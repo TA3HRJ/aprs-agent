@@ -1,0 +1,250 @@
+"""
+Configuration Management
+========================
+Loads, validates, and saves the APRS-Agent configuration from a TOML file.
+
+Supports:
+  --write-default-config   Write a fresh template config file and exit
+  --print-config           Print the loaded config and exit
+  --sync-config-to-file    Add any missing default values to the config file
+
+Developed by TA3HRJ & TA3PKS
+"""
+
+import copy
+import sys
+from pathlib import Path
+from typing import Any
+
+# Single source of truth for the application version.
+# Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
+VERSION = "1.0.0"
+
+# tomllib is built-in from Python 3.11 onwards.
+# For older Python versions, install the 'tomli' package.
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore
+        except ImportError:
+            print(
+                "ERROR: 'tomli' package is required for Python < 3.11.\n"
+                "       Run: pip install tomli",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+try:
+    import tomli_w  # type: ignore
+except ImportError:
+    tomli_w = None  # type: ignore
+
+
+# =============================================================================
+# Default values - all anonymous, no personal data
+# =============================================================================
+
+DEFAULTS: dict[str, Any] = {
+    "server": "rotate.aprs2.net",
+    "port": 14580,
+    "callsign": "N0CALL",
+    "allowed_callsigns": ["N0*"],
+    "print_config_on_startup": False,
+    "extension_server": {
+        "enabled": False,
+        "host": "127.0.0.1",
+        "port": 65080,
+    },
+    "extensions": {
+        "twitter": {
+            "enabled": False,
+            "api_key": "",
+            "api_secret": "",
+            "access_token_key": "",
+            "access_token_secret": "",
+            "add_hash_tag": True,
+            "allowed_recepients": ["twsend", "TWSEND"],
+            "allowed_senders": ["N0CALL"],
+        },
+        "logger": {
+            "enabled": True,
+            "log_comments": True,
+            "filter_by_message_type": [
+                "!", "/", "\\", "@", "~", "`", "^", "&", "*",
+                "(", ")", "_", "-", "=", "+", "[", "]", "{",
+                "}", "|", ";", ":", '"', "<", ">", "?", ".",
+            ],
+            "exclude_by_message_type": [],
+            "keyword_filter": [],
+        },
+        "fixed_beacon": {
+            "enabled": False,
+            "ssid": "N0CALL-10",
+            "lat": "0000.00N",
+            "lon": "00000.00E",
+            "symbol_table": "/",
+            "symbol": "-",
+            "comment": "APRS-Agent | https://github.com/YOUR_USERNAME/aprs-agent",
+            "beacon_interval_mins": 15,
+        },
+        "smtp": {
+            "enabled": False,
+            "smtp_server": "smtp.example.com:587",
+            "smtp_username": "your@email.com",
+            "smtp_password": "",
+            "allowed_senders": ["N0CALL"],
+            "allowed_recipients": ["EMAIL"],
+            "allowed_receiver_emails": [],
+            "from_email": "APRS-Agent <aprs@example.com>",
+        },
+    },
+}
+
+
+def strip_ssid(callsign: str) -> str:
+    """Return the base callsign without SSID suffix.
+
+    Example: "TA3HRJ-7" → "TA3HRJ",  "N0CALL" → "N0CALL"
+    Used by calculate_passcode() and the Twitter/SMTP extensions.
+    """
+    return callsign.split("-")[0]
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge override into base. override wins on conflicts."""
+    result = dict(base)
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def calculate_passcode(callsign: str) -> int:
+    """
+    Calculate the APRS-IS passcode for a given callsign.
+
+    This is the standard APRS passcode algorithm used by all APRS-IS servers
+    to verify that the connecting station holds a valid amateur radio license.
+    The passcode is derived from the base callsign (without SSID).
+
+    This algorithm is publicly documented in the APRS-IS specification.
+    """
+    callsign = strip_ssid(callsign).upper()
+    code = 0x73E2
+    for i, char in enumerate(callsign):
+        if i % 2 == 0:
+            code ^= ord(char) << 8
+        else:
+            code ^= ord(char)
+    return code & 0x7FFF
+
+
+def load_config(config_path: str) -> dict[str, Any]:
+    """
+    Load configuration from a TOML file.
+
+    If the file does not exist, writes a fresh default config and uses it.
+    Missing keys are filled in with default values.
+    """
+    path = Path(config_path)
+
+    if not path.exists():
+        print(
+            f"Config file '{config_path}' not found. "
+            f"Writing default config and starting with defaults.",
+            file=sys.stderr,
+        )
+        write_default_config(config_path)
+        return copy.deepcopy(DEFAULTS)
+
+    try:
+        with open(path, "rb") as f:
+            user_config = tomllib.load(f)
+    except Exception as e:
+        print(f"ERROR: Failed to parse config file '{config_path}': {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Merge user config over defaults so missing keys get default values
+    return _deep_merge(DEFAULTS, user_config)
+
+
+def write_default_config(config_path: str) -> None:
+    """
+    Write a fresh template config file with all default values and comments.
+    Uses the annotated TOML template (aprsconfig.toml in the project folder).
+    If tomli_w is available, also writes a machine-generated version.
+    """
+    # Look for the annotated template first (the .template file ships with the repo)
+    # then fall back to a plain aprsconfig.toml if present
+    template_path = Path(__file__).parent / "aprsconfig.toml.template"
+    if not template_path.exists():
+        template_path = Path(__file__).parent / "aprsconfig.toml"
+    dest_path = Path(config_path)
+
+    if template_path.exists() and template_path != dest_path:
+        # Copy the human-readable annotated template
+        dest_path.write_text(template_path.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"Default config written to '{config_path}'", file=sys.stderr)
+    elif tomli_w is not None:
+        # Fall back to machine-generated TOML if template not available
+        with open(dest_path, "wb") as f:
+            tomli_w.dump(DEFAULTS, f)
+        print(
+            f"Default config written to '{config_path}' (no template found, "
+            f"comments not included)",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"ERROR: Cannot write default config. "
+            f"Either place 'aprsconfig.toml' template next to this script "
+            f"or install 'tomli_w' (pip install tomli-w).",
+            file=sys.stderr,
+        )
+
+
+def sync_config_to_file(config: dict[str, Any], config_path: str) -> None:
+    """
+    Write the fully-merged config (defaults + user values) back to file.
+    This adds any missing default keys to an existing config file.
+    """
+    if tomli_w is None:
+        print(
+            "ERROR: 'tomli_w' is required for --sync-config-to-file. "
+            "Run: pip install tomli-w",
+            file=sys.stderr,
+        )
+        return
+
+    dest_path = Path(config_path)
+    with open(dest_path, "wb") as f:
+        tomli_w.dump(config, f)
+    print(f"Config synced to '{config_path}'", file=sys.stderr)
+
+
+def print_config(config: dict[str, Any]) -> None:
+    """Print the loaded config, masking sensitive values."""
+    import copy
+
+    safe = copy.deepcopy(config)
+
+    def mask(d: dict, keys: list[str]) -> None:
+        for key in keys:
+            if key in d and d[key]:
+                val = str(d[key])
+                d[key] = val[:3] + "****" + val[-3:] if len(val) > 6 else "***"
+
+    tw = safe.get("extensions", {}).get("twitter", {})
+    mask(tw, ["api_key", "api_secret", "access_token_key", "access_token_secret"])
+
+    sm = safe.get("extensions", {}).get("smtp", {})
+    mask(sm, ["smtp_password"])
+
+    import pprint
+    pprint.pprint(safe, stream=sys.stderr)

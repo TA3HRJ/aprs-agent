@@ -1,0 +1,23 @@
+# APRS-Agent Python dependencies
+# Install with: pip install -r requirements.txt
+
+# APRS packet parsing
+aprslib>=0.7.0
+
+# TOML config file support (built-in for Python 3.11+, needed for older versions)
+tomli>=2.0.1; python_version < "3.11"
+
+# TOML config file writing
+tomli-w>=1.0.0
+
+# Twitter / X API integration
+tweepy>=4.14.0
+
+# Async SMTP email sending
+aiosmtplib>=3.0.0
+
+# GUI: system tray icon support
+pystray>=0.19.0
+
+# GUI: image handling (required by pystray and for icon generation)
+Pillow>=10.0.0

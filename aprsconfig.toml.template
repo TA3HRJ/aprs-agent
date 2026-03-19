@@ -1,0 +1,159 @@
+# =============================================================================
+# APRS-Agent Configuration File
+# =============================================================================
+# Edit the values below with your own settings.
+# Lines starting with '#' are comments and are ignored by the program.
+#
+# Developed by TA3HRJ & TA3PKS
+# https://github.com/YOUR_USERNAME/aprs-agent
+# =============================================================================
+
+# --- APRS-IS Server Connection ---
+
+# APRS-IS server address. Common choices:
+#   rotate.aprs2.net  (worldwide rotation)
+#   euro.aprs2.net    (Europe)
+#   noam.aprs2.net    (North America)
+server = "rotate.aprs2.net"
+
+# APRS-IS port. Standard is 14580 (filtered) or 10152 (full feed).
+port = 14580
+
+# YOUR amateur radio callsign (required - must have a valid amateur license).
+callsign = "N0CALL"
+
+# Filter: which callsigns/wildcards to receive from the APRS-IS server.
+# Use '*' as a wildcard. Examples:
+#   "N0CALL*"   = your callsign and all SSIDs
+#   "ta*"       = all Turkish amateur callsigns starting with TA
+#   "N0CALL-*"  = all SSIDs of N0CALL
+allowed_callsigns = ["N0CALL*"]
+
+# Print the full parsed configuration to the console on startup (true/false).
+print_config_on_startup = false
+
+
+# =============================================================================
+# Extension Server (TCP)
+# =============================================================================
+# Allows external programs on the same computer to connect and receive
+# a live stream of APRS packets. Useful for integrations with other software.
+
+[extension_server]
+enabled = false
+host = "127.0.0.1"   # Use 127.0.0.1 to allow only local connections
+port = 65080
+
+
+# =============================================================================
+# Extensions
+# =============================================================================
+
+# --- Twitter / X Integration ---
+# Posts incoming APRS messages to your Twitter/X account.
+# Requires Twitter API credentials (see: https://developer.twitter.com)
+
+[extensions.twitter]
+enabled = false
+
+# Twitter API credentials (get these from developer.twitter.com)
+api_key = ""
+api_secret = ""
+access_token_key = ""
+access_token_secret = ""
+
+# Add #APRS hashtag to tweets automatically
+add_hash_tag = true
+
+# Only forward messages addressed TO these callsigns (APRS message recipients)
+allowed_recepients = ["twsend", "TWSEND"]
+
+# Only forward messages FROM these callsigns (APRS senders)
+allowed_senders = ["N0CALL"]
+
+
+# --- Logger ---
+# Logs incoming APRS packets to the console (terminal window).
+
+[extensions.logger]
+enabled = true
+
+# Also log APRS-IS server comment lines (lines starting with '#')
+log_comments = true
+
+# Only log packets whose APRS data type identifier is in this list.
+# Remove characters to filter out those packet types.
+# Common types: ! = position, : = message, ; = object, @ = pos+time
+# Leave empty [] to log ALL packet types.
+filter_by_message_type = ["!", "/", "\\", "@", "~", "`", "^", "&", "*", "(", ")", "_", "-", "=", "+", "[", "]", "{", "}", "|", ";", ":", "\"", "<", ">", "?", "."]
+
+# Packet types to always exclude from logging (even if in filter list above).
+exclude_by_message_type = []
+
+# If set, ONLY log packets that contain these keywords (case-insensitive).
+# Leave empty [] to use the type filter above instead.
+keyword_filter = []
+
+
+# --- Fixed Beacon ---
+# Periodically sends your station's fixed position to the APRS network.
+
+[extensions.fixed_beacon]
+enabled = false
+
+# Your station callsign + SSID for the beacon
+# SSID examples: -5 = software, -9 = mobile, -10 = internet
+ssid = "N0CALL-10"
+
+# Latitude in APRS format: DDMM.MMN (degrees, minutes, N/S)
+# Example: Istanbul area would be 4100.00N
+lat = "0000.00N"
+
+# Longitude in APRS format: DDDMM.MME (degrees, minutes, E/W)
+# Example: Istanbul area would be 02900.00E
+lon = "00000.00E"
+
+# APRS symbol table ('/' = primary, '\' = alternate)
+symbol_table = "/"
+
+# APRS symbol character ('-' = house, '>' = car, 'k' = truck, etc.)
+# See: http://www.aprs.org/symbols.html
+symbol = "-"
+
+# Text comment to include in the beacon packet
+comment = "APRS-Agent | https://github.com/YOUR_USERNAME/aprs-agent"
+
+# How often to send the beacon (in minutes)
+beacon_interval_mins = 15
+
+
+# --- SMTP Email ---
+# Forwards APRS messages to email. Useful for receiving APRS messages
+# when you are away from radio. Supports Gmail, Outlook, or any SMTP server.
+
+[extensions.smtp]
+enabled = false
+
+# SMTP server address and port (format: "host:port")
+# Gmail: "smtp.gmail.com:587"
+# Outlook: "smtp.office365.com:587"
+smtp_server = "smtp.example.com:587"
+
+# Your email login username
+smtp_username = "your@email.com"
+
+# Your email login password (for Gmail use an App Password, not your main password)
+smtp_password = ""
+
+# Only forward APRS messages FROM these callsigns
+allowed_senders = ["N0CALL"]
+
+# Only forward APRS messages addressed TO these APRS callsigns/aliases
+allowed_recipients = ["EMAIL"]
+
+# Optional: restrict which destination email addresses are allowed.
+# Leave empty [] to allow any email address.
+allowed_receiver_emails = []
+
+# The "From:" address shown in outgoing emails
+from_email = "APRS-Agent <aprs@example.com>"

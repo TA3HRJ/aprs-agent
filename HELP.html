@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APRS-Agent – User Guide / Kullanım Kılavuzu</title>
+<style>
+  :root {
+    --accent:  #1a5276;
+    --accent2: #2471a3;
+    --ok:      #1a8c1a;
+    --warn:    #b7770d;
+    --bg:      #f8f9fa;
+    --card:    #ffffff;
+    --border:  #dce1e7;
+    --text:    #212529;
+    --muted:   #6c757d;
+    --req:     #c0392b;
+    --opt:     #1a8c1a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  /* ── Language tabs ── */
+  .lang-bar {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--accent);
+    display: flex; align-items: center;
+    padding: 0 24px; gap: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  }
+  .lang-bar span {
+    color: #aac4e0; font-size: 13px; margin-right: 12px;
+    font-style: italic;
+  }
+  .lang-btn {
+    padding: 10px 22px; border: none; cursor: pointer;
+    font-size: 14px; font-weight: 600; border-radius: 0;
+    background: transparent; color: #cce0f5;
+    border-bottom: 3px solid transparent;
+    transition: all .15s;
+  }
+  .lang-btn.active {
+    color: #ffffff;
+    border-bottom-color: #f0a500;
+    background: rgba(255,255,255,.08);
+  }
+  .lang-btn:hover:not(.active) { color: #ffffff; background: rgba(255,255,255,.05); }
+
+  /* ── Content sections ── */
+  .section { display: none; max-width: 860px; margin: 0 auto; padding: 32px 24px 60px; }
+  .section.active { display: block; }
+
+  /* ── Heading styles ── */
+  h1 { font-size: 1.9em; color: var(--accent); margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 0.95em; margin-bottom: 32px; }
+  h2 {
+    font-size: 1.25em; color: var(--accent);
+    margin: 36px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 { font-size: 1.05em; color: var(--accent2); margin: 20px 0 6px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .card-title {
+    font-weight: 700;
+    font-size: 1.0em;
+    color: var(--accent);
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-block; border-radius: 4px;
+    font-size: 0.72em; font-weight: 700;
+    padding: 2px 7px; vertical-align: middle;
+    letter-spacing: .4px; text-transform: uppercase;
+  }
+  .req  { background: #fdecea; color: var(--req); border: 1px solid #f5c6c1; }
+  .opt  { background: #eafaf1; color: var(--opt); border: 1px solid #a9dfbf; }
+  .info { background: #e8f4fd; color: var(--accent2); border: 1px solid #aed6f1; }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; }
+  th { background: var(--accent); color: #fff; text-align: left; padding: 8px 12px; font-size: .88em; }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: .92em; vertical-align: top; }
+  tr:nth-child(even) td { background: #f4f7fb; }
+
+  /* ── Steps ── */
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    counter-increment: step;
+    display: flex; gap: 14px; align-items: flex-start;
+    margin-bottom: 14px;
+  }
+  .steps li::before {
+    content: counter(step);
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    background: var(--accent); color: #fff;
+    border-radius: 50%; display: flex;
+    align-items: center; justify-content: center;
+    font-weight: 700; font-size: .88em;
+  }
+  .steps li div { padding-top: 4px; }
+
+  /* ── Callout boxes ── */
+  .callout {
+    border-radius: 6px; padding: 12px 16px; margin: 14px 0;
+    border-left: 4px solid;
+  }
+  .callout.tip   { background: #eafaf1; border-color: var(--opt); }
+  .callout.warn  { background: #fef9e7; border-color: var(--warn); }
+  .callout.note  { background: #eaf4fb; border-color: var(--accent2); }
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  code {
+    font-family: "Consolas", monospace;
+    background: #eef2f7; padding: 1px 5px;
+    border-radius: 3px; font-size: .92em;
+  }
+  a { color: var(--accent2); }
+
+  .field-name { font-weight: 600; }
+  ul { padding-left: 20px; }
+  ul li { margin-bottom: 4px; }
+  p { margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<!-- Language selector -->
+<div class="lang-bar">
+  <span>🌐</span>
+  <button class="lang-btn active" onclick="setLang('tr')">Türkçe</button>
+  <button class="lang-btn"        onclick="setLang('en')">English</button>
+</div>
+
+<!-- ══════════════════ TÜRKÇE ══════════════════ -->
+<div id="tr" class="section active">
+
+  <h1>APRS-Agent</h1>
+  <p class="subtitle">Kullanım Kılavuzu · v1.0.0</p>
+
+  <h2>APRS-Agent Nedir?</h2>
+
+  <div class="card">
+    <p>
+      APRS-Agent, bir <strong>APRS-IS</strong> istemcisidir.
+      Telsiz istasyonunuzun konumunu ve mesajlarını İnternete bağlayan
+      APRS-IS ağına bilgisayar üzerinden bağlanır.
+    </p>
+    <p>
+      Kısaca şunları yapabilir:
+    </p>
+    <ul>
+      <li>APRS-IS ağından gelen paketleri ekranda gösterir (<strong>Logger</strong>)</li>
+      <li>Konumunuzu belirli aralıklarla ağa gönderir (<strong>Sabit Konum / Fixed Beacon</strong>)</li>
+      <li>Size gelen APRS mesajlarını Twitter/X'e iletir (<strong>Twitter</strong>)</li>
+      <li>Size gelen APRS mesajlarını e-posta olarak yönlendirir (<strong>SMTP E-posta</strong>)</li>
+      <li>Diğer programların aynı APRS akışına bağlanmasını sağlar (<strong>Extension Sunucu</strong>)</li>
+    </ul>
+  </div>
+
+  <div class="callout note">
+    <strong>📡 Bilgi: Radyo lisansınız gereklidir</strong>
+    APRS-IS'e bağlanmak için geçerli bir amatör telsiz çağrı işareti ve
+    buna ait APRS-IS parolası (passcode) gerekmektedir.
+    Passcode otomatik hesaplanır — sizin bir şey yapmanız gerekmez.
+  </div>
+
+  <h2>Hızlı Başlangıç – Adım Adım</h2>
+
+  <ol class="steps">
+    <li><div>Programı çalıştırın: <code>python gui.py</code> ya da <code>aprs-agent-gui.exe</code></div></li>
+    <li><div>
+      <strong>Bağlantı</strong> sekmesine gidin.
+      Çağrı işaretinizi girin (zorunlu).
+    </div></li>
+    <li><div>
+      İstediğiniz eklentileri <strong>etkinleştirin</strong>
+      (Logger, Sabit Konum vb.) ve ayarlarını doldurun.
+    </div></li>
+    <li><div>
+      <strong>💾 Ayarları Kaydet</strong> butonuna tıklayın.
+    </div></li>
+    <li><div>
+      <strong>▶ Başlat</strong> butonuna tıklayın.
+      Log penceresinde <em>"TA3HRJ verified"</em> gibi bir mesaj görürseniz bağlantı başarılıdır.
+    </div></li>
+  </ol>
+
+  <h2>Bağlantı Sekmesi</h2>
+
+  <div class="card">
+    <div class="card-title">🔌 Bağlantı</div>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr>
+        <td><span class="field-name">APRS-IS Sunucusu</span></td>
+        <td>Varsayılan değer (<code>rotate.aprs2.net</code>) genellikle en iyisidir.
+            Değiştirmenize gerek yok.</td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Port</span></td>
+        <td>Standart filtreli bağlantı portu: <code>14580</code>. Değiştirmeyin.</td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Çağrı İşareti</span></td>
+        <td>Kendi çağrı işaretinizi girin. Örnek: <code>TA3HRJ</code></td>
+        <td><span class="badge req">Zorunlu</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">İzin verilen çağrı işaretleri</span></td>
+        <td>Hangi istasyonlardan gelen paketleri görmek istediğinizi belirler.
+            Joker karakter kullanılabilir: <code>TA3HRJ*</code> (TA3 ile başlayan herkes).
+            Kendi çağrı işaretinizi yazmak, sadece size gelen paketleri gösterir.</td>
+        <td><span class="badge req">Zorunlu</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <h2>Logger Sekmesi</h2>
+
+  <div class="card">
+    <div class="card-title">📋 Logger</div>
+    <p>Gelen APRS paketlerini ekranın alt kısmındaki log penceresinde gösterir.</p>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr>
+        <td><span class="field-name">Logger'ı Etkinleştir</span></td>
+        <td>Log penceresini açar. Neyin geldiğini görmek için açık bırakın.</td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Paket türü filtresi</span></td>
+        <td>Sadece belirli tipteki paketleri göstermek için.
+            Boş bırakırsanız her şey gösterilir.</td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Anahtar kelime filtresi</span></td>
+        <td>Sadece belirli bir kelime içeren paketleri göstermek için.
+            Boş bırakırsanız her şey gösterilir.</td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <h2>Sabit Konum (Fixed Beacon) Sekmesi</h2>
+
+  <div class="card">
+    <div class="card-title">📍 Sabit Konum Yayını</div>
+    <p>
+      Bu sekme, istasyonunuzun konumunu APRS-IS ağına düzenli aralıklarla gönderir.
+      Böylece aprs.fi gibi haritalar üzerinde görünürsünüz.
+    </p>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr>
+        <td><span class="field-name">Sabit Konum Yayınını Etkinleştir</span></td>
+        <td>Bu seçeneği işaretleyin.</td>
+        <td><span class="badge req">Zorunlu</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">QTH Locator</span></td>
+        <td>Maidenhead grid karesi.  Örnek: <code>KM38nk</code><br>
+            Girdiğinizde Enlem/Boylam otomatik doldurulur.</td>
+        <td><span class="badge info">Kolay giriş</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Enlem / Boylam</span></td>
+        <td>QTH Locator girmek yerine doğrudan da yazabilirsiniz.<br>
+            Format: <code>3826.25N</code> / <code>02707.50E</code></td>
+        <td><span class="badge req">Zorunlu</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">İstasyon SSID</span></td>
+        <td>Çağrı işaretiniz + SSID. Örnek: <code>TA3HRJ-10</code><br>
+            SSID -1 ile -15 arasında herhangi bir sayı olabilir.</td>
+        <td><span class="badge req">Zorunlu</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Sembol</span></td>
+        <td><strong>Sembol Seç…</strong> butonuyla haritada görünmek istediğiniz
+            simgeyi seçin. Ev için <code>-</code>, araba için <code>&gt;</code>,
+            hava istasyonu için <code>_</code> kullanılır.</td>
+        <td><span class="badge req">Zorunlu</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Beacon açıklaması</span></td>
+        <td>aprs.fi haritasında adınızın yanında görünecek kısa metin.
+            Örnek: <code>TA3HRJ Home Station</code></td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Gönderim aralığı (dakika)</span></td>
+        <td>Kaç dakikada bir konum gönderileceği. Önerilen: <code>15</code> dakika.</td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
+      </tr>
+    </table>
+    <div class="callout tip" style="margin-top:12px;">
+      <strong>💡 QTH Locator'ınızı bilmiyor musunuz?</strong>
+      <a href="https://www.levinecentral.com/ham/grid_square.php" target="_blank">levinecentral.com/ham/grid_square.php</a>
+      adresine gidin, haritada yerinize tıklayın.
+    </div>
+  </div>
+
+  <h2>Twitter / X Sekmesi</h2>
+
+  <div class="card">
+    <div class="card-title">🐦 Twitter / X Entegrasyonu</div>
+    <p>
+      Size gelen bir APRS mesajı (belirli bir takma ada — örn. <code>TWSEND</code> — gönderilmiş)
+      otomatik olarak Twitter/X hesabınıza tweet atılır.
+    </p>
+    <div class="callout warn">
+      <strong>⚠️ Twitter API anahtarı gereklidir</strong>
+      Bunun için Twitter/X Developer Portal'dan (developer.twitter.com) bir uygulama oluşturmanız
+      ve dört adet anahtar/token almanız gerekir.  Bu bir seferlik bir işlemdir.
+    </div>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr><td><span class="field-name">API Key / Secret</span></td><td>Twitter uygulamanızın kimlik bilgileri.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Access Token / Secret</span></td><td>Hesabınızın erişim jetonları.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">İzin verilen APRS alıcıları</span></td><td>Hangi APRS takma ada (<em>addressee</em>) gönderildiğinde tweet atılacak.  Varsayılan: <code>TWSEND</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">İzin verilen APRS göndericileri</span></td><td>Hangi çağrı işaretlerinden gelen mesajları işleyeceği.  Kendi çağrı işaretinizi yazın.</td><td><span class="badge req">Zorunlu</span></td></tr>
+    </table>
+  </div>
+
+  <h2>SMTP E-posta Sekmesi</h2>
+
+  <div class="card">
+    <div class="card-title">✉️ E-posta Yönlendirme</div>
+    <p>
+      Size gelen bir APRS mesajında (örn. <code>EMAIL arkadas@mail.com Merhaba!</code>
+      formatında) belirtilen adrese otomatik e-posta gönderir.
+    </p>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr><td><span class="field-name">SMTP Sunucusu</span></td><td>E-posta sunucusu adresi ve portu.  Örnek: <code>smtp.gmail.com:587</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Kullanıcı adı / Şifre</span></td><td>E-posta hesabı bilgileri.  Gmail kullanıyorsanız "Uygulama Şifresi" oluşturmanız gerekir.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">İzin verilen APRS göndericileri</span></td><td>Hangi çağrı işaretlerinden gelen isteği kabul edeceği.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">İzin verilen APRS alıcıları</span></td><td>Hangi APRS takma ada gönderilmiş mesajları işleyeceği. Varsayılan: <code>EMAIL</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Gönderen adresi</span></td><td>E-postanın "Kimden" alanında görünecek adres. Örnek: <code>APRS-Agent &lt;aprs@gmail.com&gt;</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+    </table>
+  </div>
+
+  <h2>Extension Sunucu Sekmesi</h2>
+
+  <div class="card">
+    <div class="card-title">🔗 Extension Sunucu</div>
+    <p>
+      Bu sekme ileri düzey kullanıcılar içindir.
+      Aynı bilgisayarda çalışan başka bir yazılımın (örn. kendi yazdığınız
+      bir betik) canlı APRS paket akışına TCP üzerinden bağlanmasını sağlar.
+    </p>
+    <p>
+      Düz APRS kullanıyorsanız bu sekmeye dokunmanıza gerek yoktur.
+    </p>
+  </div>
+
+  <h2>Sık Sorulan Sorular</h2>
+
+  <div class="card">
+    <h3>Log penceresinde "Login by user not allowed" görüyorum.</h3>
+    <p>Çağrı işareti alanında gerçek bir çağrı işareti girilmemiş demektir.
+       <code>N0CALL</code> varsayılan değerini silip kendi çağrı işaretinizi yazın.</p>
+  </div>
+
+  <div class="card">
+    <h3>Konumum aprs.fi'de görünmüyor.</h3>
+    <p>Sabit Konum (Fixed Beacon) sekmesinin etkin olduğundan ve
+       Enlem/Boylam değerlerinin doğru formatta girildiğinden emin olun.
+       QTH Locator alanını kullanmak en kolay yoldur.</p>
+  </div>
+
+  <div class="card">
+    <h3>Program kapatıldığında çalışmaya devam ediyor mu?</h3>
+    <p>Hayır. Bilgisayar açıldığında otomatik başlaması için
+       Windows Görev Zamanlayıcısı'na kaydetmeniz gerekir.
+       Ayrıntılı açıklama için <code>README.md</code> dosyasına bakın.</p>
+  </div>
+
+  <div class="card">
+    <h3>Ayarlar nerede saklanıyor?</h3>
+    <p>Varsayılan olarak programın yanındaki <code>aprsconfig.toml</code>
+       dosyasında saklanır. İstediğiniz bir konuma taşıyabilir ve
+       üst bardaki <strong>Gözat…</strong> butonu ile seçebilirsiniz.</p>
+  </div>
+
+  <hr style="border:none;border-top:1px solid var(--border);margin:40px 0 16px;">
+  <p style="color:var(--muted);font-size:.85em;text-align:center;">
+    APRS-Agent v1.0.0 · MIT Lisansı · TA3HRJ &amp; TA3PKS ·
+    <a href="https://github.com/TA3HRJ/aprs-agent" target="_blank">github.com/TA3HRJ/aprs-agent</a>
+  </p>
+
+</div><!-- /tr -->
+
+
+<!-- ══════════════════ ENGLISH ══════════════════ -->
+<div id="en" class="section">
+
+  <h1>APRS-Agent</h1>
+  <p class="subtitle">User Guide · v1.0.0</p>
+
+  <h2>What is APRS-Agent?</h2>
+
+  <div class="card">
+    <p>
+      APRS-Agent is an <strong>APRS-IS</strong> client.
+      It connects your station to the worldwide APRS-IS network
+      over the Internet — no radio hardware required.
+    </p>
+    <p>What it can do:</p>
+    <ul>
+      <li>Display incoming APRS packets in a live log window (<strong>Logger</strong>)</li>
+      <li>Periodically broadcast your station position to APRS maps (<strong>Fixed Beacon</strong>)</li>
+      <li>Forward incoming APRS messages to Twitter/X (<strong>Twitter</strong>)</li>
+      <li>Forward incoming APRS messages to email (<strong>SMTP</strong>)</li>
+      <li>Let other software on your PC tap into the same APRS stream (<strong>Extension Server</strong>)</li>
+    </ul>
+  </div>
+
+  <div class="callout note">
+    <strong>📡 Note: An amateur radio licence is required</strong>
+    You need a valid amateur radio callsign and its corresponding APRS-IS
+    passcode to connect. The passcode is calculated automatically — you don't
+    need to do anything special.
+  </div>
+
+  <h2>Quick Start – Step by Step</h2>
+
+  <ol class="steps">
+    <li><div>Run the program: <code>python gui.py</code> or <code>aprs-agent-gui.exe</code></div></li>
+    <li><div>
+      Go to the <strong>Connection</strong> tab and enter your callsign (required).
+    </div></li>
+    <li><div>
+      Enable the extensions you want (Logger, Fixed Beacon, etc.)
+      and fill in their settings.
+    </div></li>
+    <li><div>
+      Click <strong>💾 Save Config</strong>.
+    </div></li>
+    <li><div>
+      Click <strong>▶ Start</strong>.
+      If you see <em>"TA3HRJ verified"</em> (your callsign) in the log, you're connected.
+    </div></li>
+  </ol>
+
+  <h2>Connection Tab</h2>
+
+  <div class="card">
+    <div class="card-title">🔌 Connection</div>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr>
+        <td><span class="field-name">APRS-IS Server</span></td>
+        <td>The default (<code>rotate.aprs2.net</code>) works worldwide. No need to change it.</td>
+        <td><span class="badge opt">Optional</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Port</span></td>
+        <td>Standard filtered port: <code>14580</code>. Leave it as-is.</td>
+        <td><span class="badge opt">Optional</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Callsign</span></td>
+        <td>Your amateur radio callsign. Example: <code>TA3HRJ</code></td>
+        <td><span class="badge req">Required</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Allowed callsigns</span></td>
+        <td>Which stations' packets to receive. Wildcards are supported:
+            <code>TA3HRJ*</code> = all callsigns starting with TA3HRJ.
+            Entering just your callsign shows only packets addressed to you.</td>
+        <td><span class="badge req">Required</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <h2>Logger Tab</h2>
+
+  <div class="card">
+    <div class="card-title">📋 Logger</div>
+    <p>Displays incoming APRS packets in the log panel at the bottom of the window.</p>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr>
+        <td><span class="field-name">Enable Logger</span></td>
+        <td>Turns on the log display. Recommended to keep enabled so you can see activity.</td>
+        <td><span class="badge opt">Optional</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Filter by packet type</span></td>
+        <td>Show only specific packet types. Leave blank to see everything.</td>
+        <td><span class="badge opt">Optional</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Keyword filter</span></td>
+        <td>Show only packets containing a keyword. Leave blank to see everything.</td>
+        <td><span class="badge opt">Optional</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <h2>Fixed Beacon Tab</h2>
+
+  <div class="card">
+    <div class="card-title">📍 Fixed Beacon</div>
+    <p>
+      This tab sends your station's position to the APRS network at regular intervals,
+      making you visible on maps like <a href="https://aprs.fi" target="_blank">aprs.fi</a>.
+    </p>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr>
+        <td><span class="field-name">Enable Fixed Beacon</span></td>
+        <td>Check this box to enable position beaconing.</td>
+        <td><span class="badge req">Required</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">QTH Locator</span></td>
+        <td>Your Maidenhead grid square. Example: <code>KM38nk</code><br>
+            Enter this and Latitude/Longitude fill in automatically.</td>
+        <td><span class="badge info">Easy entry</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Latitude / Longitude</span></td>
+        <td>You can enter these directly instead of using QTH Locator.<br>
+            Format: <code>3826.25N</code> / <code>02707.50E</code></td>
+        <td><span class="badge req">Required</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Station SSID</span></td>
+        <td>Your callsign with SSID suffix. Example: <code>TA3HRJ-10</code><br>
+            Any number from -1 to -15 is valid.</td>
+        <td><span class="badge req">Required</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Symbol</span></td>
+        <td>Click <strong>Choose Symbol…</strong> to pick an icon for the map.
+            Common choices: House (<code>-</code>), Car (<code>&gt;</code>),
+            Weather Station (<code>_</code>).</td>
+        <td><span class="badge req">Required</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Beacon comment</span></td>
+        <td>Short text shown next to your callsign on maps.
+            Example: <code>TA3HRJ Home Station</code></td>
+        <td><span class="badge opt">Optional</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Interval (minutes)</span></td>
+        <td>How often to transmit the beacon. Recommended: <code>15</code> minutes.</td>
+        <td><span class="badge opt">Optional</span></td>
+      </tr>
+    </table>
+    <div class="callout tip" style="margin-top:12px;">
+      <strong>💡 Don't know your QTH Locator?</strong>
+      Visit <a href="https://www.levinecentral.com/ham/grid_square.php" target="_blank">levinecentral.com/ham/grid_square.php</a>
+      and click your location on the map.
+    </div>
+  </div>
+
+  <h2>Twitter / X Tab</h2>
+
+  <div class="card">
+    <div class="card-title">🐦 Twitter / X Integration</div>
+    <p>
+      When an APRS message is addressed to a configured alias (e.g. <code>TWSEND</code>)
+      from an allowed sender, it is automatically posted as a tweet.
+    </p>
+    <div class="callout warn">
+      <strong>⚠️ Twitter API credentials are required</strong>
+      You must create an application at the Twitter/X Developer Portal
+      (developer.twitter.com) and obtain four keys/tokens.
+      This is a one-time setup.
+    </div>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr><td><span class="field-name">API Key / Secret</span></td><td>Your Twitter app credentials.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Access Token / Secret</span></td><td>Your account access tokens.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Allowed APRS recipients</span></td><td>Which APRS addressee triggers a tweet. Default: <code>TWSEND</code></td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Allowed APRS senders</span></td><td>Only messages from these callsigns are processed. Enter your own callsign.</td><td><span class="badge req">Required</span></td></tr>
+    </table>
+  </div>
+
+  <h2>SMTP Email Tab</h2>
+
+  <div class="card">
+    <div class="card-title">✉️ SMTP Email Forwarding</div>
+    <p>
+      Automatically sends an email when an APRS message in the format
+      <code>EMAIL recipient@example.com Message text here</code>
+      is received and addressed to the configured alias (default: <code>EMAIL</code>).
+    </p>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr><td><span class="field-name">SMTP Server</span></td><td>Your mail server address and port. Example: <code>smtp.gmail.com:587</code></td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Username / Password</span></td><td>Email account credentials. For Gmail, generate an <em>App Password</em>.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Allowed APRS senders</span></td><td>Only messages from these callsigns trigger emails.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Allowed APRS recipients</span></td><td>Which APRS addressee triggers email forwarding. Default: <code>EMAIL</code></td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">From address</span></td><td>The "From" field in the sent email. Example: <code>APRS-Agent &lt;aprs@gmail.com&gt;</code></td><td><span class="badge req">Required</span></td></tr>
+    </table>
+  </div>
+
+  <h2>Extension Server Tab</h2>
+
+  <div class="card">
+    <div class="card-title">🔗 Extension Server</div>
+    <p>
+      This is an advanced feature. It opens a local TCP port so that
+      other programs on your computer can subscribe to the live APRS packet stream.
+    </p>
+    <p>If you just want basic APRS operation, you don't need this tab.</p>
+  </div>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <div class="card">
+    <h3>The log says "Login by user not allowed".</h3>
+    <p>Your callsign field contains the default placeholder <code>N0CALL</code>.
+       Replace it with your real amateur radio callsign.</p>
+  </div>
+
+  <div class="card">
+    <h3>My position isn't showing on aprs.fi.</h3>
+    <p>Make sure the Fixed Beacon tab is enabled and that your
+       Latitude/Longitude values are in the correct format.
+       Using the QTH Locator field is the easiest way to set them.</p>
+  </div>
+
+  <div class="card">
+    <h3>Does the agent keep running when I close the window?</h3>
+    <p>No. To start automatically at boot, add it to Windows Task Scheduler.
+       See <code>README.md</code> for details.</p>
+  </div>
+
+  <div class="card">
+    <h3>Where are my settings stored?</h3>
+    <p>By default in <code>aprsconfig.toml</code> next to the program.
+       You can move it anywhere and point to it with the <strong>Browse…</strong>
+       button in the top bar.</p>
+  </div>
+
+  <hr style="border:none;border-top:1px solid var(--border);margin:40px 0 16px;">
+  <p style="color:var(--muted);font-size:.85em;text-align:center;">
+    APRS-Agent v1.0.0 · MIT License · TA3HRJ &amp; TA3PKS ·
+    <a href="https://github.com/TA3HRJ/aprs-agent" target="_blank">github.com/TA3HRJ/aprs-agent</a>
+  </p>
+
+</div><!-- /en -->
+
+<script>
+  function setLang(lang) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(lang).classList.add('active');
+    document.querySelectorAll('.lang-btn').forEach(b => {
+      if (b.textContent.toLowerCase().startsWith(lang === 'tr' ? 'tü' : 'en')) {
+        b.classList.add('active');
+      }
+    });
+  }
+</script>
+</body>
+</html>
