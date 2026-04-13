@@ -54,6 +54,7 @@ DEFAULTS: dict[str, Any] = {
     "callsign": "N0CALL",
     "allowed_callsigns": ["N0*"],
     "print_config_on_startup": False,
+    "auto_start_agent": False,
     "extension_server": {
         "enabled": False,
         "host": "127.0.0.1",

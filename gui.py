@@ -72,6 +72,67 @@ def _find_icon() -> Path:
 
 _ICON_PATH = _find_icon()
 
+# ─── Windows autostart (registry) ────────────────────────────────────────────
+
+_AUTOSTART_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
+_AUTOSTART_NAME = "APRS-Agent"
+_MUTEX_HANDLE   = None   # kept alive for process lifetime
+
+
+def _ensure_single_instance() -> None:
+    """
+    Allow only one running copy of the GUI.
+    On Windows: create a named mutex; if it already exists bring the
+    existing window to the foreground and exit immediately.
+    On other platforms: no-op (lock files would be more complex, skip for now).
+    """
+    global _MUTEX_HANDLE
+    if sys.platform != "win32":
+        return
+    import ctypes
+    kernel32 = ctypes.windll.kernel32
+    user32   = ctypes.windll.user32
+    _MUTEX_HANDLE = kernel32.CreateMutexW(None, True, "APRS-Agent-SingleInstance-v1")
+    if kernel32.GetLastError() == 183:          # ERROR_ALREADY_EXISTS
+        hwnd = user32.FindWindowW(None, "APRS-Agent")
+        if hwnd:
+            user32.ShowWindow(hwnd, 9)          # SW_RESTORE
+            user32.SetForegroundWindow(hwnd)
+        sys.exit(0)
+
+
+def _autostart_get() -> bool:
+    """Return True if the app is registered to start with Windows."""
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_KEY, 0,
+                             winreg.KEY_READ)
+        winreg.QueryValueEx(key, _AUTOSTART_NAME)
+        winreg.CloseKey(key)
+        return True
+    except Exception:
+        return False
+
+
+def _autostart_set(enabled: bool, cfg_path: str) -> None:
+    """Add or remove the Windows startup registry entry."""
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _AUTOSTART_KEY, 0,
+                             winreg.KEY_SET_VALUE)
+        if enabled:
+            exe = sys.executable          # works for both script and PyInstaller
+            val = f'"{exe}" -c "{cfg_path}"'
+            winreg.SetValueEx(key, _AUTOSTART_NAME, 0, winreg.REG_SZ, val)
+        else:
+            try:
+                winreg.DeleteValue(key, _AUTOSTART_NAME)
+            except FileNotFoundError:
+                pass
+        winreg.CloseKey(key)
+    except Exception:
+        pass   # not Windows or no access — silently skip
+
 
 def _load_sprites() -> "tuple[Optional[Any], Optional[Any]]":
     """
@@ -214,33 +275,45 @@ def _aprs_symbol_name(table: str, char: str, lang: str) -> str:
 
 def maidenhead_to_latlon(loc: str) -> Optional[tuple[float, float]]:
     """
-    Convert a Maidenhead grid locator (4 or 6 characters) to decimal degrees.
+    Convert a Maidenhead grid locator (4, 6, or 8 characters) to decimal degrees.
     Returns (latitude, longitude) or None on invalid input.
 
-    Example: "KM38nk" → (38.4375, 27.125)
+    Examples:
+      "KM38nk"   → (38.4375,   27.125)     ~5 km precision
+      "KM38nk23" → (38.43125,  27.1125)    ~600 m precision
     """
     loc = loc.strip()
     if len(loc) < 4:
         return None
     try:
         loc_u = loc.upper()
-        # Field (letters A–R): 20° lon × 10° lat per field
+        # Field (letters A–R): 20° lon × 10° lat
         lon = (ord(loc_u[0]) - ord('A')) * 20.0 - 180.0
         lat = (ord(loc_u[1]) - ord('A')) * 10.0 - 90.0
-        # Square (digits 0–9): 2° lon × 1° lat per square
+        # Square (digits 0–9): 2° lon × 1° lat
         lon += int(loc[2]) * 2.0
         lat += int(loc[3]) * 1.0
         if len(loc) >= 6:
-            # Sub-square (letters a–x): 5' lon × 2.5' lat per sub-square
+            # Sub-square (letters a–x): 5' lon × 2.5' lat
             sub_lon = ord(loc[4].lower()) - ord('a')
             sub_lat = ord(loc[5].lower()) - ord('a')
             lon += sub_lon * (5.0 / 60.0)
             lat += sub_lat * (2.5 / 60.0)
-            # Return centre of sub-square
-            lon += 2.5 / 60.0
-            lat += 1.25 / 60.0
+            if len(loc) >= 8:
+                # Extended square (digits 0–9): 0.5' lon × 0.25' lat
+                ext_lon = int(loc[6])
+                ext_lat = int(loc[7])
+                lon += ext_lon * (0.5 / 60.0)
+                lat += ext_lat * (0.25 / 60.0)
+                # Centre of extended square
+                lon += 0.25 / 60.0
+                lat += 0.125 / 60.0
+            else:
+                # Centre of sub-square
+                lon += 2.5 / 60.0
+                lat += 1.25 / 60.0
         else:
-            # Return centre of square
+            # Centre of square
             lon += 1.0
             lat += 0.5
         return lat, lon
@@ -250,9 +323,9 @@ def maidenhead_to_latlon(loc: str) -> Optional[tuple[float, float]]:
 
 def latlon_to_maidenhead(lat: float, lon: float) -> str:
     """
-    Convert decimal degrees to a 6-character Maidenhead grid locator.
+    Convert decimal degrees to an 8-character Maidenhead grid locator (~600 m).
 
-    Example: (38.4375, 27.125) → "KM38nk"
+    Example: (38.43125, 27.1125) → "KM38nk23"
     """
     lon += 180.0
     lat += 90.0
@@ -261,11 +334,15 @@ def latlon_to_maidenhead(lat: float, lon: float) -> str:
     lon -= field_lon * 20.0
     lat -= field_lat * 10.0
     sq_lon = int(lon / 2)
-    sq_lat = int(lat / 1)
+    sq_lat = int(lat)
     lon -= sq_lon * 2.0
-    lat -= sq_lat * 1.0
-    sub_lon = int(lon / (2.0 / 24))
-    sub_lat = int(lat / (1.0 / 24))
+    lat -= sq_lat
+    sub_lon = int(lon * 12)        # 2° / 24 subdivisions
+    sub_lat = int(lat * 24)        # 1° / 24 subdivisions
+    lon -= sub_lon / 12.0
+    lat -= sub_lat / 24.0
+    ext_lon = min(int(lon * 120), 9)   # 0.5'/step → ×120
+    ext_lat = min(int(lat * 240), 9)   # 0.25'/step → ×240
     return (
         chr(ord('A') + field_lon)
         + chr(ord('A') + field_lat)
@@ -273,6 +350,8 @@ def latlon_to_maidenhead(lat: float, lon: float) -> str:
         + str(sq_lat)
         + chr(ord('a') + sub_lon)
         + chr(ord('a') + sub_lat)
+        + str(ext_lon)
+        + str(ext_lat)
     )
 
 
@@ -346,6 +425,8 @@ _S = {
         "allowed_cs":         "Allowed callsigns:",
         "allowed_cs_hint":    "Comma-separated, wildcards OK  e.g.  TA3HRJ*, N0CALL-*",
         "print_cfg":          "Print config on startup",
+        "autostart":          "Start with Windows",
+        "autostart_agent":    "Start agent automatically on launch",
         # logger
         "log_enabled":        "Enable Logger",
         "log_comments":       "Log server comment lines (#)",
@@ -357,7 +438,7 @@ _S = {
         # beacon
         "bcn_enabled":        "Enable Fixed Beacon",
         "bcn_locator":        "QTH Locator:",
-        "bcn_locator_hint":   "Maidenhead grid  e.g.  KM38nk  ← updates lat/lon automatically",
+        "bcn_locator_hint":   "Maidenhead grid  e.g.  KM38nk23  (4/6/8 chars) ← updates lat/lon automatically",
         "bcn_ssid":           "Station SSID:",
         "bcn_ssid_hint":      "Your callsign + SSID  e.g.  N0CALL-10",
         "bcn_lat":            "Latitude:",
@@ -455,6 +536,8 @@ _S = {
         "allowed_cs":         "İzin verilen çağrı işaretleri:",
         "allowed_cs_hint":    "Virgülle ayır, joker karakter kullanılabilir  örn.  TA3HRJ*, N0CALL-*",
         "print_cfg":          "Başlangıçta ayarları ekrana yaz",
+        "autostart":          "Windows ile başlat",
+        "autostart_agent":    "Başlangıçta ajanı otomatik başlat",
         # logger
         "log_enabled":        "Logger'ı Etkinleştir",
         "log_comments":       "Sunucu yorum satırlarını (#) logla",
@@ -466,7 +549,7 @@ _S = {
         # beacon
         "bcn_enabled":        "Sabit Konum Yayınını Etkinleştir",
         "bcn_locator":        "QTH Locator:",
-        "bcn_locator_hint":   "Maidenhead grid  örn.  KM38nk  ← enlem/boylamı otomatik günceller",
+        "bcn_locator_hint":   "Maidenhead grid  örn.  KM38nk23  (4/6/8 hane) ← enlem/boylamı otomatik günceller",
         "bcn_ssid":           "İstasyon SSID:",
         "bcn_ssid_hint":      "Çağrı işareti + SSID  örn.  TA3HRJ-10",
         "bcn_lat":            "Enlem:",
@@ -1246,8 +1329,9 @@ class APRSAgentGUI:
                 row=row + 1, column=1, sticky="w", pady=(0, 2))
         return e
 
-    def _check(self, frame, row, key, var) -> ttk.Checkbutton:
-        w = ttk.Checkbutton(frame, text=self._t(key), variable=var)
+    def _check(self, frame, row, key, var, command=None) -> ttk.Checkbutton:
+        kw = {"command": command} if command else {}
+        w = ttk.Checkbutton(frame, text=self._t(key), variable=var, **kw)
         self._reg(w, "text", key)
         w.grid(row=row, column=0, columnspan=2, sticky="w", pady=(8, 2))
         return w
@@ -1262,14 +1346,20 @@ class APRSAgentGUI:
         self._v_port = tk.StringVar()
         self._v_callsign = tk.StringVar()
         self._v_allowed_cs = tk.StringVar()
-        self._v_print_cfg = tk.BooleanVar()
+        self._v_print_cfg      = tk.BooleanVar()
+        self._v_autostart      = tk.BooleanVar(value=_autostart_get())
+        self._v_autostart_agent = tk.BooleanVar()
 
         self._row(f, 0, "server",      self._v_server, width=42)
         self._row(f, 2, "port",        self._v_port,   width=10)
         self._row(f, 4, "callsign",    self._v_callsign, width=20)
         self._row(f, 6, "allowed_cs",  self._v_allowed_cs,
                   hint_key="allowed_cs_hint", width=42)
-        self._check(f, 8, "print_cfg", self._v_print_cfg)
+        self._check(f, 8,  "print_cfg",      self._v_print_cfg)
+        self._check(f, 10, "autostart_agent", self._v_autostart_agent)
+        if sys.platform == "win32":
+            self._check(f, 12, "autostart", self._v_autostart,
+                        command=self._toggle_autostart)
 
     # ── Logger tab ────────────────────────────────────────────────────────────
 
@@ -1544,6 +1634,9 @@ class APRSAgentGUI:
         self._v_callsign.set(cfg.get("callsign", ""))
         self._v_allowed_cs.set(_csv(cfg.get("allowed_callsigns", [])))
         self._v_print_cfg.set(cfg.get("print_config_on_startup", False))
+        self._v_autostart_agent.set(cfg.get("auto_start_agent", False))
+        if cfg.get("auto_start_agent", False):
+            self.root.after(1200, self._start_agent)
 
         # Logger
         l = cfg.get("extensions", {}).get("logger", {})
@@ -1625,6 +1718,7 @@ class APRSAgentGUI:
             "callsign":               self._v_callsign.get().strip().upper(),
             "allowed_callsigns":      _lst(self._v_allowed_cs.get()),
             "print_config_on_startup": self._v_print_cfg.get(),
+            "auto_start_agent":        self._v_autostart_agent.get(),
             "extension_server": {
                 "enabled": self._v_ext_enabled.get(),
                 "host":    self._v_ext_host.get().strip(),
@@ -1687,6 +1781,9 @@ class APRSAgentGUI:
                 return
         # Fallback: open online README
         webbrowser.open("https://github.com/TA3HRJ/aprs-agent")
+
+    def _toggle_autostart(self) -> None:
+        _autostart_set(self._v_autostart.get(), self._cfg_path_var.get())
 
     def _show_about(self) -> None:
         _AboutDialog(self.root, self._lang)
@@ -1857,10 +1954,7 @@ class APRSAgentGUI:
     # ── Window close / quit ───────────────────────────────────────────────────
 
     def _on_close(self) -> None:
-        if _TRAY_OK:
-            self._minimize_to_tray()
-        else:
-            self._quit()
+        self._quit()
 
     def _quit(self) -> None:
         if self._runner.running:
@@ -1890,6 +1984,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    _ensure_single_instance()
     args = _parse_args()
     APRSAgentGUI(args.config).run()
 
