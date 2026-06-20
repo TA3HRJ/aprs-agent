@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APRS-Agent</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #21262d;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --muted: #8b949e;
+  --primary: #58a6ff;
+  --primary-bg: #1f6feb;
+  --success: #3fb950;
+  --danger: #f85149;
+  --warning: #d29922;
+  --radius: 6px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ───────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+}
+header .version { color: var(--muted); font-size: 13px; }
+header .spacer { flex: 1; }
+header .cfg-path {
+  color: var(--muted);
+  font-size: 12px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hdr-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.hdr-btn:hover { border-color: var(--muted); }
+
+/* ── Tabs ─────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.tab-btn {
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* ── Main ─────────────────────────────────────────── */
+main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+.tab-panel { display: none; max-width: 640px; }
+.tab-panel.active { display: block; }
+.tab-panel h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #fff;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Form fields ──────────────────────────────────── */
+.field { margin-bottom: 14px; }
+.field label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+.field input[type="text"],
+.field input[type="number"],
+.field input[type="password"] {
+  width: 100%;
+  max-width: 420px;
+  padding: 7px 11px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+}
+.field input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(88,166,255,.15);
+}
+.field small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.field-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+.field-row .field { flex: 1; }
+.chk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.chk input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.section-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  background: var(--surface);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border-left: 3px solid var(--primary);
+}
+
+/* ── Log panel ────────────────────────────────────── */
+#log-wrap {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+}
+#log-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 20px;
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--muted);
+  cursor: ns-resize;
+  user-select: none;
+}
+#log-header span { flex: 1; }
+#log-clear {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+#log-clear:hover { color: var(--text); }
+#log {
+  height: 180px;
+  overflow-y: auto;
+  background: #010409;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 6px 14px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.log-g { color: #3fb950; }
+.log-r { color: #f85149; }
+.log-y { color: #d29922; }
+.log-n { color: #8b949e; }
+
+/* ── Footer ───────────────────────────────────────── */
+footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#status {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 120px;
+}
+.status-stopped { color: var(--muted); }
+.status-running { color: var(--success); }
+footer .spacer { flex: 1; }
+.act-btn {
+  padding: 7px 18px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.act-btn:disabled { opacity: .4; cursor: default; }
+.act-btn:hover:not(:disabled) { opacity: .85; }
+#btn-start { background: #238636; color: #fff; }
+#btn-stop  { background: #da3633; color: #fff; }
+#btn-save  { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+
+/* ── Modal ────────────────────────────────────────── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 100;
+  justify-content: center;
+  align-items: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 360px;
+  max-width: 480px;
+}
+.modal h3 { font-size: 16px; margin-bottom: 12px; color: #fff; }
+.modal p { font-size: 13px; line-height: 1.6; margin-bottom: 10px; color: var(--text); }
+.modal a { color: var(--primary); text-decoration: none; }
+.modal a:hover { text-decoration: underline; }
+.modal .close-btn {
+  margin-top: 16px;
+  padding: 6px 20px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 13px;
+}
+.modal .dev-row { margin-bottom: 6px; }
+
+/* ── Responsive ───────────────────────────────────── */
+@media (max-width: 700px) {
+  header { flex-wrap: wrap; gap: 8px; }
+  header .cfg-path { display: none; }
+  .field input { max-width: 100%; }
+}
+
+/* ── WS indicator ─────────────────────────────────── */
+#ws-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  display: inline-block;
+  margin-right: 6px;
+  transition: background .3s;
+}
+#ws-dot.connected { background: var(--success); }
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══════════════════════════════════════════ -->
+<header>
+  <h1>APRS-Agent</h1>
+  <span class="version" id="hdr-version"></span>
+  <span class="spacer"></span>
+  <span class="cfg-path" id="hdr-cfg" title="Config file path"></span>
+  <button class="hdr-btn" id="btn-about" data-i="btn_about">About</button>
+  <button class="hdr-btn" id="btn-lang">🌐 TR</button>
+</header>
+
+<!-- ═══ TABS ═════════════════════════════════════════════ -->
+<nav class="tabs" id="tab-bar">
+  <button class="tab-btn active" data-tab="conn"    data-i="tab_conn">Connection</button>
+  <button class="tab-btn"        data-tab="logger"  data-i="tab_log">Logger</button>
+  <button class="tab-btn"        data-tab="beacon"  data-i="tab_beacon">Fixed Beacon</button>
+  <button class="tab-btn"        data-tab="twitter" data-i="tab_twitter">Twitter / X</button>
+  <button class="tab-btn"        data-tab="bluesky" data-i="tab_bluesky">Bluesky</button>
+  <button class="tab-btn"        data-tab="smtp"    data-i="tab_smtp">SMTP Email</button>
+  <button class="tab-btn"        data-tab="ext"     data-i="tab_ext">Ext. Server</button>
+</nav>
+
+<!-- ═══ MAIN ═════════════════════════════════════════════ -->
+<main>
+
+<!-- ── Connection ─────────────────────────────────── -->
+<div class="tab-panel active" id="panel-conn">
+  <h2 data-i="tab_conn">Connection</h2>
+  <div class="field">
+    <label data-i="server">APRS-IS Server:</label>
+    <input type="text" id="f-server">
+  </div>
+  <div class="field">
+    <label data-i="port">Port:</label>
+    <input type="number" id="f-port" style="max-width:120px">
+  </div>
+  <div class="field">
+    <label data-i="callsign">Callsign:</label>
+    <input type="text" id="f-callsign" style="max-width:180px" placeholder="N0CALL">
+  </div>
+  <div class="field">
+    <label data-i="allowed_cs">Allowed callsigns:</label>
+    <input type="text" id="f-allowed-cs">
+    <small data-i="allowed_cs_hint">Comma-separated, wildcards OK  e.g.  TA3HRJ*, N0CALL-*</small>
+  </div>
+  <label class="chk"><input type="checkbox" id="f-print-cfg"><span data-i="print_cfg">Print config on startup</span></label>
+  <label class="chk"><input type="checkbox" id="f-autostart-agent"><span data-i="autostart_agent">Start agent automatically on launch</span></label>
+</div>
+
+<!-- ── Logger ─────────────────────────────────────── -->
+<div class="tab-panel" id="panel-logger">
+  <h2 data-i="tab_log">Logger</h2>
+  <label class="chk"><input type="checkbox" id="f-log-enabled"><span data-i="log_enabled">Enable Logger</span></label>
+  <label class="chk"><input type="checkbox" id="f-log-comments"><span data-i="log_comments">Log server comment lines (#)</span></label>
+  <div class="field">
+    <label data-i="filter_type">Filter by packet type:</label>
+    <input type="text" id="f-filter-type">
+    <small data-i="filter_type_hint">Comma-separated chars  e.g.  !, :, ;, @</small>
+  </div>
+  <div class="field">
+    <label data-i="exclude_type">Exclude packet types:</label>
+    <input type="text" id="f-exclude-type">
+  </div>
+  <div class="field">
+    <label data-i="kw_filter">Keyword filter:</label>
+    <input type="text" id="f-kw-filter">
+    <small data-i="kw_filter_hint">Comma-separated, case-insensitive</small>
+  </div>
+</div>
+
+<!-- ── Fixed Beacon ───────────────────────────────── -->
+<div class="tab-panel" id="panel-beacon">
+  <h2 data-i="tab_beacon">Fixed Beacon</h2>
+  <label class="chk"><input type="checkbox" id="f-bcn-enabled"><span data-i="bcn_enabled">Enable Fixed Beacon</span></label>
+  <div class="field">
+    <label data-i="bcn_locator">QTH Locator:</label>
+    <input type="text" id="f-bcn-locator" style="max-width:180px" placeholder="KM38nk23">
+    <small data-i="bcn_locator_hint">Maidenhead grid  e.g.  KM38nk23  (4/6/8 chars)</small>
+  </div>
+  <div class="field">
+    <label data-i="bcn_ssid">Station SSID:</label>
+    <input type="text" id="f-bcn-ssid" style="max-width:180px" placeholder="N0CALL-10">
+  </div>
+  <div class="field-row">
+    <div class="field">
+      <label data-i="bcn_lat">Latitude:</label>
+      <input type="text" id="f-bcn-lat" placeholder="4100.00N">
+      <small data-i="bcn_lat_hint">DDMM.MMN</small>
+    </div>
+    <div class="field">
+      <label data-i="bcn_lon">Longitude:</label>
+      <input type="text" id="f-bcn-lon" placeholder="02900.00E">
+      <small data-i="bcn_lon_hint">DDDMM.MME</small>
+    </div>
+  </div>
+  <div class="field-row">
+    <div class="field">
+      <label data-i="bcn_sym_tbl">Symbol table:</label>
+      <input type="text" id="f-bcn-sym-tbl" style="max-width:60px" value="/">
+    </div>
+    <div class="field">
+      <label>Symbol char:</label>
+      <input type="text" id="f-bcn-sym" style="max-width:60px" value="-">
+    </div>
+  </div>
+  <div class="field">
+    <label data-i="bcn_comment">Beacon comment:</label>
+    <input type="text" id="f-bcn-comment">
+  </div>
+  <div class="field">
+    <label data-i="bcn_interval">Interval (minutes):</label>
+    <input type="number" id="f-bcn-interval" style="max-width:120px" value="15">
+  </div>
+</div>
+
+<!-- ── Twitter / X ────────────────────────────────── -->
+<div class="tab-panel" id="panel-twitter">
+  <h2 data-i="tab_twitter">Twitter / X</h2>
+  <div class="section-note" data-i="tw_note">Requires Twitter API v2 credentials with read+write access (paid plan).</div>
+  <label class="chk"><input type="checkbox" id="f-tw-enabled"><span data-i="tw_enabled">Enable Twitter / X</span></label>
+  <div class="field">
+    <label data-i="tw_api_key">API Key:</label>
+    <input type="text" id="f-tw-api-key">
+  </div>
+  <div class="field">
+    <label data-i="tw_api_secret">API Secret:</label>
+    <input type="password" id="f-tw-api-secret">
+  </div>
+  <div class="field">
+    <label data-i="tw_tok_key">Access Token Key:</label>
+    <input type="text" id="f-tw-tok-key">
+  </div>
+  <div class="field">
+    <label data-i="tw_tok_secret">Access Token Secret:</label>
+    <input type="password" id="f-tw-tok-secret">
+  </div>
+  <label class="chk"><input type="checkbox" id="f-tw-hashtag" checked><span data-i="tw_hashtag">Add #APRS hashtag automatically</span></label>
+  <div class="field">
+    <label data-i="tw_recepients">Allowed APRS recipients:</label>
+    <input type="text" id="f-tw-recepients">
+    <small data-i="tw_cs_hint">Comma-separated callsigns</small>
+  </div>
+  <div class="field">
+    <label data-i="tw_senders">Allowed APRS senders:</label>
+    <input type="text" id="f-tw-senders">
+  </div>
+</div>
+
+<!-- ── Bluesky ────────────────────────────────────── -->
+<div class="tab-panel" id="panel-bluesky">
+  <h2 data-i="tab_bluesky">Bluesky</h2>
+  <div class="section-note" data-i="bsky_note">Free API — no payment required. Create an App Password at bsky.app → Settings → App Passwords.</div>
+  <label class="chk"><input type="checkbox" id="f-bsky-enabled"><span data-i="bsky_enabled">Enable Bluesky</span></label>
+  <div class="field">
+    <label data-i="bsky_username">Username (handle):</label>
+    <input type="text" id="f-bsky-username" placeholder="yourname.bsky.social">
+    <small data-i="bsky_username_hint">e.g.  yourname.bsky.social</small>
+  </div>
+  <div class="field">
+    <label data-i="bsky_app_pass">App Password:</label>
+    <input type="password" id="f-bsky-app-pass">
+    <small data-i="bsky_app_pass_hint">Create at bsky.app → Settings → App Passwords</small>
+  </div>
+  <label class="chk"><input type="checkbox" id="f-bsky-hashtag" checked><span data-i="bsky_hashtag">Add #APRS hashtag automatically</span></label>
+  <div class="field">
+    <label data-i="bsky_recepients">Allowed APRS recipients:</label>
+    <input type="text" id="f-bsky-recepients">
+    <small data-i="bsky_cs_hint">Comma-separated callsigns</small>
+  </div>
+  <div class="field">
+    <label data-i="bsky_senders">Allowed APRS senders:</label>
+    <input type="text" id="f-bsky-senders">
+  </div>
+</div>
+
+<!-- ── SMTP Email ─────────────────────────────────── -->
+<div class="tab-panel" id="panel-smtp">
+  <h2 data-i="tab_smtp">SMTP Email</h2>
+  <label class="chk"><input type="checkbox" id="f-smtp-enabled"><span data-i="smtp_enabled">Enable SMTP Email</span></label>
+  <div class="field">
+    <label data-i="smtp_server">SMTP Server:</label>
+    <input type="text" id="f-smtp-server">
+    <small data-i="smtp_server_hint">host:port  e.g.  smtp.gmail.com:587</small>
+  </div>
+  <div class="field">
+    <label data-i="smtp_user">Username:</label>
+    <input type="text" id="f-smtp-user">
+  </div>
+  <div class="field">
+    <label data-i="smtp_pass">Password:</label>
+    <input type="password" id="f-smtp-pass">
+  </div>
+  <div class="field">
+    <label data-i="smtp_senders">Allowed APRS senders:</label>
+    <input type="text" id="f-smtp-senders">
+  </div>
+  <div class="field">
+    <label data-i="smtp_recip">Allowed APRS recipients:</label>
+    <input type="text" id="f-smtp-recip">
+  </div>
+  <div class="field">
+    <label data-i="smtp_emails">Allowed destination emails:</label>
+    <input type="text" id="f-smtp-emails">
+    <small data-i="smtp_emails_hint">Comma-separated, leave empty to allow all</small>
+  </div>
+  <div class="field">
+    <label data-i="smtp_from">From address:</label>
+    <input type="text" id="f-smtp-from">
+  </div>
+</div>
+
+<!-- ── Extension Server ───────────────────────────── -->
+<div class="tab-panel" id="panel-ext">
+  <h2 data-i="tab_ext">Extension Server</h2>
+  <label class="chk"><input type="checkbox" id="f-ext-enabled"><span data-i="ext_enabled">Enable Extension Server</span></label>
+  <div class="field">
+    <label data-i="ext_host">Listen host:</label>
+    <input type="text" id="f-ext-host" style="max-width:200px">
+  </div>
+  <div class="field">
+    <label data-i="ext_port">Listen port:</label>
+    <input type="number" id="f-ext-port" style="max-width:120px">
+  </div>
+  <div class="section-note" data-i="ext_hint">Allows other programs on this machine to receive a live APRS stream over TCP. Protocol: client sends 'ping', server replies 'pong &lt;timestamp&gt;'. All packets are forwarded as 'data &lt;aprs_line&gt;'.</div>
+</div>
+
+</main>
+
+<!-- ═══ LOG PANEL ════════════════════════════════════════ -->
+<div id="log-wrap">
+  <div id="log-header">
+    <span><span id="ws-dot"></span>Log</span>
+    <button id="log-clear">Clear</button>
+  </div>
+  <div id="log"></div>
+</div>
+
+<!-- ═══ FOOTER ═══════════════════════════════════════════ -->
+<footer>
+  <span id="status" class="status-stopped" data-i="status_stopped">● Stopped</span>
+  <span class="spacer"></span>
+  <button class="act-btn" id="btn-save" data-i="btn_save">💾  Save Config</button>
+  <button class="act-btn" id="btn-start" data-i="btn_start">▶  Start</button>
+  <button class="act-btn" id="btn-stop" disabled data-i="btn_stop">■  Stop</button>
+</footer>
+
+<!-- ═══ ABOUT MODAL ═════════════════════════════════════ -->
+<div class="modal-overlay" id="about-overlay">
+  <div class="modal">
+    <h3 data-i="about_title">About APRS-Agent</h3>
+    <p id="about-ver"></p>
+    <p data-i="about_desc">A multi-extension APRS-IS agent for amateur radio operators.
+Supports Twitter/X, Bluesky, SMTP email, fixed position beaconing,
+and an extension server for third-party integrations.</p>
+    <p style="font-weight:600;margin-top:12px" data-i="about_devs">Developers</p>
+    <div class="dev-row">🔧 <strong>TA3HRJ</strong> — <a href="mailto:ta3hrj@gmail.com">ta3hrj@gmail.com</a> · <a href="https://github.com/TA3HRJ" target="_blank">GitHub</a></div>
+    <div class="dev-row">🔧 <strong>TA3PKS</strong> — <a href="mailto:ta3pks@mugsoft.io">ta3pks@mugsoft.io</a> · <a href="https://github.com/TA3PKS" target="_blank">GitHub</a></div>
+    <p style="margin-top:12px"><span data-i="about_source">Source code:</span> <a href="https://github.com/TA3HRJ/aprs-agent" target="_blank">github.com/TA3HRJ/aprs-agent</a></p>
+    <p style="color:var(--muted);font-size:12px" data-i="about_license">Released under the MIT License.</p>
+    <button class="close-btn" id="about-close" data-i="about_close">Close</button>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   APRS-Agent Web GUI — Frontend Logic
+   ═══════════════════════════════════════════════════════ */
+
+// ── i18n ──────────────────────────────────────────────
+const S = {
+en: {
+  tab_conn:"Connection", tab_log:"Logger", tab_beacon:"Fixed Beacon",
+  tab_twitter:"Twitter / X", tab_bluesky:"Bluesky", tab_smtp:"SMTP Email",
+  tab_ext:"Ext. Server",
+  server:"APRS-IS Server:", port:"Port:", callsign:"Callsign:",
+  allowed_cs:"Allowed callsigns:",
+  allowed_cs_hint:"Comma-separated, wildcards OK  e.g.  TA3HRJ*, N0CALL-*",
+  print_cfg:"Print config on startup",
+  autostart_agent:"Start agent automatically on launch",
+  log_enabled:"Enable Logger", log_comments:"Log server comment lines (#)",
+  filter_type:"Filter by packet type:",
+  filter_type_hint:"Comma-separated chars  e.g.  !, :, ;, @",
+  exclude_type:"Exclude packet types:", kw_filter:"Keyword filter:",
+  kw_filter_hint:"Comma-separated, case-insensitive",
+  bcn_enabled:"Enable Fixed Beacon", bcn_locator:"QTH Locator:",
+  bcn_locator_hint:"Maidenhead grid  e.g.  KM38nk23  (4/6/8 chars)",
+  bcn_ssid:"Station SSID:", bcn_lat:"Latitude:", bcn_lon:"Longitude:",
+  bcn_lat_hint:"DDMM.MMN", bcn_lon_hint:"DDDMM.MME",
+  bcn_sym_tbl:"Symbol table:", bcn_comment:"Beacon comment:",
+  bcn_interval:"Interval (minutes):",
+  tw_enabled:"Enable Twitter / X", tw_api_key:"API Key:",
+  tw_api_secret:"API Secret:", tw_tok_key:"Access Token Key:",
+  tw_tok_secret:"Access Token Secret:",
+  tw_hashtag:"Add #APRS hashtag automatically",
+  tw_recepients:"Allowed APRS recipients:", tw_senders:"Allowed APRS senders:",
+  tw_cs_hint:"Comma-separated callsigns",
+  tw_note:"Requires Twitter API v2 credentials with read+write access (paid plan).",
+  bsky_enabled:"Enable Bluesky", bsky_username:"Username (handle):",
+  bsky_username_hint:"e.g.  yourname.bsky.social",
+  bsky_app_pass:"App Password:",
+  bsky_app_pass_hint:"Create at bsky.app → Settings → App Passwords",
+  bsky_hashtag:"Add #APRS hashtag automatically",
+  bsky_recepients:"Allowed APRS recipients:", bsky_senders:"Allowed APRS senders:",
+  bsky_cs_hint:"Comma-separated callsigns",
+  bsky_note:"Free API — no payment required. Create an App Password at bsky.app → Settings → App Passwords.",
+  smtp_enabled:"Enable SMTP Email", smtp_server:"SMTP Server:",
+  smtp_server_hint:"host:port  e.g.  smtp.gmail.com:587",
+  smtp_user:"Username:", smtp_pass:"Password:",
+  smtp_senders:"Allowed APRS senders:", smtp_recip:"Allowed APRS recipients:",
+  smtp_emails:"Allowed destination emails:",
+  smtp_emails_hint:"Comma-separated, leave empty to allow all",
+  smtp_from:"From address:",
+  ext_enabled:"Enable Extension Server", ext_host:"Listen host:",
+  ext_port:"Listen port:",
+  ext_hint:"Allows other programs on this machine to receive a live APRS stream over TCP. Protocol: client sends 'ping', server replies 'pong <timestamp>'. All packets are forwarded as 'data <aprs_line>'.",
+  status_stopped:"● Stopped", status_running:"● Running",
+  btn_start:"▶  Start", btn_stop:"■  Stop", btn_save:"💾  Save Config",
+  btn_about:"About",
+  about_title:"About APRS-Agent",
+  about_desc:"A multi-extension APRS-IS agent for amateur radio operators.\nSupports Twitter/X, Bluesky, SMTP email, fixed position beaconing,\nand an extension server for third-party integrations.",
+  about_devs:"Developers", about_license:"Released under the MIT License.",
+  about_source:"Source code:", about_close:"Close",
+  save_ok:"Configuration saved.", save_err:"Failed to save configuration.",
+  no_callsign:"Please enter your callsign before starting.",
+},
+tr: {
+  tab_conn:"Bağlantı", tab_log:"Logger", tab_beacon:"Sabit Konum",
+  tab_twitter:"Twitter / X", tab_bluesky:"Bluesky", tab_smtp:"SMTP E-posta",
+  tab_ext:"Ext. Sunucu",
+  server:"APRS-IS Sunucusu:", port:"Port:", callsign:"Çağrı İşareti:",
+  allowed_cs:"İzin verilen çağrı işaretleri:",
+  allowed_cs_hint:"Virgülle ayır, joker karakter kullanılabilir  örn.  TA3HRJ*, N0CALL-*",
+  print_cfg:"Başlangıçta ayarları ekrana yaz",
+  autostart_agent:"Başlangıçta ajanı otomatik başlat",
+  log_enabled:"Logger'ı Etkinleştir", log_comments:"Sunucu yorum satırlarını (#) logla",
+  filter_type:"Paket türü filtresi:",
+  filter_type_hint:"Virgülle ayırılmış karakterler  örn.  !, :, ;, @",
+  exclude_type:"Hariç tutulacak paket türleri:", kw_filter:"Anahtar kelime filtresi:",
+  kw_filter_hint:"Virgülle ayır, büyük/küçük harf önemsiz",
+  bcn_enabled:"Sabit Konum Yayınını Etkinleştir", bcn_locator:"QTH Locator:",
+  bcn_locator_hint:"Maidenhead grid  örn.  KM38nk23  (4/6/8 hane)",
+  bcn_ssid:"İstasyon SSID:", bcn_lat:"Enlem:", bcn_lon:"Boylam:",
+  bcn_lat_hint:"DDMM.MMN", bcn_lon_hint:"DDDMM.MME",
+  bcn_sym_tbl:"Sembol tablosu:", bcn_comment:"Beacon açıklaması:",
+  bcn_interval:"Gönderim aralığı (dakika):",
+  tw_enabled:"Twitter / X Entegrasyonunu Etkinleştir", tw_api_key:"API Anahtarı:",
+  tw_api_secret:"API Gizli Anahtarı:", tw_tok_key:"Erişim Token Anahtarı:",
+  tw_tok_secret:"Erişim Token Gizli Anahtarı:",
+  tw_hashtag:"#APRS hashtag otomatik ekle",
+  tw_recepients:"İzin verilen APRS alıcıları:", tw_senders:"İzin verilen APRS göndericileri:",
+  tw_cs_hint:"Virgülle ayırılmış çağrı işaretleri",
+  tw_note:"Twitter API v2 kimlik bilgileri gerektirir — okuma+yazma erişimi (ücretli plan).",
+  bsky_enabled:"Bluesky Entegrasyonunu Etkinleştir", bsky_username:"Kullanıcı adı (handle):",
+  bsky_username_hint:"örn.  adınız.bsky.social",
+  bsky_app_pass:"Uygulama Şifresi:",
+  bsky_app_pass_hint:"bsky.app → Ayarlar → App Passwords bölümünden oluşturun",
+  bsky_hashtag:"#APRS hashtag otomatik ekle",
+  bsky_recepients:"İzin verilen APRS alıcıları:", bsky_senders:"İzin verilen APRS göndericileri:",
+  bsky_cs_hint:"Virgülle ayırılmış çağrı işaretleri",
+  bsky_note:"Ücretsiz API — ödeme gerekmez. bsky.app → Ayarlar → App Passwords bölümünden bir Uygulama Şifresi oluşturun.",
+  smtp_enabled:"SMTP E-posta Entegrasyonunu Etkinleştir", smtp_server:"SMTP Sunucusu:",
+  smtp_server_hint:"host:port  örn.  smtp.gmail.com:587",
+  smtp_user:"Kullanıcı adı:", smtp_pass:"Şifre:",
+  smtp_senders:"İzin verilen APRS göndericileri:", smtp_recip:"İzin verilen APRS alıcıları:",
+  smtp_emails:"İzin verilen hedef e-posta adresleri:",
+  smtp_emails_hint:"Virgülle ayır, boş bırakırsan hepsi serbest",
+  smtp_from:"Gönderen adresi:",
+  ext_enabled:"Extension Sunucusunu Etkinleştir", ext_host:"Dinleme adresi:",
+  ext_port:"Dinleme portu:",
+  ext_hint:"Bu bilgisayardaki diğer programların TCP üzerinden canlı APRS akışı almasını sağlar. Protokol: istemci 'ping' gönderir, sunucu 'pong <zaman>' yanıtlar. Tüm paketler 'data <aprs_satırı>' olarak iletilir.",
+  status_stopped:"● Durduruldu", status_running:"● Çalışıyor",
+  btn_start:"▶  Başlat", btn_stop:"■  Durdur", btn_save:"💾  Ayarları Kaydet",
+  btn_about:"Hakkında",
+  about_title:"APRS-Agent Hakkında",
+  about_desc:"Amatör radyo operatörleri için çok eklentili bir APRS-IS ajanı.\nTwitter/X, Bluesky, SMTP e-posta, sabit konum yayını ve\nüçüncü taraf entegrasyonları için extension sunucusu destekler.",
+  about_devs:"Geliştiriciler", about_license:"MIT Lisansı ile yayımlanmıştır.",
+  about_source:"Kaynak kod:", about_close:"Kapat",
+  save_ok:"Ayarlar kaydedildi.", save_err:"Ayarlar kaydedilemedi.",
+  no_callsign:"Başlatmadan önce çağrı işaretinizi girin.",
+}
+};
+
+let lang = 'en';
+
+function t(k) { return (S[lang] && S[lang][k]) || (S.en[k]) || k; }
+
+function applyLang() {
+  document.querySelectorAll('[data-i]').forEach(el => {
+    const k = el.getAttribute('data-i');
+    const txt = t(k);
+    if (el.tagName === 'INPUT') el.placeholder = txt;
+    else el.textContent = txt;
+  });
+  document.getElementById('btn-lang').textContent = lang === 'en' ? '🌐 TR' : '🌐 EN';
+}
+
+// ── Tabs ──────────────────────────────────────────────
+document.getElementById('tab-bar').addEventListener('click', e => {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+});
+
+// ── About ─────────────────────────────────────────────
+document.getElementById('btn-about').addEventListener('click', () => {
+  document.getElementById('about-overlay').classList.add('open');
+});
+document.getElementById('about-close').addEventListener('click', () => {
+  document.getElementById('about-overlay').classList.remove('open');
+});
+document.getElementById('about-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+});
+
+// ── Language toggle ───────────────────────────────────
+document.getElementById('btn-lang').addEventListener('click', () => {
+  lang = lang === 'en' ? 'tr' : 'en';
+  applyLang();
+});
+
+// ── Log panel ─────────────────────────────────────────
+const logEl = document.getElementById('log');
+let autoScroll = true;
+
+logEl.addEventListener('scroll', () => {
+  autoScroll = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 20;
+});
+
+document.getElementById('log-clear').addEventListener('click', () => {
+  logEl.innerHTML = '';
+});
+
+function appendLog(text) {
+  const lines = text.split('\n');
+  for (const line of lines) {
+    if (!line) continue;
+    const span = document.createElement('span');
+    const lower = line.toLowerCase();
+    if (lower.includes('error') || lower.includes('fail') || lower.includes('fatal'))
+      span.className = 'log-r';
+    else if (lower.includes('warn'))
+      span.className = 'log-y';
+    else if (lower.includes('[') && (lower.includes('ok') || lower.includes('sent') ||
+             lower.includes('connected') || lower.includes('activated') ||
+             lower.includes('initialized') || lower.includes('started')))
+      span.className = 'log-g';
+    else
+      span.className = 'log-n';
+    span.textContent = line + '\n';
+    logEl.appendChild(span);
+  }
+  if (logEl.childNodes.length > 2000) {
+    while (logEl.childNodes.length > 1500) logEl.removeChild(logEl.firstChild);
+  }
+  if (autoScroll) logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ── Log panel resize ──────────────────────────────────
+(function() {
+  const hdr = document.getElementById('log-header');
+  const logDiv = document.getElementById('log');
+  let startY, startH;
+  hdr.addEventListener('mousedown', e => {
+    startY = e.clientY;
+    startH = logDiv.offsetHeight;
+    const onMove = ev => {
+      const h = startH - (ev.clientY - startY);
+      logDiv.style.height = Math.max(60, Math.min(500, h)) + 'px';
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
+// ── Maidenhead conversion ─────────────────────────────
+function latlon2maiden(lat, lon) {
+  lon += 180; lat += 90;
+  const a = Math.floor(lon/20), b = Math.floor(lat/10);
+  lon -= a*20; lat -= b*10;
+  const c = Math.floor(lon/2), d = Math.floor(lat);
+  lon -= c*2; lat -= d;
+  const e = Math.floor(lon*12), f = Math.floor(lat*24);
+  lon = lon*12 - e; lat = lat*24 - f;
+  const g = Math.floor(lon*10), h = Math.floor(lat*10);
+  return String.fromCharCode(65+a) + String.fromCharCode(65+b) +
+         c + d + String.fromCharCode(97+e) + String.fromCharCode(97+f) + g + h;
+}
+
+function maiden2latlon(grid) {
+  const g = grid.trim();
+  if (g.length < 4) return null;
+  let lon = (g.charCodeAt(0) & 0xDF) - 65;
+  let lat = (g.charCodeAt(1) & 0xDF) - 65;
+  lon = lon*20 - 180 + parseInt(g[2])*2;
+  lat = lat*10 - 90 + parseInt(g[3]);
+  if (g.length >= 6) {
+    lon += ((g.charCodeAt(4)|32) - 97) / 12;
+    lat += ((g.charCodeAt(5)|32) - 97) / 24;
+  }
+  if (g.length >= 8) {
+    lon += parseInt(g[6]) / 120;
+    lat += parseInt(g[7]) / 240;
+  }
+  return { lat, lon };
+}
+
+function aprsLat(dd) {
+  const ns = dd >= 0 ? 'N' : 'S';
+  dd = Math.abs(dd);
+  const deg = Math.floor(dd);
+  const mins = (dd - deg) * 60;
+  return String(deg).padStart(2,'0') + mins.toFixed(2).padStart(5,'0') + ns;
+}
+function aprsLon(dd) {
+  const ew = dd >= 0 ? 'E' : 'W';
+  dd = Math.abs(dd);
+  const deg = Math.floor(dd);
+  const mins = (dd - deg) * 60;
+  return String(deg).padStart(3,'0') + mins.toFixed(2).padStart(5,'0') + ew;
+}
+function parseAprsLat(s) {
+  if (!s || s.length < 7) return null;
+  const ns = s.slice(-1).toUpperCase();
+  const deg = parseInt(s.slice(0,2));
+  const mins = parseFloat(s.slice(2, s.length-1));
+  if (isNaN(deg) || isNaN(mins)) return null;
+  let dd = deg + mins/60;
+  if (ns === 'S') dd = -dd;
+  return dd;
+}
+function parseAprsLon(s) {
+  if (!s || s.length < 8) return null;
+  const ew = s.slice(-1).toUpperCase();
+  const deg = parseInt(s.slice(0,3));
+  const mins = parseFloat(s.slice(3, s.length-1));
+  if (isNaN(deg) || isNaN(mins)) return null;
+  let dd = deg + mins/60;
+  if (ew === 'W') dd = -dd;
+  return dd;
+}
+
+// QTH Locator → Lat/Lon sync
+let coordUpdating = false;
+document.getElementById('f-bcn-locator').addEventListener('input', function() {
+  if (coordUpdating) return;
+  const v = this.value.trim();
+  if (v.length >= 4) {
+    const ll = maiden2latlon(v);
+    if (ll) {
+      coordUpdating = true;
+      document.getElementById('f-bcn-lat').value = aprsLat(ll.lat);
+      document.getElementById('f-bcn-lon').value = aprsLon(ll.lon);
+      coordUpdating = false;
+    }
+  }
+});
+['f-bcn-lat','f-bcn-lon'].forEach(id => {
+  document.getElementById(id).addEventListener('input', function() {
+    if (coordUpdating) return;
+    const lat = parseAprsLat(document.getElementById('f-bcn-lat').value);
+    const lon = parseAprsLon(document.getElementById('f-bcn-lon').value);
+    if (lat !== null && lon !== null) {
+      coordUpdating = true;
+      document.getElementById('f-bcn-locator').value = latlon2maiden(lat, lon);
+      coordUpdating = false;
+    }
+  });
+});
+
+// ── Config ↔ Form ─────────────────────────────────────
+const $ = id => document.getElementById(id);
+const csv = arr => (arr||[]).join(', ');
+const lst = s => s.split(',').map(x=>x.trim()).filter(Boolean);
+const chars = s => s.split(',').map(x=>x.trim()).filter(x=>x.length===1||x==='\\');
+
+function loadConfigToForm(cfg) {
+  $('f-server').value = cfg.server || '';
+  $('f-port').value = cfg.port || 14580;
+  $('f-callsign').value = cfg.callsign || '';
+  $('f-allowed-cs').value = csv(cfg.allowed_callsigns);
+  $('f-print-cfg').checked = cfg.print_config_on_startup || false;
+  $('f-autostart-agent').checked = cfg.auto_start_agent || false;
+
+  const l = (cfg.extensions||{}).logger || {};
+  $('f-log-enabled').checked = l.enabled !== false;
+  $('f-log-comments').checked = l.log_comments !== false;
+  $('f-filter-type').value = csv(l.filter_by_message_type);
+  $('f-exclude-type').value = csv(l.exclude_by_message_type);
+  $('f-kw-filter').value = csv(l.keyword_filter);
+
+  const b = (cfg.extensions||{}).fixed_beacon || {};
+  $('f-bcn-enabled').checked = b.enabled || false;
+  $('f-bcn-ssid').value = b.ssid || '';
+  $('f-bcn-lat').value = b.lat || '';
+  $('f-bcn-lon').value = b.lon || '';
+  const blat = parseAprsLat(b.lat||'');
+  const blon = parseAprsLon(b.lon||'');
+  if (blat!==null && blon!==null) $('f-bcn-locator').value = latlon2maiden(blat, blon);
+  $('f-bcn-sym-tbl').value = b.symbol_table || '/';
+  $('f-bcn-sym').value = b.symbol || '-';
+  $('f-bcn-comment').value = b.comment || '';
+  $('f-bcn-interval').value = b.beacon_interval_mins || 15;
+
+  const tw = (cfg.extensions||{}).twitter || {};
+  $('f-tw-enabled').checked = tw.enabled || false;
+  $('f-tw-api-key').value = tw.api_key || '';
+  $('f-tw-api-secret').value = tw.api_secret || '';
+  $('f-tw-tok-key').value = tw.access_token_key || '';
+  $('f-tw-tok-secret').value = tw.access_token_secret || '';
+  $('f-tw-hashtag').checked = tw.add_hash_tag !== false;
+  $('f-tw-recepients').value = csv(tw.allowed_recepients);
+  $('f-tw-senders').value = csv(tw.allowed_senders);
+
+  const bs = (cfg.extensions||{}).bluesky || {};
+  $('f-bsky-enabled').checked = bs.enabled || false;
+  $('f-bsky-username').value = bs.username || '';
+  $('f-bsky-app-pass').value = bs.app_password || '';
+  $('f-bsky-hashtag').checked = bs.add_hash_tag !== false;
+  $('f-bsky-recepients').value = csv(bs.allowed_recepients);
+  $('f-bsky-senders').value = csv(bs.allowed_senders);
+
+  const sm = (cfg.extensions||{}).smtp || {};
+  $('f-smtp-enabled').checked = sm.enabled || false;
+  $('f-smtp-server').value = sm.smtp_server || '';
+  $('f-smtp-user').value = sm.smtp_username || '';
+  $('f-smtp-pass').value = sm.smtp_password || '';
+  $('f-smtp-senders').value = csv(sm.allowed_senders);
+  $('f-smtp-recip').value = csv(sm.allowed_recipients);
+  $('f-smtp-emails').value = csv(sm.allowed_receiver_emails);
+  $('f-smtp-from').value = sm.from_email || '';
+
+  const es = cfg.extension_server || {};
+  $('f-ext-enabled').checked = es.enabled || false;
+  $('f-ext-host').value = es.host || '127.0.0.1';
+  $('f-ext-port').value = es.port || 65080;
+}
+
+function formToConfig() {
+  return {
+    server: $('f-server').value.trim(),
+    port: parseInt($('f-port').value) || 14580,
+    callsign: $('f-callsign').value.trim().toUpperCase(),
+    allowed_callsigns: lst($('f-allowed-cs').value),
+    print_config_on_startup: $('f-print-cfg').checked,
+    auto_start_agent: $('f-autostart-agent').checked,
+    extension_server: {
+      enabled: $('f-ext-enabled').checked,
+      host: $('f-ext-host').value.trim(),
+      port: parseInt($('f-ext-port').value) || 65080,
+    },
+    extensions: {
+      logger: {
+        enabled: $('f-log-enabled').checked,
+        log_comments: $('f-log-comments').checked,
+        filter_by_message_type: chars($('f-filter-type').value),
+        exclude_by_message_type: chars($('f-exclude-type').value),
+        keyword_filter: lst($('f-kw-filter').value),
+      },
+      fixed_beacon: {
+        enabled: $('f-bcn-enabled').checked,
+        ssid: $('f-bcn-ssid').value.trim().toUpperCase(),
+        lat: $('f-bcn-lat').value.trim(),
+        lon: $('f-bcn-lon').value.trim(),
+        symbol_table: $('f-bcn-sym-tbl').value || '/',
+        symbol: ($('f-bcn-sym').value||'-')[0],
+        comment: $('f-bcn-comment').value.trim(),
+        beacon_interval_mins: parseInt($('f-bcn-interval').value) || 15,
+      },
+      twitter: {
+        enabled: $('f-tw-enabled').checked,
+        api_key: $('f-tw-api-key').value.trim(),
+        api_secret: $('f-tw-api-secret').value.trim(),
+        access_token_key: $('f-tw-tok-key').value.trim(),
+        access_token_secret: $('f-tw-tok-secret').value.trim(),
+        add_hash_tag: $('f-tw-hashtag').checked,
+        allowed_recepients: lst($('f-tw-recepients').value),
+        allowed_senders: lst($('f-tw-senders').value),
+      },
+      bluesky: {
+        enabled: $('f-bsky-enabled').checked,
+        username: $('f-bsky-username').value.trim(),
+        app_password: $('f-bsky-app-pass').value,
+        add_hash_tag: $('f-bsky-hashtag').checked,
+        allowed_recepients: lst($('f-bsky-recepients').value),
+        allowed_senders: lst($('f-bsky-senders').value),
+      },
+      smtp: {
+        enabled: $('f-smtp-enabled').checked,
+        smtp_server: $('f-smtp-server').value.trim(),
+        smtp_username: $('f-smtp-user').value.trim(),
+        smtp_password: $('f-smtp-pass').value,
+        allowed_senders: lst($('f-smtp-senders').value),
+        allowed_recipients: lst($('f-smtp-recip').value),
+        allowed_receiver_emails: lst($('f-smtp-emails').value),
+        from_email: $('f-smtp-from').value.trim(),
+      },
+    },
+  };
+}
+
+// ── Status ────────────────────────────────────────────
+function setStatus(running) {
+  const el = $('status');
+  if (running) {
+    el.textContent = t('status_running');
+    el.className = 'status-running';
+    $('btn-start').disabled = true;
+    $('btn-stop').disabled = false;
+  } else {
+    el.textContent = t('status_stopped');
+    el.className = 'status-stopped';
+    $('btn-start').disabled = false;
+    $('btn-stop').disabled = true;
+  }
+}
+
+// ── WebSocket ─────────────────────────────────────────
+let ws = null;
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/ws');
+  ws.onopen = () => {
+    $('ws-dot').classList.add('connected');
+    appendLog('[web] WebSocket connected\n');
+  };
+  ws.onmessage = e => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'log') appendLog(data.text);
+    if (data.type === 'status') setStatus(data.running);
+  };
+  ws.onclose = () => {
+    $('ws-dot').classList.remove('connected');
+    setTimeout(connectWS, 2000);
+  };
+  ws.onerror = () => ws.close();
+}
+
+// ── API calls ─────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(path, opts);
+  return res.json();
+}
+
+// ── Buttons ───────────────────────────────────────────
+$('btn-start').addEventListener('click', async () => {
+  const cs = $('f-callsign').value.trim();
+  if (!cs || cs === 'N0CALL') {
+    alert(t('no_callsign'));
+    return;
+  }
+  $('btn-start').disabled = true;
+  await api('POST', '/api/start');
+});
+
+$('btn-stop').addEventListener('click', async () => {
+  $('btn-stop').disabled = true;
+  await api('POST', '/api/stop');
+});
+
+$('btn-save').addEventListener('click', async () => {
+  try {
+    const res = await api('POST', '/api/config', formToConfig());
+    if (res.ok) {
+      appendLog('[web] ' + t('save_ok') + '\n');
+    } else {
+      appendLog('[web] ' + t('save_err') + ' ' + (res.error||'') + '\n');
+    }
+  } catch(e) {
+    appendLog('[web] ' + t('save_err') + ' ' + e + '\n');
+  }
+});
+
+// ── Status polling (fallback if WS drops) ─────────────
+setInterval(async () => {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    setStatus(d.running);
+  } catch(e) {}
+}, 5000);
+
+// ── Init ──────────────────────────────────────────────
+(async function init() {
+  try {
+    const info = await api('GET', '/api/info');
+    $('hdr-version').textContent = 'v' + (info.version || '?');
+    $('hdr-cfg').textContent = info.config_path || '';
+    $('hdr-cfg').title = info.config_path || '';
+    $('about-ver').textContent = 'APRS-Agent v' + (info.version || '?');
+    setStatus(info.running);
+  } catch(e) {}
+
+  try {
+    const cfg = await api('GET', '/api/config');
+    loadConfigToForm(cfg);
+  } catch(e) {
+    appendLog('[web] Failed to load config: ' + e + '\n');
+  }
+
+  connectWS();
+  applyLang();
+})();
+</script>
+</body>
+</html>

@@ -24,6 +24,8 @@ _hidden = [
     'atproto',
     'atproto_client',
     'atproto_client.models',
+    'aiohttp',
+    'aiohttp.web',
     'aiosmtplib',
     'tomllib',
     'tomli_w',
@@ -132,4 +134,52 @@ gui_coll = COLLECT(
     upx=False,
     upx_exclude=[],
     name='aprs-agent-gui',
+)
+
+# ── Web GUI version ──────────────────────────────────────────────────────────
+web_analysis = Analysis(
+    ['web_gui.py'],
+    pathex=[str(ROOT)],
+    binaries=[],
+    datas=[
+        ('aprsconfig.toml.template', '.'),
+        ('HELP.html', '.'),
+        ('aprs-agent.ico', '.'),
+        ('aprs-symbols-24-0.png', '.'),
+        ('aprs-symbols-24-1.png', '.'),
+        ('static/index.html', 'static'),              # web frontend
+    ],
+    hiddenimports=_hidden,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=['tkinter', 'pystray'],
+    noarchive=False,
+)
+
+web_pyz = PYZ(web_analysis.pure)
+
+web_exe = EXE(
+    web_pyz,
+    web_analysis.scripts,
+    [],
+    exclude_binaries=True,
+    name='aprs-agent-web',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=True,           # Web: shows server URL in console
+    icon=ICON if Path(ICON).exists() else None,
+)
+
+web_coll = COLLECT(
+    web_exe,
+    web_analysis.binaries,
+    web_analysis.zipfiles,
+    web_analysis.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='aprs-agent-web',
 )
