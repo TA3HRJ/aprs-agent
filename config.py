@@ -94,6 +94,14 @@ DEFAULTS: dict[str, Any] = {
             "comment": "APRS-Agent | https://github.com/YOUR_USERNAME/aprs-agent",
             "beacon_interval_mins": 15,
         },
+        "bluesky": {
+            "enabled": False,
+            "username": "",
+            "app_password": "",
+            "add_hash_tag": True,
+            "allowed_recepients": ["BSKYSEND"],
+            "allowed_senders": ["N0CALL"],
+        },
         "smtp": {
             "enabled": False,
             "smtp_server": "smtp.example.com:587",
@@ -245,6 +253,9 @@ def print_config(config: dict[str, Any]) -> None:
 
     tw = safe.get("extensions", {}).get("twitter", {})
     mask(tw, ["api_key", "api_secret", "access_token_key", "access_token_secret"])
+
+    bsky = safe.get("extensions", {}).get("bluesky", {})
+    mask(bsky, ["app_password"])
 
     sm = safe.get("extensions", {}).get("smtp", {})
     mask(sm, ["smtp_password"])

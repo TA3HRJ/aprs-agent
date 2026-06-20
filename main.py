@@ -34,6 +34,7 @@ import extension_server as ext_server_module
 from extensions import ExtensionRegistry
 from extensions.logger_ext import Logger
 from extensions.twitter_ext import Twitter
+from extensions.bluesky_ext import Bluesky
 from extensions.smtp_ext import SmtpEmailer
 from extensions.fixed_beacon import FixedBeacon
 
@@ -96,6 +97,13 @@ def register_extensions(config: dict) -> None:
     if ext_cfg.get("fixed_beacon", {}).get("enabled"):
         try:
             ExtensionRegistry.register(FixedBeacon(ext_cfg["fixed_beacon"]))
+        except ValueError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    if ext_cfg.get("bluesky", {}).get("enabled"):
+        try:
+            ExtensionRegistry.register(Bluesky(ext_cfg["bluesky"]))
         except ValueError as e:
             print(f"ERROR: {e}", file=sys.stderr)
             sys.exit(1)

@@ -417,6 +417,7 @@ _S = {
         "tab_log":            "Logger",
         "tab_beacon":         "Fixed Beacon",
         "tab_twitter":        "Twitter / X",
+        "tab_bluesky":        "Bluesky",
         "tab_smtp":           "SMTP Email",
         "tab_ext":            "Ext. Server",
         # connection
@@ -460,6 +461,16 @@ _S = {
         "tw_recepients":      "Allowed APRS recipients:",
         "tw_senders":         "Allowed APRS senders:",
         "tw_cs_hint":         "Comma-separated callsigns",
+        # bluesky
+        "bsky_enabled":       "Enable Bluesky",
+        "bsky_username":      "Username (handle):",
+        "bsky_username_hint": "e.g.  yourname.bsky.social",
+        "bsky_app_pass":      "App Password:",
+        "bsky_app_pass_hint": "Create at bsky.app → Settings → App Passwords",
+        "bsky_hashtag":       "Add #APRS hashtag automatically",
+        "bsky_recepients":    "Allowed APRS recipients:",
+        "bsky_senders":       "Allowed APRS senders:",
+        "bsky_cs_hint":       "Comma-separated callsigns",
         # smtp
         "smtp_enabled":       "Enable SMTP Email",
         "smtp_server":        "SMTP Server:",
@@ -528,6 +539,7 @@ _S = {
         "tab_log":            "Logger",
         "tab_beacon":         "Sabit Konum",
         "tab_twitter":        "Twitter / X",
+        "tab_bluesky":        "Bluesky",
         "tab_smtp":           "SMTP E-posta",
         "tab_ext":            "Ext. Sunucu",
         # connection
@@ -571,6 +583,16 @@ _S = {
         "tw_recepients":      "İzin verilen APRS alıcıları:",
         "tw_senders":         "İzin verilen APRS göndericileri:",
         "tw_cs_hint":         "Virgülle ayırılmış çağrı işaretleri",
+        # bluesky
+        "bsky_enabled":       "Bluesky Entegrasyonunu Etkinleştir",
+        "bsky_username":      "Kullanıcı adı (handle):",
+        "bsky_username_hint": "örn.  adınız.bsky.social",
+        "bsky_app_pass":      "Uygulama Şifresi:",
+        "bsky_app_pass_hint": "bsky.app → Ayarlar → App Passwords bölümünden oluşturun",
+        "bsky_hashtag":       "#APRS hashtag otomatik ekle",
+        "bsky_recepients":    "İzin verilen APRS alıcıları:",
+        "bsky_senders":       "İzin verilen APRS göndericileri:",
+        "bsky_cs_hint":       "Virgülle ayırılmış çağrı işaretleri",
         # smtp
         "smtp_enabled":       "SMTP E-posta Entegrasyonunu Etkinleştir",
         "smtp_server":        "SMTP Sunucusu:",
@@ -1096,12 +1118,14 @@ class AgentRunner:
         # Import and register extensions
         from extensions.logger_ext import Logger
         from extensions.twitter_ext import Twitter
+        from extensions.bluesky_ext import Bluesky
         from extensions.smtp_ext import SmtpEmailer
         from extensions.fixed_beacon import FixedBeacon
 
         ext_cfg = config.get("extensions", {})
         _pairs = [
             ("twitter",      Twitter,      ext_cfg.get("twitter", {})),
+            ("bluesky",      Bluesky,      ext_cfg.get("bluesky", {})),
             ("logger",       Logger,       ext_cfg.get("logger", {})),
             ("smtp",         SmtpEmailer,  ext_cfg.get("smtp", {})),
             ("fixed_beacon", FixedBeacon,  ext_cfg.get("fixed_beacon", {})),
@@ -1261,12 +1285,13 @@ class APRSAgentGUI:
         self._nb.pack(fill="both", expand=True, padx=8, pady=(4, 0))
 
         tab_keys = ["tab_conn", "tab_log", "tab_beacon",
-                    "tab_twitter", "tab_smtp", "tab_ext"]
+                    "tab_twitter", "tab_bluesky", "tab_smtp", "tab_ext"]
         builders = [
             self._build_conn_tab,
             self._build_logger_tab,
             self._build_beacon_tab,
             self._build_twitter_tab,
+            self._build_bluesky_tab,
             self._build_smtp_tab,
             self._build_extserver_tab,
         ]
@@ -1520,6 +1545,30 @@ class APRSAgentGUI:
         self._row(f, 12, "tw_senders",    self._v_tw_senders,
                   hint_key="tw_cs_hint", width=42)
 
+    # ── Bluesky tab ───────────────────────────────────────────────────────────
+
+    def _build_bluesky_tab(self, parent) -> None:
+        f = self._scrollable(parent)
+        f.columnconfigure(1, weight=1)
+
+        self._v_bsky_enabled  = tk.BooleanVar()
+        self._v_bsky_username = tk.StringVar()
+        self._v_bsky_app_pass = tk.StringVar()
+        self._v_bsky_hashtag  = tk.BooleanVar()
+        self._v_bsky_recepients = tk.StringVar()
+        self._v_bsky_senders  = tk.StringVar()
+
+        self._check(f, 0,  "bsky_enabled",    self._v_bsky_enabled)
+        self._row(f, 1,  "bsky_username",   self._v_bsky_username,
+                  hint_key="bsky_username_hint", width=42)
+        self._row(f, 3,  "bsky_app_pass",   self._v_bsky_app_pass,
+                  show=True, hint_key="bsky_app_pass_hint", width=42)
+        self._check(f, 5,  "bsky_hashtag",   self._v_bsky_hashtag)
+        self._row(f, 6,  "bsky_recepients", self._v_bsky_recepients,
+                  hint_key="bsky_cs_hint", width=42)
+        self._row(f, 8,  "bsky_senders",    self._v_bsky_senders,
+                  hint_key="bsky_cs_hint", width=42)
+
     # ── SMTP tab ──────────────────────────────────────────────────────────────
 
     def _build_smtp_tab(self, parent) -> None:
@@ -1677,6 +1726,15 @@ class APRSAgentGUI:
         self._v_tw_recepients.set(_csv(tw.get("allowed_recepients", [])))
         self._v_tw_senders.set(_csv(tw.get("allowed_senders", [])))
 
+        # Bluesky
+        bsky = cfg.get("extensions", {}).get("bluesky", {})
+        self._v_bsky_enabled.set(bsky.get("enabled", False))
+        self._v_bsky_username.set(bsky.get("username", ""))
+        self._v_bsky_app_pass.set(bsky.get("app_password", ""))
+        self._v_bsky_hashtag.set(bsky.get("add_hash_tag", True))
+        self._v_bsky_recepients.set(_csv(bsky.get("allowed_recepients", [])))
+        self._v_bsky_senders.set(_csv(bsky.get("allowed_senders", [])))
+
         # SMTP
         sm = cfg.get("extensions", {}).get("smtp", {})
         self._v_smtp_enabled.set(sm.get("enabled", False))
@@ -1752,6 +1810,14 @@ class APRSAgentGUI:
                     "add_hash_tag":         self._v_tw_hashtag.get(),
                     "allowed_recepients":   _lst(self._v_tw_recepients.get()),
                     "allowed_senders":      _lst(self._v_tw_senders.get()),
+                },
+                "bluesky": {
+                    "enabled":              self._v_bsky_enabled.get(),
+                    "username":             self._v_bsky_username.get().strip(),
+                    "app_password":         self._v_bsky_app_pass.get(),
+                    "add_hash_tag":         self._v_bsky_hashtag.get(),
+                    "allowed_recepients":   _lst(self._v_bsky_recepients.get()),
+                    "allowed_senders":      _lst(self._v_bsky_senders.get()),
                 },
                 "smtp": {
                     "enabled":               self._v_smtp_enabled.get(),

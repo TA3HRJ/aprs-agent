@@ -157,3 +157,26 @@ allowed_receiver_emails = []
 
 # The "From:" address shown in outgoing emails
 from_email = "APRS-Agent <aprs@example.com>"
+
+# --- Bluesky ---
+# Posts incoming APRS messages to a Bluesky account (free API, no payment needed).
+# Create an App Password at: bsky.app → Settings → App Passwords
+# Send APRS messages to the "allowed_recepients" alias to trigger a post.
+
+[extensions.bluesky]
+enabled = false
+
+# Your Bluesky handle (e.g. yourname.bsky.social)
+username = ""
+
+# App Password (NOT your main Bluesky password — create one specifically for this app)
+app_password = ""
+
+# Automatically append #APRS to every post
+add_hash_tag = true
+
+# Only post when the APRS message is addressed to one of these aliases
+allowed_recepients = ["BSKYSEND"]
+
+# Only accept messages FROM these callsigns
+allowed_senders = ["N0CALL"]
