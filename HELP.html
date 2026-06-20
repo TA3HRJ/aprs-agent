@@ -172,6 +172,7 @@
       <li>APRS-IS ağından gelen paketleri ekranda gösterir (<strong>Logger</strong>)</li>
       <li>Konumunuzu belirli aralıklarla ağa gönderir (<strong>Sabit Konum / Fixed Beacon</strong>)</li>
       <li>Size gelen APRS mesajlarını Twitter/X'e iletir (<strong>Twitter</strong>)</li>
+      <li>Size gelen APRS mesajlarını Bluesky'a iletir (<strong>Bluesky</strong>) — ücretsiz API</li>
       <li>Size gelen APRS mesajlarını e-posta olarak yönlendirir (<strong>SMTP E-posta</strong>)</li>
       <li>Diğer programların aynı APRS akışına bağlanmasını sağlar (<strong>Extension Sunucu</strong>)</li>
     </ul>
@@ -345,6 +346,29 @@
     </table>
   </div>
 
+  <h2>Bluesky Sekmesi</h2>
+
+  <div class="card">
+    <div class="card-title">🦋 Bluesky Entegrasyonu</div>
+    <p>
+      Size gelen bir APRS mesajı (belirli bir takma ada — örn. <code>BSKYSEND</code> — gönderilmiş)
+      otomatik olarak Bluesky hesabınıza post olarak atılır.
+    </p>
+    <div class="callout tip">
+      <strong>✅ Ücretsiz API — ödeme gerekmez</strong>
+      Twitter/X'in aksine Bluesky API tamamen ücretsizdir.
+      Sadece bir Uygulama Şifresi (App Password) oluşturmanız yeterlidir:
+      <a href="https://bsky.app" target="_blank">bsky.app</a> → Ayarlar → App Passwords
+    </div>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr><td><span class="field-name">Kullanıcı adı</span></td><td>Bluesky handle'ınız. Örnek: <code>adiniz.bsky.social</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Uygulama Şifresi</span></td><td>App Password (ana şifreniz DEĞİL). bsky.app → Ayarlar → App Passwords'tan oluşturun.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">İzin verilen APRS alıcıları</span></td><td>Hangi APRS takma ada gönderildiğinde post atılacak. Varsayılan: <code>BSKYSEND</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">İzin verilen APRS göndericileri</span></td><td>Hangi çağrı işaretlerinden gelen mesajları işleyeceği. Kendi çağrı işaretinizi yazın.</td><td><span class="badge req">Zorunlu</span></td></tr>
+    </table>
+  </div>
+
   <h2>SMTP E-posta Sekmesi</h2>
 
   <div class="card">
@@ -434,6 +458,7 @@
       <li>Display incoming APRS packets in a live log window (<strong>Logger</strong>)</li>
       <li>Periodically broadcast your station position to APRS maps (<strong>Fixed Beacon</strong>)</li>
       <li>Forward incoming APRS messages to Twitter/X (<strong>Twitter</strong>)</li>
+      <li>Forward incoming APRS messages to Bluesky (<strong>Bluesky</strong>) — free API</li>
       <li>Forward incoming APRS messages to email (<strong>SMTP</strong>)</li>
       <li>Let other software on your PC tap into the same APRS stream (<strong>Extension Server</strong>)</li>
     </ul>
@@ -600,6 +625,29 @@
       <tr><td><span class="field-name">API Key / Secret</span></td><td>Your Twitter app credentials.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Access Token / Secret</span></td><td>Your account access tokens.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Allowed APRS recipients</span></td><td>Which APRS addressee triggers a tweet. Default: <code>TWSEND</code></td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Allowed APRS senders</span></td><td>Only messages from these callsigns are processed. Enter your own callsign.</td><td><span class="badge req">Required</span></td></tr>
+    </table>
+  </div>
+
+  <h2>Bluesky Tab</h2>
+
+  <div class="card">
+    <div class="card-title">🦋 Bluesky Integration</div>
+    <p>
+      When an APRS message is addressed to a configured alias (e.g. <code>BSKYSEND</code>)
+      from an allowed sender, it is automatically posted to your Bluesky account.
+    </p>
+    <div class="callout tip">
+      <strong>✅ Free API — no payment required</strong>
+      Unlike Twitter/X, the Bluesky API is completely free.
+      You only need to create an App Password:
+      <a href="https://bsky.app" target="_blank">bsky.app</a> → Settings → App Passwords
+    </div>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr><td><span class="field-name">Username</span></td><td>Your Bluesky handle. Example: <code>yourname.bsky.social</code></td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">App Password</span></td><td>App Password (NOT your main password). Create at bsky.app → Settings → App Passwords.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Allowed APRS recipients</span></td><td>Which APRS addressee triggers a post. Default: <code>BSKYSEND</code></td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Allowed APRS senders</span></td><td>Only messages from these callsigns are processed. Enter your own callsign.</td><td><span class="badge req">Required</span></td></tr>
     </table>
   </div>

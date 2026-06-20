@@ -14,7 +14,8 @@ several automation features useful for amateur radio operators.
 
 | | Feature | Description |
 |---|---|---|
-| 🖥️ | **GUI** | Form-based config editor, Start/Stop, minimize to system tray, EN/TR language |
+| 🖥️ | **Desktop GUI** | Form-based config editor, Start/Stop, minimize to system tray, EN/TR language |
+| 🌐 | **Web GUI** | Browser-based interface — same features, runs on Windows, Linux, or remote server |
 | 📡 | **Fixed Beacon** | Periodically sends your station's position — with visual APRS symbol picker and Maidenhead / QTH Locator support |
 | 🪵 | **Logger** | Logs incoming APRS packets to the terminal, with type and keyword filters |
 | 🐦 | **Twitter / X** | Forwards APRS messages addressed to `TWSEND` to your Twitter/X account |
@@ -50,18 +51,15 @@ cd aprs-agent
 pip install -r requirements.txt
 ```
 
-**3. Run the GUI**
+**3. Run**
 
 ```bash
-python gui.py
+python web_gui.py           # Web GUI — opens browser to http://localhost:8080
+python gui.py               # Desktop GUI (Windows, tkinter)
+python main.py              # CLI only (headless)
 ```
 
-Or run headless (CLI only):
-
-```bash
-python main.py --write-default-config   # create config template
-python main.py                          # start agent
-```
+First run creates a default `aprsconfig.toml` — enter your callsign and you're ready.
 
 ---
 
@@ -159,7 +157,27 @@ EMAIL friend@example.com Hello, sent via APRS!
 
 ---
 
+## Web GUI — Universal Interface
+
+The web-based GUI works on any operating system with a browser. Same features as the desktop GUI.
+
+```bash
+python web_gui.py                          # localhost:8080, auto-opens browser
+python web_gui.py -p 9090                  # custom port
+python web_gui.py --host 0.0.0.0 -p 8080  # listen on all interfaces (remote access)
+```
+
+**Local (Windows/Mac):** browser opens automatically to `http://localhost:8080`
+
+**Remote (Linux server / VPS):** access via `http://YOUR_SERVER_IP:8080`
+
+> For production use on a public server, put it behind a reverse proxy (nginx/caddy) with HTTPS.
+
+---
+
 ## Command-line Options
+
+### CLI (`main.py`)
 
 ```
 python main.py [options]
@@ -169,6 +187,17 @@ python main.py [options]
   -p, --print-config          Print loaded config (secrets masked) and exit
   -s, --sync-config-to-file   Add missing default values to existing config
   -h, --help                  Show this help
+```
+
+### Web GUI (`web_gui.py`)
+
+```
+python web_gui.py [options]
+
+  -c, --config PATH     Path to config file (default: ./aprsconfig.toml)
+  -p, --port PORT       Web server port (default: 8080)
+  --host HOST           Listen address (default: 0.0.0.0)
+  --no-browser          Don't auto-open browser on startup
 ```
 
 ---
@@ -182,7 +211,10 @@ pip install pyinstaller
 pyinstaller aprs_agent.spec --noconfirm
 ```
 
-Output: `dist/aprs-agent-gui/aprs-agent-gui.exe`
+Output (three targets):
+- `dist/aprs-agent/aprs-agent.exe` — CLI headless
+- `dist/aprs-agent-gui/aprs-agent-gui.exe` — Desktop GUI (tkinter)
+- `dist/aprs-agent-web/aprs-agent-web.exe` — Web GUI (browser-based)
 
 ---
 
@@ -228,8 +260,9 @@ sudo journalctl -fu aprs-agent
 
 ```
 aprs-agent/
-├── main.py                      # CLI entry point
-├── gui.py                       # Graphical interface (tkinter)
+├── main.py                      # CLI entry point (headless)
+├── gui.py                       # Desktop GUI (tkinter, Windows)
+├── web_gui.py                   # Web GUI (aiohttp, universal)
 ├── config.py                    # Configuration loading and defaults
 ├── aprs_connection.py           # APRS-IS TCP connection with auto-reconnect
 ├── extension_server.py          # Local TCP server for external clients
@@ -240,8 +273,10 @@ aprs-agent/
 │   ├── bluesky_ext.py           # Bluesky integration
 │   ├── smtp_ext.py              # SMTP email forwarding
 │   └── fixed_beacon.py          # Periodic position beacon
+├── static/
+│   └── index.html               # Web GUI frontend (HTML/CSS/JS)
 ├── aprsconfig.toml.template     # Annotated config template (safe to share)
-├── aprs_agent.spec              # PyInstaller build spec
+├── aprs_agent.spec              # PyInstaller build spec (CLI + GUI + Web)
 ├── aprs-symbols-24-0.png        # APRS symbol sprites — primary table
 ├── aprs-symbols-24-1.png        # APRS symbol sprites — alternate table
 ├── HELP.html                    # User guide (bilingual EN/TR)
