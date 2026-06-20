@@ -18,6 +18,7 @@ several automation features useful for amateur radio operators.
 | 📡 | **Fixed Beacon** | Periodically sends your station's position — with visual APRS symbol picker and Maidenhead / QTH Locator support |
 | 🪵 | **Logger** | Logs incoming APRS packets to the terminal, with type and keyword filters |
 | 🐦 | **Twitter / X** | Forwards APRS messages addressed to `TWSEND` to your Twitter/X account |
+| 🦋 | **Bluesky** | Forwards APRS messages addressed to `BSKYSEND` to your Bluesky account (free API) |
 | 📧 | **SMTP Email** | Forwards APRS messages addressed to `EMAIL` to any email address via SMTP |
 | 🔌 | **Extension Server** | Local TCP server — lets other programs subscribe to the live APRS stream |
 
@@ -118,6 +119,27 @@ allowed_senders     = ["YOUR_CALLSIGN"]
 allowed_recepients  = ["TWSEND"]
 ```
 
+### Bluesky
+
+Free alternative to Twitter/X — no API payment required.
+Create an **App Password** at [bsky.app](https://bsky.app) → Settings → App Passwords.
+
+```toml
+[extensions.bluesky]
+enabled      = true
+username     = "yourname.bsky.social"
+app_password = "xxxx-xxxx-xxxx-xxxx"   # App Password, NOT your main password
+allowed_senders    = ["YOUR_CALLSIGN"]
+allowed_recepients = ["BSKYSEND"]
+```
+
+To post to Bluesky via APRS, send this message from your radio or software:
+```
+BSKYSEND Hello from APRS!
+```
+
+The agent posts the message to your Bluesky account and sends an APRS ACK back.
+
 ### SMTP Email
 
 ```toml
@@ -215,6 +237,7 @@ aprs-agent/
 │   ├── __init__.py              # Extension base class and registry
 │   ├── logger_ext.py            # Console logger
 │   ├── twitter_ext.py           # Twitter/X integration
+│   ├── bluesky_ext.py           # Bluesky integration
 │   ├── smtp_ext.py              # SMTP email forwarding
 │   └── fixed_beacon.py          # Periodic position beacon
 ├── aprsconfig.toml.template     # Annotated config template (safe to share)
