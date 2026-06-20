@@ -21,6 +21,8 @@ Usage:
 Developed by TA3HRJ & TA3PKS
 MIT License - see LICENSE file
 """
+from __future__ import annotations
+
 
 import argparse
 import asyncio

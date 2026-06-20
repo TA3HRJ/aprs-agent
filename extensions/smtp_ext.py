@@ -15,6 +15,8 @@ Supports Gmail (use App Password), Outlook, or any standard SMTP server.
 
 Developed by TA3HRJ & TA3PKS
 """
+from __future__ import annotations
+
 
 import asyncio
 import smtplib

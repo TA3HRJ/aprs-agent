@@ -16,6 +16,8 @@ Get credentials at: https://developer.twitter.com
 
 Developed by TA3HRJ & TA3PKS
 """
+from __future__ import annotations
+
 
 import asyncio
 from typing import Optional
@@ -93,8 +95,10 @@ class Twitter(Extension):
             self.log(f"tweet sent: {tweet[:60]}...")
         except tweepy.TweepyException as e:
             self.error(f"tweet error: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                self.error(f"  response body: {e.response.text[:200]}")
         except Exception as e:
-            self.error(f"unexpected tweet error: {e}")
+            self.error(f"unexpected tweet error: {type(e).__name__}: {e}")
 
     async def handle(self, line: str) -> Optional[bytes]:
         cfg = self._config

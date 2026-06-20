@@ -16,6 +16,8 @@ APRS data stream without needing to connect directly to APRS-IS.
 
 Developed by TA3HRJ & TA3PKS
 """
+from __future__ import annotations
+
 
 import asyncio
 import sys

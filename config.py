@@ -10,6 +10,8 @@ Supports:
 
 Developed by TA3HRJ & TA3PKS
 """
+from __future__ import annotations
+
 
 import copy
 import sys

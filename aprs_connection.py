@@ -18,6 +18,8 @@ APRS-IS Protocol basics:
 
 Developed by TA3HRJ & TA3PKS
 """
+from __future__ import annotations
+
 
 import asyncio
 import sys

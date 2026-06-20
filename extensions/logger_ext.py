@@ -6,6 +6,8 @@ Supports filtering by APRS data type character and keywords.
 
 Developed by TA3HRJ & TA3PKS
 """
+from __future__ import annotations
+
 
 from typing import Optional
 

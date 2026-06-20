@@ -19,6 +19,8 @@ Configuration fields in aprsconfig.toml:
 
 Developed by TA3HRJ & TA3PKS
 """
+from __future__ import annotations
+
 
 import asyncio
 from typing import Optional
