@@ -11,7 +11,7 @@ How it works:
 4. Posts the message to Twitter
 5. Sends an APRS ACK back to the sender
 
-Requires Twitter API v1.1 credentials with read+write access.
+Requires Twitter API v2 credentials with read+write access.
 Get credentials at: https://developer.twitter.com
 
 Developed by TA3HRJ & TA3PKS
@@ -80,14 +80,13 @@ class Twitter(Extension):
         loop = asyncio.get_running_loop()
 
         def _do_tweet():
-            auth = tweepy.OAuth1UserHandler(
-                cfg["api_key"],
-                cfg["api_secret"],
-                cfg["access_token_key"],
-                cfg["access_token_secret"],
+            client = tweepy.Client(
+                consumer_key=cfg["api_key"],
+                consumer_secret=cfg["api_secret"],
+                access_token=cfg["access_token_key"],
+                access_token_secret=cfg["access_token_secret"],
             )
-            api = tweepy.API(auth)
-            api.update_status(tweet)
+            client.create_tweet(text=tweet)
 
         try:
             await loop.run_in_executor(None, _do_tweet)
