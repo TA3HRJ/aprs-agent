@@ -49,14 +49,19 @@ header h1 {
 }
 header .version { color: var(--muted); font-size: 13px; }
 header .spacer { flex: 1; }
-header .cfg-path {
-  color: var(--muted);
+.cfg-input {
+  color: var(--text);
   font-size: 12px;
   font-family: 'Consolas', 'Courier New', monospace;
-  max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  width: 260px;
+  padding: 5px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.cfg-input:focus {
+  outline: none;
+  border-color: var(--primary);
 }
 .hdr-btn {
   background: var(--surface2);
@@ -308,7 +313,8 @@ footer .spacer { flex: 1; }
   <h1>APRS-Agent</h1>
   <span class="version" id="hdr-version"></span>
   <span class="spacer"></span>
-  <span class="cfg-path" id="hdr-cfg" title="Config file path"></span>
+  <input type="text" class="cfg-input" id="hdr-cfg" title="Config file path" placeholder="aprsconfig.toml">
+  <button class="hdr-btn" id="btn-reload" data-i="btn_reload">🔄 Reload</button>
   <button class="hdr-btn" id="btn-about" data-i="btn_about">About</button>
   <button class="hdr-btn" id="btn-lang">🌐 TR</button>
 </header>
@@ -624,6 +630,9 @@ en: {
   about_desc:"A multi-extension APRS-IS agent for amateur radio operators.\nSupports Twitter/X, Bluesky, SMTP email, fixed position beaconing,\nand an extension server for third-party integrations.",
   about_devs:"Developers", about_license:"Released under the MIT License.",
   about_source:"Source code:", about_close:"Close",
+  btn_reload:"🔄 Reload",
+  reload_ok:"Config reloaded from file.",
+  reload_err:"Failed to reload config.",
   save_ok:"Configuration saved.", save_err:"Failed to save configuration.",
   no_callsign:"Please enter your callsign before starting.",
 },
@@ -679,6 +688,9 @@ tr: {
   about_desc:"Amatör radyo operatörleri için çok eklentili bir APRS-IS ajanı.\nTwitter/X, Bluesky, SMTP e-posta, sabit konum yayını ve\nüçüncü taraf entegrasyonları için extension sunucusu destekler.",
   about_devs:"Geliştiriciler", about_license:"MIT Lisansı ile yayımlanmıştır.",
   about_source:"Kaynak kod:", about_close:"Kapat",
+  btn_reload:"🔄 Yenile",
+  reload_ok:"Ayarlar dosyadan yeniden yüklendi.",
+  reload_err:"Ayarlar yeniden yüklenemedi.",
   save_ok:"Ayarlar kaydedildi.", save_err:"Ayarlar kaydedilemedi.",
   no_callsign:"Başlatmadan önce çağrı işaretinizi girin.",
 }
@@ -1073,6 +1085,20 @@ $('btn-stop').addEventListener('click', async () => {
   await api('POST', '/api/stop');
 });
 
+$('btn-reload').addEventListener('click', async () => {
+  try {
+    const newPath = $('hdr-cfg').value.trim();
+    if (newPath) {
+      await api('POST', '/api/config-path', {path: newPath});
+    }
+    const cfg = await api('GET', '/api/config');
+    loadConfigToForm(cfg);
+    appendLog('[web] ' + t('reload_ok') + '\n');
+  } catch(e) {
+    appendLog('[web] ' + t('reload_err') + ' ' + e + '\n');
+  }
+});
+
 $('btn-save').addEventListener('click', async () => {
   try {
     const res = await api('POST', '/api/config', formToConfig());
@@ -1100,7 +1126,7 @@ setInterval(async () => {
   try {
     const info = await api('GET', '/api/info');
     $('hdr-version').textContent = 'v' + (info.version || '?');
-    $('hdr-cfg').textContent = info.config_path || '';
+    $('hdr-cfg').value = info.config_path || '';
     $('hdr-cfg').title = info.config_path || '';
     $('about-ver').textContent = 'APRS-Agent v' + (info.version || '?');
     setStatus(info.running);

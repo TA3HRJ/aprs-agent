@@ -228,6 +228,19 @@ async def save_config(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": str(e)}, status=400)
 
 
+@routes.post("/api/config-path")
+async def set_config_path(request: web.Request) -> web.Response:
+    mgr: AgentManager = request.app["manager"]
+    try:
+        data = await request.json()
+        new_path = data.get("path", "").strip()
+        if new_path:
+            mgr.config_path = new_path
+        return web.json_response({"ok": True, "config_path": mgr.config_path})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=400)
+
+
 @routes.post("/api/start")
 async def start_agent(request: web.Request) -> web.Response:
     mgr: AgentManager = request.app["manager"]
