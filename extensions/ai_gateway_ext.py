@@ -144,17 +144,24 @@ class AIGateway(Extension):
         loop = asyncio.get_running_loop()
 
         def _do_ask():
-            resp = client.chat.completions.create(
-                model=model,
-                max_tokens=40 + (extra * 35),
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": question},
-                ],
-            )
-            return resp.choices[0].message.content.strip()
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    max_tokens=40 + (extra * 35),
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": question},
+                    ],
+                )
+                return resp.choices[0].message.content.strip()
+            finally:
+                try:
+                    client.close()
+                except Exception:
+                    pass
 
         try:
+            self._client = None
             answer = await loop.run_in_executor(None, _do_ask)
             return _to_ascii(answer)
         except Exception as e:
