@@ -326,6 +326,7 @@ footer .spacer { flex: 1; }
   <button class="tab-btn"        data-tab="beacon"  data-i="tab_beacon">Fixed Beacon</button>
   <button class="tab-btn"        data-tab="twitter" data-i="tab_twitter">Twitter / X</button>
   <button class="tab-btn"        data-tab="bluesky" data-i="tab_bluesky">Bluesky</button>
+  <button class="tab-btn"        data-tab="ai"      data-i="tab_ai">AI Gateway</button>
   <button class="tab-btn"        data-tab="smtp"    data-i="tab_smtp">SMTP Email</button>
   <button class="tab-btn"        data-tab="ext"     data-i="tab_ext">Ext. Server</button>
 </nav>
@@ -483,6 +484,68 @@ footer .spacer { flex: 1; }
   </div>
 </div>
 
+<!-- ── AI Gateway ─────────────────────────────────── -->
+<div class="tab-panel" id="panel-ai">
+  <h2 data-i="tab_ai">AI Gateway</h2>
+  <div class="section-note" data-i="ai_note">Auto-responds to incoming APRS messages using AI. Supports Puter (free), Groq, OpenRouter, or any OpenAI-compatible endpoint.</div>
+  <label class="chk"><input type="checkbox" id="f-ai-enabled"><span data-i="ai_enabled">Enable AI Gateway</span></label>
+  <div class="field">
+    <label data-i="ai_callsign">AI Callsign:</label>
+    <input type="text" id="f-ai-callsign" style="max-width:180px" placeholder="N0CALL">
+    <small data-i="ai_callsign_hint">Messages addressed to this callsign will trigger AI responses</small>
+  </div>
+  <div class="field">
+    <label data-i="ai_provider">Provider:</label>
+    <select id="f-ai-provider" style="max-width:220px;padding:7px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px">
+      <option value="puter">Puter (free)</option>
+      <option value="groq">Groq</option>
+      <option value="openrouter">OpenRouter</option>
+      <option value="custom">Custom endpoint</option>
+    </select>
+  </div>
+  <div class="field">
+    <label data-i="ai_api_key">API Key:</label>
+    <input type="password" id="f-ai-api-key">
+    <small data-i="ai_api_key_hint">Get from your provider's dashboard. Puter: puter.com, Groq: console.groq.com</small>
+  </div>
+  <div class="field">
+    <label data-i="ai_base_url">Custom Base URL:</label>
+    <input type="text" id="f-ai-base-url" placeholder="https://api.example.com/v1/">
+    <small data-i="ai_base_url_hint">Only needed for custom provider. Leave empty to use provider default.</small>
+  </div>
+  <div class="field">
+    <label data-i="ai_model">Model:</label>
+    <input type="text" id="f-ai-model" style="max-width:320px" placeholder="auto (provider default)">
+    <small data-i="ai_model_hint">Leave empty for provider default. Examples: gpt-4o-mini, llama-3.3-70b-versatile</small>
+  </div>
+  <div class="field">
+    <label data-i="ai_system_prompt">System Prompt:</label>
+    <input type="text" id="f-ai-system-prompt">
+    <small data-i="ai_system_prompt_hint">Custom AI instructions. Leave empty for default APRS-optimized prompt.</small>
+  </div>
+  <div class="field">
+    <label data-i="ai_trigger_prefix">Trigger Prefix:</label>
+    <input type="text" id="f-ai-trigger-prefix" style="max-width:180px" placeholder="(none — all messages)">
+    <small data-i="ai_trigger_prefix_hint">If set, only messages starting with this prefix trigger AI. e.g. "AI" means only "AI what is APRS?" triggers.</small>
+  </div>
+  <div class="field">
+    <label data-i="ai_trigger_aliases">Trigger Aliases:</label>
+    <input type="text" id="f-ai-trigger-aliases">
+    <small data-i="ai_trigger_aliases_hint">Extra APRS addressees that trigger AI, comma-separated. e.g. AI, CHATBOT</small>
+  </div>
+  <div class="field">
+    <label data-i="ai_extra_sms">Extra SMS Parts:</label>
+    <input type="number" id="f-ai-extra-sms" style="max-width:100px" value="0" min="0" max="5">
+    <small data-i="ai_extra_sms_hint">0 = single 64-char reply. 1-5 = multi-part responses (5s delay between parts).</small>
+  </div>
+  <label class="chk"><input type="checkbox" id="f-ai-wl-enabled"><span data-i="ai_wl_enabled">Enable Whitelist</span></label>
+  <div class="field">
+    <label data-i="ai_whitelist">Whitelist:</label>
+    <input type="text" id="f-ai-whitelist">
+    <small data-i="ai_whitelist_hint">Comma-separated callsigns. Wildcards OK: TA3* allows all TA3 stations.</small>
+  </div>
+</div>
+
 <!-- ── SMTP Email ─────────────────────────────────── -->
 <div class="tab-panel" id="panel-smtp">
   <h2 data-i="tab_smtp">SMTP Email</h2>
@@ -613,6 +676,20 @@ en: {
   bsky_recepients:"Allowed APRS recipients:", bsky_senders:"Allowed APRS senders:",
   bsky_cs_hint:"Comma-separated callsigns",
   bsky_note:"Free API — no payment required. Create an App Password at bsky.app → Settings → App Passwords.",
+  tab_ai:"AI Gateway",
+  ai_enabled:"Enable AI Gateway",
+  ai_note:"Auto-responds to incoming APRS messages using AI. Supports Puter (free), Groq, OpenRouter, or any OpenAI-compatible endpoint.",
+  ai_callsign:"AI Callsign:", ai_callsign_hint:"Messages addressed to this callsign will trigger AI responses",
+  ai_provider:"Provider:", ai_api_key:"API Key:",
+  ai_api_key_hint:"Get from your provider's dashboard. Puter: puter.com, Groq: console.groq.com",
+  ai_base_url:"Custom Base URL:", ai_base_url_hint:"Only needed for custom provider. Leave empty to use provider default.",
+  ai_model:"Model:", ai_model_hint:"Leave empty for provider default. Examples: gpt-4o-mini, llama-3.3-70b-versatile",
+  ai_system_prompt:"System Prompt:", ai_system_prompt_hint:"Custom AI instructions. Leave empty for default APRS-optimized prompt.",
+  ai_trigger_prefix:"Trigger Prefix:", ai_trigger_prefix_hint:"If set, only messages starting with this prefix trigger AI.",
+  ai_trigger_aliases:"Trigger Aliases:", ai_trigger_aliases_hint:"Extra APRS addressees that trigger AI, comma-separated.",
+  ai_extra_sms:"Extra SMS Parts:", ai_extra_sms_hint:"0 = single 64-char reply. 1-5 = multi-part responses (5s delay between parts).",
+  ai_wl_enabled:"Enable Whitelist", ai_whitelist:"Whitelist:",
+  ai_whitelist_hint:"Comma-separated callsigns. Wildcards OK: TA3* allows all TA3 stations.",
   smtp_enabled:"Enable SMTP Email", smtp_server:"SMTP Server:",
   smtp_server_hint:"host:port  e.g.  smtp.gmail.com:587",
   smtp_user:"Username:", smtp_pass:"Password:",
@@ -671,6 +748,20 @@ tr: {
   bsky_recepients:"İzin verilen APRS alıcıları:", bsky_senders:"İzin verilen APRS göndericileri:",
   bsky_cs_hint:"Virgülle ayırılmış çağrı işaretleri",
   bsky_note:"Ücretsiz API — ödeme gerekmez. bsky.app → Ayarlar → App Passwords bölümünden bir Uygulama Şifresi oluşturun.",
+  tab_ai:"AI Gateway",
+  ai_enabled:"AI Gateway'i Etkinleştir",
+  ai_note:"Gelen APRS mesajlarına yapay zeka ile otomatik yanıt verir. Puter (ücretsiz), Groq, OpenRouter veya herhangi bir OpenAI uyumlu endpoint destekler.",
+  ai_callsign:"AI Çağrı İşareti:", ai_callsign_hint:"Bu çağrı işaretine gönderilen mesajlar AI yanıtı tetikler",
+  ai_provider:"Sağlayıcı:", ai_api_key:"API Anahtarı:",
+  ai_api_key_hint:"Sağlayıcınızın panelinden alın. Puter: puter.com, Groq: console.groq.com",
+  ai_base_url:"Özel Base URL:", ai_base_url_hint:"Sadece özel sağlayıcı için gerekli. Varsayılan için boş bırakın.",
+  ai_model:"Model:", ai_model_hint:"Varsayılan için boş bırakın. Örnekler: gpt-4o-mini, llama-3.3-70b-versatile",
+  ai_system_prompt:"Sistem Promptu:", ai_system_prompt_hint:"Özel AI talimatları. Varsayılan APRS promptu için boş bırakın.",
+  ai_trigger_prefix:"Tetikleme Ön Eki:", ai_trigger_prefix_hint:"Ayarlanırsa sadece bu ön ekle başlayan mesajlar AI'ı tetikler.",
+  ai_trigger_aliases:"Tetikleme Takma Adları:", ai_trigger_aliases_hint:"AI'ı tetikleyen ek APRS alıcı adları, virgülle ayır.",
+  ai_extra_sms:"Ek SMS Parçası:", ai_extra_sms_hint:"0 = tek 64 karakterlik yanıt. 1-5 = çok parçalı (parçalar arası 5s gecikme).",
+  ai_wl_enabled:"Whitelist'i Etkinleştir", ai_whitelist:"Whitelist:",
+  ai_whitelist_hint:"Virgülle ayırılmış çağrı işaretleri. Joker karakter OK: TA3* tüm TA3 istasyonlarına izin verir.",
   smtp_enabled:"SMTP E-posta Entegrasyonunu Etkinleştir", smtp_server:"SMTP Sunucusu:",
   smtp_server_hint:"host:port  örn.  smtp.gmail.com:587",
   smtp_user:"Kullanıcı adı:", smtp_pass:"Şifre:",
@@ -942,6 +1033,20 @@ function loadConfigToForm(cfg) {
   $('f-bsky-recepients').value = csv(bs.allowed_recepients);
   $('f-bsky-senders').value = csv(bs.allowed_senders);
 
+  const ai = (cfg.extensions||{}).ai_gateway || {};
+  $('f-ai-enabled').checked = ai.enabled || false;
+  $('f-ai-callsign').value = ai.callsign || '';
+  $('f-ai-provider').value = ai.provider || 'puter';
+  $('f-ai-api-key').value = ai.api_key || '';
+  $('f-ai-base-url').value = ai.base_url || '';
+  $('f-ai-model').value = ai.model || '';
+  $('f-ai-system-prompt').value = ai.system_prompt || '';
+  $('f-ai-trigger-prefix').value = ai.trigger_prefix || '';
+  $('f-ai-trigger-aliases').value = csv(ai.trigger_aliases);
+  $('f-ai-extra-sms').value = ai.extra_sms || 0;
+  $('f-ai-wl-enabled').checked = ai.whitelist_enabled || false;
+  $('f-ai-whitelist').value = csv(ai.whitelist);
+
   const sm = (cfg.extensions||{}).smtp || {};
   $('f-smtp-enabled').checked = sm.enabled || false;
   $('f-smtp-server').value = sm.smtp_server || '';
@@ -1006,6 +1111,20 @@ function formToConfig() {
         add_hash_tag: $('f-bsky-hashtag').checked,
         allowed_recepients: lst($('f-bsky-recepients').value),
         allowed_senders: lst($('f-bsky-senders').value),
+      },
+      ai_gateway: {
+        enabled: $('f-ai-enabled').checked,
+        callsign: $('f-ai-callsign').value.trim().toUpperCase(),
+        provider: $('f-ai-provider').value,
+        api_key: $('f-ai-api-key').value,
+        base_url: $('f-ai-base-url').value.trim(),
+        model: $('f-ai-model').value.trim(),
+        system_prompt: $('f-ai-system-prompt').value,
+        trigger_prefix: $('f-ai-trigger-prefix').value.trim(),
+        trigger_aliases: lst($('f-ai-trigger-aliases').value),
+        extra_sms: parseInt($('f-ai-extra-sms').value) || 0,
+        whitelist_enabled: $('f-ai-wl-enabled').checked,
+        whitelist: lst($('f-ai-whitelist').value),
       },
       smtp: {
         enabled: $('f-smtp-enabled').checked,

@@ -180,3 +180,44 @@ allowed_recepients = ["BSKYSEND"]
 
 # Only accept messages FROM these callsigns
 allowed_senders = ["N0CALL"]
+
+# --- AI Gateway ---
+# Auto-responds to incoming APRS messages using an AI provider.
+# Supports Puter (free), Groq, OpenRouter, or any OpenAI-compatible endpoint.
+# Messages addressed to the configured callsign will get an AI-generated reply.
+
+[extensions.ai_gateway]
+enabled = false
+
+# The callsign that triggers AI responses (messages addressed to this callsign)
+callsign = "N0CALL"
+
+# AI provider: "puter" (free), "groq", "openrouter", or "custom"
+provider = "puter"
+
+# API key from your provider (Puter: puter.com, Groq: console.groq.com)
+api_key = ""
+
+# Custom base URL (only needed if provider = "custom")
+base_url = ""
+
+# AI model name (leave empty for provider default)
+model = ""
+
+# Custom system prompt (leave empty for default APRS-optimized prompt)
+system_prompt = ""
+
+# If set, only messages starting with this prefix trigger AI (e.g. "AI")
+trigger_prefix = ""
+
+# Extra APRS addressees that trigger AI responses
+trigger_aliases = []
+
+# Number of extra SMS parts for longer responses (0 = single 64-char reply)
+extra_sms = 0
+
+# Enable callsign whitelist
+whitelist_enabled = false
+
+# Only respond to these callsigns (wildcards OK: TA3*)
+whitelist = []

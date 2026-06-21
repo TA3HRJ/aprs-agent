@@ -35,6 +35,7 @@ from extensions import ExtensionRegistry
 from extensions.logger_ext import Logger
 from extensions.twitter_ext import Twitter
 from extensions.bluesky_ext import Bluesky
+from extensions.ai_gateway_ext import AIGateway
 from extensions.smtp_ext import SmtpEmailer
 from extensions.fixed_beacon import FixedBeacon
 
@@ -104,6 +105,13 @@ def register_extensions(config: dict) -> None:
     if ext_cfg.get("bluesky", {}).get("enabled"):
         try:
             ExtensionRegistry.register(Bluesky(ext_cfg["bluesky"]))
+        except ValueError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    if ext_cfg.get("ai_gateway", {}).get("enabled"):
+        try:
+            ExtensionRegistry.register(AIGateway(ext_cfg["ai_gateway"]))
         except ValueError as e:
             print(f"ERROR: {e}", file=sys.stderr)
             sys.exit(1)

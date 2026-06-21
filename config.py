@@ -102,6 +102,20 @@ DEFAULTS: dict[str, Any] = {
             "allowed_recepients": ["BSKYSEND"],
             "allowed_senders": ["N0CALL"],
         },
+        "ai_gateway": {
+            "enabled": False,
+            "callsign": "N0CALL",
+            "provider": "puter",
+            "api_key": "",
+            "base_url": "",
+            "model": "",
+            "system_prompt": "",
+            "trigger_prefix": "",
+            "trigger_aliases": [],
+            "extra_sms": 0,
+            "whitelist_enabled": False,
+            "whitelist": [],
+        },
         "smtp": {
             "enabled": False,
             "smtp_server": "smtp.example.com:587",
@@ -256,6 +270,9 @@ def print_config(config: dict[str, Any]) -> None:
 
     bsky = safe.get("extensions", {}).get("bluesky", {})
     mask(bsky, ["app_password"])
+
+    ai = safe.get("extensions", {}).get("ai_gateway", {})
+    mask(ai, ["api_key"])
 
     sm = safe.get("extensions", {}).get("smtp", {})
     mask(sm, ["smtp_password"])

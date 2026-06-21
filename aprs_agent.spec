@@ -24,6 +24,8 @@ _hidden = [
     'atproto',
     'atproto_client',
     'atproto_client.models',
+    'openai',
+    'httpx',
     'aiohttp',
     'aiohttp.web',
     'aiosmtplib',

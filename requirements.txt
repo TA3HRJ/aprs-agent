@@ -25,5 +25,8 @@ Pillow>=10.0.0
 # Bluesky AT Protocol integration
 atproto>=0.0.46
 
+# AI Gateway: OpenAI-compatible API client
+openai>=1.0.0
+
 # Web GUI: async HTTP server + WebSocket
 aiohttp>=3.8.0

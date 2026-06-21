@@ -418,6 +418,7 @@ _S = {
         "tab_beacon":         "Fixed Beacon",
         "tab_twitter":        "Twitter / X",
         "tab_bluesky":        "Bluesky",
+        "tab_ai":             "AI Gateway",
         "tab_smtp":           "SMTP Email",
         "tab_ext":            "Ext. Server",
         # connection
@@ -471,6 +472,26 @@ _S = {
         "bsky_recepients":    "Allowed APRS recipients:",
         "bsky_senders":       "Allowed APRS senders:",
         "bsky_cs_hint":       "Comma-separated callsigns",
+        # ai gateway
+        "ai_enabled":         "Enable AI Gateway",
+        "ai_callsign":        "AI Callsign:",
+        "ai_callsign_hint":   "Messages to this callsign trigger AI  e.g.  N0CALL",
+        "ai_provider":        "Provider:",
+        "ai_api_key":         "API Key:",
+        "ai_base_url":        "Custom Base URL:",
+        "ai_base_url_hint":   "Only for custom provider. Leave empty for default.",
+        "ai_model":           "Model:",
+        "ai_model_hint":      "Leave empty for provider default",
+        "ai_system_prompt":   "System Prompt:",
+        "ai_trigger_prefix":  "Trigger Prefix:",
+        "ai_trigger_prefix_hint": "Only messages starting with this prefix trigger AI",
+        "ai_trigger_aliases": "Trigger Aliases:",
+        "ai_trigger_aliases_hint": "Extra APRS addressees, comma-separated",
+        "ai_extra_sms":       "Extra SMS Parts:",
+        "ai_extra_sms_hint":  "0=single reply, 1-5=multi-part (5s delay)",
+        "ai_wl_enabled":      "Enable Whitelist",
+        "ai_whitelist":       "Whitelist:",
+        "ai_whitelist_hint":  "Comma-separated callsigns, wildcards OK: TA3*",
         # smtp
         "smtp_enabled":       "Enable SMTP Email",
         "smtp_server":        "SMTP Server:",
@@ -540,6 +561,7 @@ _S = {
         "tab_beacon":         "Sabit Konum",
         "tab_twitter":        "Twitter / X",
         "tab_bluesky":        "Bluesky",
+        "tab_ai":             "AI Gateway",
         "tab_smtp":           "SMTP E-posta",
         "tab_ext":            "Ext. Sunucu",
         # connection
@@ -593,6 +615,26 @@ _S = {
         "bsky_recepients":    "İzin verilen APRS alıcıları:",
         "bsky_senders":       "İzin verilen APRS göndericileri:",
         "bsky_cs_hint":       "Virgülle ayırılmış çağrı işaretleri",
+        # ai gateway
+        "ai_enabled":         "AI Gateway'i Etkinleştir",
+        "ai_callsign":        "AI Çağrı İşareti:",
+        "ai_callsign_hint":   "Bu çağrı işaretine gelen mesajlar AI yanıtı tetikler",
+        "ai_provider":        "Sağlayıcı:",
+        "ai_api_key":         "API Anahtarı:",
+        "ai_base_url":        "Özel Base URL:",
+        "ai_base_url_hint":   "Sadece özel sağlayıcı için. Varsayılan için boş bırakın.",
+        "ai_model":           "Model:",
+        "ai_model_hint":      "Varsayılan için boş bırakın",
+        "ai_system_prompt":   "Sistem Promptu:",
+        "ai_trigger_prefix":  "Tetikleme Ön Eki:",
+        "ai_trigger_prefix_hint": "Sadece bu ön ekle başlayan mesajlar AI'ı tetikler",
+        "ai_trigger_aliases": "Tetikleme Takma Adları:",
+        "ai_trigger_aliases_hint": "Ek APRS alıcı adları, virgülle ayır",
+        "ai_extra_sms":       "Ek SMS Parçası:",
+        "ai_extra_sms_hint":  "0=tek yanıt, 1-5=çok parçalı (5s gecikme)",
+        "ai_wl_enabled":      "Whitelist'i Etkinleştir",
+        "ai_whitelist":       "Whitelist:",
+        "ai_whitelist_hint":  "Virgülle ayırılmış çağrı işaretleri, joker OK: TA3*",
         # smtp
         "smtp_enabled":       "SMTP E-posta Entegrasyonunu Etkinleştir",
         "smtp_server":        "SMTP Sunucusu:",
@@ -1119,6 +1161,7 @@ class AgentRunner:
         from extensions.logger_ext import Logger
         from extensions.twitter_ext import Twitter
         from extensions.bluesky_ext import Bluesky
+        from extensions.ai_gateway_ext import AIGateway
         from extensions.smtp_ext import SmtpEmailer
         from extensions.fixed_beacon import FixedBeacon
 
@@ -1126,6 +1169,7 @@ class AgentRunner:
         _pairs = [
             ("twitter",      Twitter,      ext_cfg.get("twitter", {})),
             ("bluesky",      Bluesky,      ext_cfg.get("bluesky", {})),
+            ("ai_gateway",   AIGateway,    ext_cfg.get("ai_gateway", {})),
             ("logger",       Logger,       ext_cfg.get("logger", {})),
             ("smtp",         SmtpEmailer,  ext_cfg.get("smtp", {})),
             ("fixed_beacon", FixedBeacon,  ext_cfg.get("fixed_beacon", {})),
@@ -1285,13 +1329,15 @@ class APRSAgentGUI:
         self._nb.pack(fill="both", expand=True, padx=8, pady=(4, 0))
 
         tab_keys = ["tab_conn", "tab_log", "tab_beacon",
-                    "tab_twitter", "tab_bluesky", "tab_smtp", "tab_ext"]
+                    "tab_twitter", "tab_bluesky", "tab_ai",
+                    "tab_smtp", "tab_ext"]
         builders = [
             self._build_conn_tab,
             self._build_logger_tab,
             self._build_beacon_tab,
             self._build_twitter_tab,
             self._build_bluesky_tab,
+            self._build_ai_tab,
             self._build_smtp_tab,
             self._build_extserver_tab,
         ]
@@ -1569,6 +1615,54 @@ class APRSAgentGUI:
         self._row(f, 8,  "bsky_senders",    self._v_bsky_senders,
                   hint_key="bsky_cs_hint", width=42)
 
+    # ── AI Gateway tab ────────────────────────────────────────────────────────
+
+    def _build_ai_tab(self, parent) -> None:
+        f = self._scrollable(parent)
+        f.columnconfigure(1, weight=1)
+
+        self._v_ai_enabled    = tk.BooleanVar()
+        self._v_ai_callsign   = tk.StringVar()
+        self._v_ai_provider   = tk.StringVar(value="puter")
+        self._v_ai_api_key    = tk.StringVar()
+        self._v_ai_base_url   = tk.StringVar()
+        self._v_ai_model      = tk.StringVar()
+        self._v_ai_sys_prompt = tk.StringVar()
+        self._v_ai_prefix     = tk.StringVar()
+        self._v_ai_aliases    = tk.StringVar()
+        self._v_ai_extra_sms  = tk.StringVar(value="0")
+        self._v_ai_wl_enabled = tk.BooleanVar()
+        self._v_ai_whitelist  = tk.StringVar()
+
+        self._check(f, 0,  "ai_enabled",    self._v_ai_enabled)
+        self._row(f, 1,  "ai_callsign",   self._v_ai_callsign,
+                  hint_key="ai_callsign_hint", width=20)
+
+        # Provider dropdown
+        self._lbl(f, "ai_provider").grid(row=3, column=0, sticky="w",
+                                          padx=(0, 8), pady=(6, 0))
+        prov_combo = ttk.Combobox(f, textvariable=self._v_ai_provider, width=22,
+                                  values=["puter", "groq", "openrouter", "custom"],
+                                  state="readonly")
+        prov_combo.grid(row=3, column=1, sticky="w", pady=(6, 0))
+
+        self._row(f, 4,  "ai_api_key",    self._v_ai_api_key,
+                  show=True, width=42)
+        self._row(f, 6,  "ai_base_url",   self._v_ai_base_url,
+                  hint_key="ai_base_url_hint", width=42)
+        self._row(f, 8,  "ai_model",      self._v_ai_model,
+                  hint_key="ai_model_hint", width=36)
+        self._row(f, 10, "ai_system_prompt", self._v_ai_sys_prompt, width=42)
+        self._row(f, 12, "ai_trigger_prefix", self._v_ai_prefix,
+                  hint_key="ai_trigger_prefix_hint", width=20)
+        self._row(f, 14, "ai_trigger_aliases", self._v_ai_aliases,
+                  hint_key="ai_trigger_aliases_hint", width=42)
+        self._row(f, 16, "ai_extra_sms",  self._v_ai_extra_sms,
+                  hint_key="ai_extra_sms_hint", width=8)
+        self._check(f, 18, "ai_wl_enabled", self._v_ai_wl_enabled)
+        self._row(f, 19, "ai_whitelist",  self._v_ai_whitelist,
+                  hint_key="ai_whitelist_hint", width=42)
+
     # ── SMTP tab ──────────────────────────────────────────────────────────────
 
     def _build_smtp_tab(self, parent) -> None:
@@ -1735,6 +1829,21 @@ class APRSAgentGUI:
         self._v_bsky_recepients.set(_csv(bsky.get("allowed_recepients", [])))
         self._v_bsky_senders.set(_csv(bsky.get("allowed_senders", [])))
 
+        # AI Gateway
+        ai = cfg.get("extensions", {}).get("ai_gateway", {})
+        self._v_ai_enabled.set(ai.get("enabled", False))
+        self._v_ai_callsign.set(ai.get("callsign", ""))
+        self._v_ai_provider.set(ai.get("provider", "puter"))
+        self._v_ai_api_key.set(ai.get("api_key", ""))
+        self._v_ai_base_url.set(ai.get("base_url", ""))
+        self._v_ai_model.set(ai.get("model", ""))
+        self._v_ai_sys_prompt.set(ai.get("system_prompt", ""))
+        self._v_ai_prefix.set(ai.get("trigger_prefix", ""))
+        self._v_ai_aliases.set(_csv(ai.get("trigger_aliases", [])))
+        self._v_ai_extra_sms.set(str(ai.get("extra_sms", 0)))
+        self._v_ai_wl_enabled.set(ai.get("whitelist_enabled", False))
+        self._v_ai_whitelist.set(_csv(ai.get("whitelist", [])))
+
         # SMTP
         sm = cfg.get("extensions", {}).get("smtp", {})
         self._v_smtp_enabled.set(sm.get("enabled", False))
@@ -1818,6 +1927,20 @@ class APRSAgentGUI:
                     "add_hash_tag":         self._v_bsky_hashtag.get(),
                     "allowed_recepients":   _lst(self._v_bsky_recepients.get()),
                     "allowed_senders":      _lst(self._v_bsky_senders.get()),
+                },
+                "ai_gateway": {
+                    "enabled":              self._v_ai_enabled.get(),
+                    "callsign":             self._v_ai_callsign.get().strip().upper(),
+                    "provider":             self._v_ai_provider.get(),
+                    "api_key":              self._v_ai_api_key.get(),
+                    "base_url":             self._v_ai_base_url.get().strip(),
+                    "model":                self._v_ai_model.get().strip(),
+                    "system_prompt":        self._v_ai_sys_prompt.get(),
+                    "trigger_prefix":       self._v_ai_prefix.get().strip(),
+                    "trigger_aliases":      _lst(self._v_ai_aliases.get()),
+                    "extra_sms":            int(self._v_ai_extra_sms.get().strip() or 0),
+                    "whitelist_enabled":    self._v_ai_wl_enabled.get(),
+                    "whitelist":            _lst(self._v_ai_whitelist.get()),
                 },
                 "smtp": {
                     "enabled":               self._v_smtp_enabled.get(),
