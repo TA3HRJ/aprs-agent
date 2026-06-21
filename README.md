@@ -21,6 +21,7 @@ several automation features useful for amateur radio operators.
 | 🐦 | **Twitter / X** | Forwards APRS messages addressed to `TWSEND` to your Twitter/X account |
 | 🦋 | **Bluesky** | Forwards APRS messages addressed to `BSKYSEND` to your Bluesky account (free API) |
 | 📧 | **SMTP Email** | Forwards APRS messages addressed to `EMAIL` to any email address via SMTP |
+| 🤖 | **AI Gateway** | Auto-responds to APRS messages using AI (Puter/Groq/OpenRouter — free options available) |
 | 🔌 | **Extension Server** | Local TCP server — lets other programs subscribe to the live APRS stream |
 
 ---
@@ -137,6 +138,27 @@ BSKYSEND Hello from APRS!
 ```
 
 The agent posts the message to your Bluesky account and sends an APRS ACK back.
+
+### AI Gateway
+
+Auto-responds to incoming APRS messages using AI. Free providers available.
+Inspired by [aprs-ai-gateway](https://github.com/ArdaYalinOzkan/aprs-ai-gateway) by TA3EKM.
+
+```toml
+[extensions.ai_gateway]
+enabled   = true
+callsign  = "YOUR_CALLSIGN"
+provider  = "puter"              # puter (free), groq, openrouter, custom
+api_key   = "your-api-key"
+extra_sms = 1                    # 0 = single 64-char reply, 1-5 = multi-part
+```
+
+To ask the AI via APRS, send a message to the configured callsign:
+```
+YOUR_CALLSIGN What is APRS?
+```
+
+The agent queries the AI and sends the response back as APRS message(s).
 
 ### SMTP Email
 
@@ -271,6 +293,7 @@ aprs-agent/
 │   ├── logger_ext.py            # Console logger
 │   ├── twitter_ext.py           # Twitter/X integration
 │   ├── bluesky_ext.py           # Bluesky integration
+│   ├── ai_gateway_ext.py        # AI auto-responder
 │   ├── smtp_ext.py              # SMTP email forwarding
 │   └── fixed_beacon.py          # Periodic position beacon
 ├── static/
@@ -291,6 +314,7 @@ aprs-agent/
 MIT License — see [LICENSE](LICENSE) file.
 
 Developed by **[TA3HRJ](https://github.com/TA3HRJ)** and **[TA3PKS](https://github.com/TA3PKS)**.
+AI Gateway inspired by [aprs-ai-gateway](https://github.com/ArdaYalinOzkan/aprs-ai-gateway) by **[TA3EKM](https://github.com/ArdaYalinOzkan)**.
 Original Rust implementation by TA3PKS · Python port and GUI by TA3HRJ.
 
 ---

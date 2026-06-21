@@ -173,6 +173,7 @@
       <li>Konumunuzu belirli aralıklarla ağa gönderir (<strong>Sabit Konum / Fixed Beacon</strong>)</li>
       <li>Size gelen APRS mesajlarını Twitter/X'e iletir (<strong>Twitter</strong>)</li>
       <li>Size gelen APRS mesajlarını Bluesky'a iletir (<strong>Bluesky</strong>) — ücretsiz API</li>
+      <li>Gelen APRS mesajlarına yapay zeka ile otomatik yanıt verir (<strong>AI Gateway</strong>)</li>
       <li>Size gelen APRS mesajlarını e-posta olarak yönlendirir (<strong>SMTP E-posta</strong>)</li>
       <li>Diğer programların aynı APRS akışına bağlanmasını sağlar (<strong>Extension Sunucu</strong>)</li>
     </ul>
@@ -369,6 +370,30 @@
     </table>
   </div>
 
+  <h2>AI Gateway Sekmesi</h2>
+
+  <div class="card">
+    <div class="card-title">🤖 AI Gateway</div>
+    <p>
+      Gelen APRS mesajlarına yapay zeka ile otomatik yanıt verir.
+      Mesaj yapılandırılmış çağrı işaretine gönderildiğinde AI sağlayıcıya sorulur
+      ve cevap APRS mesajı olarak geri gönderilir.
+    </p>
+    <div class="callout tip">
+      <strong>✅ Ücretsiz seçenekler mevcut</strong>
+      Puter tamamen ücretsiz bir AI sağlayıcıdır. Groq ve OpenRouter'da da
+      ücretsiz modeller bulunmaktadır.
+    </div>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr><td><span class="field-name">AI Çağrı İşareti</span></td><td>Bu çağrı işaretine gönderilen mesajlar AI yanıtı tetikler.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Sağlayıcı</span></td><td>AI sağlayıcı: Puter (ücretsiz), Groq, OpenRouter veya özel endpoint.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">API Anahtarı</span></td><td>Sağlayıcınızdan aldığınız API anahtarı.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Ek SMS Parçası</span></td><td>0 = tek 64 karakterlik yanıt. 1-5 = uzun yanıtlar için çok parçalı mesaj.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">Whitelist</span></td><td>Etkinleştirilirse sadece listedeki çağrı işaretlerinden gelen mesajlar yanıtlanır.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+    </table>
+  </div>
+
   <h2>SMTP E-posta Sekmesi</h2>
 
   <div class="card">
@@ -459,6 +484,7 @@
       <li>Periodically broadcast your station position to APRS maps (<strong>Fixed Beacon</strong>)</li>
       <li>Forward incoming APRS messages to Twitter/X (<strong>Twitter</strong>)</li>
       <li>Forward incoming APRS messages to Bluesky (<strong>Bluesky</strong>) — free API</li>
+      <li>Auto-respond to incoming APRS messages using AI (<strong>AI Gateway</strong>)</li>
       <li>Forward incoming APRS messages to email (<strong>SMTP</strong>)</li>
       <li>Let other software on your PC tap into the same APRS stream (<strong>Extension Server</strong>)</li>
     </ul>
@@ -649,6 +675,30 @@
       <tr><td><span class="field-name">App Password</span></td><td>App Password (NOT your main password). Create at bsky.app → Settings → App Passwords.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Allowed APRS recipients</span></td><td>Which APRS addressee triggers a post. Default: <code>BSKYSEND</code></td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Allowed APRS senders</span></td><td>Only messages from these callsigns are processed. Enter your own callsign.</td><td><span class="badge req">Required</span></td></tr>
+    </table>
+  </div>
+
+  <h2>AI Gateway Tab</h2>
+
+  <div class="card">
+    <div class="card-title">🤖 AI Gateway</div>
+    <p>
+      Auto-responds to incoming APRS messages using AI.
+      When a message is addressed to the configured callsign, it is sent to
+      the AI provider and the response is returned as an APRS message.
+    </p>
+    <div class="callout tip">
+      <strong>✅ Free options available</strong>
+      Puter is a completely free AI provider. Groq and OpenRouter also
+      offer free-tier models.
+    </div>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr><td><span class="field-name">AI Callsign</span></td><td>Messages addressed to this callsign trigger an AI response.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Provider</span></td><td>AI provider: Puter (free), Groq, OpenRouter, or custom endpoint.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">API Key</span></td><td>Your API key from the chosen provider.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Extra SMS Parts</span></td><td>0 = single 64-char reply. 1-5 = multi-part messages for longer responses.</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Whitelist</span></td><td>If enabled, only messages from listed callsigns are answered.</td><td><span class="badge opt">Optional</span></td></tr>
     </table>
   </div>
 

@@ -723,6 +723,7 @@ class _AboutDialog:
     _DEVELOPERS = [
         ("TA3HRJ", "ta3hrj@gmail.com",    "https://github.com/TA3HRJ"),
         ("TA3PKS", "ta3pks@mugsoft.io",   "https://github.com/TA3PKS"),
+        ("TA3EKM", None,                   "https://github.com/ArdaYalinOzkan"),
     ]
     _GITHUB_URL = "https://github.com/TA3HRJ/aprs-agent"
 
@@ -807,17 +808,17 @@ class _AboutDialog:
                 anchor="w",
             ).pack(side="left")
 
-            mail_lnk = tk.Label(
-                row,
-                text=email,
-                font=("TkDefaultFont", 9, "underline"),
-                foreground="#1a73e8",
-                cursor="hand2",
-            )
-            mail_lnk.pack(side="left")
-            mail_lnk.bind("<Button-1>", lambda e, m=email: webbrowser.open(f"mailto:{m}"))
-
-            ttk.Label(row, text="  |  ", foreground="#cccccc").pack(side="left")
+            if email:
+                mail_lnk = tk.Label(
+                    row,
+                    text=email,
+                    font=("TkDefaultFont", 9, "underline"),
+                    foreground="#1a73e8",
+                    cursor="hand2",
+                )
+                mail_lnk.pack(side="left")
+                mail_lnk.bind("<Button-1>", lambda e, m=email: webbrowser.open(f"mailto:{m}"))
+                ttk.Label(row, text="  |  ", foreground="#cccccc").pack(side="left")
 
             gh_lnk = tk.Label(
                 row,

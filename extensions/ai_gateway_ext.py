@@ -3,24 +3,21 @@ AI Gateway Extension
 ====================
 Auto-responds to incoming APRS messages using an AI provider.
 
-How it works:
-1. Monitors the APRS-IS stream for message packets addressed to a
-   configured callsign alias (e.g. "AI" or the station's own callsign)
-2. Checks whitelist if enabled
-3. Sends the message text to an OpenAI-compatible AI provider
-4. Splits the response into 64-char APRS message parts
-5. Sends each part back to the original sender with delays between parts
+Monitors the APRS-IS stream for message packets addressed to a
+configured callsign, queries an OpenAI-compatible AI, and sends
+the response back as APRS message(s).
 
 Supported providers: Puter (free), Groq, OpenRouter, or any
 OpenAI-compatible endpoint.
 
 Developed by TA3HRJ & TA3PKS
-Based on aprs-ai-gateway by ArdaYalinOzkan
+Inspired by aprs-ai-gateway by TA3EKM (Arda Yalin Ozkan)
+  https://github.com/ArdaYalinOzkan/aprs-ai-gateway
+  Original licensed under CC BY-NC 4.0
 """
 from __future__ import annotations
 
 import asyncio
-import re
 import time
 from typing import Optional
 
@@ -28,8 +25,6 @@ import aprslib
 
 from . import Extension
 from config import strip_ssid
-
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 _TR_MAP = str.maketrans(
     "çÇğĞıİöÖşŞüÜâÂîÎûÛ",
@@ -41,7 +36,7 @@ _UNICODE_REPLACE = {
     "“": '"', "”": '"', "–": "-",
     "—": "-", " ": " ", "​": "",
     "°": " derece", "é": "e", "è": "e",
-    "à": "a", "ü": "u", "ö": "o",
+    "à": "a",
 }
 
 _PROVIDER_URLS = {
@@ -76,15 +71,12 @@ def _split_message(text: str, max_parts: int) -> list[str]:
             chunk = remaining[:64]
             if len(remaining) > 64:
                 cut = remaining[:61].rsplit(" ", 1)[0]
-                chunk = cut + "..." if cut else remaining[:61] + "..."
+                chunk = (cut or remaining[:61]) + "..."
             parts.append(chunk)
             break
-        else:
-            cut = remaining[:61].rsplit(" ", 1)[0]
-            if not cut:
-                cut = remaining[:61]
-            parts.append(cut + " --")
-            remaining = remaining[len(cut):].strip()
+        cut = remaining[:61].rsplit(" ", 1)[0] or remaining[:61]
+        parts.append(cut + " --")
+        remaining = remaining[len(cut):].strip()
     return parts
 
 
@@ -95,12 +87,16 @@ class AIGateway(Extension):
         self._validate()
         self._processed: set[str] = set()
         self._own_writer: Optional[asyncio.Queue] = None
+        self._msg_counter = 0
 
         provider = config.get("provider", "puter")
-        model = config.get("model", "") or _PROVIDER_MODELS.get(provider, "gpt-4o-mini")
+        self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(provider, _PROVIDER_URLS["puter"])
+        self._model = config.get("model", "") or _PROVIDER_MODELS.get(provider, "gpt-4o-mini")
+        self._client = None
+
         self.log(
             f"initialized | provider={provider} "
-            f"| model={model} "
+            f"| model={self._model} "
             f"| callsign={config.get('callsign', '')}"
         )
 
@@ -110,6 +106,12 @@ class AIGateway(Extension):
             raise ValueError("AI Gateway: callsign is required")
         if not cfg.get("api_key"):
             raise ValueError("AI Gateway: api_key is required")
+
+    def _ensure_client(self):
+        if self._client is None:
+            from openai import OpenAI
+            self._client = OpenAI(api_key=self._config["api_key"], base_url=self._base_url)
+        return self._client
 
     @property
     def name(self) -> str:
@@ -121,18 +123,6 @@ class AIGateway(Extension):
 
     def set_own_writer(self, q: asyncio.Queue) -> None:
         self._own_writer = q
-
-    def _get_client(self):
-        from openai import OpenAI
-        cfg = self._config
-        provider = cfg.get("provider", "puter")
-        base_url = cfg.get("base_url", "") or _PROVIDER_URLS.get(provider, _PROVIDER_URLS["puter"])
-        return OpenAI(api_key=cfg["api_key"], base_url=base_url)
-
-    def _get_model(self) -> str:
-        cfg = self._config
-        provider = cfg.get("provider", "puter")
-        return cfg.get("model", "") or _PROVIDER_MODELS.get(provider, "gpt-4o-mini")
 
     async def _ask_ai(self, question: str) -> str:
         cfg = self._config
@@ -149,15 +139,14 @@ class AIGateway(Extension):
             "Answer in the same language as the question."
         )
 
-        max_tokens = 40 + (extra * 35)
-        client = self._get_client()
-        model = self._get_model()
+        client = self._ensure_client()
+        model = self._model
         loop = asyncio.get_running_loop()
 
         def _do_ask():
             resp = client.chat.completions.create(
                 model=model,
-                max_tokens=max_tokens,
+                max_tokens=40 + (extra * 35),
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": question},
@@ -172,14 +161,16 @@ class AIGateway(Extension):
             self.error(f"AI query failed: {type(e).__name__}: {e}")
             return ""
 
-    async def _send_reply(self, from_call: str, to_call: str,
-                          message: str, path: str) -> None:
+    def _next_msg_id(self) -> str:
+        self._msg_counter = (self._msg_counter + 1) % 999 + 1
+        return str(self._msg_counter)
+
+    async def _send_reply(self, from_call: str, to_call: str, message: str) -> None:
         if not self._own_writer:
             self.error("no own_writer queue — cannot send reply")
             return
-        dest = to_call.ljust(9)
-        mid = str(int(time.time()) % 999 + 1)
-        pkt = f"{from_call}>APRS,TCPIP*::{dest}:{message}{{{mid}}}\n"
+        mid = self._next_msg_id()
+        pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}}}\n"
         await self._own_writer.put(pkt.encode("utf-8"))
 
     async def handle(self, line: str) -> Optional[bytes]:
@@ -199,9 +190,9 @@ class AIGateway(Extension):
         my_call = cfg.get("callsign", "").upper()
         recipient = packet.get("addresse", "").strip().upper()
 
-        aliases = [my_call]
+        aliases = {my_call}
         for a in cfg.get("trigger_aliases", []):
-            aliases.append(a.upper())
+            aliases.add(a.upper())
 
         if recipient not in aliases:
             return None
@@ -213,10 +204,7 @@ class AIGateway(Extension):
             return None
 
         raw_msg = packet.get("message_text", "")
-        if not raw_msg:
-            return None
-
-        if raw_msg.lower().startswith("ack") or raw_msg.lower().startswith("rej"):
+        if not raw_msg or raw_msg.lower().startswith(("ack", "rej")):
             return None
 
         msg_id = packet.get("msgNo", "")
@@ -240,14 +228,12 @@ class AIGateway(Extension):
 
         if cfg.get("whitelist_enabled"):
             whitelist = [w.upper().strip() for w in cfg.get("whitelist", []) if w.strip()]
-            if whitelist:
-                allowed = any(
-                    sender_base.startswith(w[:-1]) if w.endswith("*") else sender_base == w
-                    for w in whitelist
-                )
-                if not allowed:
-                    self.warn(f"blocked {sender_full} — not in whitelist")
-                    return None
+            if whitelist and not any(
+                sender_base.startswith(w[:-1]) if w.endswith("*") else sender_base == w
+                for w in whitelist
+            ):
+                self.warn(f"blocked {sender_full} — not in whitelist")
+                return None
 
         self.log(f"RX from {sender_full}: {question}")
 
@@ -257,12 +243,10 @@ class AIGateway(Extension):
 
         self.log(f"AI response: {answer}")
 
-        extra = int(cfg.get("extra_sms", 0))
-        parts = _split_message(answer, 1 + extra)
+        parts = _split_message(answer, 1 + int(cfg.get("extra_sms", 0)))
 
-        reply_call = my_call
         for i, part in enumerate(parts):
-            await self._send_reply(reply_call, sender_full, part, "")
+            await self._send_reply(my_call, sender_full, part)
             self.log(f"TX to {sender_full}: {part}")
             if i < len(parts) - 1:
                 await asyncio.sleep(5)
