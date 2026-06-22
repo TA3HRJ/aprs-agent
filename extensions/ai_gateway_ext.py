@@ -92,8 +92,6 @@ class AIGateway(Extension):
         provider = config.get("provider", "puter")
         self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(provider, _PROVIDER_URLS["puter"])
         self._model = config.get("model", "") or _PROVIDER_MODELS.get(provider, "gpt-4o-mini")
-        self._client = None
-
         self.log(
             f"initialized | provider={provider} "
             f"| model={self._model} "
@@ -106,12 +104,6 @@ class AIGateway(Extension):
             raise ValueError("AI Gateway: callsign is required")
         if not cfg.get("api_key"):
             raise ValueError("AI Gateway: api_key is required")
-
-    def _ensure_client(self):
-        if self._client is None:
-            from openai import OpenAI
-            self._client = OpenAI(api_key=self._config["api_key"], base_url=self._base_url)
-        return self._client
 
     @property
     def name(self) -> str:
@@ -139,12 +131,20 @@ class AIGateway(Extension):
             "Answer in the same language as the question."
         )
 
-        client = self._ensure_client()
+        api_key = cfg["api_key"]
+        base_url = self._base_url
         model = self._model
         loop = asyncio.get_running_loop()
 
         def _do_ask():
-            try:
+            import httpx
+            from openai import OpenAI
+            with httpx.Client() as http_client:
+                client = OpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                    http_client=http_client,
+                )
                 resp = client.chat.completions.create(
                     model=model,
                     max_tokens=40 + (extra * 35),
@@ -154,14 +154,8 @@ class AIGateway(Extension):
                     ],
                 )
                 return resp.choices[0].message.content.strip()
-            finally:
-                try:
-                    client.close()
-                except Exception:
-                    pass
 
         try:
-            self._client = None
             answer = await loop.run_in_executor(None, _do_ask)
             return _to_ascii(answer)
         except Exception as e:
