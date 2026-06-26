@@ -122,6 +122,7 @@ class AgentManager:
         from extensions.logger_ext import Logger
         from extensions.twitter_ext import Twitter
         from extensions.bluesky_ext import Bluesky
+        from extensions.telegram_ext import Telegram
         from extensions.ai_gateway_ext import AIGateway
         from extensions.imap_ext import ImapReceiver
         from extensions.smtp_ext import SmtpEmailer
@@ -131,6 +132,7 @@ class AgentManager:
         pairs = [
             ("twitter",      Twitter,      ext_cfg.get("twitter", {})),
             ("bluesky",      Bluesky,      ext_cfg.get("bluesky", {})),
+            ("telegram",     Telegram,     ext_cfg.get("telegram", {})),
             ("ai_gateway",   AIGateway,    ext_cfg.get("ai_gateway", {})),
             ("imap",         ImapReceiver, ext_cfg.get("imap", {})),
             ("logger",       Logger,       ext_cfg.get("logger", {})),

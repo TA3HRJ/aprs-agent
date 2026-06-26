@@ -200,6 +200,21 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
   <div class="entry-row"><label data-i="bsky_senders">Allowed APRS senders</label><input id="f-bsky-senders" type="text"></div>
 </div></div>
 
+<!-- TELEGRAM -->
+<div class="pref-group"><label>Telegram</label><div class="pref-box">
+  <div class="action-row"><div class="content"><div class="title">Telegram</div><div class="subtitle" data-i="tg_sub">Bidirectional APRS ↔ Telegram messaging (free)</div></div><label class="adw-switch"><input type="checkbox" id="f-tg-enabled"><span></span></label></div>
+  <div class="entry-row"><label data-i="tg_token">Bot Token</label><input id="f-tg-token" type="password" placeholder="123456:ABC-DEF..."><div class="hint" data-i="tg_token_hint">Get from @BotFather on Telegram</div></div>
+  <div class="entry-row"><label data-i="tg_chat_id">Chat ID</label><input id="f-tg-chat-id" type="text" placeholder="123456789" style="max-width:160px"><div class="hint" data-i="tg_chat_id_hint">Your Telegram user or group ID</div></div>
+  <div class="action-row"><div class="content"><div class="title" data-i="tg_hashtag">Add #APRS hashtag</div></div><label class="adw-switch"><input type="checkbox" id="f-tg-hashtag" checked><span></span></label></div>
+  <div class="entry-row"><label data-i="tg_recepients">Allowed APRS recipients</label><input id="f-tg-recepients" type="text"><div class="hint" data-i="tg_cs_hint">Comma-separated callsigns</div></div>
+  <div class="entry-row"><label data-i="tg_senders">Allowed APRS senders</label><input id="f-tg-senders" type="text"></div>
+  <div class="section-label">📥 <span data-i="tg_inbound_title">Receive — Telegram → Radio</span></div>
+  <div class="action-row"><div class="content"><div class="title" data-i="tg_poll_enabled">Poll Telegram</div><div class="subtitle" data-i="tg_poll_sub">Forward Telegram messages to APRS</div></div><label class="adw-switch"><input type="checkbox" id="f-tg-poll"><span></span></label></div>
+  <div class="entry-row"><label data-i="tg_poll_interval">Poll interval (seconds)</label><input id="f-tg-poll-interval" type="text" value="5" style="max-width:80px"></div>
+  <div class="entry-row"><label data-i="tg_from_call">From callsign</label><input id="f-tg-from-call" type="text" placeholder="TG-BOT" style="max-width:140px"><div class="hint" data-i="tg_from_hint">APRS sender for forwarded Telegram messages</div></div>
+  <div class="entry-row"><label data-i="tg_aprs_dest">Default APRS destination</label><input id="f-tg-aprs-dest" type="text" placeholder="" style="max-width:140px"><div class="hint" data-i="tg_dest_hint">If set, messages without a callsign prefix go here</div></div>
+</div></div>
+
 <!-- AI GATEWAY -->
 <div class="pref-group"><label>AI Gateway</label><div class="pref-box">
   <div class="action-row"><div class="content"><div class="title">AI Gateway</div><div class="subtitle" data-i="ai_sub">Auto-respond to APRS messages with AI</div></div><label class="adw-switch"><input type="checkbox" id="f-ai-enabled"><span></span></label></div>
@@ -317,6 +332,10 @@ const S={en:{
   tw_hashtag:"Add #APRS hashtag",tw_recepients:"Allowed APRS recipients",tw_senders:"Allowed APRS senders",tw_cs_hint:"Comma-separated callsigns",
   bsky_sub:"Post APRS messages to Bluesky (free API)",bsky_username:"Username (handle)",bsky_app_pass:"App Password",bsky_app_pass_hint:"bsky.app → Settings → App Passwords",
   bsky_hashtag:"Add #APRS hashtag",bsky_recepients:"Allowed APRS recipients",bsky_senders:"Allowed APRS senders",
+  tg_sub:"Bidirectional APRS ↔ Telegram (free)",tg_token:"Bot Token",tg_token_hint:"Get from @BotFather",tg_chat_id:"Chat ID",tg_chat_id_hint:"Your Telegram user or group ID",
+  tg_hashtag:"Add #APRS hashtag",tg_recepients:"Allowed APRS recipients",tg_senders:"Allowed APRS senders",tg_cs_hint:"Comma-separated callsigns",
+  tg_inbound_title:"Receive — Telegram → Radio",tg_poll_enabled:"Poll Telegram",tg_poll_sub:"Forward Telegram messages to APRS",
+  tg_poll_interval:"Poll interval (sec)",tg_from_call:"From callsign",tg_from_hint:"APRS sender for Telegram messages",tg_aprs_dest:"Default APRS destination",tg_dest_hint:"Messages without callsign prefix go here",
   ai_sub:"Auto-respond to APRS messages with AI",ai_callsign:"AI Callsign",ai_provider:"Provider",ai_api_key:"API Key",ai_base_url:"Custom Base URL",ai_base_url_hint:"Only for custom provider",
   ai_model:"Model",ai_model_hint:"Leave empty for provider default",ai_system_prompt:"System Prompt",ai_trigger_prefix:"Trigger Prefix",ai_trigger_prefix_hint:"Only messages starting with this prefix trigger AI",
   ai_trigger_aliases:"Trigger Aliases",ai_trigger_aliases_hint:"Extra APRS addressees, comma-separated",ai_extra_sms:"Extra SMS Parts",
@@ -342,6 +361,10 @@ const S={en:{
   tw_hashtag:"#APRS hashtag ekle",tw_recepients:"İzin verilen APRS alıcıları",tw_senders:"İzin verilen APRS göndericileri",tw_cs_hint:"Virgülle ayırılmış çağrı işaretleri",
   bsky_sub:"APRS mesajlarını Bluesky'a gönder (ücretsiz API)",bsky_username:"Kullanıcı adı (handle)",bsky_app_pass:"Uygulama Şifresi",bsky_app_pass_hint:"bsky.app → Ayarlar → App Passwords",
   bsky_hashtag:"#APRS hashtag ekle",bsky_recepients:"İzin verilen APRS alıcıları",bsky_senders:"İzin verilen APRS göndericileri",
+  tg_sub:"Çift yönlü APRS ↔ Telegram mesajlaşma (ücretsiz)",tg_token:"Bot Token",tg_token_hint:"Telegram'da @BotFather'dan alın",tg_chat_id:"Chat ID",tg_chat_id_hint:"Telegram kullanıcı veya grup ID'niz",
+  tg_hashtag:"#APRS hashtag ekle",tg_recepients:"İzin verilen APRS alıcıları",tg_senders:"İzin verilen APRS göndericileri",tg_cs_hint:"Virgülle ayırılmış çağrı işaretleri",
+  tg_inbound_title:"Al — Telegram → Telsiz",tg_poll_enabled:"Telegram'ı yokla",tg_poll_sub:"Telegram mesajlarını APRS'e ilet",
+  tg_poll_interval:"Yoklama aralığı (sn)",tg_from_call:"Gönderen çağrı işareti",tg_from_hint:"Telegram mesajları için APRS gönderen",tg_aprs_dest:"Varsayılan APRS hedefi",tg_dest_hint:"Çağrı işareti belirtilmeyen mesajlar buraya gider",
   ai_sub:"Gelen APRS mesajlarına AI ile yanıt ver",ai_callsign:"AI Çağrı İşareti",ai_provider:"Sağlayıcı",ai_api_key:"API Anahtarı",ai_base_url:"Özel Base URL",ai_base_url_hint:"Sadece özel sağlayıcı için",
   ai_model:"Model",ai_model_hint:"Varsayılan için boş bırakın",ai_system_prompt:"Sistem Promptu",ai_trigger_prefix:"Tetikleme Ön Eki",ai_trigger_prefix_hint:"Sadece bu ön ekle başlayanlar AI'ı tetikler",
   ai_trigger_aliases:"Tetikleme Takma Adları",ai_trigger_aliases_hint:"Ek APRS alıcı adları, virgülle ayır",ai_extra_sms:"Ek SMS Parçası",
@@ -386,6 +409,9 @@ function loadCfg(cfg){
   $('f-tw-recepients').value=csv(tw.allowed_recepients);$('f-tw-senders').value=csv(tw.allowed_senders);
   const bs=(cfg.extensions||{}).bluesky||{};$('f-bsky-enabled').checked=bs.enabled||false;$('f-bsky-username').value=bs.username||'';$('f-bsky-app-pass').value=bs.app_password||'';
   $('f-bsky-hashtag').checked=bs.add_hash_tag!==false;$('f-bsky-recepients').value=csv(bs.allowed_recepients);$('f-bsky-senders').value=csv(bs.allowed_senders);
+  const tg=(cfg.extensions||{}).telegram||{};$('f-tg-enabled').checked=tg.enabled||false;$('f-tg-token').value=tg.bot_token||'';$('f-tg-chat-id').value=tg.chat_id||'';
+  $('f-tg-hashtag').checked=tg.add_hash_tag!==false;$('f-tg-recepients').value=csv(tg.allowed_recepients);$('f-tg-senders').value=csv(tg.allowed_senders);
+  $('f-tg-poll').checked=tg.poll_enabled||false;$('f-tg-poll-interval').value=tg.poll_interval_secs||5;$('f-tg-from-call').value=tg.from_callsign||'';$('f-tg-aprs-dest').value=tg.aprs_destination||'';
   const ai=(cfg.extensions||{}).ai_gateway||{};$('f-ai-enabled').checked=ai.enabled||false;$('f-ai-callsign').value=ai.callsign||'';$('f-ai-provider').value=ai.provider||'puter';
   $('f-ai-api-key').value=ai.api_key||'';$('f-ai-base-url').value=ai.base_url||'';$('f-ai-model').value=ai.model||'';$('f-ai-system-prompt').value=ai.system_prompt||'';
   $('f-ai-trigger-prefix').value=ai.trigger_prefix||'';$('f-ai-trigger-aliases').value=csv(ai.trigger_aliases);$('f-ai-extra-sms').value=ai.extra_sms||0;
@@ -406,6 +432,7 @@ function getCfg(){return{
     fixed_beacon:{enabled:$('f-bcn-enabled').checked,ssid:$('f-bcn-ssid').value.trim().toUpperCase(),lat:$('f-bcn-lat').value.trim(),lon:$('f-bcn-lon').value.trim(),symbol_table:$('f-bcn-sym-tbl').value||'/',symbol:($('f-bcn-sym').value||'-')[0],comment:$('f-bcn-comment').value.trim(),beacon_interval_mins:parseInt($('f-bcn-interval').value)||15},
     twitter:{enabled:$('f-tw-enabled').checked,api_key:$('f-tw-api-key').value.trim(),api_secret:$('f-tw-api-secret').value.trim(),access_token_key:$('f-tw-tok-key').value.trim(),access_token_secret:$('f-tw-tok-secret').value.trim(),add_hash_tag:$('f-tw-hashtag').checked,allowed_recepients:lst($('f-tw-recepients').value),allowed_senders:lst($('f-tw-senders').value)},
     bluesky:{enabled:$('f-bsky-enabled').checked,username:$('f-bsky-username').value.trim(),app_password:$('f-bsky-app-pass').value,add_hash_tag:$('f-bsky-hashtag').checked,allowed_recepients:lst($('f-bsky-recepients').value),allowed_senders:lst($('f-bsky-senders').value)},
+    telegram:{enabled:$('f-tg-enabled').checked,bot_token:$('f-tg-token').value,chat_id:$('f-tg-chat-id').value.trim(),add_hash_tag:$('f-tg-hashtag').checked,allowed_recepients:lst($('f-tg-recepients').value),allowed_senders:lst($('f-tg-senders').value),poll_enabled:$('f-tg-poll').checked,poll_interval_secs:parseInt($('f-tg-poll-interval').value)||5,from_callsign:$('f-tg-from-call').value.trim().toUpperCase(),aprs_destination:$('f-tg-aprs-dest').value.trim().toUpperCase()},
     ai_gateway:{enabled:$('f-ai-enabled').checked,callsign:$('f-ai-callsign').value.trim().toUpperCase(),provider:$('f-ai-provider').value,api_key:$('f-ai-api-key').value,base_url:$('f-ai-base-url').value.trim(),model:$('f-ai-model').value.trim(),system_prompt:$('f-ai-system-prompt').value,trigger_prefix:$('f-ai-trigger-prefix').value.trim(),trigger_aliases:lst($('f-ai-trigger-aliases').value),extra_sms:parseInt($('f-ai-extra-sms').value)||0,whitelist_enabled:$('f-ai-wl-enabled').checked,whitelist:lst($('f-ai-whitelist').value)},
     imap:{enabled:$('f-imap-enabled').checked,imap_server:$('f-imap-server').value.trim(),imap_username:$('f-imap-user').value.trim(),imap_password:$('f-imap-pass').value,poll_interval_mins:parseInt($('f-imap-interval').value)||5,from_callsign:$('f-imap-from').value.trim().toUpperCase(),allowed_senders:lst($('f-imap-allowed').value)},
     smtp:{enabled:$('f-smtp-enabled').checked,smtp_server:$('f-smtp-server').value.trim(),smtp_username:$('f-smtp-user').value.trim(),smtp_password:$('f-smtp-pass').value,allowed_senders:lst($('f-smtp-senders').value),allowed_recipients:lst($('f-smtp-recip').value),allowed_receiver_emails:lst($('f-smtp-emails').value),from_email:$('f-smtp-from').value.trim()},

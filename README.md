@@ -22,6 +22,7 @@ several automation features useful for amateur radio operators.
 | 🦋 | **Bluesky** | Forwards APRS messages addressed to `BSKYSEND` to your Bluesky account (free API) |
 | 📥 | **IMAP Receive** | Polls email inbox and forwards new emails as APRS messages to the radio |
 | 📧 | **SMTP Email** | Forwards APRS messages addressed to `EMAIL` to any email address via SMTP |
+| 💬 | **Telegram** | Bidirectional APRS ↔ Telegram messaging (free, no API payment) |
 | 🤖 | **AI Gateway** | Auto-responds to APRS messages using AI (Puter/Groq/OpenRouter — free options available) |
 | 🔌 | **Extension Server** | Local TCP server — lets other programs subscribe to the live APRS stream |
 
@@ -139,6 +140,23 @@ BSKYSEND Hello from APRS!
 ```
 
 The agent posts the message to your Bluesky account and sends an APRS ACK back.
+
+### Telegram
+
+Bidirectional APRS ↔ Telegram messaging. Completely free.
+
+```toml
+[extensions.telegram]
+enabled   = true
+bot_token = "123456:ABC-DEF..."   # from @BotFather
+chat_id   = "123456789"           # from @userinfobot
+allowed_senders    = ["YOUR_CALLSIGN"]
+allowed_recepients = ["TGSEND"]
+poll_enabled = true               # enable Telegram → APRS
+```
+
+Send APRS to Telegram: address a message to `TGSEND`.
+Send Telegram to APRS: type `TA3HRJ-7 Hello!` in the bot chat.
 
 ### AI Gateway
 
@@ -315,6 +333,7 @@ aprs-agent/
 │   ├── logger_ext.py            # Console logger
 │   ├── twitter_ext.py           # Twitter/X integration
 │   ├── bluesky_ext.py           # Bluesky integration
+│   ├── telegram_ext.py          # Telegram bidirectional
 │   ├── ai_gateway_ext.py        # AI auto-responder
 │   ├── imap_ext.py              # IMAP email receiver (email → radio)
 │   ├── smtp_ext.py              # SMTP email sender (radio → email)

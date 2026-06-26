@@ -181,6 +181,41 @@ allowed_recepients = ["BSKYSEND"]
 # Only accept messages FROM these callsigns
 allowed_senders = ["N0CALL"]
 
+# --- Telegram ---
+# Bidirectional APRS ↔ Telegram messaging (completely free).
+# Setup: message @BotFather on Telegram to create a bot and get a token.
+# Get your chat_id by messaging @userinfobot on Telegram.
+
+[extensions.telegram]
+enabled = false
+
+# Bot token from @BotFather
+bot_token = ""
+
+# Telegram chat or group ID to send messages to
+chat_id = ""
+
+# Automatically append #APRS to outgoing messages
+add_hash_tag = true
+
+# Only forward APRS messages addressed TO these aliases
+allowed_recepients = ["TGSEND"]
+
+# Only forward APRS messages FROM these callsigns
+allowed_senders = ["N0CALL"]
+
+# Enable receiving Telegram messages and forwarding to APRS
+poll_enabled = false
+
+# How often to check for new Telegram messages (seconds)
+poll_interval_secs = 5
+
+# APRS callsign used as sender for forwarded Telegram messages
+from_callsign = "TG-BOT"
+
+# Default APRS destination if Telegram message doesn't specify a callsign
+aprs_destination = ""
+
 # --- AI Gateway ---
 # Auto-responds to incoming APRS messages using an AI provider.
 # Supports Puter (free), Groq, OpenRouter, or any OpenAI-compatible endpoint.
