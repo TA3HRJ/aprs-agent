@@ -192,6 +192,10 @@ class ImapReceiver(Extension):
                 to_call = tokens[0].upper().strip()
                 message_text = tokens[1].strip()
 
+                if not any(c.isdigit() for c in to_call):
+                    conn.store(num, "+FLAGS", "\\Seen")
+                    continue
+
                 if not to_call or not message_text:
                     conn.store(num, "+FLAGS", "\\Seen")
                     continue

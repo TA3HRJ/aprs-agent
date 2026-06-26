@@ -194,7 +194,9 @@ class Telegram(Extension):
             sender_name = msg.get("from", {}).get("first_name", "TG")
 
             tokens = text.split(None, 1)
-            if len(tokens) >= 2 and len(tokens[0]) <= 9:
+            if (len(tokens) >= 2
+                    and len(tokens[0]) <= 9
+                    and any(c.isdigit() for c in tokens[0])):
                 to_call = tokens[0].upper()
                 message = _to_ascii(tokens[1])
             elif aprs_dest:
