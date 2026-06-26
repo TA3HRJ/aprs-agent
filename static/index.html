@@ -327,8 +327,7 @@ footer .spacer { flex: 1; }
   <button class="tab-btn"        data-tab="twitter" data-i="tab_twitter">Twitter / X</button>
   <button class="tab-btn"        data-tab="bluesky" data-i="tab_bluesky">Bluesky</button>
   <button class="tab-btn"        data-tab="ai"      data-i="tab_ai">AI Gateway</button>
-  <button class="tab-btn"        data-tab="imap"    data-i="tab_imap">IMAP Receive</button>
-  <button class="tab-btn"        data-tab="smtp"    data-i="tab_smtp">SMTP Email</button>
+  <button class="tab-btn"        data-tab="email"   data-i="tab_email">Email</button>
   <button class="tab-btn"        data-tab="ext"     data-i="tab_ext">Ext. Server</button>
 </nav>
 
@@ -547,44 +546,12 @@ footer .spacer { flex: 1; }
   </div>
 </div>
 
-<!-- ── IMAP Receive ───────────────────────────────── -->
-<div class="tab-panel" id="panel-imap">
-  <h2 data-i="tab_imap">IMAP Receive</h2>
-  <div class="section-note" data-i="imap_note">Polls your email inbox and forwards new emails as APRS messages to the radio. Subject format: CALLSIGN message text</div>
-  <label class="chk"><input type="checkbox" id="f-imap-enabled"><span data-i="imap_enabled">Enable IMAP Receiver</span></label>
-  <div class="field">
-    <label data-i="imap_server">IMAP Server:</label>
-    <input type="text" id="f-imap-server">
-    <small data-i="imap_server_hint">host:port  e.g.  imap.gmail.com:993</small>
-  </div>
-  <div class="field">
-    <label data-i="imap_user">Username:</label>
-    <input type="text" id="f-imap-user">
-  </div>
-  <div class="field">
-    <label data-i="imap_pass">Password:</label>
-    <input type="password" id="f-imap-pass">
-    <small data-i="imap_pass_hint">Gmail: use an App Password, not your main password</small>
-  </div>
-  <div class="field">
-    <label data-i="imap_interval">Poll interval (minutes):</label>
-    <input type="number" id="f-imap-interval" style="max-width:100px" value="5" min="1" max="60">
-  </div>
-  <div class="field">
-    <label data-i="imap_from">From callsign:</label>
-    <input type="text" id="f-imap-from" style="max-width:180px" placeholder="EMAIL-5">
-    <small data-i="imap_from_hint">APRS sender callsign for forwarded emails</small>
-  </div>
-  <div class="field">
-    <label data-i="imap_allowed">Allowed sender emails:</label>
-    <input type="text" id="f-imap-allowed">
-    <small data-i="imap_allowed_hint">Comma-separated email addresses. Leave empty to allow all.</small>
-  </div>
-</div>
+<!-- ── Email (Send + Receive) ──────────────────────── -->
+<div class="tab-panel" id="panel-email">
+  <h2 data-i="tab_email">Email</h2>
+  <div class="section-note" data-i="email_note">Bidirectional email: send emails from radio (SMTP) and receive emails on radio (IMAP).</div>
 
-<!-- ── SMTP Email ─────────────────────────────────── -->
-<div class="tab-panel" id="panel-smtp">
-  <h2 data-i="tab_smtp">SMTP Email</h2>
+  <h3 style="margin:18px 0 10px;color:var(--primary);font-size:14px">📤 <span data-i="email_send_title">Send — Radio → Email (SMTP)</span></h3>
   <label class="chk"><input type="checkbox" id="f-smtp-enabled"><span data-i="smtp_enabled">Enable SMTP Email</span></label>
   <div class="field">
     <label data-i="smtp_server">SMTP Server:</label>
@@ -615,6 +582,39 @@ footer .spacer { flex: 1; }
   <div class="field">
     <label data-i="smtp_from">From address:</label>
     <input type="text" id="f-smtp-from">
+  </div>
+
+  <hr style="border:none;border-top:1px solid var(--border);margin:20px 0">
+
+  <h3 style="margin:0 0 10px;color:var(--primary);font-size:14px">📥 <span data-i="email_recv_title">Receive — Email → Radio (IMAP)</span></h3>
+  <label class="chk"><input type="checkbox" id="f-imap-enabled"><span data-i="imap_enabled">Enable IMAP Receiver</span></label>
+  <div class="field">
+    <label data-i="imap_server">IMAP Server:</label>
+    <input type="text" id="f-imap-server">
+    <small data-i="imap_server_hint">host:port  e.g.  imap.gmail.com:993</small>
+  </div>
+  <div class="field">
+    <label data-i="imap_user">Username:</label>
+    <input type="text" id="f-imap-user">
+  </div>
+  <div class="field">
+    <label data-i="imap_pass">Password:</label>
+    <input type="password" id="f-imap-pass">
+    <small data-i="imap_pass_hint">Gmail: use an App Password, not your main password</small>
+  </div>
+  <div class="field">
+    <label data-i="imap_interval">Poll interval (minutes):</label>
+    <input type="number" id="f-imap-interval" style="max-width:100px" value="5" min="1" max="60">
+  </div>
+  <div class="field">
+    <label data-i="imap_from">From callsign:</label>
+    <input type="text" id="f-imap-from" style="max-width:180px" placeholder="EMAIL-5">
+    <small data-i="imap_from_hint">APRS sender callsign for forwarded emails</small>
+  </div>
+  <div class="field">
+    <label data-i="imap_allowed">Allowed sender emails:</label>
+    <input type="text" id="f-imap-allowed">
+    <small data-i="imap_allowed_hint">Comma-separated email addresses. Leave empty to allow all.</small>
   </div>
 </div>
 
@@ -727,7 +727,8 @@ en: {
   ai_extra_sms:"Extra SMS Parts:", ai_extra_sms_hint:"0 = single 64-char reply. 1-5 = multi-part responses (5s delay between parts).",
   ai_wl_enabled:"Enable Whitelist", ai_whitelist:"Whitelist:",
   ai_whitelist_hint:"Comma-separated callsigns. Wildcards OK: TA3* allows all TA3 stations.",
-  tab_imap:"IMAP Receive",
+  tab_email:"Email", email_note:"Bidirectional email: send emails from radio (SMTP) and receive emails on radio (IMAP).",
+  email_send_title:"Send — Radio → Email (SMTP)", email_recv_title:"Receive — Email → Radio (IMAP)",
   imap_enabled:"Enable IMAP Receiver",
   imap_note:"Polls your email inbox and forwards new emails as APRS messages to the radio. Subject format: CALLSIGN message text",
   imap_server:"IMAP Server:", imap_server_hint:"host:port  e.g.  imap.gmail.com:993",
@@ -808,7 +809,8 @@ tr: {
   ai_extra_sms:"Ek SMS Parçası:", ai_extra_sms_hint:"0 = tek 64 karakterlik yanıt. 1-5 = çok parçalı (parçalar arası 5s gecikme).",
   ai_wl_enabled:"Whitelist'i Etkinleştir", ai_whitelist:"Whitelist:",
   ai_whitelist_hint:"Virgülle ayırılmış çağrı işaretleri. Joker karakter OK: TA3* tüm TA3 istasyonlarına izin verir.",
-  tab_imap:"IMAP Alma",
+  tab_email:"E-Posta", email_note:"Çift yönlü e-posta: telsizden e-posta gönder (SMTP) ve telsizde e-posta al (IMAP).",
+  email_send_title:"Gönder — Telsiz → E-Posta (SMTP)", email_recv_title:"Al — E-Posta → Telsiz (IMAP)",
   imap_enabled:"IMAP Alıcıyı Etkinleştir",
   imap_note:"E-posta gelen kutunuzu yoklar ve yeni e-postaları APRS mesajı olarak telsize iletir. Konu formatı: CALLSIGN mesaj metni",
   imap_server:"IMAP Sunucusu:", imap_server_hint:"host:port  örn.  imap.gmail.com:993",

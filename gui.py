@@ -419,8 +419,9 @@ _S = {
         "tab_twitter":        "Twitter / X",
         "tab_bluesky":        "Bluesky",
         "tab_ai":             "AI Gateway",
-        "tab_imap":           "IMAP Receive",
-        "tab_smtp":           "SMTP Email",
+        "tab_email":          "Email",
+        "email_send":         "📤 Send — Radio → Email (SMTP)",
+        "email_recv":         "📥 Receive — Email → Radio (IMAP)",
         "tab_ext":            "Ext. Server",
         # connection
         "server":             "APRS-IS Server:",
@@ -575,8 +576,9 @@ _S = {
         "tab_twitter":        "Twitter / X",
         "tab_bluesky":        "Bluesky",
         "tab_ai":             "AI Gateway",
-        "tab_imap":           "IMAP Alma",
-        "tab_smtp":           "SMTP E-posta",
+        "tab_email":          "E-Posta",
+        "email_send":         "📤 Gönder — Telsiz → E-Posta (SMTP)",
+        "email_recv":         "📥 Al — E-Posta → Telsiz (IMAP)",
         "tab_ext":            "Ext. Sunucu",
         # connection
         "server":             "APRS-IS Sunucusu:",
@@ -1359,7 +1361,7 @@ class APRSAgentGUI:
 
         tab_keys = ["tab_conn", "tab_log", "tab_beacon",
                     "tab_twitter", "tab_bluesky", "tab_ai",
-                    "tab_imap", "tab_smtp", "tab_ext"]
+                    "tab_email", "tab_ext"]
         builders = [
             self._build_conn_tab,
             self._build_logger_tab,
@@ -1367,8 +1369,7 @@ class APRSAgentGUI:
             self._build_twitter_tab,
             self._build_bluesky_tab,
             self._build_ai_tab,
-            self._build_imap_tab,
-            self._build_smtp_tab,
+            self._build_email_tab,
             self._build_extserver_tab,
         ]
         self._tab_keys = tab_keys
@@ -1693,37 +1694,15 @@ class APRSAgentGUI:
         self._row(f, 19, "ai_whitelist",  self._v_ai_whitelist,
                   hint_key="ai_whitelist_hint", width=42)
 
-    # ── IMAP tab ──────────────────────────────────────────────────────────────
+    # ── Email tab (SMTP send + IMAP receive) ────────────────────────────────
 
-    def _build_imap_tab(self, parent) -> None:
+    def _build_email_tab(self, parent) -> None:
         f = self._scrollable(parent)
         f.columnconfigure(1, weight=1)
 
-        self._v_imap_enabled  = tk.BooleanVar()
-        self._v_imap_server   = tk.StringVar()
-        self._v_imap_user     = tk.StringVar()
-        self._v_imap_pass     = tk.StringVar()
-        self._v_imap_interval = tk.StringVar(value="5")
-        self._v_imap_from     = tk.StringVar()
-        self._v_imap_allowed  = tk.StringVar()
-
-        self._check(f, 0,  "imap_enabled",  self._v_imap_enabled)
-        self._row(f, 1,  "imap_server",   self._v_imap_server,
-                  hint_key="imap_server_hint", width=42)
-        self._row(f, 3,  "imap_user",     self._v_imap_user, width=42)
-        self._row(f, 5,  "imap_pass",     self._v_imap_pass,
-                  show=True, hint_key="imap_pass_hint", width=42)
-        self._row(f, 7,  "imap_interval", self._v_imap_interval, width=8)
-        self._row(f, 9,  "imap_from",     self._v_imap_from,
-                  hint_key="imap_from_hint", width=20)
-        self._row(f, 11, "imap_allowed",  self._v_imap_allowed,
-                  hint_key="imap_allowed_hint", width=42)
-
-    # ── SMTP tab ──────────────────────────────────────────────────────────────
-
-    def _build_smtp_tab(self, parent) -> None:
-        f = self._scrollable(parent)
-        f.columnconfigure(1, weight=1)
+        # ── SMTP Send section ──
+        self._lbl(f, "email_send").grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(4, 6))
 
         self._v_smtp_enabled  = tk.BooleanVar()
         self._v_smtp_server   = tk.StringVar()
@@ -1734,17 +1713,45 @@ class APRSAgentGUI:
         self._v_smtp_emails   = tk.StringVar()
         self._v_smtp_from     = tk.StringVar()
 
-        self._check(f, 0,  "smtp_enabled",  self._v_smtp_enabled)
-        self._row(f, 1,  "smtp_server",   self._v_smtp_server,
+        self._check(f, 1,  "smtp_enabled",  self._v_smtp_enabled)
+        self._row(f, 2,  "smtp_server",   self._v_smtp_server,
                   hint_key="smtp_server_hint", width=42)
-        self._row(f, 3,  "smtp_user",     self._v_smtp_user,   width=42)
-        self._row(f, 5,  "smtp_pass",     self._v_smtp_pass,
+        self._row(f, 4,  "smtp_user",     self._v_smtp_user,   width=42)
+        self._row(f, 6,  "smtp_pass",     self._v_smtp_pass,
                   show=True, width=42)
-        self._row(f, 7,  "smtp_senders",  self._v_smtp_senders, width=42)
-        self._row(f, 9,  "smtp_recip",    self._v_smtp_recip,   width=42)
-        self._row(f, 11, "smtp_emails",   self._v_smtp_emails,
+        self._row(f, 8,  "smtp_senders",  self._v_smtp_senders, width=42)
+        self._row(f, 10, "smtp_recip",    self._v_smtp_recip,   width=42)
+        self._row(f, 12, "smtp_emails",   self._v_smtp_emails,
                   hint_key="smtp_emails_hint", width=42)
-        self._row(f, 13, "smtp_from",     self._v_smtp_from,    width=42)
+        self._row(f, 14, "smtp_from",     self._v_smtp_from,    width=42)
+
+        # ── Separator ──
+        ttk.Separator(f, orient="horizontal").grid(
+            row=16, column=0, columnspan=2, sticky="ew", pady=(16, 8))
+
+        # ── IMAP Receive section ──
+        self._lbl(f, "email_recv").grid(
+            row=17, column=0, columnspan=2, sticky="w", pady=(4, 6))
+
+        self._v_imap_enabled  = tk.BooleanVar()
+        self._v_imap_server   = tk.StringVar()
+        self._v_imap_user     = tk.StringVar()
+        self._v_imap_pass     = tk.StringVar()
+        self._v_imap_interval = tk.StringVar(value="5")
+        self._v_imap_from     = tk.StringVar()
+        self._v_imap_allowed  = tk.StringVar()
+
+        self._check(f, 18, "imap_enabled",  self._v_imap_enabled)
+        self._row(f, 19, "imap_server",   self._v_imap_server,
+                  hint_key="imap_server_hint", width=42)
+        self._row(f, 21, "imap_user",     self._v_imap_user, width=42)
+        self._row(f, 23, "imap_pass",     self._v_imap_pass,
+                  show=True, hint_key="imap_pass_hint", width=42)
+        self._row(f, 25, "imap_interval", self._v_imap_interval, width=8)
+        self._row(f, 27, "imap_from",     self._v_imap_from,
+                  hint_key="imap_from_hint", width=20)
+        self._row(f, 29, "imap_allowed",  self._v_imap_allowed,
+                  hint_key="imap_allowed_hint", width=42)
 
     # ── Extension server tab ──────────────────────────────────────────────────
 
