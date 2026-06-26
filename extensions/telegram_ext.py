@@ -134,7 +134,11 @@ class Telegram(Extension):
             return None
 
         recipient = packet.get("addresse", "").strip()
-        if recipient not in cfg.get("allowed_recepients", []):
+        allowed = list(cfg.get("allowed_recepients", []))
+        from_call_cfg = cfg.get("from_callsign", "").upper()
+        if from_call_cfg and from_call_cfg not in allowed:
+            allowed.append(from_call_cfg)
+        if recipient not in allowed:
             return None
 
         message = packet.get("message_text", "")
