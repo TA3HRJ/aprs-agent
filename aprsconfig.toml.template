@@ -221,3 +221,28 @@ whitelist_enabled = false
 
 # Only respond to these callsigns (wildcards OK: TA3*)
 whitelist = []
+
+# --- IMAP Email Receiver ---
+# Polls your email inbox and forwards new emails as APRS messages.
+# Email subject format: CALLSIGN message text
+# Example: "TA3HRJ-7 Hello from email!" → sends APRS message to TA3HRJ-7
+# Requires IMAP access. Gmail: enable IMAP + use an App Password.
+
+[extensions.imap]
+enabled = false
+
+# IMAP server address and port
+imap_server = "imap.gmail.com:993"
+
+# Email login credentials
+imap_username = ""
+imap_password = ""
+
+# How often to check for new emails (minutes)
+poll_interval_mins = 5
+
+# APRS callsign used as sender for forwarded emails
+from_callsign = "EMAIL-5"
+
+# Only forward emails from these addresses (empty = allow all)
+allowed_senders = []

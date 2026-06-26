@@ -116,6 +116,15 @@ DEFAULTS: dict[str, Any] = {
             "whitelist_enabled": False,
             "whitelist": [],
         },
+        "imap": {
+            "enabled": False,
+            "imap_server": "imap.gmail.com:993",
+            "imap_username": "",
+            "imap_password": "",
+            "poll_interval_mins": 5,
+            "from_callsign": "EMAIL-5",
+            "allowed_senders": [],
+        },
         "smtp": {
             "enabled": False,
             "smtp_server": "smtp.example.com:587",
@@ -273,6 +282,9 @@ def print_config(config: dict[str, Any]) -> None:
 
     ai = safe.get("extensions", {}).get("ai_gateway", {})
     mask(ai, ["api_key"])
+
+    imap = safe.get("extensions", {}).get("imap", {})
+    mask(imap, ["imap_password"])
 
     sm = safe.get("extensions", {}).get("smtp", {})
     mask(sm, ["smtp_password"])

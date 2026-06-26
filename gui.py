@@ -419,6 +419,7 @@ _S = {
         "tab_twitter":        "Twitter / X",
         "tab_bluesky":        "Bluesky",
         "tab_ai":             "AI Gateway",
+        "tab_imap":           "IMAP Receive",
         "tab_smtp":           "SMTP Email",
         "tab_ext":            "Ext. Server",
         # connection
@@ -492,6 +493,18 @@ _S = {
         "ai_wl_enabled":      "Enable Whitelist",
         "ai_whitelist":       "Whitelist:",
         "ai_whitelist_hint":  "Comma-separated callsigns, wildcards OK: TA3*",
+        # imap
+        "imap_enabled":       "Enable IMAP Receiver",
+        "imap_server":        "IMAP Server:",
+        "imap_server_hint":   "host:port  e.g.  imap.gmail.com:993",
+        "imap_user":          "Username:",
+        "imap_pass":          "Password:",
+        "imap_pass_hint":     "Gmail: use an App Password",
+        "imap_interval":      "Poll interval (minutes):",
+        "imap_from":          "From callsign:",
+        "imap_from_hint":     "APRS sender callsign for forwarded emails",
+        "imap_allowed":       "Allowed sender emails:",
+        "imap_allowed_hint":  "Comma-separated. Leave empty to allow all.",
         # smtp
         "smtp_enabled":       "Enable SMTP Email",
         "smtp_server":        "SMTP Server:",
@@ -562,6 +575,7 @@ _S = {
         "tab_twitter":        "Twitter / X",
         "tab_bluesky":        "Bluesky",
         "tab_ai":             "AI Gateway",
+        "tab_imap":           "IMAP Alma",
         "tab_smtp":           "SMTP E-posta",
         "tab_ext":            "Ext. Sunucu",
         # connection
@@ -635,6 +649,18 @@ _S = {
         "ai_wl_enabled":      "Whitelist'i Etkinleştir",
         "ai_whitelist":       "Whitelist:",
         "ai_whitelist_hint":  "Virgülle ayırılmış çağrı işaretleri, joker OK: TA3*",
+        # imap
+        "imap_enabled":       "IMAP Alıcıyı Etkinleştir",
+        "imap_server":        "IMAP Sunucusu:",
+        "imap_server_hint":   "host:port  örn.  imap.gmail.com:993",
+        "imap_user":          "Kullanıcı adı:",
+        "imap_pass":          "Şifre:",
+        "imap_pass_hint":     "Gmail: Uygulama Şifresi kullanın",
+        "imap_interval":      "Yoklama aralığı (dakika):",
+        "imap_from":          "Gönderen çağrı işareti:",
+        "imap_from_hint":     "İletilen e-postalar için APRS gönderen çağrı işareti",
+        "imap_allowed":       "İzin verilen gönderen e-postalar:",
+        "imap_allowed_hint":  "Virgülle ayırın, boş bırakırsanız hepsi kabul edilir.",
         # smtp
         "smtp_enabled":       "SMTP E-posta Entegrasyonunu Etkinleştir",
         "smtp_server":        "SMTP Sunucusu:",
@@ -1163,6 +1189,7 @@ class AgentRunner:
         from extensions.twitter_ext import Twitter
         from extensions.bluesky_ext import Bluesky
         from extensions.ai_gateway_ext import AIGateway
+        from extensions.imap_ext import ImapReceiver
         from extensions.smtp_ext import SmtpEmailer
         from extensions.fixed_beacon import FixedBeacon
 
@@ -1171,6 +1198,7 @@ class AgentRunner:
             ("twitter",      Twitter,      ext_cfg.get("twitter", {})),
             ("bluesky",      Bluesky,      ext_cfg.get("bluesky", {})),
             ("ai_gateway",   AIGateway,    ext_cfg.get("ai_gateway", {})),
+            ("imap",         ImapReceiver, ext_cfg.get("imap", {})),
             ("logger",       Logger,       ext_cfg.get("logger", {})),
             ("smtp",         SmtpEmailer,  ext_cfg.get("smtp", {})),
             ("fixed_beacon", FixedBeacon,  ext_cfg.get("fixed_beacon", {})),
@@ -1331,7 +1359,7 @@ class APRSAgentGUI:
 
         tab_keys = ["tab_conn", "tab_log", "tab_beacon",
                     "tab_twitter", "tab_bluesky", "tab_ai",
-                    "tab_smtp", "tab_ext"]
+                    "tab_imap", "tab_smtp", "tab_ext"]
         builders = [
             self._build_conn_tab,
             self._build_logger_tab,
@@ -1339,6 +1367,7 @@ class APRSAgentGUI:
             self._build_twitter_tab,
             self._build_bluesky_tab,
             self._build_ai_tab,
+            self._build_imap_tab,
             self._build_smtp_tab,
             self._build_extserver_tab,
         ]
@@ -1664,6 +1693,32 @@ class APRSAgentGUI:
         self._row(f, 19, "ai_whitelist",  self._v_ai_whitelist,
                   hint_key="ai_whitelist_hint", width=42)
 
+    # ── IMAP tab ──────────────────────────────────────────────────────────────
+
+    def _build_imap_tab(self, parent) -> None:
+        f = self._scrollable(parent)
+        f.columnconfigure(1, weight=1)
+
+        self._v_imap_enabled  = tk.BooleanVar()
+        self._v_imap_server   = tk.StringVar()
+        self._v_imap_user     = tk.StringVar()
+        self._v_imap_pass     = tk.StringVar()
+        self._v_imap_interval = tk.StringVar(value="5")
+        self._v_imap_from     = tk.StringVar()
+        self._v_imap_allowed  = tk.StringVar()
+
+        self._check(f, 0,  "imap_enabled",  self._v_imap_enabled)
+        self._row(f, 1,  "imap_server",   self._v_imap_server,
+                  hint_key="imap_server_hint", width=42)
+        self._row(f, 3,  "imap_user",     self._v_imap_user, width=42)
+        self._row(f, 5,  "imap_pass",     self._v_imap_pass,
+                  show=True, hint_key="imap_pass_hint", width=42)
+        self._row(f, 7,  "imap_interval", self._v_imap_interval, width=8)
+        self._row(f, 9,  "imap_from",     self._v_imap_from,
+                  hint_key="imap_from_hint", width=20)
+        self._row(f, 11, "imap_allowed",  self._v_imap_allowed,
+                  hint_key="imap_allowed_hint", width=42)
+
     # ── SMTP tab ──────────────────────────────────────────────────────────────
 
     def _build_smtp_tab(self, parent) -> None:
@@ -1845,6 +1900,16 @@ class APRSAgentGUI:
         self._v_ai_wl_enabled.set(ai.get("whitelist_enabled", False))
         self._v_ai_whitelist.set(_csv(ai.get("whitelist", [])))
 
+        # IMAP
+        im = cfg.get("extensions", {}).get("imap", {})
+        self._v_imap_enabled.set(im.get("enabled", False))
+        self._v_imap_server.set(im.get("imap_server", ""))
+        self._v_imap_user.set(im.get("imap_username", ""))
+        self._v_imap_pass.set(im.get("imap_password", ""))
+        self._v_imap_interval.set(str(im.get("poll_interval_mins", 5)))
+        self._v_imap_from.set(im.get("from_callsign", ""))
+        self._v_imap_allowed.set(_csv(im.get("allowed_senders", [])))
+
         # SMTP
         sm = cfg.get("extensions", {}).get("smtp", {})
         self._v_smtp_enabled.set(sm.get("enabled", False))
@@ -1942,6 +2007,15 @@ class APRSAgentGUI:
                     "extra_sms":            int(self._v_ai_extra_sms.get().strip() or 0),
                     "whitelist_enabled":    self._v_ai_wl_enabled.get(),
                     "whitelist":            _lst(self._v_ai_whitelist.get()),
+                },
+                "imap": {
+                    "enabled":              self._v_imap_enabled.get(),
+                    "imap_server":          self._v_imap_server.get().strip(),
+                    "imap_username":        self._v_imap_user.get().strip(),
+                    "imap_password":        self._v_imap_pass.get(),
+                    "poll_interval_mins":   int(self._v_imap_interval.get().strip() or 5),
+                    "from_callsign":        self._v_imap_from.get().strip().upper(),
+                    "allowed_senders":      _lst(self._v_imap_allowed.get()),
                 },
                 "smtp": {
                     "enabled":               self._v_smtp_enabled.get(),

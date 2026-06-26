@@ -174,6 +174,7 @@
       <li>Size gelen APRS mesajlarını Twitter/X'e iletir (<strong>Twitter</strong>)</li>
       <li>Size gelen APRS mesajlarını Bluesky'a iletir (<strong>Bluesky</strong>) — ücretsiz API</li>
       <li>Gelen APRS mesajlarına yapay zeka ile otomatik yanıt verir (<strong>AI Gateway</strong>)</li>
+      <li>E-posta gelen kutusunu yoklayarak yeni e-postaları APRS mesajı olarak iletir (<strong>IMAP Alma</strong>)</li>
       <li>Size gelen APRS mesajlarını e-posta olarak yönlendirir (<strong>SMTP E-posta</strong>)</li>
       <li>Diğer programların aynı APRS akışına bağlanmasını sağlar (<strong>Extension Sunucu</strong>)</li>
     </ul>
@@ -394,6 +395,30 @@
     </table>
   </div>
 
+  <h2>IMAP Alma Sekmesi</h2>
+
+  <div class="card">
+    <div class="card-title">📥 IMAP E-posta Alıcı</div>
+    <p>
+      E-posta gelen kutunuzu belirli aralıklarla yoklar ve yeni e-postaları
+      APRS mesajı olarak telsize iletir. SMTP ile birlikte çift yönlü e-posta
+      iletişimi sağlar.
+    </p>
+    <div class="callout tip">
+      <strong>📧 E-posta konu formatı</strong>
+      <code>TA3HRJ-7 Merhaba, beacon calisiyor!</code><br>
+      İlk kelime = hedef çağrı işareti, geri kalanı = mesaj metni.
+    </div>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr><td><span class="field-name">IMAP Sunucusu</span></td><td>IMAP sunucu adresi ve portu. Örnek: <code>imap.gmail.com:993</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Kullanıcı adı / Şifre</span></td><td>E-posta hesap bilgileri. Gmail için Uygulama Şifresi kullanın.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Gönderen çağrı işareti</span></td><td>İletilen e-postaların APRS'deki gönderen adı. Örnek: <code>EMAIL-5</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Yoklama aralığı</span></td><td>Gelen kutusu kaç dakikada bir kontrol edilsin. Varsayılan: 5 dakika.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">İzin verilen gönderenler</span></td><td>Sadece bu e-posta adreslerinden gelenler iletilir. Boş = hepsi kabul.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+    </table>
+  </div>
+
   <h2>SMTP E-posta Sekmesi</h2>
 
   <div class="card">
@@ -485,6 +510,7 @@
       <li>Forward incoming APRS messages to Twitter/X (<strong>Twitter</strong>)</li>
       <li>Forward incoming APRS messages to Bluesky (<strong>Bluesky</strong>) — free API</li>
       <li>Auto-respond to incoming APRS messages using AI (<strong>AI Gateway</strong>)</li>
+      <li>Poll email inbox and forward new emails as APRS messages (<strong>IMAP Receive</strong>)</li>
       <li>Forward incoming APRS messages to email (<strong>SMTP</strong>)</li>
       <li>Let other software on your PC tap into the same APRS stream (<strong>Extension Server</strong>)</li>
     </ul>
@@ -699,6 +725,30 @@
       <tr><td><span class="field-name">API Key</span></td><td>Your API key from the chosen provider.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Extra SMS Parts</span></td><td>0 = single 64-char reply. 1-5 = multi-part messages for longer responses.</td><td><span class="badge opt">Optional</span></td></tr>
       <tr><td><span class="field-name">Whitelist</span></td><td>If enabled, only messages from listed callsigns are answered.</td><td><span class="badge opt">Optional</span></td></tr>
+    </table>
+  </div>
+
+  <h2>IMAP Receive Tab</h2>
+
+  <div class="card">
+    <div class="card-title">📥 IMAP Email Receiver</div>
+    <p>
+      Polls your email inbox at a configurable interval and forwards new
+      emails as APRS messages to the radio. Together with SMTP, this enables
+      bidirectional email communication.
+    </p>
+    <div class="callout tip">
+      <strong>📧 Email subject format</strong>
+      <code>TA3HRJ-7 Hello, your beacon is working!</code><br>
+      First word = destination callsign, rest = message text.
+    </div>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr><td><span class="field-name">IMAP Server</span></td><td>IMAP server address and port. Example: <code>imap.gmail.com:993</code></td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Username / Password</span></td><td>Email account credentials. For Gmail, use an App Password.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">From callsign</span></td><td>APRS sender callsign for forwarded emails. Example: <code>EMAIL-5</code></td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Poll interval</span></td><td>How often to check the inbox, in minutes. Default: 5.</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Allowed senders</span></td><td>Only forward emails from these addresses. Empty = allow all.</td><td><span class="badge opt">Optional</span></td></tr>
     </table>
   </div>
 

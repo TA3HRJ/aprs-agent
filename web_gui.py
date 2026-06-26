@@ -123,6 +123,7 @@ class AgentManager:
         from extensions.twitter_ext import Twitter
         from extensions.bluesky_ext import Bluesky
         from extensions.ai_gateway_ext import AIGateway
+        from extensions.imap_ext import ImapReceiver
         from extensions.smtp_ext import SmtpEmailer
         from extensions.fixed_beacon import FixedBeacon
 
@@ -131,6 +132,7 @@ class AgentManager:
             ("twitter",      Twitter,      ext_cfg.get("twitter", {})),
             ("bluesky",      Bluesky,      ext_cfg.get("bluesky", {})),
             ("ai_gateway",   AIGateway,    ext_cfg.get("ai_gateway", {})),
+            ("imap",         ImapReceiver, ext_cfg.get("imap", {})),
             ("logger",       Logger,       ext_cfg.get("logger", {})),
             ("smtp",         SmtpEmailer,  ext_cfg.get("smtp", {})),
             ("fixed_beacon", FixedBeacon,  ext_cfg.get("fixed_beacon", {})),

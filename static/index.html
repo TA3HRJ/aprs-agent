@@ -327,6 +327,7 @@ footer .spacer { flex: 1; }
   <button class="tab-btn"        data-tab="twitter" data-i="tab_twitter">Twitter / X</button>
   <button class="tab-btn"        data-tab="bluesky" data-i="tab_bluesky">Bluesky</button>
   <button class="tab-btn"        data-tab="ai"      data-i="tab_ai">AI Gateway</button>
+  <button class="tab-btn"        data-tab="imap"    data-i="tab_imap">IMAP Receive</button>
   <button class="tab-btn"        data-tab="smtp"    data-i="tab_smtp">SMTP Email</button>
   <button class="tab-btn"        data-tab="ext"     data-i="tab_ext">Ext. Server</button>
 </nav>
@@ -546,6 +547,41 @@ footer .spacer { flex: 1; }
   </div>
 </div>
 
+<!-- ── IMAP Receive ───────────────────────────────── -->
+<div class="tab-panel" id="panel-imap">
+  <h2 data-i="tab_imap">IMAP Receive</h2>
+  <div class="section-note" data-i="imap_note">Polls your email inbox and forwards new emails as APRS messages to the radio. Subject format: CALLSIGN message text</div>
+  <label class="chk"><input type="checkbox" id="f-imap-enabled"><span data-i="imap_enabled">Enable IMAP Receiver</span></label>
+  <div class="field">
+    <label data-i="imap_server">IMAP Server:</label>
+    <input type="text" id="f-imap-server">
+    <small data-i="imap_server_hint">host:port  e.g.  imap.gmail.com:993</small>
+  </div>
+  <div class="field">
+    <label data-i="imap_user">Username:</label>
+    <input type="text" id="f-imap-user">
+  </div>
+  <div class="field">
+    <label data-i="imap_pass">Password:</label>
+    <input type="password" id="f-imap-pass">
+    <small data-i="imap_pass_hint">Gmail: use an App Password, not your main password</small>
+  </div>
+  <div class="field">
+    <label data-i="imap_interval">Poll interval (minutes):</label>
+    <input type="number" id="f-imap-interval" style="max-width:100px" value="5" min="1" max="60">
+  </div>
+  <div class="field">
+    <label data-i="imap_from">From callsign:</label>
+    <input type="text" id="f-imap-from" style="max-width:180px" placeholder="EMAIL-5">
+    <small data-i="imap_from_hint">APRS sender callsign for forwarded emails</small>
+  </div>
+  <div class="field">
+    <label data-i="imap_allowed">Allowed sender emails:</label>
+    <input type="text" id="f-imap-allowed">
+    <small data-i="imap_allowed_hint">Comma-separated email addresses. Leave empty to allow all.</small>
+  </div>
+</div>
+
 <!-- ── SMTP Email ─────────────────────────────────── -->
 <div class="tab-panel" id="panel-smtp">
   <h2 data-i="tab_smtp">SMTP Email</h2>
@@ -691,6 +727,15 @@ en: {
   ai_extra_sms:"Extra SMS Parts:", ai_extra_sms_hint:"0 = single 64-char reply. 1-5 = multi-part responses (5s delay between parts).",
   ai_wl_enabled:"Enable Whitelist", ai_whitelist:"Whitelist:",
   ai_whitelist_hint:"Comma-separated callsigns. Wildcards OK: TA3* allows all TA3 stations.",
+  tab_imap:"IMAP Receive",
+  imap_enabled:"Enable IMAP Receiver",
+  imap_note:"Polls your email inbox and forwards new emails as APRS messages to the radio. Subject format: CALLSIGN message text",
+  imap_server:"IMAP Server:", imap_server_hint:"host:port  e.g.  imap.gmail.com:993",
+  imap_user:"Username:", imap_pass:"Password:",
+  imap_pass_hint:"Gmail: use an App Password, not your main password",
+  imap_interval:"Poll interval (minutes):",
+  imap_from:"From callsign:", imap_from_hint:"APRS sender callsign for forwarded emails",
+  imap_allowed:"Allowed sender emails:", imap_allowed_hint:"Comma-separated email addresses. Leave empty to allow all.",
   smtp_enabled:"Enable SMTP Email", smtp_server:"SMTP Server:",
   smtp_server_hint:"host:port  e.g.  smtp.gmail.com:587",
   smtp_user:"Username:", smtp_pass:"Password:",
@@ -763,6 +808,15 @@ tr: {
   ai_extra_sms:"Ek SMS Parçası:", ai_extra_sms_hint:"0 = tek 64 karakterlik yanıt. 1-5 = çok parçalı (parçalar arası 5s gecikme).",
   ai_wl_enabled:"Whitelist'i Etkinleştir", ai_whitelist:"Whitelist:",
   ai_whitelist_hint:"Virgülle ayırılmış çağrı işaretleri. Joker karakter OK: TA3* tüm TA3 istasyonlarına izin verir.",
+  tab_imap:"IMAP Alma",
+  imap_enabled:"IMAP Alıcıyı Etkinleştir",
+  imap_note:"E-posta gelen kutunuzu yoklar ve yeni e-postaları APRS mesajı olarak telsize iletir. Konu formatı: CALLSIGN mesaj metni",
+  imap_server:"IMAP Sunucusu:", imap_server_hint:"host:port  örn.  imap.gmail.com:993",
+  imap_user:"Kullanıcı adı:", imap_pass:"Şifre:",
+  imap_pass_hint:"Gmail: ana şifreniz değil, Uygulama Şifresi kullanın",
+  imap_interval:"Yoklama aralığı (dakika):",
+  imap_from:"Gönderen çağrı işareti:", imap_from_hint:"İletilen e-postalar için APRS gönderen çağrı işareti",
+  imap_allowed:"İzin verilen gönderen e-postalar:", imap_allowed_hint:"Virgülle ayırın. Boş bırakırsanız hepsi kabul edilir.",
   smtp_enabled:"SMTP E-posta Entegrasyonunu Etkinleştir", smtp_server:"SMTP Sunucusu:",
   smtp_server_hint:"host:port  örn.  smtp.gmail.com:587",
   smtp_user:"Kullanıcı adı:", smtp_pass:"Şifre:",
@@ -1048,6 +1102,15 @@ function loadConfigToForm(cfg) {
   $('f-ai-wl-enabled').checked = ai.whitelist_enabled || false;
   $('f-ai-whitelist').value = csv(ai.whitelist);
 
+  const im = (cfg.extensions||{}).imap || {};
+  $('f-imap-enabled').checked = im.enabled || false;
+  $('f-imap-server').value = im.imap_server || '';
+  $('f-imap-user').value = im.imap_username || '';
+  $('f-imap-pass').value = im.imap_password || '';
+  $('f-imap-interval').value = im.poll_interval_mins || 5;
+  $('f-imap-from').value = im.from_callsign || '';
+  $('f-imap-allowed').value = csv(im.allowed_senders);
+
   const sm = (cfg.extensions||{}).smtp || {};
   $('f-smtp-enabled').checked = sm.enabled || false;
   $('f-smtp-server').value = sm.smtp_server || '';
@@ -1126,6 +1189,15 @@ function formToConfig() {
         extra_sms: parseInt($('f-ai-extra-sms').value) || 0,
         whitelist_enabled: $('f-ai-wl-enabled').checked,
         whitelist: lst($('f-ai-whitelist').value),
+      },
+      imap: {
+        enabled: $('f-imap-enabled').checked,
+        imap_server: $('f-imap-server').value.trim(),
+        imap_username: $('f-imap-user').value.trim(),
+        imap_password: $('f-imap-pass').value,
+        poll_interval_mins: parseInt($('f-imap-interval').value) || 5,
+        from_callsign: $('f-imap-from').value.trim().toUpperCase(),
+        allowed_senders: lst($('f-imap-allowed').value),
       },
       smtp: {
         enabled: $('f-smtp-enabled').checked,

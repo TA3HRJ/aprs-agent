@@ -20,6 +20,7 @@ several automation features useful for amateur radio operators.
 | 🪵 | **Logger** | Logs incoming APRS packets to the terminal, with type and keyword filters |
 | 🐦 | **Twitter / X** | Forwards APRS messages addressed to `TWSEND` to your Twitter/X account |
 | 🦋 | **Bluesky** | Forwards APRS messages addressed to `BSKYSEND` to your Bluesky account (free API) |
+| 📥 | **IMAP Receive** | Polls email inbox and forwards new emails as APRS messages to the radio |
 | 📧 | **SMTP Email** | Forwards APRS messages addressed to `EMAIL` to any email address via SMTP |
 | 🤖 | **AI Gateway** | Auto-responds to APRS messages using AI (Puter/Groq/OpenRouter — free options available) |
 | 🔌 | **Extension Server** | Local TCP server — lets other programs subscribe to the live APRS stream |
@@ -160,6 +161,27 @@ YOUR_CALLSIGN What is APRS?
 
 The agent queries the AI and sends the response back as APRS message(s).
 
+### IMAP Receive (Email → Radio)
+
+Polls your email inbox and forwards new emails as APRS messages.
+Bidirectional email: use SMTP to send, IMAP to receive.
+
+```toml
+[extensions.imap]
+enabled      = true
+imap_server  = "imap.gmail.com:993"
+imap_username = "you@gmail.com"
+imap_password = "your-app-password"
+from_callsign = "EMAIL-5"
+poll_interval_mins = 5
+```
+
+To send an APRS message via email, compose an email with subject:
+```
+TA3HRJ-7 Hello, your beacon is working fine!
+```
+First word = destination callsign, rest = message text.
+
 ### SMTP Email
 
 ```toml
@@ -294,7 +316,8 @@ aprs-agent/
 │   ├── twitter_ext.py           # Twitter/X integration
 │   ├── bluesky_ext.py           # Bluesky integration
 │   ├── ai_gateway_ext.py        # AI auto-responder
-│   ├── smtp_ext.py              # SMTP email forwarding
+│   ├── imap_ext.py              # IMAP email receiver (email → radio)
+│   ├── smtp_ext.py              # SMTP email sender (radio → email)
 │   └── fixed_beacon.py          # Periodic position beacon
 ├── static/
 │   └── index.html               # Web GUI frontend (HTML/CSS/JS)
