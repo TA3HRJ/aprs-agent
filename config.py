@@ -111,7 +111,7 @@ DEFAULTS: dict[str, Any] = {
             "allowed_senders": ["N0CALL"],
             "poll_enabled": False,
             "poll_interval_secs": 5,
-            "from_callsign": "TG-BOT",
+            "from_callsign": "",
             "aprs_destination": "",
         },
         "ai_gateway": {

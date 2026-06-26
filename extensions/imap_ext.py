@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import email
 import email.header
+import email.utils
 import imaplib
 import time
 from typing import Optional

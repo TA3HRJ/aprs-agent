@@ -81,6 +81,8 @@ class Telegram(Extension):
             raise ValueError("Telegram: bot_token is required")
         if not cfg.get("chat_id"):
             raise ValueError("Telegram: chat_id is required")
+        if cfg.get("poll_enabled") and not cfg.get("from_callsign"):
+            raise ValueError("Telegram: from_callsign is required when poll_enabled is on")
 
     @property
     def name(self) -> str:
@@ -169,16 +171,17 @@ class Telegram(Extension):
         loop = asyncio.get_running_loop()
         token = cfg["bot_token"]
         aprs_dest = cfg.get("aprs_destination", "").upper()
-        from_call = cfg.get("from_callsign", "").upper() or "TG-BOT"
+        from_call = cfg.get("from_callsign", "").upper()
 
         def _fetch():
             return _tg_api(token, "getUpdates", {
                 "offset": self._last_update_id + 1,
-                "timeout": 1,
+                "timeout": 10,
             })
 
         result = await loop.run_in_executor(None, _fetch)
         if not result.get("ok"):
+            self.error(f"getUpdates failed: {result}")
             return
 
         for update in result.get("result", []):
@@ -198,6 +201,7 @@ class Telegram(Extension):
                 to_call = aprs_dest
                 message = _to_ascii(text)
             else:
+                self.warn(f"skipped from {sender_name}: no callsign prefix and aprs_destination not set")
                 continue
 
             if not message:
