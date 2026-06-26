@@ -1,18 +1,16 @@
 """
-Extension Server (TCP)
-======================
-Provides a local TCP server that external programs can connect to and
-receive a live stream of APRS packets.
+Extension Server (TCP) — Bidirectional
+=======================================
+Provides a local TCP server for external programs to both receive
+and send APRS packets.
 
 Protocol:
-  Client -> Server:  "ping\n"
-  Server -> Client:  "pong {unix_timestamp}\n"
-  Server -> Client:  "data {aprs_line}\n"  (for every APRS packet received)
+  Client -> Server:  "ping\\n"                  keepalive
+  Server -> Client:  "pong {unix_timestamp}\\n"  keepalive reply
+  Server -> Client:  "data {aprs_line}\\n"       received APRS packet
+  Client -> Server:  "send {aprs_line}\\n"       inject packet into APRS-IS
 
 A client that sends no "ping" for 10 seconds is disconnected.
-
-This allows other software on the same computer to subscribe to the
-APRS data stream without needing to connect directly to APRS-IS.
 
 Developed by TA3HRJ & TA3PKS
 """
@@ -29,11 +27,13 @@ class ConStore:
     """
     Thread-safe store of connected extension server clients.
     Each client has an asyncio.Queue for outbound messages.
+    Supports bidirectional traffic via upstream queue.
     """
 
     def __init__(self) -> None:
         self._clients: dict[str, asyncio.Queue] = {}
         self._lock = asyncio.Lock()
+        self._upstream: Optional[asyncio.Queue] = None
 
     async def add(self, addr: str, queue: asyncio.Queue) -> None:
         async with self._lock:
@@ -43,13 +43,25 @@ class ConStore:
         async with self._lock:
             self._clients.pop(addr, None)
 
+    def set_upstream(self, queue: asyncio.Queue) -> None:
+        """Set the APRS-IS outbound queue for bidirectional traffic."""
+        self._upstream = queue
+
+    def inject(self, data: bytes) -> None:
+        """Forward a packet from an extension client to APRS-IS."""
+        if self._upstream:
+            try:
+                self._upstream.put_nowait(data)
+            except asyncio.QueueFull:
+                pass
+
     def broadcast(self, message: str) -> None:
         """Send an APRS line to all connected clients (non-blocking)."""
         for queue in self._clients.values():
             try:
                 queue.put_nowait(message)
             except asyncio.QueueFull:
-                pass  # Drop the packet if a client is too slow
+                pass
 
 
 async def _handle_client(
@@ -101,18 +113,25 @@ async def _handle_client(
                     result = None
 
                 if isinstance(result, bytes):
-                    # Incoming data from client (ping command)
-                    cmd = result.decode("utf-8", errors="replace").strip().lower()
+                    cmd = result.decode("utf-8", errors="replace").strip()
                     if not cmd:
                         print(
                             f"[extension_server] empty line from {addr_str}, disconnecting",
                             file=sys.stderr,
                         )
                         return
-                    if cmd == "ping":
+                    if cmd.lower() == "ping":
                         pong = f"pong {int(time.time())}\n"
                         writer.write(pong.encode("utf-8"))
                         await writer.drain()
+                    elif cmd.lower().startswith("send "):
+                        payload = cmd[5:].strip()
+                        if payload:
+                            store.inject((payload + "\n").encode("utf-8"))
+                            print(
+                                f"[extension_server] {addr_str} injected: {payload[:80]}",
+                                file=sys.stderr,
+                            )
                     else:
                         print(
                             f"[extension_server] unknown command from {addr_str}: {cmd!r}",

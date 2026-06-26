@@ -64,6 +64,7 @@ async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
             # Queue for extensions (e.g. Fixed Beacon) to send packets
             own_queue: asyncio.Queue = asyncio.Queue()
             ExtensionRegistry.set_own_writers(own_queue)
+            ext_con_store.set_upstream(own_queue)
 
             # Run the receive loop and the send loop concurrently
             await _run_session(reader, writer, own_queue, ext_con_store)
