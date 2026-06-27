@@ -418,6 +418,8 @@ _S = {
         "tab_beacon":         "Fixed Beacon",
         "tab_twitter":        "Twitter / X",
         "tab_bluesky":        "Bluesky",
+        "tab_wa":             "WhatsApp",
+        "tab_tg":             "Telegram",
         "tab_ai":             "AI Gateway",
         "tab_email":          "Email",
         "email_send":         "📤 Send — Radio → Email (SMTP)",
@@ -474,6 +476,29 @@ _S = {
         "bsky_recepients":    "Allowed APRS recipients:",
         "bsky_senders":       "Allowed APRS senders:",
         "bsky_cs_hint":       "Comma-separated callsigns",
+        # whatsapp
+        "wa_enabled":         "Enable WhatsApp",
+        "wa_phone_id":        "Phone Number ID:",
+        "wa_token":           "Access Token:",
+        "wa_verify":          "Webhook Verify Token:",
+        "wa_recipient":       "Recipient Phone:",
+        "wa_hashtag":         "Add #APRS hashtag",
+        "wa_recepients":      "Allowed APRS recipients:",
+        "wa_senders":         "Allowed APRS senders:",
+        "wa_from_call":       "From callsign:",
+        "wa_aprs_dest":       "Default APRS destination:",
+        "wa_allowed_phones":  "Allowed phone numbers:",
+        # telegram
+        "tg_enabled":         "Enable Telegram",
+        "tg_token":           "Bot Token:",
+        "tg_chat_id":         "Chat ID:",
+        "tg_hashtag":         "Add #APRS hashtag",
+        "tg_recepients":      "Allowed APRS recipients:",
+        "tg_senders":         "Allowed APRS senders:",
+        "tg_poll_enabled":    "Poll Telegram (inbound)",
+        "tg_poll_interval":   "Poll interval (seconds):",
+        "tg_from_call":       "From callsign:",
+        "tg_aprs_dest":       "Default APRS destination:",
         # ai gateway
         "ai_enabled":         "Enable AI Gateway",
         "ai_callsign":        "AI Callsign:",
@@ -575,6 +600,8 @@ _S = {
         "tab_beacon":         "Sabit Konum",
         "tab_twitter":        "Twitter / X",
         "tab_bluesky":        "Bluesky",
+        "tab_wa":             "WhatsApp",
+        "tab_tg":             "Telegram",
         "tab_ai":             "AI Gateway",
         "tab_email":          "E-Posta",
         "email_send":         "📤 Gönder — Telsiz → E-Posta (SMTP)",
@@ -631,6 +658,29 @@ _S = {
         "bsky_recepients":    "İzin verilen APRS alıcıları:",
         "bsky_senders":       "İzin verilen APRS göndericileri:",
         "bsky_cs_hint":       "Virgülle ayırılmış çağrı işaretleri",
+        # whatsapp
+        "wa_enabled":         "WhatsApp Etkinleştir",
+        "wa_phone_id":        "Telefon Numarası ID:",
+        "wa_token":           "Erişim Token:",
+        "wa_verify":          "Webhook Doğrulama Token:",
+        "wa_recipient":       "Alıcı Telefon:",
+        "wa_hashtag":         "#APRS hashtag ekle",
+        "wa_recepients":      "İzin verilen APRS alıcıları:",
+        "wa_senders":         "İzin verilen APRS göndericileri:",
+        "wa_from_call":       "Gönderen çağrı işareti:",
+        "wa_aprs_dest":       "Varsayılan APRS hedefi:",
+        "wa_allowed_phones":  "İzin verilen telefon numaraları:",
+        # telegram
+        "tg_enabled":         "Telegram Etkinleştir",
+        "tg_token":           "Bot Token:",
+        "tg_chat_id":         "Chat ID:",
+        "tg_hashtag":         "#APRS hashtag ekle",
+        "tg_recepients":      "İzin verilen APRS alıcıları:",
+        "tg_senders":         "İzin verilen APRS göndericileri:",
+        "tg_poll_enabled":    "Telegram yokla (gelen)",
+        "tg_poll_interval":   "Yoklama aralığı (saniye):",
+        "tg_from_call":       "Gönderen çağrı işareti:",
+        "tg_aprs_dest":       "Varsayılan APRS hedefi:",
         # ai gateway
         "ai_enabled":         "AI Gateway'i Etkinleştir",
         "ai_callsign":        "AI Çağrı İşareti:",
@@ -1362,14 +1412,16 @@ class APRSAgentGUI:
         self._nb.pack(fill="both", expand=True, padx=8, pady=(4, 0))
 
         tab_keys = ["tab_conn", "tab_log", "tab_beacon",
-                    "tab_twitter", "tab_bluesky", "tab_ai",
-                    "tab_email", "tab_ext"]
+                    "tab_twitter", "tab_bluesky", "tab_wa",
+                    "tab_tg", "tab_ai", "tab_email", "tab_ext"]
         builders = [
             self._build_conn_tab,
             self._build_logger_tab,
             self._build_beacon_tab,
             self._build_twitter_tab,
             self._build_bluesky_tab,
+            self._build_whatsapp_tab,
+            self._build_telegram_tab,
             self._build_ai_tab,
             self._build_email_tab,
             self._build_extserver_tab,
@@ -1648,6 +1700,64 @@ class APRSAgentGUI:
         self._row(f, 8,  "bsky_senders",    self._v_bsky_senders,
                   hint_key="bsky_cs_hint", width=42)
 
+    # ── WhatsApp tab ─────────────────────────────────────────────────────────
+
+    def _build_whatsapp_tab(self, parent) -> None:
+        f = self._scrollable(parent)
+        f.columnconfigure(1, weight=1)
+
+        self._v_wa_enabled   = tk.BooleanVar()
+        self._v_wa_phone_id  = tk.StringVar()
+        self._v_wa_token     = tk.StringVar()
+        self._v_wa_verify    = tk.StringVar()
+        self._v_wa_recipient = tk.StringVar()
+        self._v_wa_hashtag   = tk.BooleanVar()
+        self._v_wa_recepients = tk.StringVar()
+        self._v_wa_senders   = tk.StringVar()
+        self._v_wa_from_call = tk.StringVar()
+        self._v_wa_aprs_dest = tk.StringVar()
+        self._v_wa_phones    = tk.StringVar()
+
+        self._check(f, 0,  "wa_enabled",     self._v_wa_enabled)
+        self._row(f, 1,  "wa_phone_id",    self._v_wa_phone_id, width=42)
+        self._row(f, 3,  "wa_token",       self._v_wa_token, show=True, width=42)
+        self._row(f, 5,  "wa_verify",      self._v_wa_verify, width=42)
+        self._row(f, 7,  "wa_recipient",   self._v_wa_recipient, width=24)
+        self._check(f, 9,  "wa_hashtag",    self._v_wa_hashtag)
+        self._row(f, 10, "wa_recepients",  self._v_wa_recepients, width=42)
+        self._row(f, 12, "wa_senders",     self._v_wa_senders, width=42)
+        self._row(f, 14, "wa_from_call",   self._v_wa_from_call, width=20)
+        self._row(f, 16, "wa_aprs_dest",   self._v_wa_aprs_dest, width=20)
+        self._row(f, 18, "wa_allowed_phones", self._v_wa_phones, width=42)
+
+    # ── Telegram tab ──────────────────────────────────────────────────────────
+
+    def _build_telegram_tab(self, parent) -> None:
+        f = self._scrollable(parent)
+        f.columnconfigure(1, weight=1)
+
+        self._v_tg_enabled   = tk.BooleanVar()
+        self._v_tg_token     = tk.StringVar()
+        self._v_tg_chat_id   = tk.StringVar()
+        self._v_tg_hashtag   = tk.BooleanVar()
+        self._v_tg_recepients = tk.StringVar()
+        self._v_tg_senders   = tk.StringVar()
+        self._v_tg_poll      = tk.BooleanVar()
+        self._v_tg_poll_int  = tk.StringVar(value="5")
+        self._v_tg_from_call = tk.StringVar()
+        self._v_tg_aprs_dest = tk.StringVar()
+
+        self._check(f, 0,  "tg_enabled",     self._v_tg_enabled)
+        self._row(f, 1,  "tg_token",       self._v_tg_token, show=True, width=42)
+        self._row(f, 3,  "tg_chat_id",     self._v_tg_chat_id, width=20)
+        self._check(f, 5,  "tg_hashtag",    self._v_tg_hashtag)
+        self._row(f, 6,  "tg_recepients",  self._v_tg_recepients, width=42)
+        self._row(f, 8,  "tg_senders",     self._v_tg_senders, width=42)
+        self._check(f, 10, "tg_poll_enabled", self._v_tg_poll)
+        self._row(f, 11, "tg_poll_interval", self._v_tg_poll_int, width=8)
+        self._row(f, 13, "tg_from_call",   self._v_tg_from_call, width=20)
+        self._row(f, 15, "tg_aprs_dest",   self._v_tg_aprs_dest, width=20)
+
     # ── AI Gateway tab ────────────────────────────────────────────────────────
 
     def _build_ai_tab(self, parent) -> None:
@@ -1894,6 +2004,33 @@ class APRSAgentGUI:
         self._v_bsky_recepients.set(_csv(bsky.get("allowed_recepients", [])))
         self._v_bsky_senders.set(_csv(bsky.get("allowed_senders", [])))
 
+        # WhatsApp
+        wa = cfg.get("extensions", {}).get("whatsapp", {})
+        self._v_wa_enabled.set(wa.get("enabled", False))
+        self._v_wa_phone_id.set(wa.get("phone_number_id", ""))
+        self._v_wa_token.set(wa.get("access_token", ""))
+        self._v_wa_verify.set(wa.get("verify_token", ""))
+        self._v_wa_recipient.set(wa.get("recipient_phone", ""))
+        self._v_wa_hashtag.set(wa.get("add_hash_tag", True))
+        self._v_wa_recepients.set(_csv(wa.get("allowed_recepients", [])))
+        self._v_wa_senders.set(_csv(wa.get("allowed_senders", [])))
+        self._v_wa_from_call.set(wa.get("from_callsign", ""))
+        self._v_wa_aprs_dest.set(wa.get("aprs_destination", ""))
+        self._v_wa_phones.set(_csv(wa.get("allowed_phones", [])))
+
+        # Telegram
+        tg = cfg.get("extensions", {}).get("telegram", {})
+        self._v_tg_enabled.set(tg.get("enabled", False))
+        self._v_tg_token.set(tg.get("bot_token", ""))
+        self._v_tg_chat_id.set(tg.get("chat_id", ""))
+        self._v_tg_hashtag.set(tg.get("add_hash_tag", True))
+        self._v_tg_recepients.set(_csv(tg.get("allowed_recepients", [])))
+        self._v_tg_senders.set(_csv(tg.get("allowed_senders", [])))
+        self._v_tg_poll.set(tg.get("poll_enabled", False))
+        self._v_tg_poll_int.set(str(tg.get("poll_interval_secs", 5)))
+        self._v_tg_from_call.set(tg.get("from_callsign", ""))
+        self._v_tg_aprs_dest.set(tg.get("aprs_destination", ""))
+
         # AI Gateway
         ai = cfg.get("extensions", {}).get("ai_gateway", {})
         self._v_ai_enabled.set(ai.get("enabled", False))
@@ -2002,6 +2139,31 @@ class APRSAgentGUI:
                     "add_hash_tag":         self._v_bsky_hashtag.get(),
                     "allowed_recepients":   _lst(self._v_bsky_recepients.get()),
                     "allowed_senders":      _lst(self._v_bsky_senders.get()),
+                },
+                "whatsapp": {
+                    "enabled":              self._v_wa_enabled.get(),
+                    "phone_number_id":      self._v_wa_phone_id.get().strip(),
+                    "access_token":         self._v_wa_token.get(),
+                    "verify_token":         self._v_wa_verify.get().strip(),
+                    "recipient_phone":      self._v_wa_recipient.get().strip(),
+                    "add_hash_tag":         self._v_wa_hashtag.get(),
+                    "allowed_recepients":   _lst(self._v_wa_recepients.get()),
+                    "allowed_senders":      _lst(self._v_wa_senders.get()),
+                    "from_callsign":        self._v_wa_from_call.get().strip().upper(),
+                    "aprs_destination":     self._v_wa_aprs_dest.get().strip().upper(),
+                    "allowed_phones":       _lst(self._v_wa_phones.get()),
+                },
+                "telegram": {
+                    "enabled":              self._v_tg_enabled.get(),
+                    "bot_token":            self._v_tg_token.get(),
+                    "chat_id":              self._v_tg_chat_id.get().strip(),
+                    "add_hash_tag":         self._v_tg_hashtag.get(),
+                    "allowed_recepients":   _lst(self._v_tg_recepients.get()),
+                    "allowed_senders":      _lst(self._v_tg_senders.get()),
+                    "poll_enabled":         self._v_tg_poll.get(),
+                    "poll_interval_secs":   int(self._v_tg_poll_int.get().strip() or 5),
+                    "from_callsign":        self._v_tg_from_call.get().strip().upper(),
+                    "aprs_destination":     self._v_tg_aprs_dest.get().strip().upper(),
                 },
                 "ai_gateway": {
                     "enabled":              self._v_ai_enabled.get(),
