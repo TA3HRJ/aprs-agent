@@ -161,11 +161,24 @@ class Telegram(Extension):
 
     async def _poll_loop(self) -> None:
         interval = int(self._config.get("poll_interval_secs", 5))
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(None, lambda: _tg_api(
+                self._config["bot_token"], "deleteWebhook"))
+            self.log("webhook cleared")
+        except Exception:
+            pass
         self.log(f"polling Telegram every {interval}s")
         await asyncio.sleep(5)
         while True:
             try:
                 await self._check_updates()
+            except urllib.error.HTTPError as e:
+                if e.code == 409:
+                    self.error("409 Conflict — another bot instance is polling this token. Stop the other process.")
+                    await asyncio.sleep(30)
+                else:
+                    self.error(f"poll error: {e}")
             except Exception as e:
                 self.error(f"poll error: {type(e).__name__}: {e}")
             await asyncio.sleep(interval)
