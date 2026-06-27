@@ -20,7 +20,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "2.3.1"
+VERSION = "2.4.0"
 
 # tomllib is built-in from Python 3.11 onwards.
 # For older Python versions, install the 'tomli' package.
@@ -101,6 +101,19 @@ DEFAULTS: dict[str, Any] = {
             "add_hash_tag": True,
             "allowed_recepients": ["BSKYSEND"],
             "allowed_senders": ["N0CALL"],
+        },
+        "whatsapp": {
+            "enabled": False,
+            "phone_number_id": "",
+            "access_token": "",
+            "verify_token": "",
+            "recipient_phone": "",
+            "add_hash_tag": True,
+            "allowed_recepients": ["WASEND"],
+            "allowed_senders": ["N0CALL"],
+            "from_callsign": "",
+            "aprs_destination": "",
+            "allowed_phones": [],
         },
         "telegram": {
             "enabled": False,
@@ -291,6 +304,9 @@ def print_config(config: dict[str, Any]) -> None:
 
     bsky = safe.get("extensions", {}).get("bluesky", {})
     mask(bsky, ["app_password"])
+
+    wa = safe.get("extensions", {}).get("whatsapp", {})
+    mask(wa, ["access_token"])
 
     tg = safe.get("extensions", {}).get("telegram", {})
     mask(tg, ["bot_token"])

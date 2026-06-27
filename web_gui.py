@@ -122,6 +122,7 @@ class AgentManager:
         from extensions.logger_ext import Logger
         from extensions.twitter_ext import Twitter
         from extensions.bluesky_ext import Bluesky
+        from extensions.whatsapp_ext import WhatsApp
         from extensions.telegram_ext import Telegram
         from extensions.ai_gateway_ext import AIGateway
         from extensions.imap_ext import ImapReceiver
@@ -132,6 +133,7 @@ class AgentManager:
         pairs = [
             ("twitter",      Twitter,      ext_cfg.get("twitter", {})),
             ("bluesky",      Bluesky,      ext_cfg.get("bluesky", {})),
+            ("whatsapp",     WhatsApp,     ext_cfg.get("whatsapp", {})),
             ("telegram",     Telegram,     ext_cfg.get("telegram", {})),
             ("ai_gateway",   AIGateway,    ext_cfg.get("ai_gateway", {})),
             ("imap",         ImapReceiver, ext_cfg.get("imap", {})),
@@ -280,6 +282,36 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     finally:
         mgr.remove_ws(ws)
     return ws
+
+
+# ── WhatsApp webhook ────────────────────────────────────────────────────────
+
+@routes.get("/webhook/whatsapp")
+async def wa_webhook_verify(request: web.Request) -> web.Response:
+    mgr: AgentManager = request.app["manager"]
+    cfg = mgr.get_config()
+    verify_token = cfg.get("extensions", {}).get("whatsapp", {}).get("verify_token", "")
+    mode = request.query.get("hub.mode", "")
+    token = request.query.get("hub.verify_token", "")
+    challenge = request.query.get("hub.challenge", "")
+    if mode == "subscribe" and token == verify_token and verify_token:
+        return web.Response(text=challenge)
+    raise web.HTTPForbidden()
+
+
+@routes.post("/webhook/whatsapp")
+async def wa_webhook_incoming(request: web.Request) -> web.Response:
+    mgr: AgentManager = request.app["manager"]
+    try:
+        data = await request.json()
+        from extensions import ExtensionRegistry
+        for ext in ExtensionRegistry._extensions:
+            if ext.name == "whatsapp" and hasattr(ext, "process_webhook"):
+                await ext.process_webhook(data)
+                break
+    except Exception as e:
+        print(f"[whatsapp-webhook] error: {e}", file=sys.stderr)
+    return web.json_response({"ok": True})
 
 
 @routes.get("/favicon.ico")

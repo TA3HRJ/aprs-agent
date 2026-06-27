@@ -22,6 +22,7 @@ several automation features useful for amateur radio operators.
 | 🦋 | **Bluesky** | Forwards APRS messages addressed to `BSKYSEND` to your Bluesky account (free API) |
 | 📥 | **IMAP Receive** | Polls email inbox and forwards new emails as APRS messages to the radio |
 | 📧 | **SMTP Email** | Forwards APRS messages addressed to `EMAIL` to any email address via SMTP |
+| 📱 | **WhatsApp** | Bidirectional APRS ↔ WhatsApp via Meta Cloud API (webhook) |
 | 💬 | **Telegram** | Bidirectional APRS ↔ Telegram messaging (free, no API payment) |
 | 🤖 | **AI Gateway** | Auto-responds to APRS messages using AI (Puter/Groq/OpenRouter — free options available) |
 | 🔌 | **Extension Server** | Local TCP server — lets other programs subscribe to the live APRS stream |
@@ -140,6 +141,21 @@ BSKYSEND Hello from APRS!
 ```
 
 The agent posts the message to your Bluesky account and sends an APRS ACK back.
+
+### WhatsApp
+
+Bidirectional APRS ↔ WhatsApp via Meta Cloud API.
+
+```toml
+[extensions.whatsapp]
+enabled          = true
+phone_number_id  = "123456789"     # from Meta dashboard
+access_token     = "EAAx..."       # from Meta dashboard
+verify_token     = "my-secret"     # for webhook verification
+recipient_phone  = "+905551234567"
+```
+
+Webhook URL: `https://YOUR_SERVER/webhook/whatsapp`
 
 ### Telegram
 
@@ -333,6 +349,7 @@ aprs-agent/
 │   ├── logger_ext.py            # Console logger
 │   ├── twitter_ext.py           # Twitter/X integration
 │   ├── bluesky_ext.py           # Bluesky integration
+│   ├── whatsapp_ext.py          # WhatsApp bidirectional (webhook)
 │   ├── telegram_ext.py          # Telegram bidirectional
 │   ├── ai_gateway_ext.py        # AI auto-responder
 │   ├── imap_ext.py              # IMAP email receiver (email → radio)

@@ -181,6 +181,34 @@ allowed_recepients = ["BSKYSEND"]
 # Only accept messages FROM these callsigns
 allowed_senders = ["N0CALL"]
 
+# --- WhatsApp ---
+# Bidirectional APRS ↔ WhatsApp via Meta Cloud API.
+# Setup: create a Meta Business app at developers.facebook.com
+# Get phone_number_id and access_token from the dashboard.
+# Webhook URL: https://YOUR_SERVER/webhook/whatsapp
+
+[extensions.whatsapp]
+enabled = false
+
+# From Meta Business dashboard
+phone_number_id = ""
+access_token = ""
+
+# Custom string for webhook verification (must match Meta config)
+verify_token = ""
+
+# Default WhatsApp recipient phone number (with country code)
+recipient_phone = ""
+
+add_hash_tag = true
+allowed_recepients = ["WASEND"]
+allowed_senders = ["N0CALL"]
+
+# Inbound (WhatsApp → APRS)
+from_callsign = ""
+aprs_destination = ""
+allowed_phones = []
+
 # --- Telegram ---
 # Bidirectional APRS ↔ Telegram messaging (completely free).
 # Setup: message @BotFather on Telegram to create a bot and get a token.
