@@ -32,7 +32,10 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 
 /* PREF GROUP */
 .pref-group{margin-bottom:18px}
-.pref-group>label{display:block;font-size:12px;font-weight:bold;color:var(--dim);margin:0 4px 6px;text-transform:uppercase;letter-spacing:.5px}
+.pref-group>label{display:flex;align-items:center;font-size:12px;font-weight:bold;color:var(--dim);margin:0 4px 6px;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;user-select:none}
+.pref-group>label::before{content:'▼';font-size:9px;margin-right:6px;transition:transform .2s;display:inline-block;width:10px}
+.pref-group.collapsed>label::before{transform:rotate(-90deg)}
+.pref-group.collapsed>.pref-box{display:none}
 .pref-box{background:var(--card);border-radius:var(--r);border:1px solid var(--border)}
 
 /* ACTION ROW (toggle) */
@@ -144,6 +147,8 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 <div class="side-header">
   <h1>APRS-Agent <span class="ver" id="hdr-ver"></span></h1>
   <span class="ws-dot" id="ws-dot"></span>
+  <button class="hdr-btn" onclick="document.querySelectorAll('.pref-group').forEach(g=>g.classList.add('collapsed'))" title="Collapse All">−</button>
+  <button class="hdr-btn" onclick="document.querySelectorAll('.pref-group').forEach(g=>g.classList.remove('collapsed'))" title="Expand All">+</button>
   <button class="hdr-btn" id="btn-lang" onclick="toggleLang()">TR</button>
   <button class="hdr-btn" id="btn-about" onclick="$('about-bg').classList.add('open')">About</button>
 </div>
@@ -410,6 +415,9 @@ const S={en:{
 function t(k){return(S[lang]&&S[lang][k])||S.en[k]||k}
 function applyLang(){document.querySelectorAll('[data-i]').forEach(el=>{const k=el.getAttribute('data-i');const v=t(k);if(el.tagName==='INPUT')el.placeholder=v;else el.textContent=v});$('btn-lang').textContent=lang==='en'?'TR':'EN'}
 function toggleLang(){lang=lang==='en'?'tr':'en';applyLang()}
+
+// ── Section collapse/expand ──
+document.querySelectorAll('.pref-group>label').forEach(lbl=>{lbl.addEventListener('click',()=>lbl.parentElement.classList.toggle('collapsed'))});
 
 // ── Maidenhead ──
 function latlon2m(lat,lon){lon+=180;lat+=90;const a=Math.floor(lon/20),b=Math.floor(lat/10);lon-=a*20;lat-=b*10;const c=Math.floor(lon/2),d=Math.floor(lat);lon-=c*2;lat-=d;const e=Math.floor(lon*12),f=Math.floor(lat*24);lon=lon*12-e;lat=lat*24-f;return String.fromCharCode(65+a)+String.fromCharCode(65+b)+c+d+String.fromCharCode(97+e)+String.fromCharCode(97+f)+Math.floor(lon*10)+Math.floor(lat*10)}
