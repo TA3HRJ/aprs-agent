@@ -36,7 +36,7 @@ import aprslib
 from . import Extension
 from config import strip_ssid
 
-_GRAPH_API = "https://graph.facebook.com/v21.0"
+_GRAPH_API = "https://graph.facebook.com/v25.0"
 
 
 def _to_ascii(text: str) -> str:
@@ -91,6 +91,7 @@ class WhatsApp(Extension):
             url = f"{_GRAPH_API}/{cfg['phone_number_id']}/messages"
             payload = json.dumps({
                 "messaging_product": "whatsapp",
+                "recipient_type": "individual",
                 "to": phone,
                 "type": "text",
                 "text": {"body": text},
@@ -153,12 +154,15 @@ class WhatsApp(Extension):
         msg_id = packet.get("msgNo", "")
         if not msg_id:
             return None
-        ack = f"{recipient}>{sender_full},{path}::{sender_full:<9}:ack{msg_id}\n"
+        ack = f"{recipient}>{sender_full},{path}::{sender_full:<9}:ack{msg_id}\r\n"
         return ack.encode("utf-8")
 
     # ── Inbound: WhatsApp webhook → APRS ──
 
     async def process_webhook(self, data: dict) -> None:
+        if data.get("object") != "whatsapp_business_account":
+            return
+
         cfg = self._config
         aprs_dest = cfg.get("aprs_destination", "").upper()
         from_call = cfg.get("from_callsign", "").upper()
@@ -209,6 +213,6 @@ class WhatsApp(Extension):
             self.error("no own_writer queue")
             return
         mid = self._next_msg_id()
-        pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}}}\n"
+        pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
         await self._queue.put(pkt.encode("utf-8"))
         self.log(f"TX to APRS: {to_call} {message}")

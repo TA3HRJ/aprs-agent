@@ -171,7 +171,7 @@ class AIGateway(Extension):
             self.error("no own_writer queue — cannot send reply")
             return
         mid = self._next_msg_id()
-        pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}}}\n"
+        pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
         await self._own_writer.put(pkt.encode("utf-8"))
 
     async def handle(self, line: str) -> Optional[bytes]:
@@ -253,7 +253,7 @@ class AIGateway(Extension):
                 await asyncio.sleep(5)
 
         if msg_id:
-            ack = f"{my_call}>APRS,TCPIP*::{sender_full:<9}:ack{msg_id}\n"
+            ack = f"{my_call}>APRS,TCPIP*::{sender_full:<9}:ack{msg_id}\r\n"
             return ack.encode("utf-8")
 
         return None

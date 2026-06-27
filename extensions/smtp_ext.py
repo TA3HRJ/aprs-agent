@@ -125,7 +125,7 @@ class SmtpEmailer(Extension):
 
         path = ",".join(packet.get("path", []))
         dest = packet.get("to", "")
-        ack = f"{dest}>{sender_full},{path}::{sender_full:<9}:ack{msg_id}\n"
+        ack = f"{dest}>{sender_full},{path}::{sender_full:<9}:ack{msg_id}\r\n"
         return ack.encode("utf-8")
 
     def _send_email(

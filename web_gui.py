@@ -302,8 +302,22 @@ async def wa_webhook_verify(request: web.Request) -> web.Response:
 @routes.post("/webhook/whatsapp")
 async def wa_webhook_incoming(request: web.Request) -> web.Response:
     mgr: AgentManager = request.app["manager"]
-    try:
+    cfg = mgr.get_config()
+    app_secret = cfg.get("extensions", {}).get("whatsapp", {}).get("app_secret", "")
+    if app_secret:
+        import hashlib, hmac as _hmac
+        raw_body = await request.read()
+        sig_header = request.headers.get("X-Hub-Signature-256", "")
+        expected = "sha256=" + _hmac.new(
+            app_secret.encode(), raw_body, hashlib.sha256
+        ).hexdigest()
+        if not _hmac.compare_digest(expected, sig_header):
+            print("[whatsapp-webhook] invalid signature", file=sys.stderr)
+            raise web.HTTPForbidden()
+        data = json.loads(raw_body)
+    else:
         data = await request.json()
+    try:
         from extensions import ExtensionRegistry
         for ext in ExtensionRegistry._extensions:
             if ext.name == "whatsapp" and hasattr(ext, "process_webhook"):

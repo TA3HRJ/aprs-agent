@@ -102,8 +102,8 @@ class FixedBeacon(Extension):
         # APRS position beacon format:
         # SSID>AP4GNT,TCPIP*,qAC,APRSAGENT:!LATTSTLONS COMMENT
         packet = (
-            f"{ssid}>AP4GNT,TCPIP*,qAC,APRSAGENT:"
-            f"!{lat}{symbol_table}{lon}{symbol}{comment}\n"
+            f"{ssid}>AP4GNT,TCPIP*:"
+            f"!{lat}{symbol_table}{lon}{symbol}{comment}\r\n"
         )
 
         try:

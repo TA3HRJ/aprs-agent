@@ -154,7 +154,7 @@ class Telegram(Extension):
         msg_id = packet.get("msgNo", "")
         if not msg_id:
             return None
-        ack = f"{recipient}>{sender_full},{path}::{sender_full:<9}:ack{msg_id}\n"
+        ack = f"{recipient}>{sender_full},{path}::{sender_full:<9}:ack{msg_id}\r\n"
         return ack.encode("utf-8")
 
     # ── Inbound: Telegram → APRS ──
@@ -241,6 +241,6 @@ class Telegram(Extension):
             self.error("no own_writer queue")
             return
         mid = self._next_msg_id()
-        pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}}}\n"
+        pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
         await self._queue.put(pkt.encode("utf-8"))
         self.log(f"TX to APRS: {to_call} {message}")

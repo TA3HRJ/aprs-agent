@@ -220,5 +220,5 @@ class ImapReceiver(Extension):
             self.error("no own_writer queue")
             return
         mid = self._next_msg_id()
-        pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}}}\n"
+        pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
         await self._queue.put(pkt.encode("utf-8"))

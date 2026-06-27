@@ -147,5 +147,5 @@ class Twitter(Extension):
         if not msg_id:
             return None
 
-        ack = f"{recipient}>{sender_full},{path}::{sender_full:<9}:ack{msg_id}\n"
+        ack = f"{recipient}>{sender_full},{path}::{sender_full:<9}:ack{msg_id}\r\n"
         return ack.encode("utf-8")

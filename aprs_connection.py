@@ -47,7 +47,7 @@ async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
     # Build the APRS-IS login line
     login_line = (
         f"user {callsign} pass {passcode} vers {SOFTWARE_VERSION} "
-        f"filter b/{filter_str}\n"
+        f"filter b/{filter_str}\r\n"
     )
 
     while True:
@@ -175,8 +175,8 @@ async def _send_loop(
         if not data:
             continue
 
-        if not data.endswith(b"\n"):
-            data += b"\n"
+        if not data.endswith(b"\r\n"):
+            data = data.rstrip(b"\r\n") + b"\r\n"
 
         decoded = data.decode("utf-8", errors="replace").strip()
         print(f"--> {decoded}", file=sys.stderr)

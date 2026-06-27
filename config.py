@@ -20,7 +20,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "2.4.0"
+VERSION = "2.5.0"
 
 # tomllib is built-in from Python 3.11 onwards.
 # For older Python versions, install the 'tomli' package.
@@ -107,6 +107,7 @@ DEFAULTS: dict[str, Any] = {
             "phone_number_id": "",
             "access_token": "",
             "verify_token": "",
+            "app_secret": "",
             "recipient_phone": "",
             "add_hash_tag": True,
             "allowed_recepients": ["WASEND"],
