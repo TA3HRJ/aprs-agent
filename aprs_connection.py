@@ -42,12 +42,27 @@ async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
     port = config["port"]
     callsign = config["callsign"].upper()
     passcode = calculate_passcode(callsign)
-    filter_str = "/".join(config["allowed_callsigns"])
+    # Separate exact callsigns (b/ filter) from prefix wildcards (p/ filter)
+    exact = []
+    prefix = []
+    for cs in config["allowed_callsigns"]:
+        cs = cs.strip().upper()
+        if cs.endswith("*"):
+            prefix.append(cs.rstrip("*"))
+        else:
+            exact.append(cs)
+
+    filters = []
+    if exact:
+        filters.append("b/" + "/".join(exact))
+    if prefix:
+        filters.append("p/" + "/".join(prefix))
+    filter_cmd = " ".join(filters) if filters else f"b/{callsign}"
 
     # Build the APRS-IS login line
     login_line = (
         f"user {callsign} pass {passcode} vers {SOFTWARE_VERSION} "
-        f"filter b/{filter_str}\r\n"
+        f"filter {filter_cmd}\r\n"
     )
 
     while True:
