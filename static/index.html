@@ -158,7 +158,7 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
   <div class="entry-row"><label data-i="server">APRS-IS Server</label><input id="f-server" type="text" placeholder="rotate.aprs2.net"></div>
   <div class="entry-row"><label data-i="port">Port</label><input id="f-port" type="text" placeholder="14580" style="max-width:100px"></div>
   <div class="entry-row"><label data-i="callsign">Callsign</label><input id="f-callsign" type="text" placeholder="N0CALL" style="text-transform:uppercase;max-width:140px"></div>
-  <div class="entry-row"><label data-i="allowed_cs">Allowed Callsigns</label><input id="f-allowed-cs" type="text" placeholder="N0CALL*"><div class="hint" data-i="allowed_cs_hint">Comma-separated, wildcards OK</div></div>
+  <div class="entry-row"><label data-i="allowed_cs">Station Filter</label><input id="f-allowed-cs" type="text" placeholder="TA3*, TB3*"><div class="hint" data-i="allowed_cs_hint">Which stations to monitor from APRS-IS. Wildcards OK: TA3* = all TA3 stations</div></div>
   <div class="action-row"><div class="content"><div class="title" data-i="autostart_agent">Auto-start agent</div></div><label class="adw-switch"><input type="checkbox" id="f-autostart-agent"><span></span></label></div>
   <div class="action-row"><div class="content"><div class="title" data-i="print_cfg">Print config on startup</div></div><label class="adw-switch"><input type="checkbox" id="f-print-cfg"><span></span></label></div>
 </div></div>
@@ -343,7 +343,7 @@ let lang='en',autoScroll=true,logCount=0,cRX=0,cTX=0,cER=0,cPK=0;
 // ── i18n ──
 const S={en:{
   g_conn:"Connection",g_logger:"Logger",g_beacon:"Fixed Beacon",g_email:"Email",g_ext:"Extension Server",g_config:"Config File",
-  server:"APRS-IS Server",port:"Port",callsign:"Callsign",allowed_cs:"Allowed Callsigns",allowed_cs_hint:"Comma-separated, wildcards OK",
+  server:"APRS-IS Server",port:"Port",callsign:"Callsign",allowed_cs:"Station Filter",allowed_cs_hint:"Which stations to monitor. Wildcards OK: TA3* = all TA3 stations",
   autostart_agent:"Auto-start agent",print_cfg:"Print config on startup",
   log_enabled:"Logger",log_enabled_sub:"Log incoming APRS packets",log_comments:"Log comments",log_comments_sub:"Include server comment lines (#)",
   filter_type:"Filter by packet type",filter_type_hint:"Comma-separated chars",exclude_type:"Exclude packet types",kw_filter:"Keyword filter",kw_filter_hint:"Comma-separated, case-insensitive",
@@ -378,7 +378,7 @@ const S={en:{
   save_ok:"Config saved.",save_err:"Save failed.",reload_ok:"Config reloaded.",no_callsign:"Enter your callsign first."
 },tr:{
   g_conn:"Bağlantı",g_logger:"Logger",g_beacon:"Sabit Konum",g_email:"E-Posta",g_ext:"Ext. Sunucu",g_config:"Ayar Dosyası",
-  server:"APRS-IS Sunucusu",port:"Port",callsign:"Çağrı İşareti",allowed_cs:"İzin Verilen Çağrı İşaretleri",allowed_cs_hint:"Virgülle ayır, joker OK",
+  server:"APRS-IS Sunucusu",port:"Port",callsign:"Çağrı İşareti",allowed_cs:"İstasyon Filtresi",allowed_cs_hint:"APRS-IS'den hangi istasyonlar izlenecek. Joker OK: TA3* = tüm TA3 istasyonları",
   autostart_agent:"Ajanı otomatik başlat",print_cfg:"Başlangıçta ayarları yaz",
   log_enabled:"Logger",log_enabled_sub:"Gelen APRS paketlerini logla",log_comments:"Yorum satırları",log_comments_sub:"Sunucu yorum satırlarını (#) dahil et",
   filter_type:"Paket türü filtresi",filter_type_hint:"Virgülle ayırılmış karakterler",exclude_type:"Hariç tutulacak türler",kw_filter:"Anahtar kelime filtresi",kw_filter_hint:"Virgülle ayır",
