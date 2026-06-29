@@ -122,8 +122,11 @@ class AIGateway(Extension):
         total_parts = 1 + extra
         char_limit = 64 if total_parts == 1 else (total_parts - 1) * 62 + 64
 
+        from datetime import datetime, timezone
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         system_prompt = cfg.get("system_prompt", "") or (
             "You are an AI running on an APRS amateur radio system. "
+            f"Current date/time: {today}. "
             f"Keep your answer under {char_limit} characters. "
             "Be concise and direct. "
             "Use only ASCII characters (a-z, A-Z, 0-9, punctuation). "
