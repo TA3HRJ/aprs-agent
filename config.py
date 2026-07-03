@@ -57,6 +57,8 @@ DEFAULTS: dict[str, Any] = {
     "allowed_callsigns": ["N0*"],
     "print_config_on_startup": False,
     "auto_start_agent": False,
+    "full_feed": False,
+    "rate_limit_pps": 50,
     "extension_server": {
         "enabled": False,
         "host": "127.0.0.1",

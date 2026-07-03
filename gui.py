@@ -431,6 +431,14 @@ _S = {
         "callsign":           "Callsign:",
         "allowed_cs":         "Station Filter:",
         "allowed_cs_hint":    "Which stations to monitor. Wildcards OK  e.g.  TA3* = all TA3 stations",
+        "full_feed":          "Full World Feed (port 10152)",
+        "full_feed_warn":     (
+            "⚠  Receives ALL worldwide APRS traffic (~50–100 pkt/s). "
+            "Extensions only respond to their own whitelisted callsigns. "
+            "Rate limit below is strongly recommended."
+        ),
+        "rate_limit_pps":     "Rate limit (pkt/s):",
+        "rate_limit_hint":    "Max packets dispatched to extensions per second. 0 = unlimited.",
         "print_cfg":          "Print config on startup",
         "autostart":          "Start with Windows",
         "autostart_agent":    "Start agent automatically on launch",
@@ -613,6 +621,14 @@ _S = {
         "callsign":           "Çağrı İşareti:",
         "allowed_cs":         "İstasyon Filtresi:",
         "allowed_cs_hint":    "APRS-IS'den hangi istasyonlar izlenecek. Joker OK  örn.  TA3* = tüm TA3 istasyonları",
+        "full_feed":          "Tüm Dünya Akışı (port 10152)",
+        "full_feed_warn":     (
+            "⚠  Tüm dünya APRS trafiğini alır (~50–100 pkt/s). "
+            "Extension'lar yalnızca kendi listelerindeki çağrı işaretlerine yanıt verir. "
+            "Aşağıdaki hız sınırı şiddetle tavsiye edilir."
+        ),
+        "rate_limit_pps":     "Hız sınırı (pkt/sn):",
+        "rate_limit_hint":    "Saniyede extension'lara iletilen maksimum paket. 0 = sınırsız.",
         "print_cfg":          "Başlangıçta ayarları ekrana yaz",
         "autostart":          "Windows ile başlat",
         "autostart_agent":    "Başlangıçta ajanı otomatik başlat",
@@ -1506,6 +1522,8 @@ class APRSAgentGUI:
         self._v_print_cfg      = tk.BooleanVar()
         self._v_autostart      = tk.BooleanVar(value=_autostart_get())
         self._v_autostart_agent = tk.BooleanVar()
+        self._v_full_feed      = tk.BooleanVar()
+        self._v_rate_limit     = tk.StringVar()
 
         self._row(f, 0, "server",      self._v_server, width=42)
         self._row(f, 2, "port",        self._v_port,   width=10)
@@ -1517,6 +1535,16 @@ class APRSAgentGUI:
         if sys.platform == "win32":
             self._check(f, 12, "autostart", self._v_autostart,
                         command=self._toggle_autostart)
+        self._check(f, 14, "full_feed", self._v_full_feed)
+        self._full_feed_warn = ttk.Label(
+            f, text=self._t("full_feed_warn"),
+            foreground="#dcdcaa", wraplength=420, justify="left",
+        )
+        self._full_feed_warn.grid(row=15, column=0, columnspan=2,
+                                  sticky="w", padx=8, pady=(0, 4))
+        self._lang_widgets.append((self._full_feed_warn, "text", "full_feed_warn"))
+        self._row(f, 16, "rate_limit_pps", self._v_rate_limit,
+                  hint_key="rate_limit_hint", width=10)
 
     # ── Logger tab ────────────────────────────────────────────────────────────
 
@@ -1952,6 +1980,8 @@ class APRSAgentGUI:
         self._v_port.set(str(cfg.get("port", 14580)))
         self._v_callsign.set(cfg.get("callsign", ""))
         self._v_allowed_cs.set(_csv(cfg.get("allowed_callsigns", [])))
+        self._v_full_feed.set(cfg.get("full_feed", False))
+        self._v_rate_limit.set(str(cfg.get("rate_limit_pps", 50)))
         self._v_print_cfg.set(cfg.get("print_config_on_startup", False))
         self._v_autostart_agent.set(cfg.get("auto_start_agent", False))
         if cfg.get("auto_start_agent", False):
@@ -2097,6 +2127,8 @@ class APRSAgentGUI:
             "port":                   int(self._v_port.get().strip() or 14580),
             "callsign":               self._v_callsign.get().strip().upper(),
             "allowed_callsigns":      _lst(self._v_allowed_cs.get()),
+            "full_feed":              self._v_full_feed.get(),
+            "rate_limit_pps":         max(0, int(self._v_rate_limit.get().strip() or 50)),
             "print_config_on_startup": self._v_print_cfg.get(),
             "auto_start_agent":        self._v_autostart_agent.get(),
             "extension_server": {

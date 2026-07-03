@@ -39,31 +39,43 @@ async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
     This function never returns - it loops forever.
     """
     server = config["server"]
-    port = config["port"]
     callsign = config["callsign"].upper()
     passcode = calculate_passcode(callsign)
-    # Separate exact callsigns (b/ filter) from prefix wildcards (p/ filter)
-    exact = []
-    prefix = []
-    for cs in config["allowed_callsigns"]:
-        cs = cs.strip().upper()
-        if cs.endswith("*"):
-            prefix.append(cs.rstrip("*"))
-        else:
-            exact.append(cs)
+    full_feed = config.get("full_feed", False)
+    rate_limit_pps = max(0, int(config.get("rate_limit_pps", 50)))
 
-    filters = []
-    if exact:
-        filters.append("b/" + "/".join(exact))
-    if prefix:
-        filters.append("p/" + "/".join(prefix))
-    filter_cmd = " ".join(filters) if filters else f"b/{callsign}"
+    if full_feed:
+        port = 10152
+        login_line = (
+            f"user {callsign} pass {passcode} vers {SOFTWARE_VERSION}\r\n"
+        )
+        print(
+            "[full-feed] Full worldwide APRS-IS feed — port 10152, no filter.",
+            file=sys.stderr,
+        )
+    else:
+        port = config["port"]
+        # Separate exact callsigns (b/ filter) from prefix wildcards (p/ filter)
+        exact = []
+        prefix = []
+        for cs in config["allowed_callsigns"]:
+            cs = cs.strip().upper()
+            if cs.endswith("*"):
+                prefix.append(cs.rstrip("*"))
+            else:
+                exact.append(cs)
 
-    # Build the APRS-IS login line
-    login_line = (
-        f"user {callsign} pass {passcode} vers {SOFTWARE_VERSION} "
-        f"filter {filter_cmd}\r\n"
-    )
+        filters = []
+        if exact:
+            filters.append("b/" + "/".join(exact))
+        if prefix:
+            filters.append("p/" + "/".join(prefix))
+        filter_cmd = " ".join(filters) if filters else f"b/{callsign}"
+
+        login_line = (
+            f"user {callsign} pass {passcode} vers {SOFTWARE_VERSION} "
+            f"filter {filter_cmd}\r\n"
+        )
 
     while True:
         print(f"Connecting to {server}:{port} ...", file=sys.stderr)
@@ -82,7 +94,7 @@ async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
             ext_con_store.set_upstream(own_queue)
 
             # Run the receive loop and the send loop concurrently
-            await _run_session(reader, writer, own_queue, ext_con_store)
+            await _run_session(reader, writer, own_queue, ext_con_store, rate_limit_pps)
 
         except ConnectionRefusedError:
             print(
@@ -109,6 +121,7 @@ async def _run_session(
     writer: asyncio.StreamWriter,
     own_queue: asyncio.Queue,
     ext_con_store: ConStore,
+    rate_limit_pps: int = 0,
 ) -> None:
     """
     Handle one active APRS-IS session until disconnect.
@@ -117,7 +130,7 @@ async def _run_session(
       1. Receive loop: reads lines from APRS-IS and broadcasts to extensions
       2. Send loop: reads from own_queue and sends to APRS-IS
     """
-    receive_task = asyncio.create_task(_receive_loop(reader, writer, ext_con_store))
+    receive_task = asyncio.create_task(_receive_loop(reader, writer, ext_con_store, rate_limit_pps))
     send_task = asyncio.create_task(_send_loop(writer, own_queue))
 
     # Wait for either task to finish (either one means we should reconnect)
@@ -145,8 +158,15 @@ async def _receive_loop(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
     ext_con_store: ConStore,
+    rate_limit_pps: int = 0,
 ) -> None:
     """Read lines from APRS-IS and dispatch to extensions and extension server clients."""
+    # Token bucket rate limiter — only limits extension dispatch, not TCP receive
+    loop = asyncio.get_event_loop()
+    tokens: float = float(rate_limit_pps) if rate_limit_pps > 0 else 0.0
+    last_refill: float = loop.time()
+    _throttled = 0
+
     while True:
         try:
             raw = await reader.readline()
@@ -163,13 +183,34 @@ async def _receive_loop(
         if not line:
             continue
 
-        # Broadcast to all extensions (may write ACK packets back to APRS-IS)
-        success = await ExtensionRegistry.broadcast(line, writer)
-        if not success:
-            print("Write to APRS-IS failed, reconnecting ...", file=sys.stderr)
-            return
+        # Rate limiter: refill tokens based on elapsed time, then consume one
+        if rate_limit_pps > 0:
+            now = loop.time()
+            tokens = min(float(rate_limit_pps), tokens + (now - last_refill) * rate_limit_pps)
+            last_refill = now
+            if tokens >= 1.0:
+                tokens -= 1.0
+                dispatch = True
+            else:
+                dispatch = False
+                _throttled += 1
+                if _throttled % 1000 == 0:
+                    print(
+                        f"[rate-limit] {_throttled} packets throttled so far "
+                        f"(limit: {rate_limit_pps} pkt/s)",
+                        file=sys.stderr,
+                    )
+        else:
+            dispatch = True
 
-        # Broadcast to extension server (external TCP clients)
+        if dispatch:
+            # Broadcast to all extensions (may write ACK packets back to APRS-IS)
+            success = await ExtensionRegistry.broadcast(line, writer)
+            if not success:
+                print("Write to APRS-IS failed, reconnecting ...", file=sys.stderr)
+                return
+
+        # Always forward to extension server clients regardless of rate limit
         ext_con_store.broadcast(line)
 
 
