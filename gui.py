@@ -431,6 +431,9 @@ _S = {
         "callsign":           "Callsign:",
         "allowed_cs":         "Station Filter:",
         "allowed_cs_hint":    "Which stations to monitor. Wildcards OK  e.g.  TA3* = all TA3 stations",
+        "st_packets":         "Packets",
+        "st_stations":        "Stations",
+        "st_uptime":          "Uptime",
         "full_feed":          "Full World Feed (port 10152)",
         "full_feed_warn":     (
             "⚠  Receives ALL worldwide APRS traffic (~50–100 pkt/s). "
@@ -621,6 +624,9 @@ _S = {
         "callsign":           "Çağrı İşareti:",
         "allowed_cs":         "İstasyon Filtresi:",
         "allowed_cs_hint":    "APRS-IS'den hangi istasyonlar izlenecek. Joker OK  örn.  TA3* = tüm TA3 istasyonları",
+        "st_packets":         "Paket",
+        "st_stations":        "İstasyon",
+        "st_uptime":          "Süre",
         "full_feed":          "Tüm Dünya Akışı (port 10152)",
         "full_feed_warn":     (
             "⚠  Tüm dünya APRS trafiğini alır (~50–100 pkt/s). "
@@ -1318,6 +1324,14 @@ class APRSAgentGUI:
         self._log_q: queue.Queue = log_queue
         self._tray_icon: Optional[object] = None
         self._scroll_canvases: list[tk.Canvas] = []  # one canvas per scrollable tab
+        # Live stats
+        self._stat_pkt_count = 0
+        self._stat_unique_count = 0
+        self._stat_seen_calls: set = set()
+        self._stat_started_at: Optional[float] = None
+        self._stat_src_re = re.compile(
+            r'\[logger\] ([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)>'
+        )
 
         self.root = tk.Tk()
         self.root.title(self._t("title"))
@@ -1928,6 +1942,17 @@ class APRSAgentGUI:
         self._log_text.tag_config("yellow", foreground="#dcdcaa")
         self._log_text.tag_config("normal", foreground="#d4d4d4")
 
+        # Stats bar below log text
+        stats = ttk.Frame(frame)
+        stats.pack(fill="x", pady=(4, 0))
+        dim = {"foreground": "#888888", "font": ("TkDefaultFont", 8)}
+        self._lbl_packets  = ttk.Label(stats, text=f"{self._t('st_packets')}: 0",  **dim)
+        self._lbl_stations = ttk.Label(stats, text=f"{self._t('st_stations')}: 0", **dim)
+        self._lbl_uptime   = ttk.Label(stats, text=f"{self._t('st_uptime')}: —",   **dim)
+        self._lbl_packets.pack(side="left", padx=(0, 16))
+        self._lbl_stations.pack(side="left", padx=(0, 16))
+        self._lbl_uptime.pack(side="left")
+
     # ── Bottom bar ────────────────────────────────────────────────────────────
 
     def _build_bottom_bar(self) -> None:
@@ -2283,12 +2308,37 @@ class APRSAgentGUI:
             return
         self._save_config()
         cfg = self._form_to_config()
+        self._stat_pkt_count = 0
+        self._stat_unique_count = 0
+        self._stat_seen_calls.clear()
+        self._stat_started_at = None   # set after first log line
+        self._lbl_packets.configure(text=f"{self._t('st_packets')}: 0")
+        self._lbl_stations.configure(text=f"{self._t('st_stations')}: 0")
+        self._lbl_uptime.configure(text=f"{self._t('st_uptime')}: 0s")
         self._runner.start(cfg)
+        self._stat_started_at = __import__("time").time()
         self._update_status(running=True)
+        self._tick_uptime()
 
     def _stop_agent(self) -> None:
         self._runner.stop()
+        self._stat_started_at = None
         self._update_status(running=False)
+
+    def _tick_uptime(self) -> None:
+        if not self._runner.running or self._stat_started_at is None:
+            return
+        secs = int(__import__("time").time() - self._stat_started_at)
+        h, rem = divmod(secs, 3600)
+        m, s = divmod(rem, 60)
+        if h:
+            txt = f"{h}h {m}m"
+        elif m:
+            txt = f"{m}m {s}s"
+        else:
+            txt = f"{s}s"
+        self._lbl_uptime.configure(text=f"{self._t('st_uptime')}: {txt}")
+        self.root.after(1000, self._tick_uptime)
 
     def _update_status(self, running: bool) -> None:
         if running:
@@ -2414,6 +2464,21 @@ class APRSAgentGUI:
                 # Strip ANSI color codes
                 clean = re.sub(r"\033\[[0-9;]*m", "", msg)
                 self._log(clean, tag)
+
+                # Track stats from logger lines
+                m = self._stat_src_re.search(clean)
+                if m:
+                    self._stat_pkt_count += 1
+                    call = m.group(1)
+                    if call not in self._stat_seen_calls:
+                        self._stat_seen_calls.add(call)
+                        self._stat_unique_count += 1
+                    self._lbl_packets.configure(
+                        text=f"{self._t('st_packets')}: {self._stat_pkt_count}"
+                    )
+                    self._lbl_stations.configure(
+                        text=f"{self._t('st_stations')}: {self._stat_unique_count}"
+                    )
 
                 # Sync running state
                 if "[agent] stopped" in clean.lower():

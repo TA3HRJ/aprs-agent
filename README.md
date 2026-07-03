@@ -14,8 +14,8 @@ several automation features useful for amateur radio operators.
 
 | | Feature | Description |
 |---|---|---|
-| 🖥️ | **Desktop GUI** | Form-based config editor, Start/Stop, minimize to system tray, EN/TR language |
-| 🌐 | **Web GUI** | Browser-based interface — same features, runs on Windows, Linux, or remote server |
+| 🖥️ | **Desktop GUI** | Form-based config editor, Start/Stop, system tray, EN/TR language, live Packets/Stations/Uptime bar |
+| 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, gzip-compressed |
 | 📡 | **Fixed Beacon** | Periodically sends your station's position — with visual APRS symbol picker and Maidenhead / QTH Locator support |
 | 🪵 | **Logger** | Logs incoming APRS packets to the terminal, with type and keyword filters |
 | 🐦 | **Twitter / X** | Forwards APRS messages addressed to `TWSEND` to your Twitter/X account |
@@ -258,6 +258,7 @@ python web_gui.py --host 0.0.0.0 -p 8080  # listen on all interfaces (remote acc
 - **PWA — installable app** — on Chrome/Edge, use *Install* or *Add to Home Screen* to run without a browser tab; works on Android, iOS, Windows, and Mac
 - **Efficient delivery** — `index.html` is served gzip-compressed (~14 KB instead of 55 KB) with ETag caching; the page loads instantly on repeat visits
 - **Bounded log** — the log panel keeps the last 10 000 lines; memory stays flat even after days of continuous operation
+- **Full World Feed** — optional port 10152 mode receives all worldwide APRS traffic; built-in token-bucket rate limiter prevents CPU overload
 
 ---
 
