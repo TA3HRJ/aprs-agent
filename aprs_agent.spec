@@ -149,7 +149,11 @@ web_analysis = Analysis(
         ('aprs-agent.ico', '.'),
         ('aprs-symbols-24-0.png', '.'),
         ('aprs-symbols-24-1.png', '.'),
-        ('static/index.html', 'static'),              # web frontend
+        ('static/index.html',    'static'),             # web frontend
+        ('static/manifest.json', 'static'),             # PWA manifest
+        ('static/sw.js',         'static'),             # service worker
+        ('static/icon-192.png',  'static'),             # PWA icon
+        ('static/icon-512.png',  'static'),             # PWA icon
     ],
     hiddenimports=_hidden,
     hookspath=[],
