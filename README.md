@@ -251,6 +251,14 @@ python web_gui.py --host 0.0.0.0 -p 8080  # listen on all interfaces (remote acc
 
 > For production use on a public server, put it behind a reverse proxy (nginx/caddy) with HTTPS.
 
+### Web GUI Features
+
+- **Live stats bar** — RX / TX / Errors / Packets / Stations / Uptime, updated every 2 seconds via WebSocket
+- **Last Heard strip** — callsign chips above the stats bar; click a chip to filter the log to that station
+- **PWA — installable app** — on Chrome/Edge, use *Install* or *Add to Home Screen* to run without a browser tab; works on Android, iOS, Windows, and Mac
+- **Efficient delivery** — `index.html` is served gzip-compressed (~14 KB instead of 55 KB) with ETag caching; the page loads instantly on repeat visits
+- **Bounded log** — the log panel keeps the last 10 000 lines; memory stays flat even after days of continuous operation
+
 ---
 
 ## Command-line Options
@@ -356,7 +364,11 @@ aprs-agent/
 │   ├── smtp_ext.py              # SMTP email sender (radio → email)
 │   └── fixed_beacon.py          # Periodic position beacon
 ├── static/
-│   └── index.html               # Web GUI frontend (HTML/CSS/JS)
+│   ├── index.html               # Web GUI frontend (HTML/CSS/JS)
+│   ├── manifest.json            # PWA install manifest
+│   ├── sw.js                    # Service worker (offline shell cache)
+│   ├── icon-192.png             # PWA icon 192 px
+│   └── icon-512.png             # PWA icon 512 px
 ├── aprsconfig.toml.template     # Annotated config template (safe to share)
 ├── aprs_agent.spec              # PyInstaller build spec (CLI + GUI + Web)
 ├── aprs-symbols-24-0.png        # APRS symbol sprites — primary table

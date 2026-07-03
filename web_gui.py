@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import gzip
 import json
 import queue
 import re
@@ -23,6 +24,7 @@ import sys
 import threading
 import time
 import webbrowser
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Optional, Set
 
@@ -48,17 +50,60 @@ def _resolve_path(name: str) -> Path:
 _STATIC_DIR = _resolve_path("static")
 _DEFAULT_CFG = Path(__file__).parent / "aprsconfig.toml"
 
+# Cache headers: app shell revalidates via ETag, immutable assets cache for a day
+_NO_CACHE = {"Cache-Control": "no-cache"}
+_DAY_CACHE = {"Cache-Control": "public, max-age=86400"}
+
+# In-memory gzip cache for index.html, keyed by file mtime/size so edits
+# during development are picked up automatically.
+_GZ_CACHE: dict = {}
+
+
+def _gzipped_index() -> tuple[Path, bytes, str]:
+    path = _STATIC_DIR / "index.html"
+    st = path.stat()
+    key = (st.st_mtime_ns, st.st_size)
+    cached = _GZ_CACHE.get("index")
+    if not cached or cached[0] != key:
+        body = gzip.compress(path.read_bytes(), 9)
+        etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
+        cached = (key, body, etag)
+        _GZ_CACHE["index"] = cached
+    return path, cached[1], cached[2]
+
 
 class _QueueWriter:
+    """Bounded stderr redirect: drops the oldest lines when the browser
+    cannot keep up, so memory stays flat on long unattended runs."""
+
     def __init__(self, q: queue.Queue):
         self._q = q
 
     def write(self, text: str) -> None:
-        if text:
-            self._q.put(text)
+        if not text:
+            return
+        try:
+            self._q.put_nowait(text)
+        except queue.Full:
+            try:
+                self._q.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._q.put_nowait(text)
+            except queue.Full:
+                pass
 
     def flush(self) -> None:
         pass
+
+
+# Source callsign of packets echoed by the logger extension, e.g.
+# "[logger] TA3ABC-9>APRS,TCPIP*,qAC,...:payload"
+_SRC_CALL_RE = re.compile(r"^\[logger\] ([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)>", re.M)
+
+_MAX_STATIONS = 40      # server-side last-heard table cap
+_STATS_INTERVAL = 2.0   # seconds between stats pushes to browsers
 
 
 class AgentManager:
@@ -66,12 +111,17 @@ class AgentManager:
     def __init__(self, config_path: str):
         self.config_path = config_path
         self.running = False
-        self._log_queue: queue.Queue = queue.Queue()
+        self._log_queue: queue.Queue = queue.Queue(maxsize=2000)
         self._ws_clients: Set[web.WebSocketResponse] = set()
         self._thread: Optional[threading.Thread] = None
         self._agent_loop: Optional[asyncio.AbstractEventLoop] = None
         self._stop_event: Optional[asyncio.Event] = None
         self._original_stderr = sys.stderr
+        # Live stats shown in the browser (packet counter + last-heard stations)
+        self._started_at: Optional[float] = None
+        self._pkt_count = 0
+        self._stations: "OrderedDict[str, list]" = OrderedDict()  # call -> [last_ts, count]
+        self._last_stats_sent = 0.0
 
     def get_config(self) -> dict:
         return cfg_module.load_config(self.config_path)
@@ -98,6 +148,9 @@ class AgentManager:
         asyncio.set_event_loop(self._agent_loop)
         self._stop_event = asyncio.Event()
         sys.stderr = _QueueWriter(self._log_queue)
+        self._started_at = time.time()
+        self._pkt_count = 0
+        self._stations.clear()
         self.running = True
         try:
             self._agent_loop.run_until_complete(self._agent_main())
@@ -169,6 +222,36 @@ class AgentManager:
 
         print("[agent] stopped.", file=sys.stderr)
 
+    def _track_stations(self, text: str) -> None:
+        now = time.time()
+        for call in _SRC_CALL_RE.findall(text):
+            self._pkt_count += 1
+            entry = self._stations.get(call)
+            if entry:
+                entry[0] = now
+                entry[1] += 1
+                self._stations.move_to_end(call)
+            else:
+                if len(self._stations) >= _MAX_STATIONS:
+                    self._stations.popitem(last=False)  # drop least recently heard
+                self._stations[call] = [now, 1]
+
+    def _stats_payload(self) -> dict:
+        now = time.time()
+        recent = list(self._stations.items())[-12:]  # 12 most recently heard
+        recent.reverse()
+        return {
+            "type": "stats",
+            "running": self.running,
+            "uptime": int(now - self._started_at) if self.running and self._started_at else 0,
+            "packets": self._pkt_count,
+            "unique": len(self._stations),
+            "stations": [
+                {"c": call, "t": int(now - ts), "n": count}
+                for call, (ts, count) in recent
+            ],
+        }
+
     async def broadcast_logs(self) -> None:
         while True:
             messages = []
@@ -178,13 +261,24 @@ class AgentManager:
             except queue.Empty:
                 pass
 
+            payloads = []
             if messages:
                 text = "".join(messages)
                 text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+                self._track_stations(text)
+                payloads.append({"type": "log", "text": text})
+
+            now = time.time()
+            if now - self._last_stats_sent >= _STATS_INTERVAL:
+                self._last_stats_sent = now
+                payloads.append(self._stats_payload())
+
+            if payloads and self._ws_clients:
                 dead: Set[web.WebSocketResponse] = set()
                 for ws in list(self._ws_clients):
                     try:
-                        await ws.send_json({"type": "log", "text": text})
+                        for payload in payloads:
+                            await ws.send_json(payload)
                     except Exception:
                         dead.add(ws)
                 self._ws_clients -= dead
@@ -205,7 +299,38 @@ routes = web.RouteTableDef()
 
 @routes.get("/")
 async def index(request: web.Request) -> web.Response:
-    return web.FileResponse(_STATIC_DIR / "index.html")
+    path, gz_body, etag = _gzipped_index()
+    if request.headers.get("If-None-Match") == etag:
+        return web.Response(status=304, headers={**_NO_CACHE, "ETag": etag})
+    if "gzip" in request.headers.get("Accept-Encoding", ""):
+        return web.Response(
+            body=gz_body,
+            content_type="text/html",
+            charset="utf-8",
+            headers={**_NO_CACHE, "ETag": etag, "Content-Encoding": "gzip"},
+        )
+    return web.FileResponse(path, headers={**_NO_CACHE, "ETag": etag})
+
+
+# ── PWA (installable web app) ───────────────────────────────────────────────
+
+@routes.get("/manifest.json")
+async def manifest(request: web.Request) -> web.Response:
+    return web.FileResponse(_STATIC_DIR / "manifest.json", headers=_DAY_CACHE)
+
+
+@routes.get("/sw.js")
+async def service_worker(request: web.Request) -> web.Response:
+    # Service workers must revalidate so browsers pick up new versions
+    return web.FileResponse(_STATIC_DIR / "sw.js", headers=_NO_CACHE)
+
+
+@routes.get("/icon-{size}.png")
+async def pwa_icon(request: web.Request) -> web.Response:
+    size = request.match_info["size"]
+    if size not in ("192", "512"):
+        raise web.HTTPNotFound()
+    return web.FileResponse(_STATIC_DIR / f"icon-{size}.png", headers=_DAY_CACHE)
 
 
 @routes.get("/api/info")
@@ -276,6 +401,7 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     mgr: AgentManager = request.app["manager"]
     mgr.add_ws(ws)
     await ws.send_json({"type": "status", "running": mgr.running})
+    await ws.send_json(mgr._stats_payload())
     try:
         async for _ in ws:
             pass
@@ -332,7 +458,7 @@ async def wa_webhook_incoming(request: web.Request) -> web.Response:
 async def favicon(request: web.Request) -> web.Response:
     ico = _resolve_path("aprs-agent.ico")
     if ico.exists():
-        return web.FileResponse(ico)
+        return web.FileResponse(ico, headers=_DAY_CACHE)
     raise web.HTTPNotFound()
 
 
@@ -343,7 +469,7 @@ async def symbols(request: web.Request) -> web.Response:
         raise web.HTTPNotFound()
     img = _resolve_path(f"aprs-symbols-24-{table}.png")
     if img.exists():
-        return web.FileResponse(img)
+        return web.FileResponse(img, headers=_DAY_CACHE)
     raise web.HTTPNotFound()
 
 

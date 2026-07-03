@@ -2353,9 +2353,13 @@ class APRSAgentGUI:
 
     # ── Logging ───────────────────────────────────────────────────────────────
 
+    _MAX_LOG_LINES = 10_000
+
     def _log(self, text: str, tag: str = "normal") -> None:
         self._log_text.configure(state="normal")
         self._log_text.insert("end", text.rstrip("\n") + "\n", tag)
+        if int(self._log_text.index("end-1c").split(".")[0]) > self._MAX_LOG_LINES:
+            self._log_text.delete("1.0", f"{self._MAX_LOG_LINES // 10}.0")
         self._log_text.see("end")
         self._log_text.configure(state="disabled")
 

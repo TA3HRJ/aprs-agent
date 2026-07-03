@@ -4,7 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>APRS-Agent</title>
+<meta name="theme-color" content="#242424">
 <link rel="icon" href="/favicon.ico">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -105,8 +108,18 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 .ll.ai-resp{color:#dc8add;border-left:3px solid #9141ac;padding-left:10px;margin:2px 0}
 .ll.ai-err{color:var(--error);border-left:3px solid #c01c28;padding-left:10px;margin:2px 0}
 
+/* LAST HEARD */
+.heard-bar{display:flex;align-items:center;gap:6px;padding:4px 8px;overflow-x:auto;background:var(--sidebar);box-shadow:inset 0 1px var(--border);min-height:30px;scrollbar-width:thin}
+.heard-bar[hidden]{display:none}
+.heard-bar .hl{font-size:10px;font-weight:bold;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;margin-right:2px}
+.hc{font-family:'Consolas',monospace;font-size:11px;padding:2px 8px;border-radius:6px;background:var(--card);color:var(--fg2);cursor:pointer;white-space:nowrap;border:1px solid transparent;transition:border-color .15s}
+.hc:hover{border-color:var(--border2)}
+.hc.on{background:var(--accent);color:#fff}
+.hc .ago{color:var(--dim);margin-left:5px}
+.hc.on .ago{color:rgba(255,255,255,.7)}
+
 /* STATS BAR */
-.stat-bar{display:grid;grid-template-columns:repeat(4,1fr);background:var(--sidebar);box-shadow:inset 0 1px var(--border);min-height:44px}
+.stat-bar{display:grid;grid-template-columns:repeat(6,1fr);background:var(--sidebar);box-shadow:inset 0 1px var(--border);min-height:44px}
 .stat-bar .cell{padding:6px 0;text-align:center;border-right:1px solid var(--border2)}
 .stat-bar .cell:last-child{border-right:none}
 .stat-bar .v{font-size:16px;font-weight:bold;font-family:'Consolas',monospace}
@@ -299,11 +312,16 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
     <button class="log-btn active" id="asB" onclick="togAs()">Auto Scroll</button>
   </div>
   <div class="log-view" id="log"></div>
+  <div class="heard-bar" id="heard" hidden>
+    <span class="hl" data-i="heard_label">Last Heard</span>
+  </div>
   <div class="stat-bar">
-    <div class="cell"><div class="v" id="xRX">0</div><div class="l">Received</div></div>
-    <div class="cell"><div class="v" id="xTX">0</div><div class="l">Sent</div></div>
-    <div class="cell"><div class="v" id="xER">0</div><div class="l">Errors</div></div>
-    <div class="cell"><div class="v" id="xPK">0</div><div class="l">Packets</div></div>
+    <div class="cell"><div class="v" id="xRX">0</div><div class="l" data-i="st_rx">Received</div></div>
+    <div class="cell"><div class="v" id="xTX">0</div><div class="l" data-i="st_tx">Sent</div></div>
+    <div class="cell"><div class="v" id="xER">0</div><div class="l" data-i="st_err">Errors</div></div>
+    <div class="cell"><div class="v" id="xPK">0</div><div class="l" data-i="st_pk">Packets</div></div>
+    <div class="cell"><div class="v" id="xST">0</div><div class="l" data-i="st_stations">Stations</div></div>
+    <div class="cell"><div class="v" id="xUP">—</div><div class="l" data-i="st_uptime">Uptime</div></div>
   </div>
 </div>
 
@@ -338,7 +356,7 @@ const $=id=>document.getElementById(id);
 const csv=a=>(a||[]).join(', ');
 const lst=s=>s.split(',').map(x=>x.trim()).filter(Boolean);
 const chars=s=>s.split(',').map(x=>x.trim()).filter(x=>x.length===1||x==='\\');
-let lang='en',autoScroll=true,logCount=0,cRX=0,cTX=0,cER=0,cPK=0;
+let lang='en',autoScroll=true,logCount=0,cRX=0,cTX=0,cER=0,heardFilter=null,lastStations=[];
 
 // ── i18n ──
 const S={en:{
@@ -374,6 +392,7 @@ const S={en:{
   imap_interval:"Poll interval (min)",imap_from:"From callsign",imap_allowed:"Allowed sender emails",imap_allowed_hint:"Comma-separated, empty = allow all",
   ext_enabled:"Extension Server",ext_sub:"Bidirectional TCP stream for external programs",ext_host:"Listen host",ext_port:"Listen port",
   cfg_path:"Path",status_stopped:"● Stopped",status_running:"● Running",btn_reload:"🔄 Reload",btn_save:"💾 Save",btn_start:"▶ Start",btn_stop:"■ Stop",
+  heard_label:"Last Heard",st_rx:"Received",st_tx:"Sent",st_err:"Errors",st_pk:"Packets",st_stations:"Stations",st_uptime:"Uptime",
   about_title:"About APRS-Agent",about_desc:"A multi-extension APRS-IS agent for amateur radio operators.",about_devs:"Developers",about_source:"Source:",about_license:"MIT License",about_close:"Close",
   save_ok:"Config saved.",save_err:"Save failed.",reload_ok:"Config reloaded.",no_callsign:"Enter your callsign first."
 },tr:{
@@ -409,6 +428,7 @@ const S={en:{
   imap_interval:"Yoklama aralığı (dk)",imap_from:"Gönderen çağrı işareti",imap_allowed:"İzin verilen gönderen e-postalar",imap_allowed_hint:"Virgülle ayır, boş = hepsi",
   ext_enabled:"Extension Sunucusu",ext_sub:"Harici programlar için çift yönlü TCP akışı",ext_host:"Dinleme adresi",ext_port:"Dinleme portu",
   cfg_path:"Dosya yolu",status_stopped:"● Durduruldu",status_running:"● Çalışıyor",btn_reload:"🔄 Yenile",btn_save:"💾 Kaydet",btn_start:"▶ Başlat",btn_stop:"■ Durdur",
+  heard_label:"Son Duyulan",st_rx:"Alınan",st_tx:"Gönderilen",st_err:"Hata",st_pk:"Paket",st_stations:"İstasyon",st_uptime:"Süre",
   about_title:"APRS-Agent Hakkında",about_desc:"Amatör radyo operatörleri için çok eklentili bir APRS-IS ajanı.",about_devs:"Geliştiriciler",about_source:"Kaynak:",about_license:"MIT Lisansı",about_close:"Kapat",
   save_ok:"Ayarlar kaydedildi.",save_err:"Kaydetme başarısız.",reload_ok:"Ayarlar yeniden yüklendi.",no_callsign:"Çağrı işaretinizi girin."
 }};
@@ -484,13 +504,33 @@ function setStatus(r){const el=$('status');if(r){el.textContent=t('status_runnin
 
 // ── Log ──
 function cls(l){if(!l)return'raw';if(l.includes('[ai-gateway] RX'))return'ai-rx';if(l.includes('[ai-gateway] TX'))return'ai-tx';if(l.includes('[ai-gateway] AI response'))return'ai-resp';if(/\[ai-gateway\].*error|failed/i.test(l))return'ai-err';if(/error|fail|fatal/i.test(l))return'err';if(/::/i.test(l))return'msg';if(/:([!\/=@])/i.test(l))return'pos';return'raw'}
-function addLog(text){const lines=text.split('\n');for(const line of lines){if(!line)continue;const el=document.createElement('div');el.className='ll '+cls(line);el.textContent=line;$('log').appendChild(el);logCount++;cPK++;const c=cls(line);if(c==='ai-rx')cRX++;if(c==='ai-tx')cTX++;if(c.includes('err'))cER++}$('lc').textContent=logCount;$('xRX').textContent=cRX;$('xTX').textContent=cTX;$('xER').textContent=cER;$('xPK').textContent=cPK;while($('log').children.length>1500)$('log').removeChild($('log').firstChild);if(autoScroll)$('log').scrollTop=$('log').scrollHeight}
-function clrLog(){$('log').innerHTML='';logCount=0;cRX=cTX=cER=cPK=0;$('lc').textContent='0';$('xRX').textContent='0';$('xTX').textContent='0';$('xER').textContent='0';$('xPK').textContent='0'}
+const MAX_LOG=500;function addLog(text){const log=$('log');const lines=text.split('\n');for(const line of lines){if(!line)continue;const el=document.createElement('div');el.className='ll '+cls(line);el.textContent=line;if(heardFilter&&!line.includes(heardFilter))el.style.display='none';log.appendChild(el);if(log.children.length>MAX_LOG)log.removeChild(log.firstChild);const c=cls(line);if(c==='ai-rx')cRX++;if(c==='ai-tx')cTX++;if(c.includes('err'))cER++}logCount=log.children.length;$('lc').textContent=logCount;$('xRX').textContent=cRX;$('xTX').textContent=cTX;$('xER').textContent=cER;if(autoScroll)log.scrollTop=log.scrollHeight}
+function clrLog(){$('log').innerHTML='';logCount=0;cRX=cTX=cER=0;$('lc').textContent='0';$('xRX').textContent='0';$('xTX').textContent='0';$('xER').textContent='0'}
 function togAs(){autoScroll=!autoScroll;$('asB').className=autoScroll?'log-btn active':'log-btn';if(autoScroll)$('log').scrollTop=1e9}
+
+// ── Live stats / Last Heard ──
+function fmtUp(s){if(!s||s<=0)return'—';const h=Math.floor(s/3600),m=Math.floor(s%3600/60);if(h)return h+'h '+String(m).padStart(2,'0')+'m';return m+'m '+String(s%60).padStart(2,'0')+'s'}
+function fmtAgo(t){if(t<60)return t+'s';if(t<3600)return Math.floor(t/60)+'m';return Math.floor(t/3600)+'h'}
+function onStats(d){setStatus(d.running);$('xPK').textContent=d.packets;$('xST').textContent=d.unique;$('xUP').textContent=d.running?fmtUp(d.uptime):'—';lastStations=d.stations||[];renderHeard()}
+function renderHeard(){
+  const bar=$('heard');bar.querySelectorAll('.hc').forEach(el=>el.remove());
+  const chips=lastStations.slice();
+  if(heardFilter&&!chips.some(s=>s.c===heardFilter))chips.unshift({c:heardFilter,t:-1,n:0});
+  if(!chips.length){bar.hidden=true;return}
+  bar.hidden=false;
+  for(const s of chips){
+    const el=document.createElement('span');el.className='hc'+(heardFilter===s.c?' on':'');
+    el.title=s.n+' pkt';el.onclick=()=>togHeard(s.c);
+    const cs=document.createElement('span');cs.textContent=s.c;el.appendChild(cs);
+    if(s.t>=0){const ago=document.createElement('span');ago.className='ago';ago.textContent=fmtAgo(s.t);el.appendChild(ago)}
+    bar.appendChild(el);
+  }
+}
+function togHeard(cs){heardFilter=heardFilter===cs?null:cs;document.querySelectorAll('#log .ll').forEach(el=>{el.style.display=!heardFilter||el.textContent.includes(heardFilter)?'':'none'});renderHeard();if(autoScroll)$('log').scrollTop=1e9}
 
 // ── WebSocket ──
 let ws=null;
-function connectWS(){const p=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(p+'//'+location.host+'/ws');ws.onopen=()=>{$('ws-dot').classList.add('on')};ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='log')addLog(d.text);if(d.type==='status')setStatus(d.running)};ws.onclose=()=>{$('ws-dot').classList.remove('on');setTimeout(connectWS,2000)};ws.onerror=()=>ws.close()}
+function connectWS(){const p=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(p+'//'+location.host+'/ws');ws.onopen=()=>{$('ws-dot').classList.add('on')};ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='log')addLog(d.text);if(d.type==='status')setStatus(d.running);if(d.type==='stats')onStats(d)};ws.onclose=()=>{$('ws-dot').classList.remove('on');setTimeout(connectWS,2000)};ws.onerror=()=>ws.close()}
 
 // ── API ──
 async function api(m,p,b){const o={method:m,headers:{}};if(b!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}return(await fetch(p,o)).json()}
@@ -498,7 +538,10 @@ async function startAgent(){const cs=$('f-callsign').value.trim();if(!cs||cs==='
 async function stopAgent(){$('btn-stop').disabled=true;await api('POST','/api/stop')}
 async function saveCfg(){try{const r=await api('POST','/api/config',getCfg());addLog('[web] '+(r.ok?t('save_ok'):t('save_err'))+'\n')}catch(e){addLog('[web] '+t('save_err')+'\n')}}
 async function reloadCfg(){try{const p=$('hdr-cfg').value.trim();if(p)await api('POST','/api/config-path',{path:p});const c=await api('GET','/api/config');loadCfg(c);addLog('[web] '+t('reload_ok')+'\n')}catch(e){addLog('[web] '+t('save_err')+'\n')}}
-setInterval(async()=>{try{const r=await(await fetch('/api/status')).json();setStatus(r.running)}catch(e){}},5000);
+// Status updates arrive via WebSocket "stats" messages every 2s — no polling needed.
+
+// ── PWA ──
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
 
 // ── Init ──
 (async function(){try{const info=await api('GET','/api/info');$('hdr-ver').textContent='v'+info.version;$('hdr-cfg').value=info.config_path||'';$('about-ver').textContent='APRS-Agent v'+info.version;setStatus(info.running)}catch(e){}try{const cfg=await api('GET','/api/config');loadCfg(cfg)}catch(e){addLog('[web] Failed to load config\n')}connectWS();applyLang()})();
