@@ -102,7 +102,7 @@ class _QueueWriter:
 # "[logger] TA3ABC-9>APRS,TCPIP*,qAC,...:payload"
 _SRC_CALL_RE = re.compile(r"^\[logger\] ([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)>", re.M)
 
-_MAX_STATIONS = 40      # server-side last-heard table cap
+_MAX_STATIONS = 200     # last-heard chip table (most recent N callsigns)
 _STATS_INTERVAL = 2.0   # seconds between stats pushes to browsers
 
 
@@ -120,7 +120,9 @@ class AgentManager:
         # Live stats shown in the browser (packet counter + last-heard stations)
         self._started_at: Optional[float] = None
         self._pkt_count = 0
+        self._unique_count = 0          # total distinct callsigns ever heard this session
         self._stations: "OrderedDict[str, list]" = OrderedDict()  # call -> [last_ts, count]
+        self._seen_calls: "set[str]" = set()    # for accurate unique count
         self._last_stats_sent = 0.0
 
     def get_config(self) -> dict:
@@ -150,7 +152,9 @@ class AgentManager:
         sys.stderr = _QueueWriter(self._log_queue)
         self._started_at = time.time()
         self._pkt_count = 0
+        self._unique_count = 0
         self._stations.clear()
+        self._seen_calls.clear()
         self.running = True
         try:
             self._agent_loop.run_until_complete(self._agent_main())
@@ -226,6 +230,9 @@ class AgentManager:
         now = time.time()
         for call in _SRC_CALL_RE.findall(text):
             self._pkt_count += 1
+            if call not in self._seen_calls:
+                self._seen_calls.add(call)
+                self._unique_count += 1
             entry = self._stations.get(call)
             if entry:
                 entry[0] = now
@@ -233,7 +240,7 @@ class AgentManager:
                 self._stations.move_to_end(call)
             else:
                 if len(self._stations) >= _MAX_STATIONS:
-                    self._stations.popitem(last=False)  # drop least recently heard
+                    self._stations.popitem(last=False)  # drop least recently heard chip
                 self._stations[call] = [now, 1]
 
     def _stats_payload(self) -> dict:
@@ -245,7 +252,7 @@ class AgentManager:
             "running": self.running,
             "uptime": int(now - self._started_at) if self.running and self._started_at else 0,
             "packets": self._pkt_count,
-            "unique": len(self._stations),
+            "unique": self._unique_count,
             "stations": [
                 {"c": call, "t": int(now - ts), "n": count}
                 for call, (ts, count) in recent
