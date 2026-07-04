@@ -27,9 +27,10 @@ class StationRecord:
     __slots__ = (
         "callsign", "base_call",
         "station_type", "icon",
-        "city", "district", "country",
-        "lat", "lon",
+        "city", "district", "location", "country", "ta_region",
+        "lat", "lon", "locator",
         "freq_mhz", "tone_hz", "offset_mhz",
+        "band", "mode", "db_status",
         "echolink", "url", "comment",
         "wx_temp_c", "wx_humidity", "wx_pressure_mb", "wx_wind_gust_ms",
         "db_record",       # raw dict from Turkey Repeaters DB (or None)
@@ -47,12 +48,18 @@ class StationRecord:
         self.icon: str = STATION_ICON["unknown"]
         self.city: str = ""
         self.district: str = ""
+        self.location: str = ""   # site name, e.g. "Rüzgarlı Tepe"
         self.country: str = ""
+        self.ta_region: str = ""
         self.lat: Optional[float] = None
         self.lon: Optional[float] = None
+        self.locator: str = ""
         self.freq_mhz: Optional[float] = None
         self.tone_hz: Optional[float] = None
         self.offset_mhz: Optional[float] = None
+        self.band: str = ""
+        self.mode: str = ""
+        self.db_status: Optional[bool] = None   # True = active per DB
         self.echolink: str = ""
         self.url: str = ""
         self.comment: str = ""
@@ -99,31 +106,33 @@ class StationRecord:
     def update_from_db(self, db: dict[str, Any]) -> None:
         """Overlay structured data from Turkey Repeaters DB."""
         self.db_record = db
-        if not self.city:
-            self.city = db.get("city", "")
-        if not self.district:
-            self.district = db.get("district", "")
-        if not self.country:
-            self.country = db.get("country", "")
-        # DB coordinates are authoritative
+        # Location fields — DB is authoritative
+        self.city     = db.get("city") or self.city
+        self.district = db.get("district") or self.district
+        self.location = db.get("location") or self.location
+        self.ta_region = db.get("ta_region") or self.ta_region
+        self.locator  = db.get("locator") or self.locator
+        # Coordinates — DB is authoritative
         if db.get("lat") is not None:
             self.lat = db["lat"]
         if db.get("lon") is not None:
             self.lon = db["lon"]
-        # DB freq/tone are authoritative
+        # Frequency — DB is authoritative
         if db.get("frequency") is not None:
             self.freq_mhz = float(db["frequency"])
+        if db.get("offset") is not None:
+            self.offset_mhz = float(db["offset"])
         if db.get("tone") is not None:
             try:
                 self.tone_hz = float(str(db["tone"]).replace("D", ""))
             except ValueError:
                 pass
-        # Infer station type from DB mode/band if still unknown
-        if self.station_type == "unknown":
-            mode = str(db.get("mode", "")).upper()
-            if mode in ("FM", "DMR", "D-STAR", "C4FM", "TETRA", "P25"):
-                self.station_type = "repeater"
-                self.icon = STATION_ICON["repeater"]
+        self.band = db.get("band") or self.band
+        self.mode = db.get("mode") or self.mode
+        self.db_status = db.get("status")   # True/False/None
+        # All records in Turkey Repeaters DB are repeaters
+        self.station_type = "repeater"
+        self.icon = STATION_ICON["repeater"]
 
     @property
     def online(self) -> Optional[bool]:
@@ -149,12 +158,18 @@ class StationRecord:
             "icon":        self.icon,
             "city":        self.city,
             "district":    self.district,
+            "location":    self.location,
             "country":     self.country,
+            "ta_region":   self.ta_region,
             "lat":         self.lat,
             "lon":         self.lon,
+            "locator":     self.locator,
             "freq_mhz":    self.freq_mhz,
             "tone_hz":     self.tone_hz,
             "offset_mhz":  self.offset_mhz,
+            "band":        self.band,
+            "mode":        self.mode,
+            "db_status":   self.db_status,
             "echolink":    self.echolink,
             "url":         self.url,
             "comment":     self.comment,

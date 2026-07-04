@@ -164,6 +164,17 @@ class AgentManager:
         self._seen_calls.clear()
         self._seen_base_calls.clear()
         self._station_db.reset()
+        try:
+            cfg = cfg_module.load_config(self.config_path)
+            db_path = cfg.get("repeater_db_path", "").strip()
+            if db_path:
+                n = self._station_db.load_repeater_db(db_path)
+                if n:
+                    self._log_queue.put(f"[station-db] Loaded {n} repeater records from DB\n")
+                else:
+                    self._log_queue.put(f"[station-db] WARNING: repeater_db_path set but no records loaded from '{db_path}'\n")
+        except Exception as e:
+            self._log_queue.put(f"[station-db] Could not load repeater DB: {e}\n")
         self.running = True
         try:
             self._agent_loop.run_until_complete(self._agent_main())

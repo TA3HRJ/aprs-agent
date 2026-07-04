@@ -219,6 +219,7 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
   <div class="action-row"><div class="content"><div class="title" data-i="full_feed">Full World Feed (port 10152)</div><div class="subtitle" data-i="full_feed_sub">Receive all worldwide APRS traffic — ignores Station Filter</div></div><label class="adw-switch"><input type="checkbox" id="f-full-feed"><span></span></label></div>
   <div id="full-feed-warn" style="display:none;margin:4px 8px 8px;padding:8px 12px;border-radius:6px;background:#3a3000;color:#dcdcaa;font-size:12px" data-i="full_feed_warn">⚠ Receives ALL worldwide APRS traffic (~50–100 pkt/s). Extensions only respond to their own whitelisted callsigns. Rate limit below is strongly recommended.</div>
   <div class="entry-row"><label data-i="rate_limit_pps">Rate limit (pkt/s)</label><input id="f-rate-limit" type="number" min="0" max="500" value="50" style="max-width:80px"><div class="hint" data-i="rate_limit_hint">Max packets dispatched to extensions per second. 0 = unlimited.</div></div>
+  <div class="entry-row"><label data-i="repeater_db_path">Repeater DB Path</label><input id="f-rdb-path" type="text" placeholder="(optional) /path/to/repeaters.json"><div class="hint" data-i="repeater_db_hint">Path to a Turkey Repeaters JSON file. Stations tab will enrich matching callsigns with city, frequency and tone data.</div></div>
   <div class="action-row"><div class="content"><div class="title" data-i="autostart_agent">Auto-start agent</div></div><label class="adw-switch"><input type="checkbox" id="f-autostart-agent"><span></span></label></div>
   <div class="action-row"><div class="content"><div class="title" data-i="print_cfg">Print config on startup</div></div><label class="adw-switch"><input type="checkbox" id="f-print-cfg"><span></span></label></div>
 </div></div>
@@ -466,6 +467,7 @@ const S={en:{
   server:"APRS-IS Server",port:"Port",callsign:"Callsign",allowed_cs:"Station Filter",allowed_cs_hint:"Which stations to monitor. Wildcards OK: TA3* = all TA3 stations",
   full_feed:"Full World Feed (port 10152)",full_feed_sub:"Receive all worldwide APRS traffic — ignores Station Filter",full_feed_warn:"⚠  Receives ALL worldwide APRS traffic (~50–100 pkt/s). Extensions only respond to their own whitelisted callsigns. Rate limit below is strongly recommended.",
   rate_limit_pps:"Rate limit (pkt/s)",rate_limit_hint:"Max packets dispatched to extensions per second. 0 = unlimited.",
+  repeater_db_path:"Repeater DB Path",repeater_db_hint:"Path to a Turkey Repeaters JSON file. Stations tab will enrich matching callsigns with city, frequency and tone data.",
   autostart_agent:"Auto-start agent",print_cfg:"Print config on startup",
   log_enabled:"Logger",log_enabled_sub:"Log incoming APRS packets",log_comments:"Log comments",log_comments_sub:"Include server comment lines (#)",
   filter_type:"Filter by packet type",filter_type_hint:"Comma-separated chars",exclude_type:"Exclude packet types",kw_filter:"Keyword filter",kw_filter_hint:"Comma-separated, case-insensitive",
@@ -510,6 +512,7 @@ const S={en:{
   server:"APRS-IS Sunucusu",port:"Port",callsign:"Çağrı İşareti",allowed_cs:"İstasyon Filtresi",allowed_cs_hint:"APRS-IS'den hangi istasyonlar izlenecek. Joker OK: TA3* = tüm TA3 istasyonları",
   full_feed:"Tüm Dünya Akışı (port 10152)",full_feed_sub:"Tüm dünya APRS trafiğini alır — İstasyon Filtresi devre dışı kalır",full_feed_warn:"⚠  Tüm dünya APRS trafiğini alır (~50–100 pkt/s). Extension'lar yalnızca kendi listelerindeki çağrı işaretlerine yanıt verir. Aşağıdaki hız sınırı şiddetle tavsiye edilir.",
   rate_limit_pps:"Hız sınırı (pkt/sn)",rate_limit_hint:"Saniyede extension'lara iletilen maksimum paket. 0 = sınırsız.",
+  repeater_db_path:"Röle DB Dosyası",repeater_db_hint:"Turkey Repeaters JSON dosyasının yolu. Stations sekmesi eşleşen çağrı işaretlerini şehir, frekans ve ton bilgisiyle zenginleştirir.",
   autostart_agent:"Ajanı otomatik başlat",print_cfg:"Başlangıçta ayarları yaz",
   log_enabled:"Logger",log_enabled_sub:"Gelen APRS paketlerini logla",log_comments:"Yorum satırları",log_comments_sub:"Sunucu yorum satırlarını (#) dahil et",
   filter_type:"Paket türü filtresi",filter_type_hint:"Virgülle ayırılmış karakterler",exclude_type:"Hariç tutulacak türler",kw_filter:"Anahtar kelime filtresi",kw_filter_hint:"Virgülle ayır",
@@ -572,7 +575,7 @@ $('f-bcn-locator').addEventListener('input',function(){if(cu)return;const ll=m2l
 function loadCfg(cfg){
   $('f-server').value=cfg.server||'';$('f-port').value=cfg.port||14580;$('f-callsign').value=cfg.callsign||'';
   $('f-allowed-cs').value=csv(cfg.allowed_callsigns);$('f-print-cfg').checked=cfg.print_config_on_startup||false;$('f-autostart-agent').checked=cfg.auto_start_agent||false;
-  $('f-full-feed').checked=cfg.full_feed||false;$('f-rate-limit').value=cfg.rate_limit_pps!=null?cfg.rate_limit_pps:50;toggleFullFeedWarn();
+  $('f-full-feed').checked=cfg.full_feed||false;$('f-rate-limit').value=cfg.rate_limit_pps!=null?cfg.rate_limit_pps:50;toggleFullFeedWarn();$('f-rdb-path').value=cfg.repeater_db_path||'';
   const l=(cfg.extensions||{}).logger||{};$('f-log-enabled').checked=l.enabled!==false;$('f-log-comments').checked=l.log_comments!==false;
   $('f-filter-type').value=csv(l.filter_by_message_type);$('f-exclude-type').value=csv(l.exclude_by_message_type);$('f-kw-filter').value=csv(l.keyword_filter);
   const b=(cfg.extensions||{}).fixed_beacon||{};$('f-bcn-enabled').checked=b.enabled||false;$('f-bcn-ssid').value=b.ssid||'';
@@ -605,7 +608,7 @@ function loadCfg(cfg){
 function getCfg(){return{
   server:$('f-server').value.trim(),port:parseInt($('f-port').value)||14580,callsign:$('f-callsign').value.trim().toUpperCase(),
   allowed_callsigns:lst($('f-allowed-cs').value),print_config_on_startup:$('f-print-cfg').checked,auto_start_agent:$('f-autostart-agent').checked,
-  full_feed:$('f-full-feed').checked,rate_limit_pps:Math.max(0,parseInt($('f-rate-limit').value)||50),
+  full_feed:$('f-full-feed').checked,rate_limit_pps:Math.max(0,parseInt($('f-rate-limit').value)||50),repeater_db_path:$('f-rdb-path').value.trim(),
   extension_server:{enabled:$('f-ext-enabled').checked,host:$('f-ext-host').value.trim(),port:parseInt($('f-ext-port').value)||65080},
   extensions:{
     logger:{enabled:$('f-log-enabled').checked,log_comments:$('f-log-comments').checked,filter_by_message_type:chars($('f-filter-type').value),exclude_by_message_type:chars($('f-exclude-type').value),keyword_filter:lst($('f-kw-filter').value)},
@@ -706,12 +709,13 @@ function renderStations(){
 }
 function showDetail(r){
   $('sd-title').innerHTML=r.icon+' '+r.callsign;
-  const locParts=[r.city,r.district,r.country].filter(Boolean);
   const srcLabel=r.has_db&&r.packet_count>0?t('sd_both'):r.has_db?t('sd_db_only'):t('sd_aprs_live');
   let html='';
   const row=(l,v)=>v?'<div class="row"><span class="lbl">'+l+'</span><span class="val">'+v+'</span></div>':'';
-  html+=row(t('sta_h_type'),r.type);
-  html+=row(t('sta_h_loc'),locParts.join(', '));
+  html+=row(t('sta_h_type'),r.type+(r.mode?' · '+r.mode:'')+(r.band?' · '+r.band:''));
+  const locParts2=[r.location,r.district,r.city,r.ta_region].filter(Boolean);
+  html+=row(t('sta_h_loc'),locParts2.join(', '));
+  if(r.locator)html+=row('Locator',r.locator);
   if(r.lat&&r.lon)html+=row('Lat / Lon',r.lat.toFixed(4)+'° / '+r.lon.toFixed(4)+'°');
   if(r.freq_mhz)html+=row(t('sta_h_freq'),fmtFreq(r.freq_mhz)+' MHz'+(r.offset_mhz?' ('+( r.offset_mhz>0?'+':'')+r.offset_mhz.toFixed(3)+' MHz)':''));
   if(r.tone_hz)html+=row('CTCSS',r.tone_hz+' Hz');

@@ -20,7 +20,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "2.7.0"
+VERSION = "2.7.1"
 
 # tomllib is built-in from Python 3.11 onwards.
 # For older Python versions, install the 'tomli' package.
@@ -59,6 +59,7 @@ DEFAULTS: dict[str, Any] = {
     "auto_start_agent": False,
     "full_feed": False,
     "rate_limit_pps": 50,
+    "repeater_db_path": "",
     "extension_server": {
         "enabled": False,
         "host": "127.0.0.1",

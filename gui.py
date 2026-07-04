@@ -443,6 +443,8 @@ _S = {
         ),
         "rate_limit_pps":     "Rate limit (pkt/s):",
         "rate_limit_hint":    "Max packets dispatched to extensions per second. 0 = unlimited.",
+        "repeater_db_path":   "Repeater DB Path:",
+        "repeater_db_hint":   "Path to repeaters.json (Turkey Repeaters). Stations tab enriches matching callsigns with city, frequency and tone.",
         "print_cfg":          "Print config on startup",
         "autostart":          "Start with Windows",
         "autostart_agent":    "Start agent automatically on launch",
@@ -637,6 +639,8 @@ _S = {
         ),
         "rate_limit_pps":     "Hız sınırı (pkt/sn):",
         "rate_limit_hint":    "Saniyede extension'lara iletilen maksimum paket. 0 = sınırsız.",
+        "repeater_db_path":   "Röle DB Dosyası:",
+        "repeater_db_hint":   "repeaters.json dosyasının yolu (Turkey Repeaters). Stations sekmesi eşleşen çağrı işaretlerini şehir, frekans ve ton bilgisiyle zenginleştirir.",
         "print_cfg":          "Başlangıçta ayarları ekrana yaz",
         "autostart":          "Windows ile başlat",
         "autostart_agent":    "Başlangıçta ajanı otomatik başlat",
@@ -1542,6 +1546,7 @@ class APRSAgentGUI:
         self._v_autostart_agent = tk.BooleanVar()
         self._v_full_feed      = tk.BooleanVar()
         self._v_rate_limit     = tk.StringVar()
+        self._v_repeater_db    = tk.StringVar()
 
         self._row(f, 0, "server",      self._v_server, width=42)
         self._row(f, 2, "port",        self._v_port,   width=10)
@@ -1563,6 +1568,8 @@ class APRSAgentGUI:
         self._lang_widgets.append((self._full_feed_warn, "text", "full_feed_warn"))
         self._row(f, 16, "rate_limit_pps", self._v_rate_limit,
                   hint_key="rate_limit_hint", width=10)
+        self._row(f, 18, "repeater_db_path", self._v_repeater_db,
+                  hint_key="repeater_db_hint", width=42)
 
     # ── Logger tab ────────────────────────────────────────────────────────────
 
@@ -2013,6 +2020,7 @@ class APRSAgentGUI:
         self._v_allowed_cs.set(_csv(cfg.get("allowed_callsigns", [])))
         self._v_full_feed.set(cfg.get("full_feed", False))
         self._v_rate_limit.set(str(cfg.get("rate_limit_pps", 50)))
+        self._v_repeater_db.set(cfg.get("repeater_db_path", ""))
         self._v_print_cfg.set(cfg.get("print_config_on_startup", False))
         self._v_autostart_agent.set(cfg.get("auto_start_agent", False))
         if cfg.get("auto_start_agent", False):
@@ -2160,6 +2168,7 @@ class APRSAgentGUI:
             "allowed_callsigns":      _lst(self._v_allowed_cs.get()),
             "full_feed":              self._v_full_feed.get(),
             "rate_limit_pps":         max(0, int(self._v_rate_limit.get().strip() or 50)),
+            "repeater_db_path":       self._v_repeater_db.get().strip(),
             "print_config_on_startup": self._v_print_cfg.get(),
             "auto_start_agent":        self._v_autostart_agent.get(),
             "extension_server": {
