@@ -326,7 +326,25 @@ class AgentManager:
                     await asyncio.sleep(2)      # polite gap between requests
             await asyncio.sleep(interval)
 
+    # Keywords that suggest the comment carries real station/operational info.
+    _OPERATIONAL_RE = re.compile(
+        r'(?i)(MHz|Hz|CTCSS|EchoLink|TRAC|dernek|club|kulüb|AKRAD|igate|digi'
+        r'|echolink|gateway|beacon|aprs|relay|http|\.net|\.org|\.com)',
+    )
+    # Patterns that indicate a transient/greeting message — skip AI for these.
+    _GREETING_RE = re.compile(
+        r'(?i)(kutlu|kutlar|bayram|happy|merry|year|yılbaşı|yeni yıl'
+        r'|sevgililer|anneler|babalar|eid|ramazan|merry|good luck)',
+    )
+
     async def _analyze_one(self, rec: "object", ai_cfg: dict) -> None:
+        comment = rec.comment.strip()
+        # Skip transient greetings or comments with no operational content.
+        if self._GREETING_RE.search(comment) and not self._OPERATIONAL_RE.search(comment):
+            print(f"[station-ai] {rec.callsign}: skipped (greeting/seasonal)", file=sys.stderr)
+            rec.ai_analyzed = True
+            return
+
         provider  = ai_cfg.get("provider", "puter")
         api_key   = ai_cfg.get("api_key", "")
         base_url  = ai_cfg.get("base_url", "").rstrip("/")
@@ -339,10 +357,9 @@ class AgentManager:
         elif provider == "openrouter":
             base_url = base_url or "https://openrouter.ai/api/v1"
 
-        comment = rec.comment[:300]
         prompt = (
             f"Station callsign: {rec.callsign}\n"
-            f"APRS comment: {comment}\n\n"
+            f"APRS comment: {comment[:300]}\n\n"
             "Extract the following from the APRS comment above and return ONLY valid JSON "
             "with no prose or markdown:\n"
             '{"org": "<organization or club name, null if not found>", '

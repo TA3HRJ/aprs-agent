@@ -102,6 +102,9 @@ OFFLINE_THRESHOLD: dict[str, int] = {
 # ---------------------------------------------------------------------------
 _RE_CALLSIGN = re.compile(r'^([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)')
 
+# Object packet: ;NAME     *DDHHMMzDDMM.mmN/DDDMM.mmEsymbol...
+_RE_OBJECT = re.compile(r'^;([A-Z0-9 -]{9})\*')
+
 # Position: uncompressed  !DDMM.mmN/DDDMM.mmE and compressed forms
 _RE_POS_UNCOMP = re.compile(
     r'[!/@=`]'
@@ -140,6 +143,23 @@ _RE_WX_T = re.compile(r't(-?\d{3})')   # temperature in F (tXXX)
 _RE_WX_H = re.compile(r'h(\d{2})')     # humidity (hXX, 00=100%)
 _RE_WX_B = re.compile(r'b(\d{5})')     # barometric pressure (bXXXXX in tenths of mb)
 _RE_WX_W = re.compile(r'g(\d{3})')     # wind gust (gXXX in mph)
+
+
+def _latlon_to_locator(lat: float, lon: float) -> str:
+    """Return 6-character Maidenhead grid locator for given decimal degrees."""
+    lon += 180.0
+    lat += 90.0
+    a = int(lon / 20);  lon -= a * 20
+    b = int(lat / 10);  lat -= b * 10
+    c = int(lon / 2);   lon -= c * 2
+    d = int(lat);       lat -= d
+    e = int(lon * 12)
+    f = int(lat * 24)
+    return (
+        chr(65 + a) + chr(65 + b) +
+        str(c) + str(d) +
+        chr(97 + e) + chr(97 + f)
+    )
 
 
 def _ddmm_to_decimal(deg_str: str, mm_str: str, hemisphere: str) -> float:
@@ -189,6 +209,16 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
     colon_idx = raw_line.rfind(":")
     info = raw_line[colon_idx + 1:] if colon_idx != -1 else ""
 
+    # Object packet: sender is the framing station; the named object is the
+    # real station we care about.  Override callsign with the object name.
+    om = _RE_OBJECT.match(info)
+    if om:
+        obj_name = om.group(1).rstrip()
+        if obj_name:
+            result["callsign"] = obj_name
+            result["base_call"] = obj_name.split("-")[0]
+            result["object_sender"] = callsign
+
     # --- Position ---
     pm = _RE_POS_UNCOMP.search(raw_line)
     if pm:
@@ -198,6 +228,7 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
         sym = pm.group(8)
         result["lat"] = lat
         result["lon"] = lon
+        result["locator"] = _latlon_to_locator(lat, lon)
         result["symbol_table"] = tbl
         result["symbol"] = sym
         result["station_type"] = classify_symbol(tbl, sym)

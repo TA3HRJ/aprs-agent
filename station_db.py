@@ -94,7 +94,7 @@ class StationRecord:
             self.icon = STATION_ICON.get(self.station_type, "❓")
 
         # Prefer DB coordinates; only overwrite if we don't have them yet
-        for field in ("lat", "lon"):
+        for field in ("lat", "lon", "locator"):
             if field in parsed and getattr(self, field) is None:
                 setattr(self, field, parsed[field])
 

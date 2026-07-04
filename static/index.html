@@ -129,7 +129,8 @@ table.sta th:hover{color:var(--fg2)}
 table.sta td{padding:5px 10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
 table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
 .s-call{font-family:'Consolas',monospace;font-weight:bold;color:var(--accent2)}
-.s-loc{color:var(--fg2);max-width:130px}
+.s-loc{color:var(--fg2);max-width:120px}
+.s-org{color:var(--fg2);max-width:140px;font-size:12px}
 .s-freq{font-family:'Consolas',monospace;color:#8ff0a4}
 .s-ago{color:var(--dim);font-size:11px}
 .s-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
@@ -409,6 +410,7 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
             <th data-i="sta_h_call">Callsign</th>
             <th data-i="sta_h_type">Type</th>
             <th data-i="sta_h_loc">Location</th>
+            <th data-i="sta_h_org">Organization</th>
             <th data-i="sta_h_freq">Freq (MHz)</th>
             <th data-i="sta_h_status">Status</th>
             <th data-i="sta_h_seen">Last Heard</th>
@@ -524,7 +526,7 @@ const S={en:{
   save_ok:"Config saved.",save_err:"Save failed.",reload_ok:"Config reloaded.",no_callsign:"Enter your callsign first.",
   btn_clear:"Clear",btn_autoscroll:"Auto Scroll",
   tab_log:"Live Log",tab_sta:"Stations",
-  sta_h_call:"Callsign",sta_h_type:"Type",sta_h_loc:"Location",sta_h_freq:"Freq (MHz)",sta_h_status:"Status",sta_h_seen:"Last Heard",
+  sta_h_call:"Callsign",sta_h_type:"Type",sta_h_loc:"Location",sta_h_org:"Organization",sta_h_freq:"Freq (MHz)",sta_h_status:"Status",sta_h_seen:"Last Heard",
   sta_empty:"No stations heard yet — start the agent to begin receiving.",
   sd_source:"Source",sd_first:"First seen",sd_packets:"Packets",sd_last:"Last packet",sd_aprs_live:"APRS live",sd_db_only:"DB only",sd_both:"APRS + DB",
   sta_online:"Online",sta_offline:"Offline",sta_db_only:"DB only",sta_unknown:"—"
@@ -575,7 +577,7 @@ const S={en:{
   save_ok:"Ayarlar kaydedildi.",save_err:"Kaydetme başarısız.",reload_ok:"Ayarlar yeniden yüklendi.",no_callsign:"Çağrı işaretinizi girin.",
   btn_clear:"Temizle",btn_autoscroll:"Otomatik Kaydır",
   tab_log:"Canlı Log",tab_sta:"İstasyonlar",
-  sta_h_call:"Çağrı İşareti",sta_h_type:"Tür",sta_h_loc:"Konum",sta_h_freq:"Frek (MHz)",sta_h_status:"Durum",sta_h_seen:"Son Görülme",
+  sta_h_call:"Çağrı İşareti",sta_h_type:"Tür",sta_h_loc:"Konum",sta_h_org:"Dernek/Kuruluş",sta_h_freq:"Frek (MHz)",sta_h_status:"Durum",sta_h_seen:"Son Görülme",
   sta_empty:"Henüz istasyon duyulmadı — almaya başlamak için ajanı çalıştırın.",
   sd_source:"Kaynak",sd_first:"İlk görülme",sd_packets:"Paket",sd_last:"Son paket",sd_aprs_live:"APRS canlı",sd_db_only:"Yalnızca DB",sd_both:"APRS + DB",
   sta_online:"Çevrimiçi",sta_offline:"Çevrimdışı",sta_db_only:"Yalnızca DB",sta_unknown:"—"
@@ -725,12 +727,14 @@ function renderStations(){
   if(staData.length===0)$('sta-empty').hidden=false;
   for(const r of rows){
     const tr=document.createElement('tr');
-    const loc=[r.city,r.district].filter(Boolean).join(', ')||'';
+    const cityLoc=[r.city,r.district].filter(Boolean).join(', ');
+    const loc=cityLoc||(r.locator||'')|| (r.lat&&r.lon?(r.lat.toFixed(2)+'°/'+r.lon.toFixed(2)+'°'):'');
     const dc=dotClass(r);
     tr.innerHTML=
       '<td class="s-call">'+r.icon+' '+r.callsign+'</td>'+
       '<td>'+r.type+'</td>'+
       '<td class="s-loc" title="'+loc+'">'+loc+'</td>'+
+      '<td class="s-org">'+(r.ai_org||'')+'</td>'+
       '<td class="s-freq">'+(fmtFreq(r.freq_mhz)||'')+'</td>'+
       '<td><span class="s-dot '+dc+'"></span></td>'+
       '<td class="s-ago">'+fmtAgoLong(r.last_seen_ago_s)+'</td>';
