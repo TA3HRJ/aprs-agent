@@ -39,6 +39,7 @@ class StationRecord:
         "packet_count",
         "packets_today",
         "last_packet",
+        "prev_online",     # last known online state (for transition detection)
     )
 
     def __init__(self, callsign: str) -> None:
@@ -74,6 +75,7 @@ class StationRecord:
         self.packet_count = 0
         self.packets_today = 0
         self.last_packet: str = ""
+        self.prev_online: Optional[bool] = None  # sentinel: not yet checked
 
     def update_from_parsed(self, parsed: dict[str, Any]) -> None:
         """Merge fields extracted from a new APRS packet into this record."""
@@ -215,9 +217,10 @@ class StationDB:
             return 0
         records = data if isinstance(data, list) else data.get("repeaters", [])
         for rec in records:
-            call = rec.get("callsign", "").strip().upper()
-            if not call:
+            raw_call = rec.get("callsign")
+            if not raw_call:
                 continue
+            call = str(raw_call).strip().upper()
             base = call.split("-")[0]
             self._repeater_index.setdefault(base, []).append(rec)
         return len(records)
@@ -257,6 +260,37 @@ class StationDB:
 
     def count(self) -> int:
         return len(self._stations)
+
+    def check_transitions(
+        self,
+        watch_filter: "set[str]" = None,
+    ) -> "list[tuple[StationRecord, str]]":
+        """
+        Detect online↔offline transitions for DB-matched repeaters.
+
+        Returns list of (record, event) where event is "offline" or "online".
+        On the very first call, prev_online is initialised with no alerts.
+        Only stations with a DB record are checked.
+        watch_filter: if non-empty, only check those base callsigns.
+        """
+        results = []
+        for rec in self._stations.values():
+            if rec.db_record is None:
+                continue
+            if watch_filter and rec.base_call not in watch_filter:
+                continue
+            current = rec.online  # True / False / None
+            if current is None:
+                continue          # DB-only, never heard live — skip
+            if rec.prev_online is None:
+                # First evaluation: just store, no alert
+                rec.prev_online = current
+                continue
+            if current != rec.prev_online:
+                event = "online" if current else "offline"
+                results.append((rec, event))
+                rec.prev_online = current
+        return results
 
     def reset(self) -> None:
         self._stations.clear()

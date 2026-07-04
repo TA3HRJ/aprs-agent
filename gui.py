@@ -424,7 +424,14 @@ _S = {
         "tab_email":          "Email",
         "email_send":         "📤 Send — Radio → Email (SMTP)",
         "email_recv":         "📥 Receive — Email → Radio (IMAP)",
+        "tab_monitor":        "Monitor",
         "tab_ext":            "Ext. Server",
+        "mon_enabled":        "Repeater Monitor",
+        "mon_sub":            "Notify when a DB repeater goes offline or comes back online",
+        "mon_channel":        "Notify via:",
+        "mon_interval":       "Check interval (min):",
+        "mon_watch":          "Watch callsigns:",
+        "mon_watch_hint":     "Comma-separated base callsigns. Empty = all DB repeaters.",
         # connection
         "server":             "APRS-IS Server:",
         "port":               "Port:",
@@ -620,7 +627,14 @@ _S = {
         "tab_email":          "E-Posta",
         "email_send":         "📤 Gönder — Telsiz → E-Posta (SMTP)",
         "email_recv":         "📥 Al — E-Posta → Telsiz (IMAP)",
+        "tab_monitor":        "İzleyici",
         "tab_ext":            "Ext. Sunucu",
+        "mon_enabled":        "Röle İzleyici",
+        "mon_sub":            "DB'deki röle çevrimdışı/çevrimiçi olduğunda bildirim gönder",
+        "mon_channel":        "Bildirim kanalı:",
+        "mon_interval":       "Kontrol aralığı (dk):",
+        "mon_watch":          "İzlenecek çağrı işaretleri:",
+        "mon_watch_hint":     "Virgülle ayır. Boş = DB'deki tüm röleleri izle.",
         # connection
         "server":             "APRS-IS Sunucusu:",
         "port":               "Port:",
@@ -1451,7 +1465,7 @@ class APRSAgentGUI:
 
         tab_keys = ["tab_conn", "tab_log", "tab_beacon",
                     "tab_twitter", "tab_bluesky", "tab_wa",
-                    "tab_tg", "tab_ai", "tab_email", "tab_ext"]
+                    "tab_tg", "tab_ai", "tab_email", "tab_monitor", "tab_ext"]
         builders = [
             self._build_conn_tab,
             self._build_logger_tab,
@@ -1462,6 +1476,7 @@ class APRSAgentGUI:
             self._build_telegram_tab,
             self._build_ai_tab,
             self._build_email_tab,
+            self._build_monitor_tab,
             self._build_extserver_tab,
         ]
         self._tab_keys = tab_keys
@@ -1934,6 +1949,38 @@ class APRSAgentGUI:
         self._hint(f, "ext_hint").grid(
             row=5, column=0, columnspan=2, sticky="w", pady=(16, 0))
 
+    # ── Monitor tab ───────────────────────────────────────────────────────────
+
+    def _build_monitor_tab(self, parent) -> None:
+        f = self._scrollable(parent)
+        f.columnconfigure(1, weight=1)
+
+        self._v_mon_enabled  = tk.BooleanVar()
+        self._v_mon_channel  = tk.StringVar(value="telegram")
+        self._v_mon_interval = tk.StringVar(value="10")
+        self._v_mon_watch    = tk.StringVar()
+
+        self._check(f, 0, "mon_enabled", self._v_mon_enabled)
+        ttk.Label(f, text=self._t("mon_sub"), foreground="#888888",
+                  wraplength=420, justify="left").grid(
+            row=1, column=0, columnspan=2, sticky="w", padx=8, pady=(0, 6))
+
+        # Channel selector
+        row_lbl = ttk.Label(f, text=self._t("mon_channel"))
+        row_lbl.grid(row=2, column=0, sticky="w", padx=8, pady=2)
+        self._lang_widgets.append((row_lbl, "text", "mon_channel"))
+        ch_frame = ttk.Frame(f)
+        ch_frame.grid(row=2, column=1, sticky="w", padx=4, pady=2)
+        self._v_mon_channel_combo = ttk.Combobox(
+            ch_frame, textvariable=self._v_mon_channel,
+            values=["telegram", "smtp"], state="readonly", width=14)
+        self._v_mon_channel_combo.pack(side="left")
+
+        self._row(f, 4, "mon_interval", self._v_mon_interval,
+                  hint_key=None, width=8)
+        self._row(f, 6, "mon_watch", self._v_mon_watch,
+                  hint_key="mon_watch_hint", width=42)
+
     # ── Log area ──────────────────────────────────────────────────────────────
 
     def _build_log_area(self) -> None:
@@ -2021,6 +2068,11 @@ class APRSAgentGUI:
         self._v_full_feed.set(cfg.get("full_feed", False))
         self._v_rate_limit.set(str(cfg.get("rate_limit_pps", 50)))
         self._v_repeater_db.set(cfg.get("repeater_db_path", ""))
+        mon = cfg.get("monitor", {})
+        self._v_mon_enabled.set(mon.get("enabled", False))
+        self._v_mon_channel.set(mon.get("notify_channel", "telegram"))
+        self._v_mon_interval.set(str(mon.get("check_interval_mins", 10)))
+        self._v_mon_watch.set(", ".join(mon.get("watch_callsigns", [])))
         self._v_print_cfg.set(cfg.get("print_config_on_startup", False))
         self._v_autostart_agent.set(cfg.get("auto_start_agent", False))
         if cfg.get("auto_start_agent", False):
@@ -2169,6 +2221,12 @@ class APRSAgentGUI:
             "full_feed":              self._v_full_feed.get(),
             "rate_limit_pps":         max(0, int(self._v_rate_limit.get().strip() or 50)),
             "repeater_db_path":       self._v_repeater_db.get().strip(),
+            "monitor": {
+                "enabled":             self._v_mon_enabled.get(),
+                "notify_channel":      self._v_mon_channel.get(),
+                "check_interval_mins": max(1, int(self._v_mon_interval.get().strip() or 10)),
+                "watch_callsigns":     [c.strip().upper() for c in self._v_mon_watch.get().split(",") if c.strip()],
+            },
             "print_config_on_startup": self._v_print_cfg.get(),
             "auto_start_agent":        self._v_autostart_agent.get(),
             "extension_server": {

@@ -228,6 +228,14 @@ class AgentManager:
         server_task = asyncio.create_task(
             aprs_connection.start_server(config, ext_store)
         )
+
+        mon_cfg = config.get("monitor", {})
+        if mon_cfg.get("enabled") and config.get("repeater_db_path", "").strip():
+            asyncio.create_task(self._monitor_loop(config))
+            print("[monitor] Repeater monitor started", file=sys.stderr)
+        elif mon_cfg.get("enabled"):
+            print("[monitor] WARNING: monitor enabled but repeater_db_path not set", file=sys.stderr)
+
         await self._stop_event.wait()
         server_task.cancel()
         try:
@@ -245,6 +253,85 @@ class AgentManager:
                     pass
 
         print("[agent] stopped.", file=sys.stderr)
+
+    # ── Repeater monitor ──────────────────────────────────────────────────────
+
+    async def _monitor_loop(self, config: dict) -> None:
+        mon = config.get("monitor", {})
+        interval = max(1, int(mon.get("check_interval_mins", 10))) * 60
+        watch_raw = mon.get("watch_callsigns", [])
+        watch = set(w.strip().upper().split("-")[0] for w in watch_raw if w.strip())
+        channel = mon.get("notify_channel", "telegram")
+
+        # First sleep lets the agent fill in some stations before first check
+        await asyncio.sleep(min(interval, 120))
+
+        while True:
+            transitions = self._station_db.check_transitions(watch_filter=watch or None)
+            for rec, event in transitions:
+                msg = self._format_monitor_msg(rec, event)
+                print(f"[monitor] {event.upper()} → {rec.callsign}", file=sys.stderr)
+                try:
+                    await self._send_notification(msg, channel, config)
+                except Exception as e:
+                    print(f"[monitor] notification error: {e}", file=sys.stderr)
+            await asyncio.sleep(interval)
+
+    @staticmethod
+    def _format_monitor_msg(rec: "object", event: str) -> str:
+        icon = "🟢" if event == "online" else "🔴"
+        loc = ", ".join(p for p in [rec.city, rec.district, rec.ta_region] if p)
+        freq = f"{rec.freq_mhz:.4f} MHz" if rec.freq_mhz else ""
+        tone = f" T{rec.tone_hz}" if rec.tone_hz else ""
+        parts = [p for p in [loc, freq + tone, rec.mode] if p]
+        detail = " · ".join(parts) if parts else ""
+        ago = ""
+        if event == "offline" and rec.last_seen_ago_s is not None:
+            h = rec.last_seen_ago_s // 3600
+            m = (rec.last_seen_ago_s % 3600) // 60
+            ago = f" (last heard {h}h {m:02d}m ago)" if h else f" (last heard {m}m ago)"
+        return f"{icon} {rec.callsign} is now {event.upper()}{ago}\n{detail}"
+
+    @staticmethod
+    async def _send_notification(msg: str, channel: str, config: dict) -> None:
+        loop = asyncio.get_event_loop()
+        if channel == "telegram":
+            tg = config.get("extensions", {}).get("telegram", {})
+            token = tg.get("bot_token", "")
+            chat_id = str(tg.get("chat_id", ""))
+            if not token or not chat_id:
+                print("[monitor] Telegram not configured — cannot send notification", file=sys.stderr)
+                return
+            import urllib.request, urllib.parse, json as _json
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            payload = _json.dumps({"chat_id": chat_id, "text": msg}).encode()
+            req = urllib.request.Request(url, data=payload,
+                                         headers={"Content-Type": "application/json"})
+            await loop.run_in_executor(None, lambda: urllib.request.urlopen(req, timeout=10))
+        elif channel == "smtp":
+            smtp_cfg = config.get("extensions", {}).get("smtp", {})
+            server_port = smtp_cfg.get("smtp_server", "")
+            username = smtp_cfg.get("smtp_username", "")
+            password = smtp_cfg.get("smtp_password", "")
+            from_email = smtp_cfg.get("from_email", username)
+            recipients = smtp_cfg.get("allowed_receiver_emails", [])
+            if not server_port or not recipients:
+                print("[monitor] SMTP not configured — cannot send notification", file=sys.stderr)
+                return
+            host, _, port_str = server_port.rpartition(":")
+            port = int(port_str) if port_str.isdigit() else 587
+            import smtplib, email.mime.text as _mt
+            mime = _mt.MIMEText(msg, "plain", "utf-8")
+            mime["Subject"] = f"APRS Monitor: {msg.splitlines()[0]}"
+            mime["From"] = from_email
+            mime["To"] = ", ".join(recipients)
+            def _send():
+                with smtplib.SMTP(host, port, timeout=10) as s:
+                    s.starttls()
+                    if username:
+                        s.login(username, password)
+                    s.sendmail(from_email, recipients, mime.as_string())
+            await loop.run_in_executor(None, _send)
 
     def _track_stations(self, text: str) -> None:
         now = time.time()

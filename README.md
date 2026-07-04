@@ -16,6 +16,8 @@ several automation features useful for amateur radio operators.
 |---|---|---|
 | 🖥️ | **Desktop GUI** | Form-based config editor, Start/Stop, system tray, EN/TR language, live Packets/Stations/Callsigns/Uptime bar |
 | 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, **Stations tab** with type/status filter and detail panel, gzip-compressed |
+| 📊 | **Stations Tab** | Live table of all heard stations — type, location, frequency, tone, online/offline status; enriched from Turkey Repeaters DB when configured |
+| 🔔 | **Repeater Monitor** | Detects when DB-matched repeaters go offline or come back; sends Telegram or email notification |
 | 📡 | **Fixed Beacon** | Periodically sends your station's position — with visual APRS symbol picker and Maidenhead / QTH Locator support |
 | 🪵 | **Logger** | Logs incoming APRS packets to the terminal, with type and keyword filters |
 | 🐦 | **Twitter / X** | Forwards APRS messages addressed to `TWSEND` to your Twitter/X account |
