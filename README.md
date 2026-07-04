@@ -14,8 +14,8 @@ several automation features useful for amateur radio operators.
 
 | | Feature | Description |
 |---|---|---|
-| 🖥️ | **Desktop GUI** | Form-based config editor, Start/Stop, system tray, EN/TR language, live Packets/Stations/Uptime bar |
-| 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, gzip-compressed |
+| 🖥️ | **Desktop GUI** | Form-based config editor, Start/Stop, system tray, EN/TR language, live Packets/Stations/Callsigns/Uptime bar |
+| 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, **Stations tab** with type/status filter and detail panel, gzip-compressed |
 | 📡 | **Fixed Beacon** | Periodically sends your station's position — with visual APRS symbol picker and Maidenhead / QTH Locator support |
 | 🪵 | **Logger** | Logs incoming APRS packets to the terminal, with type and keyword filters |
 | 🐦 | **Twitter / X** | Forwards APRS messages addressed to `TWSEND` to your Twitter/X account |
@@ -253,8 +253,9 @@ python web_gui.py --host 0.0.0.0 -p 8080  # listen on all interfaces (remote acc
 
 ### Web GUI Features
 
-- **Live stats bar** — RX / TX / Errors / Packets / Stations / Uptime, updated every 2 seconds via WebSocket
+- **Live stats bar** — RX / TX / Errors / Packets / Stations / Callsigns / Uptime (7 cells, proportional widths), updated every 2 seconds via WebSocket
 - **Last Heard strip** — callsign chips above the stats bar; click a chip to filter the log to that station
+- **Stations tab** — live table of all heard stations with type/status/callsign filters; click any row for a detail panel showing coordinates, frequency, tone, EchoLink, weather data, and packet history; auto-refreshes every 5 seconds
 - **PWA — installable app** — on Chrome/Edge, use *Install* or *Add to Home Screen* to run without a browser tab; works on Android, iOS, Windows, and Mac
 - **Efficient delivery** — `index.html` is served gzip-compressed (~14 KB instead of 55 KB) with ETag caching; the page loads instantly on repeat visits
 - **Bounded log** — the log panel keeps the last 10 000 lines; memory stays flat even after days of continuous operation
@@ -353,6 +354,8 @@ aprs-agent/
 ├── config.py                    # Configuration loading and defaults
 ├── aprs_connection.py           # APRS-IS TCP connection with auto-reconnect
 ├── extension_server.py          # Local TCP server for external clients
+├── packet_parser.py             # Rule-based APRS packet parser (coord, freq, tone, wx…)
+├── station_db.py                # In-memory station registry with online/offline detection
 ├── extensions/
 │   ├── __init__.py              # Extension base class and registry
 │   ├── logger_ext.py            # Console logger

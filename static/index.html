@@ -9,7 +9,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
+*{margin:0;padding:0;box-sizing:border-box}[hidden]{display:none!important}
 :root{
   --bg:#242424;--sidebar:#2b2b2b;--view:#1e1e1e;
   --card:rgba(255,255,255,.08);--fg:#fff;--fg2:#deddda;
@@ -90,8 +90,13 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 
 /* LOG PANEL */
 .log-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--view)}
-.log-header{height:40px;min-height:40px;padding:0 10px;display:flex;align-items:center;gap:6px;background:var(--sidebar);box-shadow:inset 0 -1px var(--border)}
-.log-header h2{flex:1;font-size:14px;font-weight:bold}
+.tab-bar{height:40px;min-height:40px;display:flex;align-items:stretch;background:var(--sidebar);box-shadow:inset 0 -1px var(--border)}
+.tab-btn{padding:0 18px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--dim);font-size:13px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;transition:color .15s,border-color .15s}
+.tab-btn:hover{color:var(--fg2)}
+.tab-btn.active{color:var(--fg);border-bottom-color:var(--accent)}
+.tab-spacer{flex:1}
+.log-header{display:flex;align-items:center;gap:6px;padding:0 10px;min-height:34px;background:var(--view);border-bottom:1px solid var(--border)}
+.log-header h2{display:none}  /* hidden — tab bar replaces it */
 .log-chip{font-size:11px;padding:2px 8px;border-radius:6px;background:var(--card);color:var(--dim);font-family:'Consolas',monospace}
 .log-btn{height:24px;padding:0 10px;border:none;border-radius:6px;font-size:11px;cursor:pointer;background:transparent;color:var(--dim);font-family:inherit}
 .log-btn:hover{background:var(--card)}
@@ -108,6 +113,45 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 .ll.ai-resp{color:#dc8add;border-left:3px solid #9141ac;padding-left:10px;margin:2px 0}
 .ll.ai-err{color:var(--error);border-left:3px solid #c01c28;padding-left:10px;margin:2px 0}
 
+/* STATIONS PANEL */
+.sta-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.sta-filters{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--sidebar);border-bottom:1px solid var(--border);flex-wrap:wrap}
+.sta-select{background:var(--view);color:var(--fg2);border:1px solid var(--border2);border-radius:6px;padding:3px 8px;font-size:12px;font-family:inherit;cursor:pointer}
+.sta-search{background:var(--view);color:var(--fg);border:1px solid var(--border2);border-radius:6px;padding:3px 8px;font-size:12px;font-family:inherit;flex:1;min-width:100px}
+.sta-search::placeholder{color:var(--dim)}
+.sta-count{font-size:11px;color:var(--dim);margin-left:auto;white-space:nowrap}
+.sta-table-wrap{flex:1;overflow-y:auto}
+.sta-table-wrap::-webkit-scrollbar{width:5px}
+.sta-table-wrap::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+table.sta{width:100%;border-collapse:collapse;font-size:12px}
+table.sta th{position:sticky;top:0;background:var(--sidebar);padding:6px 10px;text-align:left;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border2);white-space:nowrap;cursor:pointer;user-select:none}
+table.sta th:hover{color:var(--fg2)}
+table.sta td{padding:5px 10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
+.s-call{font-family:'Consolas',monospace;font-weight:bold;color:var(--accent2)}
+.s-loc{color:var(--fg2);max-width:130px}
+.s-freq{font-family:'Consolas',monospace;color:#8ff0a4}
+.s-ago{color:var(--dim);font-size:11px}
+.s-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.s-dot.on{background:var(--success)}
+.s-dot.off{background:var(--error)}
+.s-dot.db{background:var(--dim)}
+.s-dot.unk{background:var(--warn)}
+.sta-empty{padding:40px;text-align:center;color:var(--dim);font-size:13px}
+
+/* STATION DETAIL MODAL */
+.sta-modal{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55)}
+.sta-modal[hidden]{display:none}
+.sta-card{background:var(--sidebar);border:1px solid var(--border2);border-radius:12px;padding:20px 24px;min-width:340px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;position:relative}
+.sta-card h3{font-size:18px;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sta-card .sub{font-size:12px;color:var(--dim);margin-bottom:14px}
+.sta-card .row{display:flex;gap:8px;margin-bottom:6px;font-size:13px}
+.sta-card .lbl{color:var(--dim);width:110px;flex-shrink:0}
+.sta-card .val{color:var(--fg2)}
+.sta-card hr{border:none;border-top:1px solid var(--border);margin:12px 0}
+.sta-close{position:absolute;top:12px;right:14px;background:transparent;border:none;color:var(--dim);font-size:18px;cursor:pointer;line-height:1}
+.sta-close:hover{color:var(--fg)}
+
 /* LAST HEARD */
 .heard-bar{display:flex;align-items:center;gap:6px;padding:4px 8px;overflow-x:auto;background:var(--sidebar);box-shadow:inset 0 1px var(--border);min-height:30px;scrollbar-width:thin}
 .heard-bar[hidden]{display:none}
@@ -119,7 +163,7 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 .hc.on .ago{color:rgba(255,255,255,.7)}
 
 /* STATS BAR */
-.stat-bar{display:grid;grid-template-columns:repeat(6,1fr);background:var(--sidebar);box-shadow:inset 0 1px var(--border);min-height:44px}
+.stat-bar{display:grid;grid-template-columns:repeat(3,.6fr) 1.4fr 1fr 1fr 1fr;background:var(--sidebar);box-shadow:inset 0 1px var(--border);min-height:44px}
 .stat-bar .cell{padding:6px 0;text-align:center;border-right:1px solid var(--border2)}
 .stat-bar .cell:last-child{border-right:none}
 .stat-bar .v{font-size:16px;font-weight:bold;font-family:'Consolas',monospace}
@@ -308,13 +352,57 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 
 <!-- LOG PANEL -->
 <div class="log-panel">
-  <div class="log-header">
-    <h2>Live Log</h2>
-    <span class="log-chip" id="lc">0</span>
-    <button class="log-btn" onclick="clrLog()">Clear</button>
-    <button class="log-btn active" id="asB" onclick="togAs()">Auto Scroll</button>
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-log" onclick="switchTab('log')" data-i="tab_log">Live Log</button>
+    <button class="tab-btn" id="tab-sta" onclick="switchTab('sta')" data-i="tab_sta">Stations</button>
+    <div class="tab-spacer"></div>
+    <div class="log-header" style="background:transparent;border:none">
+      <span class="log-chip" id="lc">0</span>
+      <button class="log-btn" onclick="clrLog()" data-i="btn_clear">Clear</button>
+      <button class="log-btn active" id="asB" onclick="togAs()" data-i="btn_autoscroll">Auto Scroll</button>
+    </div>
   </div>
   <div class="log-view" id="log"></div>
+
+  <!-- STATIONS PANEL -->
+  <div class="sta-panel" id="sta-view" hidden>
+    <div class="sta-filters">
+      <select class="sta-select" id="sta-ftype" onchange="renderStations()" data-i-opt="sta_ftype">
+        <option value="">All Types</option>
+        <option value="repeater">🔁 Repeater</option>
+        <option value="weather">🌤 Weather</option>
+        <option value="digi">📡 Digi</option>
+        <option value="igate">🛰 IGate</option>
+        <option value="mobile">🚗 Mobile</option>
+        <option value="echolink">🔗 EchoLink</option>
+        <option value="unknown">❓ Unknown</option>
+      </select>
+      <select class="sta-select" id="sta-fonline" onchange="renderStations()" data-i-opt="sta_fonline">
+        <option value="">All Status</option>
+        <option value="on">🟢 Online</option>
+        <option value="off">🔴 Offline</option>
+        <option value="db">⬜ DB Only</option>
+      </select>
+      <input class="sta-search" id="sta-fsearch" placeholder="Search callsign…" oninput="renderStations()">
+      <span class="sta-count" id="sta-cnt">0 stations</span>
+    </div>
+    <div class="sta-table-wrap">
+      <table class="sta" id="sta-tbl">
+        <thead>
+          <tr>
+            <th data-i="sta_h_call">Callsign</th>
+            <th data-i="sta_h_type">Type</th>
+            <th data-i="sta_h_loc">Location</th>
+            <th data-i="sta_h_freq">Freq (MHz)</th>
+            <th data-i="sta_h_status">Status</th>
+            <th data-i="sta_h_seen">Last Heard</th>
+          </tr>
+        </thead>
+        <tbody id="sta-body"></tbody>
+      </table>
+      <div class="sta-empty" id="sta-empty" hidden data-i="sta_empty">No stations heard yet — start the agent to begin receiving.</div>
+    </div>
+  </div>
   <div class="heard-bar" id="heard" hidden>
     <span class="hl" data-i="heard_label">Last Heard</span>
   </div>
@@ -330,6 +418,16 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 </div>
 
 </div><!-- /split -->
+
+<!-- STATION DETAIL MODAL -->
+<div class="sta-modal" id="sta-modal" hidden onclick="if(event.target===this)closeDetail()">
+  <div class="sta-card" id="sta-card">
+    <button class="sta-close" onclick="closeDetail()">×</button>
+    <h3 id="sd-title"></h3>
+    <div class="sub" id="sd-sub"></div>
+    <div id="sd-body"></div>
+  </div>
+</div>
 
 <!-- BOTTOM BAR -->
 <div class="bot-bar">
@@ -400,7 +498,13 @@ const S={en:{
   cfg_path:"Path",status_stopped:"● Stopped",status_running:"● Running",btn_reload:"🔄 Reload",btn_save:"💾 Save",btn_start:"▶ Start",btn_stop:"■ Stop",
   heard_label:"Last Heard",st_rx:"Received",st_tx:"Sent",st_err:"Errors",st_pk:"Packets",st_stations:"Stations",st_calls:"Callsigns",st_uptime:"Uptime",
   about_title:"About APRS-Agent",about_desc:"A multi-extension APRS-IS agent for amateur radio operators.",about_devs:"Developers",about_source:"Source:",about_license:"MIT License",about_close:"Close",
-  save_ok:"Config saved.",save_err:"Save failed.",reload_ok:"Config reloaded.",no_callsign:"Enter your callsign first."
+  save_ok:"Config saved.",save_err:"Save failed.",reload_ok:"Config reloaded.",no_callsign:"Enter your callsign first.",
+  btn_clear:"Clear",btn_autoscroll:"Auto Scroll",
+  tab_log:"Live Log",tab_sta:"Stations",
+  sta_h_call:"Callsign",sta_h_type:"Type",sta_h_loc:"Location",sta_h_freq:"Freq (MHz)",sta_h_status:"Status",sta_h_seen:"Last Heard",
+  sta_empty:"No stations heard yet — start the agent to begin receiving.",
+  sd_source:"Source",sd_first:"First seen",sd_packets:"Packets",sd_last:"Last packet",sd_aprs_live:"APRS live",sd_db_only:"DB only",sd_both:"APRS + DB",
+  sta_online:"Online",sta_offline:"Offline",sta_db_only:"DB only",sta_unknown:"—"
 },tr:{
   g_conn:"Bağlantı",g_logger:"Logger",g_beacon:"Sabit Konum",g_email:"E-Posta",g_ext:"Ext. Sunucu",g_config:"Ayar Dosyası",
   server:"APRS-IS Sunucusu",port:"Port",callsign:"Çağrı İşareti",allowed_cs:"İstasyon Filtresi",allowed_cs_hint:"APRS-IS'den hangi istasyonlar izlenecek. Joker OK: TA3* = tüm TA3 istasyonları",
@@ -438,7 +542,13 @@ const S={en:{
   cfg_path:"Dosya yolu",status_stopped:"● Durduruldu",status_running:"● Çalışıyor",btn_reload:"🔄 Yenile",btn_save:"💾 Kaydet",btn_start:"▶ Başlat",btn_stop:"■ Durdur",
   heard_label:"Son Duyulan",st_rx:"Alınan",st_tx:"Gönderilen",st_err:"Hata",st_pk:"Paket",st_stations:"İstasyon",st_calls:"Çağrı İşareti",st_uptime:"Süre",
   about_title:"APRS-Agent Hakkında",about_desc:"Amatör radyo operatörleri için çok eklentili bir APRS-IS ajanı.",about_devs:"Geliştiriciler",about_source:"Kaynak:",about_license:"MIT Lisansı",about_close:"Kapat",
-  save_ok:"Ayarlar kaydedildi.",save_err:"Kaydetme başarısız.",reload_ok:"Ayarlar yeniden yüklendi.",no_callsign:"Çağrı işaretinizi girin."
+  save_ok:"Ayarlar kaydedildi.",save_err:"Kaydetme başarısız.",reload_ok:"Ayarlar yeniden yüklendi.",no_callsign:"Çağrı işaretinizi girin.",
+  btn_clear:"Temizle",btn_autoscroll:"Otomatik Kaydır",
+  tab_log:"Canlı Log",tab_sta:"İstasyonlar",
+  sta_h_call:"Çağrı İşareti",sta_h_type:"Tür",sta_h_loc:"Konum",sta_h_freq:"Frek (MHz)",sta_h_status:"Durum",sta_h_seen:"Son Görülme",
+  sta_empty:"Henüz istasyon duyulmadı — almaya başlamak için ajanı çalıştırın.",
+  sd_source:"Kaynak",sd_first:"İlk görülme",sd_packets:"Paket",sd_last:"Son paket",sd_aprs_live:"APRS canlı",sd_db_only:"Yalnızca DB",sd_both:"APRS + DB",
+  sta_online:"Çevrimiçi",sta_offline:"Çevrimdışı",sta_db_only:"Yalnızca DB",sta_unknown:"—"
 }};
 function t(k){return(S[lang]&&S[lang][k])||S.en[k]||k}
 function applyLang(){document.querySelectorAll('[data-i]').forEach(el=>{const k=el.getAttribute('data-i');const v=t(k);if(el.tagName==='INPUT')el.placeholder=v;else el.textContent=v});$('btn-lang').textContent=lang==='en'?'TR':'EN'}
@@ -539,6 +649,89 @@ function renderHeard(){
   }
 }
 function togHeard(cs){heardFilter=heardFilter===cs?null:cs;document.querySelectorAll('#log .ll').forEach(el=>{el.style.display=!heardFilter||el.textContent.includes(heardFilter)?'':'none'});renderHeard();if(autoScroll)$('log').scrollTop=1e9}
+
+// ── Tab switching ──
+let activeTab='log';
+let staData=[];
+let staRefreshTimer=null;
+function switchTab(tab){
+  activeTab=tab;
+  $('tab-log').className='tab-btn'+(tab==='log'?' active':'');
+  $('tab-sta').className='tab-btn'+(tab==='sta'?' active':'');
+  $('log').hidden=tab!=='log';
+  $('sta-view').hidden=tab!=='sta';
+  // log-header buttons only visible on log tab
+  const lh=document.querySelector('.log-header');if(lh)lh.style.visibility=tab==='log'?'':'hidden';
+  if(tab==='sta'){fetchStations();if(!staRefreshTimer)staRefreshTimer=setInterval(fetchStations,5000)}
+  else{clearInterval(staRefreshTimer);staRefreshTimer=null}
+}
+
+// ── Stations ──
+async function fetchStations(){
+  try{const r=await api('GET','/api/stations');staData=r.stations||[];renderStations()}catch(e){}
+}
+function fmtAgoLong(s){if(s===null||s===undefined)return'—';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';const h=Math.floor(s/3600);return h+'h '+String(Math.floor(s%3600/60)).padStart(2,'0')+'m'}
+function fmtFreq(f){if(!f&&f!==0)return'';return parseFloat(f).toFixed(4)}
+function dotClass(r){if(r.online===null||r.online===undefined)return'db';if(r.online)return'on';return'off'}
+function renderStations(){
+  const ftype=$('sta-ftype').value;
+  const fonline=$('sta-fonline').value;
+  const fsearch=$('sta-fsearch').value.toUpperCase();
+  let rows=staData.filter(r=>{
+    if(ftype&&r.type!==ftype)return false;
+    if(fonline==='on'&&!r.online)return false;
+    if(fonline==='off'&&(r.online||r.online===null))return false;
+    if(fonline==='db'&&r.online!==null)return false;
+    if(fsearch&&!r.callsign.includes(fsearch)&&!(r.city||'').toUpperCase().includes(fsearch))return false;
+    return true;
+  });
+  $('sta-cnt').textContent=rows.length+' / '+staData.length;
+  const body=$('sta-body');body.innerHTML='';
+  $('sta-empty').hidden=rows.length>0||staData.length===0?rows.length>0:true;
+  if(staData.length===0)$('sta-empty').hidden=false;
+  for(const r of rows){
+    const tr=document.createElement('tr');
+    const loc=[r.city,r.district].filter(Boolean).join(', ')||'';
+    const dc=dotClass(r);
+    tr.innerHTML=
+      '<td class="s-call">'+r.icon+' '+r.callsign+'</td>'+
+      '<td>'+r.type+'</td>'+
+      '<td class="s-loc" title="'+loc+'">'+loc+'</td>'+
+      '<td class="s-freq">'+(fmtFreq(r.freq_mhz)||'')+'</td>'+
+      '<td><span class="s-dot '+dc+'"></span></td>'+
+      '<td class="s-ago">'+fmtAgoLong(r.last_seen_ago_s)+'</td>';
+    tr.onclick=()=>showDetail(r);
+    body.appendChild(tr);
+  }
+}
+function showDetail(r){
+  $('sd-title').innerHTML=r.icon+' '+r.callsign;
+  const locParts=[r.city,r.district,r.country].filter(Boolean);
+  const srcLabel=r.has_db&&r.packet_count>0?t('sd_both'):r.has_db?t('sd_db_only'):t('sd_aprs_live');
+  let html='';
+  const row=(l,v)=>v?'<div class="row"><span class="lbl">'+l+'</span><span class="val">'+v+'</span></div>':'';
+  html+=row(t('sta_h_type'),r.type);
+  html+=row(t('sta_h_loc'),locParts.join(', '));
+  if(r.lat&&r.lon)html+=row('Lat / Lon',r.lat.toFixed(4)+'° / '+r.lon.toFixed(4)+'°');
+  if(r.freq_mhz)html+=row(t('sta_h_freq'),fmtFreq(r.freq_mhz)+' MHz'+(r.offset_mhz?' ('+( r.offset_mhz>0?'+':'')+r.offset_mhz.toFixed(3)+' MHz)':''));
+  if(r.tone_hz)html+=row('CTCSS',r.tone_hz+' Hz');
+  if(r.echolink)html+=row('EchoLink',r.echolink);
+  if(r.url)html+=row('URL','<a href="'+r.url+'" target="_blank" style="color:var(--accent2)">'+r.url+'</a>');
+  if(r.wx_temp_c!==null&&r.wx_temp_c!==undefined)html+=row('Temp',r.wx_temp_c+'°C'+(r.wx_humidity?' / '+r.wx_humidity+'% RH':''));
+  if(r.wx_pressure_mb)html+=row('Pressure',r.wx_pressure_mb+' mb');
+  html+='<hr>';
+  html+=row(t('sd_source'),srcLabel);
+  html+=row(t('sd_first'),r.first_seen?new Date(r.first_seen*1000).toLocaleTimeString():'—');
+  html+=row(t('sd_packets'),r.packet_count||0);
+  if(r.comment)html+='<hr><div class="row"><span class="lbl">Comment</span><span class="val" style="color:var(--dim);font-size:11px;word-break:break-all;white-space:pre-wrap">'+r.comment+'</span></div>';
+  $('sd-body').innerHTML=html;
+  const dc=dotClass(r);
+  const statusText=dc==='on'?t('sta_online'):dc==='off'?t('sta_offline'):t('sta_db_only');
+  $('sd-sub').innerHTML='<span class="s-dot '+dc+'" style="margin-right:4px"></span>'+statusText+(r.last_seen_ago_s!==null?' · '+fmtAgoLong(r.last_seen_ago_s)+' ago':'');
+  $('sta-modal').hidden=false;
+}
+function closeDetail(){$('sta-modal').hidden=true}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail()});
 
 // ── WebSocket ──
 let ws=null;

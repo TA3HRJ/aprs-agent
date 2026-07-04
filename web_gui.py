@@ -34,6 +34,7 @@ import config as cfg_module
 import aprs_connection
 import extension_server as ext_server_module
 from extensions import ExtensionRegistry
+from station_db import StationDB
 
 
 def _resolve_path(name: str) -> Path:
@@ -101,6 +102,8 @@ class _QueueWriter:
 # Source callsign of packets echoed by the logger extension, e.g.
 # "[logger] TA3ABC-9>APRS,TCPIP*,qAC,...:payload"
 _SRC_CALL_RE = re.compile(r"^\[logger\] ([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)>", re.M)
+# Full raw APRS line extracted from logger output
+_SRC_LINE_RE = re.compile(r"^\[logger\] (.+)$", re.M)
 
 _MAX_STATIONS = 200     # last-heard chip table (most recent N callsigns)
 _STATS_INTERVAL = 2.0   # seconds between stats pushes to browsers
@@ -126,6 +129,7 @@ class AgentManager:
         self._seen_calls: "set[str]" = set()       # full call+SSID
         self._seen_base_calls: "set[str]" = set()  # base callsign only
         self._last_stats_sent = 0.0
+        self._station_db: StationDB = StationDB()
 
     def get_config(self) -> dict:
         return cfg_module.load_config(self.config_path)
@@ -159,6 +163,7 @@ class AgentManager:
         self._stations.clear()
         self._seen_calls.clear()
         self._seen_base_calls.clear()
+        self._station_db.reset()
         self.running = True
         try:
             self._agent_loop.run_until_complete(self._agent_main())
@@ -232,6 +237,8 @@ class AgentManager:
 
     def _track_stations(self, text: str) -> None:
         now = time.time()
+        for raw_line in _SRC_LINE_RE.findall(text):
+            self._station_db.ingest(raw_line)
         for call in _SRC_CALL_RE.findall(text):
             self._pkt_count += 1
             if call not in self._seen_calls:
@@ -468,6 +475,23 @@ async def wa_webhook_incoming(request: web.Request) -> web.Response:
     except Exception as e:
         print(f"[whatsapp-webhook] error: {e}", file=sys.stderr)
     return web.json_response({"ok": True})
+
+
+@routes.get("/api/stations")
+async def get_stations(request: web.Request) -> web.Response:
+    mgr: AgentManager = request.app["manager"]
+    stations = mgr._station_db.get_all()
+    return web.json_response({"stations": stations, "count": len(stations)})
+
+
+@routes.get("/api/stations/{callsign}")
+async def get_station(request: web.Request) -> web.Response:
+    mgr: AgentManager = request.app["manager"]
+    callsign = request.match_info["callsign"].upper()
+    rec = mgr._station_db.get_one(callsign)
+    if rec is None:
+        raise web.HTTPNotFound()
+    return web.json_response(rec)
 
 
 @routes.get("/favicon.ico")
