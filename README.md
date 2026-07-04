@@ -498,9 +498,9 @@ aprs-agent/
 
 MIT License — see [LICENSE](LICENSE) file.
 
-Developed by **[TA3HRJ](https://github.com/TA3HRJ)** and **[TA3PKS](https://github.com/TA3PKS)**.
-AI Gateway inspired by [aprs-ai-gateway](https://github.com/ArdaYalinOzkan/aprs-ai-gateway) by **[TA3EKM](https://github.com/ArdaYalinOzkan)**.
-Original Rust implementation by TA3PKS · Python port and GUI by TA3HRJ.
+Developed by **[TA3HRJ](https://github.com/TA3HRJ)**.
+Based on the Rust work of **[TA3PKS](https://github.com/TA3PKS)**.
+Bidirectional AI Gateway concept by **[TA3EKM](https://github.com/ArdaYalinOzkan)** — [aprs-ai-gateway](https://github.com/ArdaYalinOzkan/aprs-ai-gateway).
 
 ---
 
