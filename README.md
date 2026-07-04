@@ -16,7 +16,7 @@ several automation features useful for amateur radio operators.
 |---|---|---|
 | 🖥️ | **Desktop GUI** | Form-based config editor, Start/Stop, system tray, EN/TR language, live Packets/Stations/Callsigns/Uptime bar |
 | 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, **Stations tab** with type/status filter and detail panel, gzip-compressed |
-| 📊 | **Stations Tab** | Live table of all heard stations — type, location, frequency, tone, online/offline status; enriched from Turkey Repeaters DB when configured |
+| 📊 | **Stations Tab** | Live table of all heard stations — type, location, organization, frequency, online/offline status; APRS Object packets parsed; location falls back to Maidenhead locator or coordinates |
 | 🔔 | **Repeater Monitor** | Detects when DB-matched repeaters go offline or come back; sends Telegram or email notification |
 | 📡 | **Fixed Beacon** | Periodically sends your station's position — with visual APRS symbol picker and Maidenhead / QTH Locator support |
 | 🪵 | **Logger** | Logs incoming APRS packets to the terminal, with type and keyword filters |
@@ -257,7 +257,7 @@ python web_gui.py --host 0.0.0.0 -p 8080  # listen on all interfaces (remote acc
 
 - **Live stats bar** — RX / TX / Errors / Packets / Stations / Callsigns / Uptime (7 cells, proportional widths), updated every 2 seconds via WebSocket
 - **Last Heard strip** — callsign chips above the stats bar; click a chip to filter the log to that station
-- **Stations tab** — live table of all heard stations with type/status/callsign filters; click any row for a detail panel showing coordinates, frequency, tone, EchoLink, weather data, and packet history; auto-refreshes every 5 seconds
+- **Stations tab** — live table of all heard stations with type/status/callsign filters and an Organization column (filled by AI analysis); APRS Object packets are correctly attributed to the object callsign; Location column falls back to Maidenhead locator or lat/lon when city is unknown; click any row for a detail panel showing coordinates, frequency, tone, EchoLink, weather data, AI-extracted org/description, and packet history; auto-refreshes every 5 seconds
 - **PWA — installable app** — on Chrome/Edge, use *Install* or *Add to Home Screen* to run without a browser tab; works on Android, iOS, Windows, and Mac
 - **Efficient delivery** — `index.html` is served gzip-compressed (~14 KB instead of 55 KB) with ETag caching; the page loads instantly on repeat visits
 - **Bounded log** — the log panel keeps the last 10 000 lines; memory stays flat even after days of continuous operation
