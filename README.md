@@ -396,8 +396,8 @@ aprs-agent/
 ├── config.py                    # Configuration loading and defaults
 ├── aprs_connection.py           # APRS-IS TCP connection with auto-reconnect
 ├── extension_server.py          # Local TCP server for external clients
-├── packet_parser.py             # Rule-based APRS packet parser (coord, freq, tone, wx…)
-├── station_db.py                # In-memory station registry with online/offline detection
+├── packet_parser.py             # Rule-based APRS packet parser (coord→locator, freq, tone, Object packets, wx…)
+├── station_db.py                # In-memory station registry; Turkey Repeaters DB enrichment; online/offline detection; AI analysis queue
 ├── extensions/
 │   ├── __init__.py              # Extension base class and registry
 │   ├── logger_ext.py            # Console logger
