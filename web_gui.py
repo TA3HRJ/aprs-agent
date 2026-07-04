@@ -120,9 +120,11 @@ class AgentManager:
         # Live stats shown in the browser (packet counter + last-heard stations)
         self._started_at: Optional[float] = None
         self._pkt_count = 0
-        self._unique_count = 0          # total distinct callsigns ever heard this session
+        self._unique_count = 0          # distinct call+SSID pairs ever heard
+        self._unique_calls = 0          # distinct base callsigns (SSID stripped)
         self._stations: "OrderedDict[str, list]" = OrderedDict()  # call -> [last_ts, count]
-        self._seen_calls: "set[str]" = set()    # for accurate unique count
+        self._seen_calls: "set[str]" = set()       # full call+SSID
+        self._seen_base_calls: "set[str]" = set()  # base callsign only
         self._last_stats_sent = 0.0
 
     def get_config(self) -> dict:
@@ -153,8 +155,10 @@ class AgentManager:
         self._started_at = time.time()
         self._pkt_count = 0
         self._unique_count = 0
+        self._unique_calls = 0
         self._stations.clear()
         self._seen_calls.clear()
+        self._seen_base_calls.clear()
         self.running = True
         try:
             self._agent_loop.run_until_complete(self._agent_main())
@@ -233,6 +237,10 @@ class AgentManager:
             if call not in self._seen_calls:
                 self._seen_calls.add(call)
                 self._unique_count += 1
+            base = call.split("-")[0]
+            if base not in self._seen_base_calls:
+                self._seen_base_calls.add(base)
+                self._unique_calls += 1
             entry = self._stations.get(call)
             if entry:
                 entry[0] = now
@@ -253,6 +261,7 @@ class AgentManager:
             "uptime": int(now - self._started_at) if self.running and self._started_at else 0,
             "packets": self._pkt_count,
             "unique": self._unique_count,
+            "unique_calls": self._unique_calls,
             "stations": [
                 {"c": call, "t": int(now - ts), "n": count}
                 for call, (ts, count) in recent

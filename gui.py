@@ -433,6 +433,7 @@ _S = {
         "allowed_cs_hint":    "Which stations to monitor. Wildcards OK  e.g.  TA3* = all TA3 stations",
         "st_packets":         "Packets",
         "st_stations":        "Stations",
+        "st_calls":           "Callsigns",
         "st_uptime":          "Uptime",
         "full_feed":          "Full World Feed (port 10152)",
         "full_feed_warn":     (
@@ -626,6 +627,7 @@ _S = {
         "allowed_cs_hint":    "APRS-IS'den hangi istasyonlar izlenecek. Joker OK  örn.  TA3* = tüm TA3 istasyonları",
         "st_packets":         "Paket",
         "st_stations":        "İstasyon",
+        "st_calls":           "Çağrı İşareti",
         "st_uptime":          "Süre",
         "full_feed":          "Tüm Dünya Akışı (port 10152)",
         "full_feed_warn":     (
@@ -1327,7 +1329,9 @@ class APRSAgentGUI:
         # Live stats
         self._stat_pkt_count = 0
         self._stat_unique_count = 0
+        self._stat_calls_count = 0
         self._stat_seen_calls: set = set()
+        self._stat_seen_base: set = set()
         self._stat_started_at: Optional[float] = None
         self._stat_src_re = re.compile(
             r'\[logger\] ([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)>'
@@ -1946,11 +1950,13 @@ class APRSAgentGUI:
         stats = ttk.Frame(frame)
         stats.pack(fill="x", pady=(4, 0))
         dim = {"foreground": "#888888", "font": ("TkDefaultFont", 8)}
-        self._lbl_packets  = ttk.Label(stats, text=f"{self._t('st_packets')}: 0",  **dim)
-        self._lbl_stations = ttk.Label(stats, text=f"{self._t('st_stations')}: 0", **dim)
-        self._lbl_uptime   = ttk.Label(stats, text=f"{self._t('st_uptime')}: —",   **dim)
+        self._lbl_packets  = ttk.Label(stats, text=f"{self._t('st_packets')}: 0",   **dim)
+        self._lbl_stations = ttk.Label(stats, text=f"{self._t('st_stations')}: 0",  **dim)
+        self._lbl_calls    = ttk.Label(stats, text=f"{self._t('st_calls')}: 0",     **dim)
+        self._lbl_uptime   = ttk.Label(stats, text=f"{self._t('st_uptime')}: —",    **dim)
         self._lbl_packets.pack(side="left", padx=(0, 16))
         self._lbl_stations.pack(side="left", padx=(0, 16))
+        self._lbl_calls.pack(side="left", padx=(0, 16))
         self._lbl_uptime.pack(side="left")
 
     # ── Bottom bar ────────────────────────────────────────────────────────────
@@ -2310,8 +2316,10 @@ class APRSAgentGUI:
         cfg = self._form_to_config()
         self._stat_pkt_count = 0
         self._stat_unique_count = 0
+        self._stat_calls_count = 0
         self._stat_seen_calls.clear()
-        self._stat_started_at = None   # set after first log line
+        self._stat_seen_base.clear()
+        self._stat_started_at = None
         self._lbl_packets.configure(text=f"{self._t('st_packets')}: 0")
         self._lbl_stations.configure(text=f"{self._t('st_stations')}: 0")
         self._lbl_uptime.configure(text=f"{self._t('st_uptime')}: 0s")
@@ -2473,11 +2481,18 @@ class APRSAgentGUI:
                     if call not in self._stat_seen_calls:
                         self._stat_seen_calls.add(call)
                         self._stat_unique_count += 1
+                    base = call.split("-")[0]
+                    if base not in self._stat_seen_base:
+                        self._stat_seen_base.add(base)
+                        self._stat_calls_count += 1
                     self._lbl_packets.configure(
                         text=f"{self._t('st_packets')}: {self._stat_pkt_count}"
                     )
                     self._lbl_stations.configure(
                         text=f"{self._t('st_stations')}: {self._stat_unique_count}"
+                    )
+                    self._lbl_calls.configure(
+                        text=f"{self._t('st_calls')}: {self._stat_calls_count}"
                     )
 
                 # Sync running state

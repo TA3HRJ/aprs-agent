@@ -324,6 +324,7 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
     <div class="cell"><div class="v" id="xER">0</div><div class="l" data-i="st_err">Errors</div></div>
     <div class="cell"><div class="v" id="xPK">0</div><div class="l" data-i="st_pk">Packets</div></div>
     <div class="cell"><div class="v" id="xST">0</div><div class="l" data-i="st_stations">Stations</div></div>
+    <div class="cell"><div class="v" id="xCS">0</div><div class="l" data-i="st_calls">Callsigns</div></div>
     <div class="cell"><div class="v" id="xUP">—</div><div class="l" data-i="st_uptime">Uptime</div></div>
   </div>
 </div>
@@ -397,7 +398,7 @@ const S={en:{
   imap_interval:"Poll interval (min)",imap_from:"From callsign",imap_allowed:"Allowed sender emails",imap_allowed_hint:"Comma-separated, empty = allow all",
   ext_enabled:"Extension Server",ext_sub:"Bidirectional TCP stream for external programs",ext_host:"Listen host",ext_port:"Listen port",
   cfg_path:"Path",status_stopped:"● Stopped",status_running:"● Running",btn_reload:"🔄 Reload",btn_save:"💾 Save",btn_start:"▶ Start",btn_stop:"■ Stop",
-  heard_label:"Last Heard",st_rx:"Received",st_tx:"Sent",st_err:"Errors",st_pk:"Packets",st_stations:"Stations",st_uptime:"Uptime",
+  heard_label:"Last Heard",st_rx:"Received",st_tx:"Sent",st_err:"Errors",st_pk:"Packets",st_stations:"Stations",st_calls:"Callsigns",st_uptime:"Uptime",
   about_title:"About APRS-Agent",about_desc:"A multi-extension APRS-IS agent for amateur radio operators.",about_devs:"Developers",about_source:"Source:",about_license:"MIT License",about_close:"Close",
   save_ok:"Config saved.",save_err:"Save failed.",reload_ok:"Config reloaded.",no_callsign:"Enter your callsign first."
 },tr:{
@@ -435,7 +436,7 @@ const S={en:{
   imap_interval:"Yoklama aralığı (dk)",imap_from:"Gönderen çağrı işareti",imap_allowed:"İzin verilen gönderen e-postalar",imap_allowed_hint:"Virgülle ayır, boş = hepsi",
   ext_enabled:"Extension Sunucusu",ext_sub:"Harici programlar için çift yönlü TCP akışı",ext_host:"Dinleme adresi",ext_port:"Dinleme portu",
   cfg_path:"Dosya yolu",status_stopped:"● Durduruldu",status_running:"● Çalışıyor",btn_reload:"🔄 Yenile",btn_save:"💾 Kaydet",btn_start:"▶ Başlat",btn_stop:"■ Durdur",
-  heard_label:"Son Duyulan",st_rx:"Alınan",st_tx:"Gönderilen",st_err:"Hata",st_pk:"Paket",st_stations:"İstasyon",st_uptime:"Süre",
+  heard_label:"Son Duyulan",st_rx:"Alınan",st_tx:"Gönderilen",st_err:"Hata",st_pk:"Paket",st_stations:"İstasyon",st_calls:"Çağrı İşareti",st_uptime:"Süre",
   about_title:"APRS-Agent Hakkında",about_desc:"Amatör radyo operatörleri için çok eklentili bir APRS-IS ajanı.",about_devs:"Geliştiriciler",about_source:"Kaynak:",about_license:"MIT Lisansı",about_close:"Kapat",
   save_ok:"Ayarlar kaydedildi.",save_err:"Kaydetme başarısız.",reload_ok:"Ayarlar yeniden yüklendi.",no_callsign:"Çağrı işaretinizi girin."
 }};
@@ -522,7 +523,7 @@ function togAs(){autoScroll=!autoScroll;$('asB').className=autoScroll?'log-btn a
 // ── Live stats / Last Heard ──
 function fmtUp(s){if(!s||s<=0)return'—';const h=Math.floor(s/3600),m=Math.floor(s%3600/60);if(h)return h+'h '+String(m).padStart(2,'0')+'m';return m+'m '+String(s%60).padStart(2,'0')+'s'}
 function fmtAgo(t){if(t<60)return t+'s';if(t<3600)return Math.floor(t/60)+'m';return Math.floor(t/3600)+'h'}
-function onStats(d){setStatus(d.running);$('xPK').textContent=d.packets;$('xST').textContent=d.unique;$('xUP').textContent=d.running?fmtUp(d.uptime):'—';lastStations=d.stations||[];renderHeard()}
+function onStats(d){setStatus(d.running);$('xPK').textContent=d.packets;$('xST').textContent=d.unique;$('xCS').textContent=d.unique_calls||0;$('xUP').textContent=d.running?fmtUp(d.uptime):'—';lastStations=d.stations||[];renderHeard()}
 function renderHeard(){
   const bar=$('heard');bar.querySelectorAll('.hc').forEach(el=>el.remove());
   const chips=lastStations.slice();
