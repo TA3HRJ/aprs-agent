@@ -1,11 +1,14 @@
 MIT License
 
-Copyright (c) 2024 TA3HRJ, TA3PKS
+Copyright (c) 2024–2026 TA3HRJ (Erhan)
 
-Original Rust implementation: TA3PKS (Burak)
+Original concept and Rust implementation: TA3PKS (Burak)
   https://github.com/ta3pks/aprs-agent
 
-Python port and further development: TA3HRJ (Erhan)
+Bidirectional AI Gateway (original concept): TA3EKM (Arda Yalın Özkan)
+  https://github.com/ArdaYalinOzkan/aprs-ai-gateway
+
+Python port, GUI, Web GUI, and all subsequent development: TA3HRJ (Erhan)
   https://github.com/TA3HRJ/aprs-agent
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
