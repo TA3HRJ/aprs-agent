@@ -18,6 +18,7 @@ several automation features useful for amateur radio operators.
 | 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, **Stations tab** with type/status filter and detail panel, gzip-compressed |
 | 📊 | **Stations Tab** | Live table of all heard stations — type, location, organization, frequency, online/offline status; APRS Object packets parsed; location falls back to Maidenhead locator or coordinates |
 | 🔔 | **Repeater Monitor** | Detects when DB-matched repeaters go offline or come back; sends Telegram or email notification |
+| 🤖 | **AI Station Analysis** | Periodically sends beacon comments to AI to extract organisation name and description — results shown in the Stations tab; skips greeting/seasonal messages automatically |
 | 📡 | **Fixed Beacon** | Periodically sends your station's position — with visual APRS symbol picker and Maidenhead / QTH Locator support |
 | 🪵 | **Logger** | Logs incoming APRS packets to the terminal, with type and keyword filters |
 | 🐦 | **Twitter / X** | Forwards APRS messages addressed to `TWSEND` to your Twitter/X account |
@@ -217,6 +218,45 @@ To send an APRS message via email, compose an email with subject:
 TA3HRJ-7 Hello, your beacon is working fine!
 ```
 First word = destination callsign, rest = message text.
+
+### Repeater Monitor
+
+Watches DB-matched repeaters and sends a notification when one goes offline or comes back online.
+Requires the **Turkey Repeaters DB** path to be set and at least one notification channel configured.
+
+```toml
+repeater_db_path = "C:/path/to/repeaters.json"   # Turkey Repeaters JSON file
+
+[monitor]
+enabled            = true
+notify_channel     = "telegram"     # "telegram" or "smtp"
+check_interval_mins = 10
+watch_callsigns    = []             # empty = watch all DB repeaters
+```
+
+Notification example:
+```
+🔴 YM5KAD is now OFFLINE (last heard 1h 23m ago)
+Adana · 145.7000 MHz · FM
+```
+
+### AI Station Analysis
+
+Periodically sends APRS beacon comments to AI to extract the station's organisation name and description.
+Results appear in the Stations tab detail panel under **Organization** and **AI Note**.
+
+Requires **AI Gateway** to be configured (same provider/API key).
+
+```toml
+[station_ai]
+enabled        = true
+interval_hours = 24     # run every N hours
+max_batch      = 20     # max stations analysed per run
+```
+
+- DB-matched repeaters are prioritised in each batch
+- Transient comments (holiday greetings, seasonal messages) are skipped automatically
+- Each station is analysed once per session; results are cached in memory
 
 ### SMTP Email
 
