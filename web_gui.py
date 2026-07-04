@@ -351,7 +351,7 @@ class AgentManager:
         model     = ai_cfg.get("model", "")
 
         if provider == "puter":
-            base_url = base_url or "https://api.puter.com/drivers/call"
+            base_url = base_url or "https://api.puter.com/puterai/openai/v1"
         elif provider == "groq":
             base_url = base_url or "https://api.groq.com/openai/v1"
         elif provider == "openrouter":
@@ -386,29 +386,22 @@ class AgentManager:
                      model: str, prompt: str) -> "dict | None":
         import urllib.request, json as _json
 
-        if provider == "puter":
-            payload = {
-                "interface": "puter-chat-completion",
-                "driver":    "claude-claude-3-5-sonnet",
-                "test_mode": False,
-                "call": {
-                    "messages": [{"role": "user", "content": prompt}]
-                }
-            }
-            url = base_url
-        else:
-            payload = {
-                "model":    model or ("llama-3.1-8b-instant" if provider == "groq" else ""),
-                "messages": [
-                    {"role": "system",
-                     "content": "You extract structured data from APRS beacon text. "
-                                "Return ONLY valid JSON, no prose."},
-                    {"role": "user", "content": prompt},
-                ],
-                "max_tokens": 120,
-                "temperature": 0,
-            }
-            url = base_url + "/chat/completions"
+        default_models = {
+            "puter": "gpt-4o-mini",
+            "groq":  "llama-3.1-8b-instant",
+        }
+        payload = {
+            "model": model or default_models.get(provider, ""),
+            "messages": [
+                {"role": "system",
+                 "content": "You extract structured data from APRS beacon text. "
+                            "Return ONLY valid JSON, no prose."},
+                {"role": "user", "content": prompt},
+            ],
+            "max_tokens": 120,
+            "temperature": 0,
+        }
+        url = base_url.rstrip("/") + "/chat/completions"
 
         headers = {"Content-Type": "application/json"}
         if api_key:
@@ -420,16 +413,9 @@ class AgentManager:
         with urllib.request.urlopen(req, timeout=20) as resp:
             data = _json.loads(resp.read())
 
-        # Extract content from response
-        if provider == "puter":
-            text = (data.get("result", {})
-                       .get("message", {})
-                       .get("content", [{}])[0]
-                       .get("text", ""))
-        else:
-            text = (data.get("choices", [{}])[0]
-                       .get("message", {})
-                       .get("content", ""))
+        text = (data.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", ""))
 
         text = text.strip()
         # Strip markdown code fences if present
