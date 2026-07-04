@@ -424,8 +424,14 @@ _S = {
         "tab_email":          "Email",
         "email_send":         "📤 Send — Radio → Email (SMTP)",
         "email_recv":         "📥 Receive — Email → Radio (IMAP)",
+        "tab_station_ai":     "Station AI",
         "tab_monitor":        "Monitor",
         "tab_ext":            "Ext. Server",
+        "sai_enabled":        "AI Station Analysis",
+        "sai_sub":            "Send station comments to AI — extracts org name and description. Uses AI Gateway settings.",
+        "sai_interval":       "Run every (hours):",
+        "sai_interval_hint":  "AI Gateway must be configured. Each station analysed once per session.",
+        "sai_batch":          "Max stations per run:",
         "mon_enabled":        "Repeater Monitor",
         "mon_sub":            "Notify when a DB repeater goes offline or comes back online",
         "mon_channel":        "Notify via:",
@@ -627,8 +633,14 @@ _S = {
         "tab_email":          "E-Posta",
         "email_send":         "📤 Gönder — Telsiz → E-Posta (SMTP)",
         "email_recv":         "📥 Al — E-Posta → Telsiz (IMAP)",
+        "tab_station_ai":     "İstasyon AI",
         "tab_monitor":        "İzleyici",
         "tab_ext":            "Ext. Sunucu",
+        "sai_enabled":        "AI İstasyon Analizi",
+        "sai_sub":            "İstasyon yorumlarını AI'a gönder — dernek adı ve açıklama çıkarır. AI Gateway ayarlarını kullanır.",
+        "sai_interval":       "Her (saat) çalış:",
+        "sai_interval_hint":  "AI Gateway ayarlanmış olmalı. Her istasyon bir kez analiz edilir.",
+        "sai_batch":          "Tur başına maks istasyon:",
         "mon_enabled":        "Röle İzleyici",
         "mon_sub":            "DB'deki röle çevrimdışı/çevrimiçi olduğunda bildirim gönder",
         "mon_channel":        "Bildirim kanalı:",
@@ -1465,7 +1477,7 @@ class APRSAgentGUI:
 
         tab_keys = ["tab_conn", "tab_log", "tab_beacon",
                     "tab_twitter", "tab_bluesky", "tab_wa",
-                    "tab_tg", "tab_ai", "tab_email", "tab_monitor", "tab_ext"]
+                    "tab_tg", "tab_ai", "tab_email", "tab_station_ai", "tab_monitor", "tab_ext"]
         builders = [
             self._build_conn_tab,
             self._build_logger_tab,
@@ -1476,6 +1488,7 @@ class APRSAgentGUI:
             self._build_telegram_tab,
             self._build_ai_tab,
             self._build_email_tab,
+            self._build_station_ai_tab,
             self._build_monitor_tab,
             self._build_extserver_tab,
         ]
@@ -1949,6 +1962,24 @@ class APRSAgentGUI:
         self._hint(f, "ext_hint").grid(
             row=5, column=0, columnspan=2, sticky="w", pady=(16, 0))
 
+    # ── Station AI tab ────────────────────────────────────────────────────────
+
+    def _build_station_ai_tab(self, parent) -> None:
+        f = self._scrollable(parent)
+        f.columnconfigure(1, weight=1)
+
+        self._v_sai_enabled  = tk.BooleanVar()
+        self._v_sai_interval = tk.StringVar(value="24")
+        self._v_sai_batch    = tk.StringVar(value="20")
+
+        self._check(f, 0, "sai_enabled", self._v_sai_enabled)
+        ttk.Label(f, text=self._t("sai_sub"), foreground="#888888",
+                  wraplength=420, justify="left").grid(
+            row=1, column=0, columnspan=2, sticky="w", padx=8, pady=(0, 6))
+        self._row(f, 2, "sai_interval", self._v_sai_interval,
+                  hint_key="sai_interval_hint", width=8)
+        self._row(f, 4, "sai_batch", self._v_sai_batch, hint_key=None, width=8)
+
     # ── Monitor tab ───────────────────────────────────────────────────────────
 
     def _build_monitor_tab(self, parent) -> None:
@@ -2068,6 +2099,10 @@ class APRSAgentGUI:
         self._v_full_feed.set(cfg.get("full_feed", False))
         self._v_rate_limit.set(str(cfg.get("rate_limit_pps", 50)))
         self._v_repeater_db.set(cfg.get("repeater_db_path", ""))
+        sai = cfg.get("station_ai", {})
+        self._v_sai_enabled.set(sai.get("enabled", False))
+        self._v_sai_interval.set(str(sai.get("interval_hours", 24)))
+        self._v_sai_batch.set(str(sai.get("max_batch", 20)))
         mon = cfg.get("monitor", {})
         self._v_mon_enabled.set(mon.get("enabled", False))
         self._v_mon_channel.set(mon.get("notify_channel", "telegram"))
@@ -2221,6 +2256,11 @@ class APRSAgentGUI:
             "full_feed":              self._v_full_feed.get(),
             "rate_limit_pps":         max(0, int(self._v_rate_limit.get().strip() or 50)),
             "repeater_db_path":       self._v_repeater_db.get().strip(),
+            "station_ai": {
+                "enabled":        self._v_sai_enabled.get(),
+                "interval_hours": max(1, int(self._v_sai_interval.get().strip() or 24)),
+                "max_batch":      max(1, int(self._v_sai_batch.get().strip() or 20)),
+            },
             "monitor": {
                 "enabled":             self._v_mon_enabled.get(),
                 "notify_channel":      self._v_mon_channel.get(),

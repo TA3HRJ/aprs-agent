@@ -337,6 +337,13 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
   <div class="entry-row"><label data-i="imap_allowed">Allowed sender emails</label><input id="f-imap-allowed" type="text"><div class="hint" data-i="imap_allowed_hint">Comma-separated, empty = allow all</div></div>
 </div></div>
 
+<!-- STATION AI -->
+<div class="pref-group collapsed"><label data-i="g_station_ai">Station AI</label><div class="pref-box">
+  <div class="action-row"><div class="content"><div class="title" data-i="sai_enabled">AI Station Analysis</div><div class="subtitle" data-i="sai_sub">Periodically send station comments to AI for org name and description extraction. Uses the AI Gateway provider settings.</div></div><label class="adw-switch"><input type="checkbox" id="f-sai-enabled"><span></span></label></div>
+  <div class="entry-row"><label data-i="sai_interval">Run every (hours)</label><input id="f-sai-interval" type="number" min="1" max="168" value="24" style="max-width:80px"><div class="hint" data-i="sai_interval_hint">AI Gateway (provider/API key) must be configured. Each new station is analysed once and cached for the session.</div></div>
+  <div class="entry-row"><label data-i="sai_batch">Max per run</label><input id="f-sai-batch" type="number" min="1" max="100" value="20" style="max-width:80px"></div>
+</div></div>
+
 <!-- MONITOR -->
 <div class="pref-group collapsed"><label data-i="g_monitor">Monitor</label><div class="pref-box">
   <div class="action-row"><div class="content"><div class="title" data-i="mon_enabled">Repeater Monitor</div><div class="subtitle" data-i="mon_sub">Notify when a DB repeater goes offline or comes back online</div></div><label class="adw-switch"><input type="checkbox" id="f-mon-enabled"><span></span></label></div>
@@ -471,7 +478,10 @@ let lang='en',autoScroll=true,logCount=0,cRX=0,cTX=0,cER=0,heardFilter=null,last
 
 // ── i18n ──
 const S={en:{
-  g_conn:"Connection",g_logger:"Logger",g_beacon:"Fixed Beacon",g_email:"Email",g_monitor:"Monitor",g_ext:"Extension Server",g_config:"Config File",
+  g_conn:"Connection",g_logger:"Logger",g_beacon:"Fixed Beacon",g_email:"Email",g_station_ai:"Station AI",g_monitor:"Monitor",g_ext:"Extension Server",g_config:"Config File",
+  sai_enabled:"AI Station Analysis",sai_sub:"Periodically send station comments to AI for org name and description extraction. Uses the AI Gateway provider settings.",
+  sai_interval:"Run every (hours)",sai_interval_hint:"AI Gateway (provider/API key) must be configured. Each new station is analysed once and cached for the session.",
+  sai_batch:"Max per run",
   mon_enabled:"Repeater Monitor",mon_sub:"Notify when a DB repeater goes offline or comes back online",
   mon_channel:"Notify via",mon_interval:"Check interval (min)",
   mon_watch:"Watch callsigns",mon_watch_hint:"Comma-separated base callsigns to monitor. Leave empty to monitor all repeaters in the DB.",
@@ -519,7 +529,10 @@ const S={en:{
   sd_source:"Source",sd_first:"First seen",sd_packets:"Packets",sd_last:"Last packet",sd_aprs_live:"APRS live",sd_db_only:"DB only",sd_both:"APRS + DB",
   sta_online:"Online",sta_offline:"Offline",sta_db_only:"DB only",sta_unknown:"—"
 },tr:{
-  g_conn:"Bağlantı",g_logger:"Logger",g_beacon:"Sabit Konum",g_email:"E-Posta",g_monitor:"İzleyici",g_ext:"Ext. Sunucu",g_config:"Ayar Dosyası",
+  g_conn:"Bağlantı",g_logger:"Logger",g_beacon:"Sabit Konum",g_email:"E-Posta",g_station_ai:"İstasyon AI",g_monitor:"İzleyici",g_ext:"Ext. Sunucu",g_config:"Ayar Dosyası",
+  sai_enabled:"AI İstasyon Analizi",sai_sub:"İstasyon yorumlarını periyodik olarak AI'a gönder — dernek adı ve açıklama çıkarır. AI Gateway ayarlarını kullanır.",
+  sai_interval:"Her (saat) çalış",sai_interval_hint:"AI Gateway (sağlayıcı/API anahtarı) ayarlanmış olmalı. Her istasyon bir kez analiz edilir, sonuç oturum boyunca saklanır.",
+  sai_batch:"Her turda maksimum",
   mon_enabled:"Röle İzleyici",mon_sub:"DB'deki röle çevrimdışı olduğunda veya geri geldiğinde bildirim gönder",
   mon_channel:"Bildirim kanalı",mon_interval:"Kontrol aralığı (dk)",
   mon_watch:"İzlenecek çağrı işaretleri",mon_watch_hint:"Virgülle ayırılmış çağrı işaretleri. Boş bırakırsanız DB'deki tüm röleleri izler.",
@@ -591,6 +604,7 @@ function loadCfg(cfg){
   $('f-allowed-cs').value=csv(cfg.allowed_callsigns);$('f-print-cfg').checked=cfg.print_config_on_startup||false;$('f-autostart-agent').checked=cfg.auto_start_agent||false;
   $('f-full-feed').checked=cfg.full_feed||false;$('f-rate-limit').value=cfg.rate_limit_pps!=null?cfg.rate_limit_pps:50;toggleFullFeedWarn();$('f-rdb-path').value=cfg.repeater_db_path||'';
   const mon=cfg.monitor||{};$('f-mon-enabled').checked=mon.enabled||false;$('f-mon-channel').value=mon.notify_channel||'telegram';$('f-mon-interval').value=mon.check_interval_mins||10;$('f-mon-watch').value=(mon.watch_callsigns||[]).join(', ');
+  const sai=cfg.station_ai||{};$('f-sai-enabled').checked=sai.enabled||false;$('f-sai-interval').value=sai.interval_hours||24;$('f-sai-batch').value=sai.max_batch||20;
   const l=(cfg.extensions||{}).logger||{};$('f-log-enabled').checked=l.enabled!==false;$('f-log-comments').checked=l.log_comments!==false;
   $('f-filter-type').value=csv(l.filter_by_message_type);$('f-exclude-type').value=csv(l.exclude_by_message_type);$('f-kw-filter').value=csv(l.keyword_filter);
   const b=(cfg.extensions||{}).fixed_beacon||{};$('f-bcn-enabled').checked=b.enabled||false;$('f-bcn-ssid').value=b.ssid||'';
@@ -625,6 +639,7 @@ function getCfg(){return{
   allowed_callsigns:lst($('f-allowed-cs').value),print_config_on_startup:$('f-print-cfg').checked,auto_start_agent:$('f-autostart-agent').checked,
   full_feed:$('f-full-feed').checked,rate_limit_pps:Math.max(0,parseInt($('f-rate-limit').value)||50),repeater_db_path:$('f-rdb-path').value.trim(),
   monitor:{enabled:$('f-mon-enabled').checked,notify_channel:$('f-mon-channel').value,check_interval_mins:Math.max(1,parseInt($('f-mon-interval').value)||10),watch_callsigns:$('f-mon-watch').value.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean)},
+  station_ai:{enabled:$('f-sai-enabled').checked,interval_hours:Math.max(1,parseInt($('f-sai-interval').value)||24),max_batch:Math.max(1,parseInt($('f-sai-batch').value)||20)},
   extension_server:{enabled:$('f-ext-enabled').checked,host:$('f-ext-host').value.trim(),port:parseInt($('f-ext-port').value)||65080},
   extensions:{
     logger:{enabled:$('f-log-enabled').checked,log_comments:$('f-log-comments').checked,filter_by_message_type:chars($('f-filter-type').value),exclude_by_message_type:chars($('f-exclude-type').value),keyword_filter:lst($('f-kw-filter').value)},
@@ -743,6 +758,13 @@ function showDetail(r){
   html+=row(t('sd_source'),srcLabel);
   html+=row(t('sd_first'),r.first_seen?new Date(r.first_seen*1000).toLocaleTimeString():'—');
   html+=row(t('sd_packets'),r.packet_count||0);
+  if(r.ai_org||r.ai_description){
+    html+='<hr>';
+    if(r.ai_org)html+=row('Organization',r.ai_org);
+    if(r.ai_description)html+='<div class="row"><span class="lbl">AI Note</span><span class="val" style="color:var(--dim);font-size:12px;word-break:break-word">'+r.ai_description+'</span></div>';
+  }else if(r.ai_analyzed){
+    html+='<hr><div class="row"><span class="lbl" style="font-size:11px;color:var(--dim)">AI</span><span class="val" style="font-size:11px;color:var(--dim)">No org/description found in beacon text</span></div>';
+  }
   if(r.comment)html+='<hr><div class="row"><span class="lbl">Comment</span><span class="val" style="color:var(--dim);font-size:11px;word-break:break-all;white-space:pre-wrap">'+r.comment+'</span></div>';
   $('sd-body').innerHTML=html;
   const dc=dotClass(r);

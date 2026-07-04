@@ -20,7 +20,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "2.7.2"
+VERSION = "2.7.3"
 
 # tomllib is built-in from Python 3.11 onwards.
 # For older Python versions, install the 'tomli' package.
@@ -65,6 +65,11 @@ DEFAULTS: dict[str, Any] = {
         "watch_callsigns": [],
         "notify_channel": "telegram",
         "check_interval_mins": 10,
+    },
+    "station_ai": {
+        "enabled": False,
+        "interval_hours": 24,
+        "max_batch": 20,
     },
     "extension_server": {
         "enabled": False,

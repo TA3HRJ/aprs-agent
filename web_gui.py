@@ -236,6 +236,16 @@ class AgentManager:
         elif mon_cfg.get("enabled"):
             print("[monitor] WARNING: monitor enabled but repeater_db_path not set", file=sys.stderr)
 
+        sai_cfg = config.get("station_ai", {})
+        if sai_cfg.get("enabled"):
+            ai_ext = config.get("extensions", {}).get("ai_gateway", {})
+            if ai_ext.get("provider") or ai_ext.get("base_url"):
+                asyncio.create_task(self._ai_analysis_loop(config))
+                hours = sai_cfg.get("interval_hours", 24)
+                print(f"[station-ai] AI analysis started (every {hours}h, first run in 10m)", file=sys.stderr)
+            else:
+                print("[station-ai] WARNING: station_ai enabled but ai_gateway not configured", file=sys.stderr)
+
         await self._stop_event.wait()
         server_task.cancel()
         try:
@@ -291,6 +301,129 @@ class AgentManager:
             m = (rec.last_seen_ago_s % 3600) // 60
             ago = f" (last heard {h}h {m:02d}m ago)" if h else f" (last heard {m}m ago)"
         return f"{icon} {rec.callsign} is now {event.upper()}{ago}\n{detail}"
+
+    # ── AI station analysis ───────────────────────────────────────────────────
+
+    async def _ai_analysis_loop(self, config: dict) -> None:
+        sai = config.get("station_ai", {})
+        interval = max(1, int(sai.get("interval_hours", 24))) * 3600
+        max_batch = max(1, int(sai.get("max_batch", 20)))
+        ai_cfg = config.get("extensions", {}).get("ai_gateway", {})
+
+        # Initial delay: let the agent accumulate stations first
+        await asyncio.sleep(600)
+
+        while True:
+            batch = self._station_db.get_unanalyzed(max_batch)
+            if batch:
+                print(f"[station-ai] Analysing {len(batch)} station(s)…", file=sys.stderr)
+                for rec in batch:
+                    try:
+                        await self._analyze_one(rec, ai_cfg)
+                    except Exception as e:
+                        print(f"[station-ai] {rec.callsign}: {e}", file=sys.stderr)
+                        rec.ai_analyzed = True  # don't retry on error this session
+                    await asyncio.sleep(2)      # polite gap between requests
+            await asyncio.sleep(interval)
+
+    async def _analyze_one(self, rec: "object", ai_cfg: dict) -> None:
+        provider  = ai_cfg.get("provider", "puter")
+        api_key   = ai_cfg.get("api_key", "")
+        base_url  = ai_cfg.get("base_url", "").rstrip("/")
+        model     = ai_cfg.get("model", "")
+
+        if provider == "puter":
+            base_url = base_url or "https://api.puter.com/drivers/call"
+        elif provider == "groq":
+            base_url = base_url or "https://api.groq.com/openai/v1"
+        elif provider == "openrouter":
+            base_url = base_url or "https://openrouter.ai/api/v1"
+
+        comment = rec.comment[:300]
+        prompt = (
+            f"Station callsign: {rec.callsign}\n"
+            f"APRS comment: {comment}\n\n"
+            "Extract the following from the APRS comment above and return ONLY valid JSON "
+            "with no prose or markdown:\n"
+            '{"org": "<organization or club name, null if not found>", '
+            '"description": "<one-sentence description of this station, null if not found>"}'
+        )
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: self._call_ai_api(provider, base_url, api_key, model, prompt)
+        )
+        rec.ai_analyzed = True
+        if result:
+            rec.ai_org = result.get("org") or ""
+            rec.ai_description = result.get("description") or ""
+            if rec.ai_org or rec.ai_description:
+                print(
+                    f"[station-ai] {rec.callsign}: org={rec.ai_org!r} desc={rec.ai_description!r}",
+                    file=sys.stderr
+                )
+
+    @staticmethod
+    def _call_ai_api(provider: str, base_url: str, api_key: str,
+                     model: str, prompt: str) -> "dict | None":
+        import urllib.request, json as _json
+
+        if provider == "puter":
+            payload = {
+                "interface": "puter-chat-completion",
+                "driver":    "claude-claude-3-5-sonnet",
+                "test_mode": False,
+                "call": {
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+            }
+            url = base_url
+        else:
+            payload = {
+                "model":    model or ("llama-3.1-8b-instant" if provider == "groq" else ""),
+                "messages": [
+                    {"role": "system",
+                     "content": "You extract structured data from APRS beacon text. "
+                                "Return ONLY valid JSON, no prose."},
+                    {"role": "user", "content": prompt},
+                ],
+                "max_tokens": 120,
+                "temperature": 0,
+            }
+            url = base_url + "/chat/completions"
+
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        req = urllib.request.Request(
+            url, data=_json.dumps(payload).encode(), headers=headers
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = _json.loads(resp.read())
+
+        # Extract content from response
+        if provider == "puter":
+            text = (data.get("result", {})
+                       .get("message", {})
+                       .get("content", [{}])[0]
+                       .get("text", ""))
+        else:
+            text = (data.get("choices", [{}])[0]
+                       .get("message", {})
+                       .get("content", ""))
+
+        text = text.strip()
+        # Strip markdown code fences if present
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        try:
+            return _json.loads(text)
+        except Exception:
+            return None
 
     @staticmethod
     async def _send_notification(msg: str, channel: str, config: dict) -> None:

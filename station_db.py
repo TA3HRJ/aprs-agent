@@ -40,6 +40,9 @@ class StationRecord:
         "packets_today",
         "last_packet",
         "prev_online",     # last known online state (for transition detection)
+        "ai_org",          # AI-extracted organization/club name
+        "ai_description",  # AI-extracted station description
+        "ai_analyzed",     # True once AI analysis has been attempted
     )
 
     def __init__(self, callsign: str) -> None:
@@ -76,6 +79,9 @@ class StationRecord:
         self.packets_today = 0
         self.last_packet: str = ""
         self.prev_online: Optional[bool] = None  # sentinel: not yet checked
+        self.ai_org: str = ""
+        self.ai_description: str = ""
+        self.ai_analyzed: bool = False
 
     def update_from_parsed(self, parsed: dict[str, Any]) -> None:
         """Merge fields extracted from a new APRS packet into this record."""
@@ -179,6 +185,9 @@ class StationRecord:
             "wx_humidity":       self.wx_humidity,
             "wx_pressure_mb":    self.wx_pressure_mb,
             "wx_wind_gust_ms":   self.wx_wind_gust_ms,
+            "ai_org":         self.ai_org,
+            "ai_description": self.ai_description,
+            "ai_analyzed":    self.ai_analyzed,
             "has_db":      self.db_record is not None,
             "online":      online,
             "first_seen":  int(self.first_seen),
@@ -291,6 +300,19 @@ class StationDB:
                 results.append((rec, event))
                 rec.prev_online = current
         return results
+
+    def get_unanalyzed(self, max_n: int = 20) -> "list[StationRecord]":
+        """
+        Return up to max_n stations that have a comment but no AI analysis yet.
+        Prioritises DB-matched stations, then others.
+        """
+        candidates = [
+            r for r in self._stations.values()
+            if not r.ai_analyzed and r.comment.strip()
+        ]
+        # DB-matched first
+        candidates.sort(key=lambda r: (not r.db_record, -r.packet_count))
+        return candidates[:max_n]
 
     def reset(self) -> None:
         self._stations.clear()
