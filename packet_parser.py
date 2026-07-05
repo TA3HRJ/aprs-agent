@@ -242,17 +242,21 @@ OFFLINE_THRESHOLD: dict[str, int] = {
 # ---------------------------------------------------------------------------
 _RE_CALLSIGN = re.compile(r'^([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)')
 
-# Object packet: ;NAME     *DDHHMMzDDMM.mmN/DDDMM.mmEsymbol...
-_RE_OBJECT = re.compile(r'^;([A-Z0-9 -]{9})\*')
+# Object packet: ;NAME     * — name is 9 chars (any printable except *)
+_RE_OBJECT = re.compile(r'^;([^\*]{9})\*')
 
-# Position: uncompressed  !DDMM.mmN/DDDMM.mmE and compressed forms
+# Uncompressed position — works for all packet types (!, =, @, /, Object, etc.)
+# The optional \d{6}[zh] handles timestamped packets (@DDHHMMz or @DDHHMMh)
 _RE_POS_UNCOMP = re.compile(
-    r'[!/@=`]'
+    r'(?:\d{6}[zh])?'             # optional timestamp (DDHHMMz / DDHHMMh)
     r'(\d{2})(\d{2}\.\d{2})([NS])'
     r'([\\/])'
     r'(\d{3})(\d{2}\.\d{2})([EW])'
-    r'(.)'   # symbol
+    r'(.)'                         # symbol
 )
+
+# Mic-E: info starts with ` or ' followed by 6 lon bytes, then symbol, then table
+_RE_MICE = re.compile(r'^[`\'](.{6})(.)(.)', re.DOTALL)
 
 # Frequency patterns (MHz)
 _RE_FREQ = re.compile(r'\b(1[2-4]\d\.\d{3,5}|4[23]\d\.\d{3,5})\b')
@@ -372,6 +376,15 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
         result["symbol_table"] = tbl
         result["symbol"] = sym
         result["station_type"] = classify_symbol(tbl, sym)
+    else:
+        # Mic-E: symbol is at info[7] (symbol code) and info[8] (table)
+        mm = _RE_MICE.match(info)
+        if mm and len(info) >= 9:
+            sym = info[7]   # symbol code
+            tbl = info[8]   # symbol table (/ or \)
+            result["station_type"] = classify_symbol(tbl, sym)
+            result["symbol_table"] = tbl
+            result["symbol"] = sym
 
     # Weather type override (_) even without uncompressed position
     if "_" in raw_line[:raw_line.find(":") + 20 if ":" in raw_line else 50]:
