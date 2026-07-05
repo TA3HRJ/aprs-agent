@@ -128,6 +128,9 @@ table.sta th{position:sticky;top:0;background:var(--sidebar);padding:6px 10px;te
 table.sta th:hover{color:var(--fg2)}
 table.sta td{padding:5px 10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
 table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
+.s-sym{display:inline-block;width:24px;height:24px;vertical-align:middle;background-repeat:no-repeat;position:relative;flex-shrink:0}
+.s-sym-ov{position:absolute;left:0;top:0;width:24px;height:24px;background-image:url(/aprs-symbols-24-2.png);background-repeat:no-repeat}
+.s-emoji{display:inline-block;width:24px;text-align:center;vertical-align:middle}
 .s-call{font-family:'Consolas',monospace;font-weight:bold;color:var(--accent2)}
 .s-loc{color:var(--fg2);max-width:120px}
 .s-org{color:var(--fg2);max-width:140px;font-size:12px}
@@ -709,6 +712,20 @@ async function fetchStations(){
 function fmtAgoLong(s){if(s===null||s===undefined)return'—';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';const h=Math.floor(s/3600);return h+'h '+String(Math.floor(s%3600/60)).padStart(2,'0')+'m'}
 function fmtFreq(f){if(!f&&f!==0)return'';return parseFloat(f).toFixed(4)}
 function dotClass(r){if(r.online===null||r.online===undefined)return'db';if(r.online)return'on';return'off'}
+// Render the real APRS symbol from the sprite sheet (aprs.fi symbol set).
+// Falls back to the emoji icon when no APRS symbol is known for the station.
+function aprsSym(r){
+  const sym=r.symbol||'';
+  const code=sym?sym.charCodeAt(0)-33:-1;
+  if(code<0||code>95)return '<span class="s-emoji">'+(r.icon||'')+'</span>';
+  const col=code%16,row=Math.floor(code/16);
+  const tbl=r.symbol_table||'/';
+  const sheet=(tbl==='/')?0:1;               // '/'=primary, else alternate/overlay
+  let h='<span class="s-sym" style="background-image:url(/aprs-symbols-24-'+sheet+'.png);background-position:'+(-col*24)+'px '+(-row*24)+'px">';
+  const ov=r.symbol_overlay||((tbl!=='/'&&tbl!=='\\')?tbl:'');
+  if(ov){const oc=ov.charCodeAt(0)-33;if(oc>=0&&oc<=95){const ocol=oc%16,orow=Math.floor(oc/16);h+='<span class="s-sym-ov" style="background-position:'+(-ocol*24)+'px '+(-orow*24)+'px"></span>';}}
+  return h+'</span>';
+}
 function renderStations(){
   const ftype=$('sta-ftype').value;
   const fonline=$('sta-fonline').value;
@@ -731,7 +748,7 @@ function renderStations(){
     const loc=cityLoc||(r.locator||'')|| (r.lat&&r.lon?(r.lat.toFixed(2)+'°/'+r.lon.toFixed(2)+'°'):'');
     const dc=dotClass(r);
     tr.innerHTML=
-      '<td class="s-call">'+r.icon+' '+r.callsign+'</td>'+
+      '<td class="s-call">'+aprsSym(r)+' '+r.callsign+'</td>'+
       '<td>'+r.type+'</td>'+
       '<td class="s-loc" title="'+loc+'">'+loc+'</td>'+
       '<td class="s-org">'+(r.ai_org||'')+'</td>'+
@@ -743,7 +760,7 @@ function renderStations(){
   }
 }
 function showDetail(r){
-  $('sd-title').innerHTML=r.icon+' '+r.callsign;
+  $('sd-title').innerHTML=aprsSym(r)+' '+r.callsign;
   const srcLabel=r.has_db&&r.packet_count>0?t('sd_both'):r.has_db?t('sd_db_only'):t('sd_aprs_live');
   let html='';
   const row=(l,v)=>v?'<div class="row"><span class="lbl">'+l+'</span><span class="val">'+v+'</span></div>':'';

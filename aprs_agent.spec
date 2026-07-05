@@ -55,6 +55,7 @@ cli_analysis = Analysis(
         ('aprs-agent.ico', '.'),                       # icon (runtime tray/window use)
         ('aprs-symbols-24-0.png', '.'),                # APRS symbol sprites - primary table
         ('aprs-symbols-24-1.png', '.'),                # APRS symbol sprites - alternate table
+        ('aprs-symbols-24-2.png', '.'),                # APRS symbol sprites - overlay chars
     ],
     hiddenimports=_hidden,
     hookspath=[],
@@ -102,6 +103,7 @@ gui_analysis = Analysis(
         ('aprs-agent.ico', '.'),                       # icon (runtime tray/window use)
         ('aprs-symbols-24-0.png', '.'),                # APRS symbol sprites - primary table
         ('aprs-symbols-24-1.png', '.'),                # APRS symbol sprites - alternate table
+        ('aprs-symbols-24-2.png', '.'),                # APRS symbol sprites - overlay chars
     ],
     hiddenimports=_hidden,
     hookspath=[],
@@ -154,6 +156,7 @@ web_analysis = Analysis(
         ('static/sw.js',         'static'),             # service worker
         ('static/icon-192.png',  'static'),             # PWA icon
         ('static/icon-512.png',  'static'),             # PWA icon
+        ('aprs-symbols-24-2.png', '.'),                 # APRS symbol sprites - overlay chars
     ],
     hiddenimports=_hidden,
     hookspath=[],

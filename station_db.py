@@ -27,6 +27,7 @@ class StationRecord:
     __slots__ = (
         "callsign", "base_call",
         "station_type", "icon",
+        "symbol", "symbol_table", "symbol_overlay",
         "city", "district", "location", "country", "ta_region",
         "lat", "lon", "locator",
         "freq_mhz", "tone_hz", "offset_mhz",
@@ -50,6 +51,9 @@ class StationRecord:
         self.base_call   = callsign.split("-")[0]
         self.station_type: str = "unknown"
         self.icon: str = STATION_ICON["unknown"]
+        self.symbol: str = ""          # APRS symbol code (e.g. '#')
+        self.symbol_table: str = ""    # '/', '\\' or overlay char (e.g. 'L')
+        self.symbol_overlay: str = ""  # overlay char to draw on top, if any
         self.city: str = ""
         self.district: str = ""
         self.location: str = ""   # site name, e.g. "Rüzgarlı Tepe"
@@ -92,6 +96,12 @@ class StationRecord:
         if "station_type" in parsed and parsed["station_type"] != "unknown":
             self.station_type = parsed["station_type"]
             self.icon = STATION_ICON.get(self.station_type, "❓")
+
+        # APRS symbol for sprite rendering (only overwrite when a packet has one)
+        if parsed.get("symbol"):
+            self.symbol = parsed["symbol"]
+            self.symbol_table = parsed.get("symbol_table", "/")
+            self.symbol_overlay = parsed.get("symbol_overlay", "")
 
         # Prefer DB coordinates; only overwrite if we don't have them yet
         for field in ("lat", "lon", "locator"):
@@ -164,6 +174,9 @@ class StationRecord:
             "base_call":   self.base_call,
             "type":        self.station_type,
             "icon":        self.icon,
+            "symbol":        self.symbol,
+            "symbol_table":  self.symbol_table,
+            "symbol_overlay": self.symbol_overlay,
             "city":        self.city,
             "district":    self.district,
             "location":    self.location,

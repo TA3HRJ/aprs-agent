@@ -176,15 +176,24 @@ _SYMBOL_TYPE: dict[tuple[str, str], str] = {
     ("\\", "z"): "shelter",
 }
 
+# Overlay character → refined type for digi (#) symbols.
+# Only the widely-recognised LoRa overlay is remapped; other overlays are
+# kept as-is (base symbol type) and just stored/displayed as an overlay char,
+# because an overlay letter's meaning is not otherwise standardised.
+_OVERLAY_TYPE: dict[str, str] = {
+    "L": "lora",       # LoRa igate/digi
+}
+
 # Icons shown in UI for each station type
 STATION_ICON: dict[str, str] = {
+    "lora":          "📶",
     # Infrastructure
     "repeater":      "🔁",
-    "digi":          "📡",
-    "igate":         "🛰",
-    "gateway":       "🛰",
+    "digi":          "🗼",
+    "igate":         "🌐",
+    "gateway":       "🌐",
     "echolink":      "🔗",
-    "reverse-digi":  "📡",
+    "reverse-digi":  "🗼",
     "server":        "🖥",
     "bbs":           "🖥",
     "dx-cluster":    "🖥",
@@ -328,7 +337,7 @@ _RE_OBJECT = re.compile(r'^;([^\*]{9})\*')
 _RE_POS_UNCOMP = re.compile(
     r'(?:\d{6}[zh])?'             # optional timestamp (DDHHMMz / DDHHMMh)
     r'(\d{2})(\d{2}\.\d{2})([NS])'
-    r'([\\/])'
+    r'([\\/A-Z0-9])'             # symbol table: / \ or an overlay char (A-Z 0-9)
     r'(\d{3})(\d{2}\.\d{2})([EW])'
     r'(.)'                         # symbol
 )
@@ -394,7 +403,14 @@ def _ddmm_to_decimal(deg_str: str, mm_str: str, hemisphere: str) -> float:
 
 
 def classify_symbol(table: str, symbol: str) -> str:
-    """Return station type string for an APRS symbol table+code pair."""
+    """Return station type string for an APRS symbol table+code pair.
+
+    An overlay character (any table char other than '/' or '\\', e.g. a letter
+    or digit like 'L') means the symbol lives on the alternate ('\\') table with
+    the overlay drawn on top. Classify it as alternate-table.
+    """
+    if table not in ("/", "\\"):
+        table = "\\"
     return _SYMBOL_TYPE.get((table, symbol), "unknown")
 
 
@@ -454,6 +470,14 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
         result["symbol_table"] = tbl
         result["symbol"] = sym
         result["station_type"] = classify_symbol(tbl, sym)
+        # Overlay char (a letter/digit table) refines digi/gateway symbols.
+        # e.g. L#=LoRa igate, I#=igate, R#=rx-only digi (aprs.fi convention).
+        if tbl not in ("/", "\\"):
+            result["symbol_overlay"] = tbl
+            if sym == "#":
+                result["station_type"] = _OVERLAY_TYPE.get(
+                    tbl, result["station_type"]
+                )
     else:
         # Mic-E: symbol is at info[7] (symbol code) and info[8] (table)
         mm = _RE_MICE.match(info)

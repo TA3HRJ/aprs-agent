@@ -739,7 +739,7 @@ async def favicon(request: web.Request) -> web.Response:
 @routes.get("/aprs-symbols-24-{table}.png")
 async def symbols(request: web.Request) -> web.Response:
     table = request.match_info["table"]
-    if table not in ("0", "1"):
+    if table not in ("0", "1", "2"):
         raise web.HTTPNotFound()
     img = _resolve_path(f"aprs-symbols-24-{table}.png")
     if img.exists():
