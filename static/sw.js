@@ -6,7 +6,7 @@
  *
  * Developed by TA3HRJ & TA3PKS
  */
-const CACHE = "aprs-agent-v1";
+const CACHE = "aprs-agent-v2";
 const ICONS = ["/icon-192.png", "/icon-512.png", "/manifest.json", "/favicon.ico"];
 
 self.addEventListener("install", (e) => {
