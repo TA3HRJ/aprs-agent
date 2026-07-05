@@ -556,9 +556,12 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
                 result["symbol_table"] = tbl
                 result["symbol"] = sym
 
-    # Weather type override (_) even without uncompressed position
-    if "_" in raw_line[:raw_line.find(":") + 20 if ":" in raw_line else 50]:
-        result.setdefault("station_type", "weather")
+    # Weather: only when the symbol is genuinely the weather symbol ('_', already
+    # classified above) or this is a positionless weather report (info starts with
+    # '_').  Do NOT scan the whole line for '_': it is a valid Base91 byte and
+    # would misclassify compressed-position stations (e.g. LoRa igates).
+    if result.get("station_type") == "weather" or info.startswith("_"):
+        result["station_type"] = "weather"
         # Parse wx fields from info
         twx = _RE_WX_T.search(info)
         hwx = _RE_WX_H.search(info)
