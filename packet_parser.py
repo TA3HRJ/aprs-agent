@@ -393,6 +393,58 @@ def _latlon_to_locator(lat: float, lon: float) -> str:
     )
 
 
+def _b91_decode(chars: str) -> int:
+    """Decode a Base91 string (APRS compressed format) to an integer."""
+    value = 0
+    for c in chars:
+        value = value * 91 + (ord(c) - 33)
+    return value
+
+
+def _decode_compressed(info: str) -> Optional[tuple[str, str, float, float]]:
+    """Decode an APRS compressed position from the info field.
+
+    Compressed layout (13 bytes): <table><YYYY><XXXX><sym><cs><t>
+      table  : '/', '\\' or an overlay char
+      YYYY   : 4-byte Base91 latitude
+      XXXX   : 4-byte Base91 longitude
+      sym    : symbol code
+
+    Returns (symbol_table, symbol, lat, lon) or None if not a compressed packet.
+    Modern LoRa/ESP32 trackers use this format heavily.
+    """
+    if not info:
+        return None
+    t = info[0]
+    if t in ("!", "="):
+        p = 1                     # no timestamp
+    elif t in ("@", "/"):
+        p = 8                     # skip 7-char timestamp
+    else:
+        return None
+    if len(info) < p + 10:
+        return None
+    tbl = info[p]
+    # A compressed packet's first byte is the symbol table ('/', '\\' or an
+    # overlay letter/digit). If it's a digit it's an uncompressed latitude.
+    if tbl.isdigit():
+        return None
+    if tbl not in ("/", "\\") and not tbl.isalpha():
+        return None
+    lat_raw = info[p + 1:p + 5]
+    lon_raw = info[p + 5:p + 9]
+    sym = info[p + 9]
+    # All 8 lat/lon bytes must be printable Base91 (0x21..0x7b)
+    for c in lat_raw + lon_raw:
+        if not (0x21 <= ord(c) <= 0x7b):
+            return None
+    lat = 90.0 - _b91_decode(lat_raw) / 380926.0
+    lon = -180.0 + _b91_decode(lon_raw) / 190463.0
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None
+    return tbl, sym, round(lat, 5), round(lon, 5)
+
+
 def _ddmm_to_decimal(deg_str: str, mm_str: str, hemisphere: str) -> float:
     deg = int(deg_str)
     minutes = float(mm_str)
@@ -479,14 +531,30 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
                     tbl, result["station_type"]
                 )
     else:
-        # Mic-E: symbol is at info[7] (symbol code) and info[8] (table)
-        mm = _RE_MICE.match(info)
-        if mm and len(info) >= 9:
-            sym = info[7]   # symbol code
-            tbl = info[8]   # symbol table (/ or \)
-            result["station_type"] = classify_symbol(tbl, sym)
+        comp = _decode_compressed(info)
+        if comp:
+            tbl, sym, lat, lon = comp
+            result["lat"] = lat
+            result["lon"] = lon
+            result["locator"] = _latlon_to_locator(lat, lon)
             result["symbol_table"] = tbl
             result["symbol"] = sym
+            result["station_type"] = classify_symbol(tbl, sym)
+            if tbl not in ("/", "\\"):
+                result["symbol_overlay"] = tbl
+                if sym == "#":
+                    result["station_type"] = _OVERLAY_TYPE.get(
+                        tbl, result["station_type"]
+                    )
+        else:
+            # Mic-E: symbol is at info[7] (symbol code) and info[8] (table)
+            mm = _RE_MICE.match(info)
+            if mm and len(info) >= 9:
+                sym = info[7]   # symbol code
+                tbl = info[8]   # symbol table (/ or \)
+                result["station_type"] = classify_symbol(tbl, sym)
+                result["symbol_table"] = tbl
+                result["symbol"] = sym
 
     # Weather type override (_) even without uncompressed position
     if "_" in raw_line[:raw_line.find(":") + 20 if ":" in raw_line else 50]:
