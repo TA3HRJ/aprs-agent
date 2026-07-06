@@ -345,12 +345,13 @@ _RE_POS_UNCOMP = re.compile(
 # Mic-E: info starts with ` or ' followed by 6 lon bytes, then symbol, then table
 _RE_MICE = re.compile(r'^[`\'](.{6})(.)(.)', re.DOTALL)
 
-# Frequency patterns (MHz)
-_RE_FREQ = re.compile(r'\b(1[2-4]\d\.\d{3,5}|4[23]\d\.\d{3,5})\b')
+# Frequency patterns (MHz).  No trailing \b: "433.775MHz" has no word
+# boundary between the digit and the 'M', so \b would reject it.
+_RE_FREQ = re.compile(r'(?<![\d.])(1[2-4]\d\.\d{3,5}|4[23]\d\.\d{3,5})(?![\d.])')
 
 # CTCSS / DCS tone patterns
 _RE_TONE = re.compile(
-    r'(?i)(?:T(?:one)?|CTCSS)[:\s=]?\s*(\d+\.?\d*)\s*(?:Hz)?'
+    r'(?i)(?:\bT(?:one)?|\bCTCSS)[:\s=]?\s*(\d+\.?\d*)\s*(?:Hz)?'
     r'|(?<!\d)(\d+\.?\d*)\s*Hz(?!\w)'
     r'|\bT(\d{3})\b'          # APRSdos Tnnn format
     r'|\bt(\d{3})\b'          # lowercase
@@ -431,6 +432,11 @@ def _decode_compressed(info: str) -> Optional[tuple[str, str, float, float]]:
         return None
     if tbl not in ("/", "\\") and not tbl.isalpha():
         return None
+    # Compressed format encodes digit overlays 0-9 as 'a'-'j' (APRS 1.01).
+    if "a" <= tbl <= "j":
+        tbl = chr(ord(tbl) - ord("a") + ord("0"))
+    elif tbl.islower():
+        return None
     lat_raw = info[p + 1:p + 5]
     lon_raw = info[p + 5:p + 9]
     sym = info[p + 9]
@@ -495,8 +501,11 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
     result["callsign"] = callsign
     result["base_call"] = callsign.split("-")[0]
 
-    # Everything after the last ':' is the information field
-    colon_idx = raw_line.rfind(":")
+    # The information field starts after the FIRST ':' (header is
+    # FROM>TO,PATH:info and callsigns/path never contain ':').  The info field
+    # itself may contain ':' (Base91 compressed bytes, URLs, message packets),
+    # so rfind would cut the info field at the wrong place.
+    colon_idx = raw_line.find(":")
     info = raw_line[colon_idx + 1:] if colon_idx != -1 else ""
 
     # Object packet: sender is the framing station; the named object is the
@@ -584,14 +593,17 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
         result["freq_mhz"] = float(fm.group(1))
 
     # --- Tone ---
-    for tm in _RE_TONE.finditer(info):
-        for g in tm.groups():
-            if g:
-                try:
-                    result["tone_hz"] = float(g)
-                except ValueError:
-                    pass
-                break
+    # Skip on weather packets: the wx data contains tXXX (temperature in F),
+    # which the Tnnn tone pattern would misread as a CTCSS tone.
+    if "wx_temp_c" not in result:
+        for tm in _RE_TONE.finditer(info):
+            for g in tm.groups():
+                if g:
+                    try:
+                        result["tone_hz"] = float(g)
+                    except ValueError:
+                        pass
+                    break
 
     # --- Offset ---
     if "freq_mhz" in result:
