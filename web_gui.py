@@ -105,6 +105,14 @@ _SRC_CALL_RE = re.compile(r"^\[logger\] ([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)>", re
 # Full raw APRS line extracted from logger output
 _SRC_LINE_RE = re.compile(r"^\[logger\] (.+)$", re.M)
 
+# Log-line classification for the RX/TX/error stat counters. These mirror the
+# browser's cls() classifier so the server-authoritative counts match what the
+# live log colouring shows — but, unlike the old client-side tally, they survive
+# a page refresh because they live on the server alongside the packet counter.
+_AIRESP_MARK = "[ai-gateway] AI response"
+_AIERR_RE = re.compile(r"\[ai-gateway\].*error|failed", re.I)
+_ERR_RE = re.compile(r"error|fail|fatal", re.I)
+
 _MAX_STATIONS = 200     # last-heard chip table (most recent N callsigns)
 _STATS_INTERVAL = 2.0   # seconds between stats pushes to browsers
 
@@ -125,6 +133,9 @@ class AgentManager:
         self._pkt_count = 0
         self._unique_count = 0          # distinct call+SSID pairs ever heard
         self._unique_calls = 0          # distinct base callsigns (SSID stripped)
+        self._ai_rx = 0                 # AI-gateway messages received (RX)
+        self._ai_tx = 0                 # AI-gateway messages sent (TX)
+        self._err_count = 0             # error/failure log lines
         self._stations: "OrderedDict[str, list]" = OrderedDict()  # call -> [last_ts, count]
         self._seen_calls: "set[str]" = set()       # full call+SSID
         self._seen_base_calls: "set[str]" = set()  # base callsign only
@@ -160,6 +171,9 @@ class AgentManager:
         self._pkt_count = 0
         self._unique_count = 0
         self._unique_calls = 0
+        self._ai_rx = 0
+        self._ai_tx = 0
+        self._err_count = 0
         self._stations.clear()
         self._seen_calls.clear()
         self._seen_base_calls.clear()
@@ -492,6 +506,20 @@ class AgentManager:
                     self._stations.popitem(last=False)  # drop least recently heard chip
                 self._stations[call] = [now, 1]
 
+    def _count_log_lines(self, text: str) -> None:
+        """Tally AI RX/TX and error log lines for the persistent stat counters."""
+        for line in text.split("\n"):
+            if not line:
+                continue
+            if "[ai-gateway] RX" in line:
+                self._ai_rx += 1
+            elif "[ai-gateway] TX" in line:
+                self._ai_tx += 1
+            elif _AIRESP_MARK in line:
+                continue
+            elif _AIERR_RE.search(line) or _ERR_RE.search(line):
+                self._err_count += 1
+
     def _stats_payload(self) -> dict:
         now = time.time()
         recent = list(self._stations.items())[-12:]  # 12 most recently heard
@@ -503,6 +531,9 @@ class AgentManager:
             "packets": self._pkt_count,
             "unique": self._unique_count,
             "unique_calls": self._unique_calls,
+            "received": self._ai_rx,
+            "sent": self._ai_tx,
+            "errors": self._err_count,
             "stations": [
                 {"c": call, "t": int(now - ts), "n": count}
                 for call, (ts, count) in recent
@@ -523,6 +554,7 @@ class AgentManager:
                 text = "".join(messages)
                 text = re.sub(r"\x1b\[[0-9;]*m", "", text)
                 self._track_stations(text)
+                self._count_log_lines(text)
                 payloads.append({"type": "log", "text": text})
 
             now = time.time()

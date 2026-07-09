@@ -479,7 +479,7 @@ const $=id=>document.getElementById(id);
 const csv=a=>(a||[]).join(', ');
 const lst=s=>s.split(',').map(x=>x.trim()).filter(Boolean);
 const chars=s=>s.split(',').map(x=>x.trim()).filter(x=>x.length===1||x==='\\');
-let lang='en',autoScroll=true,logCount=0,cRX=0,cTX=0,cER=0,heardFilter=null,lastStations=[];
+let lang='en',autoScroll=true,logCount=0,heardFilter=null,lastStations=[];
 
 // ── i18n ──
 const S={en:{
@@ -663,8 +663,10 @@ function setStatus(r){const el=$('status');if(r){el.textContent=t('status_runnin
 
 // ── Log ──
 function cls(l){if(!l)return'raw';if(l.includes('[ai-gateway] RX'))return'ai-rx';if(l.includes('[ai-gateway] TX'))return'ai-tx';if(l.includes('[ai-gateway] AI response'))return'ai-resp';if(/\[ai-gateway\].*error|failed/i.test(l))return'ai-err';if(/error|fail|fatal/i.test(l))return'err';if(/::/i.test(l))return'msg';if(/:([!\/=@])/i.test(l))return'pos';return'raw'}
-const MAX_LOG=500;function addLog(text){const log=$('log');const lines=text.split('\n');for(const line of lines){if(!line)continue;const el=document.createElement('div');el.className='ll '+cls(line);el.textContent=line;if(heardFilter&&!line.includes(heardFilter))el.style.display='none';log.appendChild(el);if(log.children.length>MAX_LOG)log.removeChild(log.firstChild);const c=cls(line);if(c==='ai-rx')cRX++;if(c==='ai-tx')cTX++;if(c.includes('err'))cER++}logCount=log.children.length;$('lc').textContent=logCount;$('xRX').textContent=cRX;$('xTX').textContent=cTX;$('xER').textContent=cER;if(autoScroll)log.scrollTop=log.scrollHeight}
-function clrLog(){$('log').innerHTML='';logCount=0;cRX=cTX=cER=0;$('lc').textContent='0';$('xRX').textContent='0';$('xTX').textContent='0';$('xER').textContent='0'}
+const MAX_LOG=500;function addLog(text){const log=$('log');const lines=text.split('\n');for(const line of lines){if(!line)continue;const el=document.createElement('div');el.className='ll '+cls(line);el.textContent=line;if(heardFilter&&!line.includes(heardFilter))el.style.display='none';log.appendChild(el);if(log.children.length>MAX_LOG)log.removeChild(log.firstChild)}logCount=log.children.length;$('lc').textContent=logCount;if(autoScroll)log.scrollTop=log.scrollHeight}
+// RX/TX/error counters are server-authoritative (delivered via onStats), so they
+// survive a page refresh. Clearing the log only empties the on-screen buffer.
+function clrLog(){$('log').innerHTML='';logCount=0;$('lc').textContent='0'}
 function toggleFullFeedWarn(){$('full-feed-warn').style.display=$('f-full-feed').checked?'block':'none'}
 $('f-full-feed').addEventListener('change',toggleFullFeedWarn);
 function togAs(){autoScroll=!autoScroll;$('asB').className=autoScroll?'log-btn active':'log-btn';if(autoScroll)$('log').scrollTop=1e9}
@@ -672,7 +674,7 @@ function togAs(){autoScroll=!autoScroll;$('asB').className=autoScroll?'log-btn a
 // ── Live stats / Last Heard ──
 function fmtUp(s){if(!s||s<=0)return'—';const h=Math.floor(s/3600),m=Math.floor(s%3600/60);if(h)return h+'h '+String(m).padStart(2,'0')+'m';return m+'m '+String(s%60).padStart(2,'0')+'s'}
 function fmtAgo(t){if(t<60)return t+'s';if(t<3600)return Math.floor(t/60)+'m';return Math.floor(t/3600)+'h'}
-function onStats(d){setStatus(d.running);$('xPK').textContent=d.packets;$('xST').textContent=d.unique;$('xCS').textContent=d.unique_calls||0;$('xUP').textContent=d.running?fmtUp(d.uptime):'—';lastStations=d.stations||[];renderHeard()}
+function onStats(d){setStatus(d.running);$('xPK').textContent=d.packets;$('xST').textContent=d.unique;$('xCS').textContent=d.unique_calls||0;$('xRX').textContent=d.received||0;$('xTX').textContent=d.sent||0;$('xER').textContent=d.errors||0;$('xUP').textContent=d.running?fmtUp(d.uptime):'—';lastStations=d.stations||[];renderHeard()}
 function renderHeard(){
   const bar=$('heard');bar.querySelectorAll('.hc').forEach(el=>el.remove());
   const chips=lastStations.slice();
