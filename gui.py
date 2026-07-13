@@ -41,6 +41,7 @@ import config as cfg_module
 import aprs_connection
 import extension_server as ext_server_module
 from extensions import ExtensionRegistry
+from station_db import StationDB
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -161,6 +162,12 @@ def _load_sprites() -> "tuple[Optional[Any], Optional[Any]]":
 
 
 _SPRITE_PRIMARY, _SPRITE_ALTERNATE = _load_sprites()
+
+# Log-line classification for the RX/TX/error stat counters.
+# Mirrors web_gui.py exactly so both GUIs report identical numbers.
+_AIRESP_MARK = "[ai-gateway] AI response"
+_AIERR_RE = re.compile(r"\[ai-gateway\].*error|failed", re.I)
+_ERR_RE = re.compile(r"error|fail|fatal", re.I)
 
 
 # ─── APRS Symbol tables ───────────────────────────────────────────────────────
@@ -427,6 +434,28 @@ _S = {
         "tab_station_ai":     "Station AI",
         "tab_monitor":        "Monitor",
         "tab_ext":            "Ext. Server",
+        # bottom panel (Live Log / Stations)
+        "bottom_log":         "Live Log",
+        "bottom_sta":         "Stations",
+        "sta_col_call":       "Callsign",
+        "sta_col_type":       "Type",
+        "sta_col_loc":        "Location",
+        "sta_col_org":        "Organization",
+        "sta_col_freq":       "Freq (MHz)",
+        "sta_col_status":     "Status",
+        "sta_col_ago":        "Last Heard",
+        "sta_all_types":      "All Types",
+        "sta_all_status":     "All Status",
+        "sta_f_on":           "Online",
+        "sta_f_off":          "Offline",
+        "sta_f_db":           "DB Only",
+        "sta_search":         "Search:",
+        "sta_on":             "Online",
+        "sta_off":            "Offline",
+        "sta_db":             "DB",
+        "st_rx":              "Received",
+        "st_tx":              "Sent",
+        "st_err":             "Errors",
         "sai_enabled":        "AI Station Analysis",
         "sai_sub":            "Send station comments to AI — extracts org name and description. Uses AI Gateway settings.",
         "sai_interval":       "Run every (hours):",
@@ -636,6 +665,28 @@ _S = {
         "tab_station_ai":     "İstasyon AI",
         "tab_monitor":        "İzleyici",
         "tab_ext":            "Ext. Sunucu",
+        # bottom panel (Live Log / Stations)
+        "bottom_log":         "Canlı Log",
+        "bottom_sta":         "İstasyonlar",
+        "sta_col_call":       "Çağrı İşareti",
+        "sta_col_type":       "Tür",
+        "sta_col_loc":        "Konum",
+        "sta_col_org":        "Kuruluş",
+        "sta_col_freq":       "Frekans (MHz)",
+        "sta_col_status":     "Durum",
+        "sta_col_ago":        "Son Duyulma",
+        "sta_all_types":      "Tüm Türler",
+        "sta_all_status":     "Tüm Durumlar",
+        "sta_f_on":           "Çevrimiçi",
+        "sta_f_off":          "Çevrimdışı",
+        "sta_f_db":           "Yalnız DB",
+        "sta_search":         "Ara:",
+        "sta_on":             "Çevrimiçi",
+        "sta_off":            "Çevrimdışı",
+        "sta_db":             "DB",
+        "st_rx":              "Alınan",
+        "st_tx":              "Gönderilen",
+        "st_err":             "Hata",
         "sai_enabled":        "AI İstasyon Analizi",
         "sai_sub":            "İstasyon yorumlarını AI'a gönder — dernek adı ve açıklama çıkarır. AI Gateway ayarlarını kullanır.",
         "sai_interval":       "Her (saat) çalış:",
@@ -1359,6 +1410,9 @@ class APRSAgentGUI:
         # Live stats
         self._stat_pkt_count = 0
         self._stat_unique_count = 0
+        self._stat_ai_rx = 0
+        self._stat_ai_tx = 0
+        self._stat_err = 0
         self._stat_calls_count = 0
         self._stat_seen_calls: set = set()
         self._stat_seen_base: set = set()
@@ -1366,6 +1420,10 @@ class APRSAgentGUI:
         self._stat_src_re = re.compile(
             r'\[logger\] ([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)>'
         )
+        # Stations panel: fed from the same logger lines as the Web GUI
+        self._logger_line_re = re.compile(r'^\[logger\] (.+)$', re.M)
+        self._station_db = StationDB()
+        self._sym_photos: dict = {}   # (table, symbol) → PhotoImage cache
 
         self.root = tk.Tk()
         self.root.title(self._t("title"))
@@ -1396,6 +1454,7 @@ class APRSAgentGUI:
         self._build_ui()
         self._load_config_to_form()
         self._poll_log_queue()
+        self._refresh_stations()
 
     # ── Translation helper ────────────────────────────────────────────────────
 
@@ -1531,6 +1590,13 @@ class APRSAgentGUI:
         active tab's canvas.  Called once after all tabs are built."""
         def _on_wheel(event: tk.Event) -> None:
             try:
+                # Widgets with native wheel scrolling (station list, log text)
+                # handle the event themselves — don't also scroll the config tab.
+                w = event.widget
+                while w is not None:
+                    if isinstance(w, (ttk.Treeview, tk.Text)):
+                        return
+                    w = w.master
                 idx = self._nb.index(self._nb.select())
                 self._scroll_canvases[idx].yview_scroll(
                     int(-1 * (event.delta / 120)), "units"
@@ -2015,8 +2081,12 @@ class APRSAgentGUI:
     # ── Log area ──────────────────────────────────────────────────────────────
 
     def _build_log_area(self) -> None:
-        frame = ttk.LabelFrame(self.root, text=" Log ", padding=4)
-        frame.pack(fill="both", padx=8, pady=(4, 0))
+        # Bottom panel: two tabs mirroring the Web GUI (Live Log / Stations)
+        self._bottom_nb = ttk.Notebook(self.root)
+        self._bottom_nb.pack(fill="both", padx=8, pady=(4, 0))
+
+        frame = ttk.Frame(self._bottom_nb, padding=4)
+        self._bottom_nb.add(frame, text=self._t("bottom_log"))
 
         self._log_text = scrolledtext.ScrolledText(
             frame, height=8, state="disabled",
@@ -2031,18 +2101,232 @@ class APRSAgentGUI:
         self._log_text.tag_config("yellow", foreground="#dcdcaa")
         self._log_text.tag_config("normal", foreground="#d4d4d4")
 
+        self._build_stations_tab()
+
+        # Refresh the station list as soon as its tab is opened
+        self._bottom_nb.bind(
+            "<<NotebookTabChanged>>",
+            lambda e: self._populate_stations(),
+        )
+
         # Stats bar below log text
         stats = ttk.Frame(frame)
         stats.pack(fill="x", pady=(4, 0))
         dim = {"foreground": "#888888", "font": ("TkDefaultFont", 8)}
+        self._lbl_rx       = ttk.Label(stats, text=f"{self._t('st_rx')}: 0",       **dim)
+        self._lbl_tx       = ttk.Label(stats, text=f"{self._t('st_tx')}: 0",       **dim)
+        self._lbl_err      = ttk.Label(stats, text=f"{self._t('st_err')}: 0",      **dim)
         self._lbl_packets  = ttk.Label(stats, text=f"{self._t('st_packets')}: 0",   **dim)
         self._lbl_stations = ttk.Label(stats, text=f"{self._t('st_stations')}: 0",  **dim)
         self._lbl_calls    = ttk.Label(stats, text=f"{self._t('st_calls')}: 0",     **dim)
         self._lbl_uptime   = ttk.Label(stats, text=f"{self._t('st_uptime')}: —",    **dim)
+        self._lbl_rx.pack(side="left", padx=(0, 16))
+        self._lbl_tx.pack(side="left", padx=(0, 16))
+        self._lbl_err.pack(side="left", padx=(0, 16))
         self._lbl_packets.pack(side="left", padx=(0, 16))
         self._lbl_stations.pack(side="left", padx=(0, 16))
         self._lbl_calls.pack(side="left", padx=(0, 16))
         self._lbl_uptime.pack(side="left")
+
+    # ── Stations tab (bottom panel) ───────────────────────────────────────────
+
+    def _build_stations_tab(self) -> None:
+        tab = ttk.Frame(self._bottom_nb, padding=4)
+        self._bottom_nb.add(tab, text=self._t("bottom_sta"))
+
+        # ── Filter bar (mirrors the Web GUI: type / status / search / count) ──
+        fbar = ttk.Frame(tab)
+        fbar.pack(fill="x", pady=(0, 4))
+
+        self._sta_ftype = ttk.Combobox(fbar, state="readonly", width=16,
+                                       values=[self._t("sta_all_types")])
+        self._sta_ftype.current(0)
+        self._sta_ftype.pack(side="left")
+        self._sta_ftype.bind("<<ComboboxSelected>>",
+                             lambda e: self._populate_stations())
+
+        self._sta_fstatus = ttk.Combobox(fbar, state="readonly", width=14)
+        self._retranslate_sta_status()
+        self._sta_fstatus.pack(side="left", padx=(6, 0))
+        self._sta_fstatus.bind("<<ComboboxSelected>>",
+                               lambda e: self._populate_stations())
+
+        self._sta_search_lbl = ttk.Label(fbar, text=self._t("sta_search"))
+        self._sta_search_lbl.pack(side="left", padx=(12, 4))
+        self._sta_fsearch = ttk.Entry(fbar, width=18)
+        self._sta_fsearch.pack(side="left")
+        self._sta_fsearch.bind("<KeyRelease>",
+                               lambda e: self._populate_stations())
+
+        self._sta_cnt = ttk.Label(fbar, text="0 / 0", foreground="#888888")
+        self._sta_cnt.pack(side="right")
+
+        style = ttk.Style(self.root)
+        style.configure("Sta.Treeview", rowheight=26)
+
+        self._sta_col_keys = [
+            ("#0",     "sta_col_call"),
+            ("type",   "sta_col_type"),
+            ("loc",    "sta_col_loc"),
+            ("org",    "sta_col_org"),
+            ("freq",   "sta_col_freq"),
+            ("status", "sta_col_status"),
+            ("ago",    "sta_col_ago"),
+        ]
+        tree = ttk.Treeview(
+            tab, columns=("type", "loc", "org", "freq", "status", "ago"),
+            style="Sta.Treeview", selectmode="browse", height=7,
+        )
+        for cid, key in self._sta_col_keys:
+            tree.heading(cid, text=self._t(key))
+        tree.column("#0",     width=180, stretch=False)
+        tree.column("type",   width=100, stretch=False)
+        tree.column("loc",    width=180, stretch=True)
+        tree.column("org",    width=140, stretch=True)
+        tree.column("freq",   width=90,  anchor="e", stretch=False)
+        tree.column("status", width=80,  anchor="center", stretch=False)
+        tree.column("ago",    width=90,  anchor="e", stretch=False)
+
+        vsb = ttk.Scrollbar(tab, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        tree.pack(fill="both", expand=True)
+        self._sta_tree = tree
+
+    def _retranslate_sta_status(self) -> None:
+        """(Re)build the status filter values, keeping the selection index."""
+        idx = self._sta_fstatus.current()
+        self._sta_fstatus["values"] = [
+            self._t("sta_all_status"), self._t("sta_f_on"),
+            self._t("sta_f_off"), self._t("sta_f_db"),
+        ]
+        self._sta_fstatus.current(max(idx, 0))
+
+    def _retranslate_sta_filters(self) -> None:
+        """Update filter-bar texts after a language toggle."""
+        was_all = self._sta_ftype.current() == 0
+        values = list(self._sta_ftype["values"])
+        all_label = self._t("sta_all_types")
+        self._sta_ftype["values"] = [all_label] + values[1:]
+        if was_all or self._sta_ftype.get() not in self._sta_ftype["values"]:
+            self._sta_ftype.set(all_label)
+        self._retranslate_sta_status()
+        self._sta_search_lbl.configure(text=self._t("sta_search"))
+
+    def _sym_photo(self, table: str, symbol: str):
+        """Return a cached 24×24 PhotoImage for an APRS symbol, or None.
+
+        Overlay table chars (letters/digits) use the alternate sheet, matching
+        the Web GUI's rendering.
+        """
+        if not symbol:
+            return None
+        key = ("/" if table == "/" else "\\", symbol)
+        if key in self._sym_photos:
+            return self._sym_photos[key]
+        sheet = _SPRITE_PRIMARY if key[0] == "/" else _SPRITE_ALTERNATE
+        photo = None
+        if sheet is not None:
+            code = ord(symbol) - 33
+            if 0 <= code <= 95:
+                try:
+                    from PIL import ImageTk
+                    sx, sy = (code % 16) * 24, (code // 16) * 24
+                    photo = ImageTk.PhotoImage(
+                        sheet.crop((sx, sy, sx + 24, sy + 24)))
+                except Exception:
+                    photo = None
+        self._sym_photos[key] = photo
+        return photo
+
+    @staticmethod
+    def _sta_loc(r: dict) -> str:
+        city = ", ".join(x for x in (r.get("city"), r.get("district")) if x)
+        if city:
+            return city
+        if r.get("locator"):
+            return r["locator"]
+        if r.get("lat") is not None and r.get("lon") is not None:
+            return f"{r['lat']:.2f}° / {r['lon']:.2f}°"
+        return ""
+
+    @staticmethod
+    def _sta_ago(s) -> str:
+        if s is None:
+            return "—"
+        if s < 60:
+            return f"{s}s"
+        if s < 3600:
+            return f"{s // 60}m {s % 60:02d}s"
+        return f"{s // 3600}h {s % 3600 // 60:02d}m"
+
+    def _populate_stations(self) -> None:
+        """Rebuild the station list when the Stations tab is visible."""
+        try:
+            if self._bottom_nb.index(self._bottom_nb.select()) != 1:
+                return
+        except Exception:
+            return
+        rows = self._station_db.get_all()
+
+        # The type filter follows the types actually present in the data
+        all_label = self._t("sta_all_types")
+        types = sorted({r.get("type", "") for r in rows if r.get("type")})
+        values = [all_label] + types
+        if list(self._sta_ftype["values"]) != values:
+            sel = self._sta_ftype.get()
+            self._sta_ftype["values"] = values
+            self._sta_ftype.set(sel if sel in values else all_label)
+
+        ftype = self._sta_ftype.get()
+        if ftype == all_label:
+            ftype = ""
+        fstatus = self._sta_fstatus.current()   # 0=all 1=online 2=offline 3=db
+        fsearch = self._sta_fsearch.get().strip().upper()
+
+        tree = self._sta_tree
+        tree.delete(*tree.get_children())
+        shown = 0
+        for r in rows:
+            if ftype and r.get("type") != ftype:
+                continue
+            online = r.get("online")
+            if fstatus == 1 and not online:
+                continue
+            if fstatus == 2 and (online or online is None):
+                continue
+            if fstatus == 3 and online is not None:
+                continue
+            if fsearch and fsearch not in r["callsign"] \
+                    and fsearch not in (r.get("city") or "").upper():
+                continue
+            shown += 1
+            if shown > 300:
+                continue        # count matches, but cap the rendered rows
+            photo = self._sym_photo(r.get("symbol_table", ""),
+                                    r.get("symbol", ""))
+            text = (r["callsign"] if photo
+                    else f"{r.get('icon', '')} {r['callsign']}")
+            freq = f"{r['freq_mhz']:.4f}" if r.get("freq_mhz") else ""
+            if online is None:
+                status = self._t("sta_db")
+            elif online:
+                status = self._t("sta_on")
+            else:
+                status = self._t("sta_off")
+            kwargs = {"image": photo} if photo else {}
+            tree.insert(
+                "", "end", text=text,
+                values=(r.get("type", ""), self._sta_loc(r),
+                        r.get("ai_org", ""), freq, status,
+                        self._sta_ago(r.get("last_seen_ago_s"))),
+                **kwargs,
+            )
+        self._sta_cnt.configure(text=f"{shown} / {len(rows)}")
+
+    def _refresh_stations(self) -> None:
+        self._populate_stations()
+        self.root.after(5000, self._refresh_stations)
 
     # ── Bottom bar ────────────────────────────────────────────────────────────
 
@@ -2421,12 +2705,26 @@ class APRSAgentGUI:
             return
         self._save_config()
         cfg = self._form_to_config()
+        self._station_db.reset()
+        self._sta_tree.delete(*self._sta_tree.get_children())
+        db_path = self._v_repeater_db.get().strip()
+        if db_path:
+            n = self._station_db.load_repeater_db(db_path)
+            if n:
+                self._log(f"[stations] Repeater DB loaded: {n} records",
+                          "green")
         self._stat_pkt_count = 0
         self._stat_unique_count = 0
         self._stat_calls_count = 0
+        self._stat_ai_rx = 0
+        self._stat_ai_tx = 0
+        self._stat_err = 0
         self._stat_seen_calls.clear()
         self._stat_seen_base.clear()
         self._stat_started_at = None
+        self._lbl_rx.configure(text=f"{self._t('st_rx')}: 0")
+        self._lbl_tx.configure(text=f"{self._t('st_tx')}: 0")
+        self._lbl_err.configure(text=f"{self._t('st_err')}: 0")
         self._lbl_packets.configure(text=f"{self._t('st_packets')}: 0")
         self._lbl_stations.configure(text=f"{self._t('st_stations')}: 0")
         self._lbl_uptime.configure(text=f"{self._t('st_uptime')}: 0s")
@@ -2539,6 +2837,14 @@ class APRSAgentGUI:
         for i, key in enumerate(self._tab_keys):
             self._nb.tab(i, text=self._t(key))
 
+        # Bottom panel tabs + station column headers + filter bar
+        for i, key in enumerate(("bottom_log", "bottom_sta")):
+            self._bottom_nb.tab(i, text=self._t(key))
+        for cid, key in self._sta_col_keys:
+            self._sta_tree.heading(cid, text=self._t(key))
+        self._retranslate_sta_filters()
+        self._populate_stations()
+
         # Update status label
         is_running = self._runner.running
         self._status_lbl.configure(
@@ -2579,6 +2885,34 @@ class APRSAgentGUI:
                 # Strip ANSI color codes
                 clean = re.sub(r"\033\[[0-9;]*m", "", msg)
                 self._log(clean, tag)
+
+                # Feed the Stations panel from logger lines (same as Web GUI)
+                for raw in self._logger_line_re.findall(clean):
+                    self._station_db.ingest(raw)
+
+                # RX/TX/error counters (classification mirrors web_gui.py)
+                counted = False
+                for line in clean.split("\n"):
+                    if not line:
+                        continue
+                    if "[ai-gateway] RX" in line:
+                        self._stat_ai_rx += 1
+                        counted = True
+                    elif "[ai-gateway] TX" in line:
+                        self._stat_ai_tx += 1
+                        counted = True
+                    elif _AIRESP_MARK in line:
+                        continue
+                    elif _AIERR_RE.search(line) or _ERR_RE.search(line):
+                        self._stat_err += 1
+                        counted = True
+                if counted:
+                    self._lbl_rx.configure(
+                        text=f"{self._t('st_rx')}: {self._stat_ai_rx}")
+                    self._lbl_tx.configure(
+                        text=f"{self._t('st_tx')}: {self._stat_ai_tx}")
+                    self._lbl_err.configure(
+                        text=f"{self._t('st_err')}: {self._stat_err}")
 
                 # Track stats from logger lines
                 m = self._stat_src_re.search(clean)

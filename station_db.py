@@ -103,9 +103,10 @@ class StationRecord:
             self.symbol_table = parsed.get("symbol_table", "/")
             self.symbol_overlay = parsed.get("symbol_overlay", "")
 
-        # Prefer DB coordinates; only overwrite if we don't have them yet
+        # Prefer DB coordinates; only overwrite if we don't have them yet.
+        # locator is initialised to "" (not None) — treat both as unset.
         for field in ("lat", "lon", "locator"):
-            if field in parsed and getattr(self, field) is None:
+            if field in parsed and getattr(self, field) in (None, ""):
                 setattr(self, field, parsed[field])
 
         # Prefer DB freq/tone; fill in from APRS if missing

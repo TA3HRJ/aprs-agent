@@ -14,7 +14,7 @@ several automation features useful for amateur radio operators.
 
 | | Feature | Description |
 |---|---|---|
-| 🖥️ | **Desktop GUI** | Form-based config editor, Start/Stop, system tray, EN/TR language toggle, live stats bar |
+| 🖥️ | **Desktop GUI** | Form-based config editor, Start/Stop, system tray, EN/TR language toggle, live stats bar (RX/TX/Errors/Packets/Stations/Callsigns/Uptime), Live Log + Stations bottom panel with real APRS symbol icons and type/status/search filters |
 | 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, Stations tab, gzip-compressed |
 | 📊 | **Stations Tab** | Live table of all heard stations — type, location, organization, frequency, online/offline status; Object packets parsed; location falls back to Maidenhead locator or coordinates |
 | 🗄️ | **Turkey Repeaters DB** | Enriches station records with city, district, frequency, tone, band, mode from a local JSON database |
