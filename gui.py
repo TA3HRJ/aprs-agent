@@ -1423,6 +1423,15 @@ class APRSAgentGUI:
         # Stations panel: fed from the same logger lines as the Web GUI
         self._logger_line_re = re.compile(r'^\[logger\] (.+)$', re.M)
         self._station_db = StationDB()
+        # SQLite persistence (same file the Web GUI uses) — keeps the
+        # beacon-cadence baseline across restarts
+        self._sta_db_path = str(
+            Path(self._cfg_path).resolve().with_name("aprs_stations.db"))
+        try:
+            self._station_db.load_sqlite(self._sta_db_path)
+        except Exception:
+            pass
+        self._sta_save_tick = 0
         self._sym_photos: dict = {}   # (table, symbol) → PhotoImage cache
 
         self.root = tk.Tk()
@@ -2326,6 +2335,13 @@ class APRSAgentGUI:
 
     def _refresh_stations(self) -> None:
         self._populate_stations()
+        # Flush station records to SQLite roughly once a minute while running
+        self._sta_save_tick += 1
+        if self._sta_save_tick % 12 == 0 and self._runner.running:
+            try:
+                self._station_db.save_sqlite(self._sta_db_path)
+            except Exception:
+                pass
         self.root.after(5000, self._refresh_stations)
 
     # ── Bottom bar ────────────────────────────────────────────────────────────
@@ -2705,8 +2721,7 @@ class APRSAgentGUI:
             return
         self._save_config()
         cfg = self._form_to_config()
-        self._station_db.reset()
-        self._sta_tree.delete(*self._sta_tree.get_children())
+        # Station records persist across restarts (SQLite) — no reset here.
         db_path = self._v_repeater_db.get().strip()
         if db_path:
             n = self._station_db.load_repeater_db(db_path)
@@ -2959,6 +2974,10 @@ class APRSAgentGUI:
                 self._tray_icon.stop()
             except Exception:
                 pass
+        try:
+            self._station_db.save_sqlite(self._sta_db_path)
+        except Exception:
+            pass
         self.root.destroy()
 
     # ── Entry point ───────────────────────────────────────────────────────────

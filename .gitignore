@@ -50,3 +50,6 @@ logs/
 
 # ── Test artifacts
 test_*.toml
+
+# -- Station persistence database (local data, per-installation)
+aprs_stations.db

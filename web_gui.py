@@ -34,6 +34,7 @@ import config as cfg_module
 import aprs_connection
 import extension_server as ext_server_module
 from extensions import ExtensionRegistry
+import station_db as station_db_module
 from station_db import StationDB
 
 
@@ -141,6 +142,16 @@ class AgentManager:
         self._seen_base_calls: "set[str]" = set()  # base callsign only
         self._last_stats_sent = 0.0
         self._station_db: StationDB = StationDB()
+        # SQLite persistence lives next to the config file
+        self._sta_db_path = str(
+            Path(config_path).resolve().with_name("aprs_stations.db"))
+        try:
+            n = self._station_db.load_sqlite(self._sta_db_path)
+            if n:
+                print(f"[station-db] Restored {n} stations from "
+                      f"{self._sta_db_path}", file=sys.__stderr__)
+        except Exception as e:
+            print(f"[station-db] SQLite load failed: {e}", file=sys.__stderr__)
 
     def get_config(self) -> dict:
         return cfg_module.load_config(self.config_path)
@@ -177,7 +188,9 @@ class AgentManager:
         self._stations.clear()
         self._seen_calls.clear()
         self._seen_base_calls.clear()
-        self._station_db.reset()
+        # Station records are NOT reset on agent start any more: they are
+        # persisted in SQLite so the beacon-cadence baseline (silence
+        # detection) survives restarts.
         try:
             cfg = cfg_module.load_config(self.config_path)
             db_path = cfg.get("repeater_db_path", "").strip()
@@ -750,6 +763,37 @@ async def get_stations(request: web.Request) -> web.Response:
     return web.json_response({"stations": stations, "count": len(stations)})
 
 
+@routes.get("/api/silence")
+async def get_silence(request: web.Request) -> web.Response:
+    """Maidenhead cells with recently-silent station clusters (map overlay)."""
+    mgr: AgentManager = request.app["manager"]
+    try:
+        cells = mgr._station_db.silence_cells()
+    except Exception:
+        cells = []
+    return web.json_response({"cells": cells})
+
+
+@routes.get("/api/silence/range")
+async def get_silence_range(request: web.Request) -> web.Response:
+    """Time range of stored silence snapshots (map timeline slider bounds)."""
+    mgr: AgentManager = request.app["manager"]
+    rng = station_db_module.silence_history_range(mgr._sta_db_path)
+    return web.json_response({"range": rng})
+
+
+@routes.get("/api/silence/history")
+async def get_silence_history(request: web.Request) -> web.Response:
+    """Silence-cell snapshot nearest to ?ts= (map timeline scrubbing)."""
+    mgr: AgentManager = request.app["manager"]
+    try:
+        ts = int(request.query.get("ts", "0"))
+    except ValueError:
+        ts = 0
+    snap = station_db_module.load_silence_history(mgr._sta_db_path, ts)
+    return web.json_response(snap)
+
+
 @routes.get("/api/stations/{callsign}")
 async def get_station(request: web.Request) -> web.Response:
     mgr: AgentManager = request.app["manager"]
@@ -781,9 +825,32 @@ async def symbols(request: web.Request) -> web.Response:
 
 # ── App lifecycle ───────────────────────────────────────────────────────────
 
+async def _persist_loop(mgr: "AgentManager") -> None:
+    """Flush station records to SQLite once a minute; every 10 minutes also
+    record a silence-cell snapshot for the map timeline."""
+    tick = 0
+    while True:
+        await asyncio.sleep(60)
+        tick += 1
+        try:
+            await asyncio.get_event_loop().run_in_executor(
+                None, mgr._station_db.save_sqlite, mgr._sta_db_path)
+        except Exception as e:
+            print(f"[station-db] SQLite save failed: {e}", file=sys.__stderr__)
+        if tick % 10 == 0 and mgr.running:
+            try:
+                await asyncio.get_event_loop().run_in_executor(
+                    None, mgr._station_db.record_silence_history,
+                    mgr._sta_db_path)
+            except Exception as e:
+                print(f"[station-db] history snapshot failed: {e}",
+                      file=sys.__stderr__)
+
+
 async def on_startup(app: web.Application) -> None:
     mgr: AgentManager = app["manager"]
     app["log_task"] = asyncio.create_task(mgr.broadcast_logs())
+    app["persist_task"] = asyncio.create_task(_persist_loop(mgr))
     try:
         cfg = mgr.get_config()
         if cfg.get("auto_start_agent", False):
@@ -794,9 +861,14 @@ async def on_startup(app: web.Application) -> None:
 
 async def on_shutdown(app: web.Application) -> None:
     app["log_task"].cancel()
+    app["persist_task"].cancel()
     mgr: AgentManager = app["manager"]
     if mgr.running:
         mgr.stop()
+    try:
+        mgr._station_db.save_sqlite(mgr._sta_db_path)
+    except Exception:
+        pass
 
 
 def main() -> None:

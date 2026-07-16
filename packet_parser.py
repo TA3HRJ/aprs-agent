@@ -332,6 +332,9 @@ _RE_CALLSIGN = re.compile(r'^([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)')
 # Object packet: ;NAME     * — name is 9 chars (any printable except *)
 _RE_OBJECT = re.compile(r'^;([^\*]{9})\*')
 
+# q-construct: the igate that put the packet on APRS-IS (qAR/qAO/qAS/qAC…)
+_RE_GATE = re.compile(r',qA[A-Z],([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)')
+
 # Uncompressed position — works for all packet types (!, =, @, /, Object, etc.)
 # The optional \d{6}[zh] handles timestamped packets (@DDHHMMz or @DDHHMMh)
 _RE_POS_UNCOMP = re.compile(
@@ -507,6 +510,11 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
     # so rfind would cut the info field at the wrong place.
     colon_idx = raw_line.find(":")
     info = raw_line[colon_idx + 1:] if colon_idx != -1 else ""
+
+    # Which igate put this packet on APRS-IS (from the header's q-construct)
+    gm = _RE_GATE.search(raw_line[:colon_idx] if colon_idx != -1 else raw_line)
+    if gm:
+        result["gate"] = gm.group(1)
 
     # Object packet: sender is the framing station; the named object is the
     # real station we care about.  Override callsign with the object name.

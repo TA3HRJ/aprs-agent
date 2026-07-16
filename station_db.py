@@ -9,6 +9,7 @@ Developed by TA3HRJ & TA3PKS
 from __future__ import annotations
 
 import json
+import sqlite3
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -19,6 +20,81 @@ from packet_parser import (
     classify_symbol,
     parse_packet,
 )
+
+
+def silence_history_range(path: str) -> Optional[dict[str, int]]:
+    """Return {"min": ts, "max": ts} of stored snapshots, or None if empty."""
+    if not Path(path).exists():
+        return None
+    con = sqlite3.connect(path)
+    try:
+        row = con.execute(
+            "SELECT MIN(ts), MAX(ts) FROM silence_history").fetchone()
+        if not row or row[0] is None:
+            return None
+        return {"min": int(row[0]), "max": int(row[1])}
+    except sqlite3.Error:
+        return None
+    finally:
+        con.close()
+
+
+def load_silence_history(path: str, ts: int) -> dict[str, Any]:
+    """Return the snapshot nearest to (at or before) the requested time.
+
+    Falls back to the earliest snapshot when ts predates all data.
+    """
+    empty: dict[str, Any] = {"ts": None, "cells": []}
+    if not Path(path).exists():
+        return empty
+    con = sqlite3.connect(path)
+    try:
+        row = con.execute(
+            "SELECT MAX(ts) FROM silence_history WHERE ts <= ?", (ts,)
+        ).fetchone()
+        snap_ts = row[0] if row and row[0] is not None else None
+        if snap_ts is None:
+            row = con.execute(
+                "SELECT MIN(ts) FROM silence_history").fetchone()
+            snap_ts = row[0] if row and row[0] is not None else None
+        if snap_ts is None:
+            return empty
+        cells = []
+        for (cell, baseline, silent, ratio, alert, cause,
+             silent_calls, since) in con.execute(
+                "SELECT cell, baseline, silent, ratio, alert, cause,"
+                " silent_calls, since FROM silence_history WHERE ts = ?",
+                (snap_ts,)):
+            try:
+                calls = json.loads(silent_calls or "[]")
+            except Exception:
+                calls = []
+            cells.append({
+                "cell": cell, "baseline": baseline, "silent": silent,
+                "ratio": ratio, "alert": bool(alert), "cause": cause,
+                "silent_calls": calls, "since": since,
+                "bounds": _cell_bounds(cell),
+            })
+        return {"ts": int(snap_ts), "cells": cells}
+    except sqlite3.Error:
+        return empty
+    finally:
+        con.close()
+
+
+def _cell_bounds(cell4: str) -> Optional[list[list[float]]]:
+    """Bounds of a 4-char Maidenhead square: [[south, west], [north, east]].
+
+    A square (e.g. KM69) spans 1° of latitude by 2° of longitude.
+    """
+    if len(cell4) < 4:
+        return None
+    try:
+        lon = (ord(cell4[0]) - 65) * 20 - 180 + int(cell4[2]) * 2
+        lat = (ord(cell4[1]) - 65) * 10 - 90 + int(cell4[3])
+    except (ValueError, TypeError):
+        return None
+    return [[lat, lon], [lat + 1, lon + 2]]
 
 
 class StationRecord:
@@ -44,6 +120,9 @@ class StationRecord:
         "ai_org",          # AI-extracted organization/club name
         "ai_description",  # AI-extracted station description
         "ai_analyzed",     # True once AI analysis has been attempted
+        "ema_interval_s",  # smoothed beacon interval (silence detection baseline)
+        "last_gate",       # igate that last gated this station to APRS-IS
+        "hour_counts",     # packets heard per local hour-of-day (diurnal profile)
     )
 
     def __init__(self, callsign: str) -> None:
@@ -86,10 +165,25 @@ class StationRecord:
         self.ai_org: str = ""
         self.ai_description: str = ""
         self.ai_analyzed: bool = False
+        self.ema_interval_s: Optional[float] = None
+        self.last_gate: str = ""
+        self.hour_counts: list[int] = [0] * 24
 
     def update_from_parsed(self, parsed: dict[str, Any]) -> None:
         """Merge fields extracted from a new APRS packet into this record."""
-        self.last_seen    = parsed.get("ts", int(time.time()))
+        ts = parsed.get("ts", int(time.time()))
+        # Beacon cadence: smoothed interval between packets. Ignore gaps under
+        # 30 s (digipeated duplicates of one beacon) and over 24 h (stale).
+        dt = ts - self.last_seen
+        if self.packet_count > 0 and 30 <= dt <= 86400:
+            if self.ema_interval_s is None:
+                self.ema_interval_s = float(dt)
+            else:
+                self.ema_interval_s = 0.3 * dt + 0.7 * self.ema_interval_s
+        self.hour_counts[time.localtime(ts).tm_hour] += 1
+        if parsed.get("gate"):
+            self.last_gate = parsed["gate"]
+        self.last_seen    = ts
         self.packet_count += 1
         self.last_packet  = parsed.get("raw", "")[:200]
 
@@ -202,6 +296,8 @@ class StationRecord:
             "ai_org":         self.ai_org,
             "ai_description": self.ai_description,
             "ai_analyzed":    self.ai_analyzed,
+            "ema_interval_s": self.ema_interval_s,
+            "last_gate":      self.last_gate,
             "has_db":      self.db_record is not None,
             "online":      online,
             "first_seen":  int(self.first_seen),
@@ -246,6 +342,13 @@ class StationDB:
             call = str(raw_call).strip().upper()
             base = call.split("-")[0]
             self._repeater_index.setdefault(base, []).append(rec)
+        # Enrich stations already in memory (e.g. loaded from SQLite before
+        # the repeater DB was available).
+        for st in self._stations.values():
+            if st.db_record is None:
+                entries = self._repeater_index.get(st.base_call)
+                if entries:
+                    st.update_from_db(entries[0])
         return len(records)
 
     # ------------------------------------------------------------------
@@ -330,3 +433,215 @@ class StationDB:
 
     def reset(self) -> None:
         self._stations.clear()
+
+    # ------------------------------------------------------------------
+    # SQLite persistence — survives agent/GUI restarts so the beacon-cadence
+    # baseline (silence detection) builds up over days, not sessions.
+
+    _SQL_COLS = (
+        "callsign", "first_seen", "last_seen", "packet_count",
+        "lat", "lon", "locator", "symbol", "symbol_table", "symbol_overlay",
+        "station_type", "icon", "city", "district", "freq_mhz", "tone_hz",
+        "comment", "ai_org", "ai_description", "ai_analyzed",
+        "ema_interval_s", "last_gate", "hour_counts",
+    )
+
+    def save_sqlite(self, path: str) -> int:
+        """Persist all station records. Returns number of rows written."""
+        con = sqlite3.connect(path)
+        try:
+            con.execute(
+                "CREATE TABLE IF NOT EXISTS stations ("
+                "callsign TEXT PRIMARY KEY, first_seen REAL, last_seen REAL,"
+                "packet_count INTEGER, lat REAL, lon REAL, locator TEXT,"
+                "symbol TEXT, symbol_table TEXT, symbol_overlay TEXT,"
+                "station_type TEXT, icon TEXT, city TEXT, district TEXT,"
+                "freq_mhz REAL, tone_hz REAL, comment TEXT,"
+                "ai_org TEXT, ai_description TEXT, ai_analyzed INTEGER,"
+                "ema_interval_s REAL, last_gate TEXT, hour_counts TEXT)"
+            )
+            rows = [
+                (r.callsign, r.first_seen, r.last_seen, r.packet_count,
+                 r.lat, r.lon, r.locator, r.symbol, r.symbol_table,
+                 r.symbol_overlay, r.station_type, r.icon, r.city, r.district,
+                 r.freq_mhz, r.tone_hz, r.comment, r.ai_org, r.ai_description,
+                 int(r.ai_analyzed), r.ema_interval_s, r.last_gate,
+                 json.dumps(r.hour_counts))
+                for r in self._stations.values()
+            ]
+            con.executemany(
+                "INSERT OR REPLACE INTO stations VALUES ("
+                + ",".join("?" * len(self._SQL_COLS)) + ")", rows)
+            con.commit()
+            return len(rows)
+        finally:
+            con.close()
+
+    def load_sqlite(self, path: str) -> int:
+        """Load persisted records (skips callsigns already in memory)."""
+        if not Path(path).exists():
+            return 0
+        con = sqlite3.connect(path)
+        try:
+            cur = con.execute(
+                "SELECT " + ",".join(self._SQL_COLS) + " FROM stations")
+            n = 0
+            for row in cur:
+                d = dict(zip(self._SQL_COLS, row))
+                cs = d["callsign"]
+                if not cs or cs in self._stations:
+                    continue
+                r = StationRecord(cs)
+                r.first_seen   = d["first_seen"] or time.time()
+                r.last_seen    = d["last_seen"] or r.first_seen
+                r.packet_count = d["packet_count"] or 0
+                r.lat, r.lon   = d["lat"], d["lon"]
+                r.locator      = d["locator"] or ""
+                r.symbol       = d["symbol"] or ""
+                r.symbol_table = d["symbol_table"] or ""
+                r.symbol_overlay = d["symbol_overlay"] or ""
+                r.station_type = d["station_type"] or "unknown"
+                r.icon         = d["icon"] or STATION_ICON["unknown"]
+                r.city         = d["city"] or ""
+                r.district     = d["district"] or ""
+                r.freq_mhz     = d["freq_mhz"]
+                r.tone_hz      = d["tone_hz"]
+                r.comment      = d["comment"] or ""
+                r.ai_org       = d["ai_org"] or ""
+                r.ai_description = d["ai_description"] or ""
+                r.ai_analyzed  = bool(d["ai_analyzed"])
+                r.ema_interval_s = d["ema_interval_s"]
+                r.last_gate    = d["last_gate"] or ""
+                try:
+                    hc = json.loads(d["hour_counts"] or "[]")
+                    if isinstance(hc, list) and len(hc) == 24:
+                        r.hour_counts = hc
+                except Exception:
+                    pass
+                self._stations[cs] = r
+                n += 1
+            return n
+        except sqlite3.Error:
+            return 0
+        finally:
+            con.close()
+
+    # ------------------------------------------------------------------
+    # Silence history — timeline scrubbing support. Snapshots of the computed
+    # cell state are appended periodically so past events can be replayed.
+
+    _HISTORY_RETENTION_S = 14 * 24 * 3600
+
+    def record_silence_history(self, path: str) -> int:
+        """Append the current silence-cell state as a timestamped snapshot.
+
+        Only cells with at least one silent station are stored. Rows older
+        than the retention window are pruned. Returns rows written.
+        """
+        cells = [c for c in self.silence_cells() if c["silent"] >= 1]
+        now = int(time.time())
+        con = sqlite3.connect(path)
+        try:
+            con.execute(
+                "CREATE TABLE IF NOT EXISTS silence_history ("
+                "ts INTEGER, cell TEXT, baseline INTEGER, silent INTEGER,"
+                "ratio REAL, alert INTEGER, cause TEXT, silent_calls TEXT,"
+                "since INTEGER, PRIMARY KEY (ts, cell))"
+            )
+            con.executemany(
+                "INSERT OR REPLACE INTO silence_history VALUES (?,?,?,?,?,?,?,?,?)",
+                [(now, c["cell"], c["baseline"], c["silent"], c["ratio"],
+                  int(c["alert"]), c["cause"], json.dumps(c["silent_calls"]),
+                  c["since"]) for c in cells])
+            con.execute("DELETE FROM silence_history WHERE ts < ?",
+                        (now - self._HISTORY_RETENTION_S,))
+            con.commit()
+            return len(cells)
+        finally:
+            con.close()
+
+    # ------------------------------------------------------------------
+    # Silence clustering — Phase 3 of the silence-map roadmap.
+
+    def silence_cells(
+        self,
+        min_history: int = 5,
+        baseline_window_s: int = 24 * 3600,
+        min_silent: int = 3,
+        min_ratio: float = 0.5,
+    ) -> list[dict[str, Any]]:
+        """Group recently-silent stations into Maidenhead squares (4-char).
+
+        A station is "recently silent" when the gap since its last packet
+        exceeds 3× its own smoothed beacon interval (min 15 minutes) while it
+        was active inside the baseline window. Cells where enough of the
+        normally-active stations fell silent become alert candidates; if all
+        silent stations were gated by one igate that is itself silent, the
+        cause is reported as an igate failure instead of a regional outage.
+        """
+        now = time.time()
+
+        def gate_active(gate: str) -> Optional[bool]:
+            g = self._stations.get(gate)
+            if g is None or g.packet_count == 0:
+                return None                      # gate not tracked
+            return (now - g.last_seen) < 1800    # heard in last 30 min
+
+        cells: dict[str, dict[str, Any]] = {}
+        for r in self._stations.values():
+            if r.packet_count < min_history or not r.locator:
+                continue
+            if r.lat is None or r.lon is None:
+                continue
+            if (now - r.last_seen) > baseline_window_s:
+                continue                          # long dead — not baseline
+            if r.ema_interval_s is None:
+                continue                          # no cadence baseline yet
+            cell = r.locator[:4].upper()
+            c = cells.setdefault(cell, {
+                "cell": cell, "baseline": 0, "silent": 0,
+                "silent_calls": [], "gate_of": {}, "first_silent": None,
+            })
+            c["baseline"] += 1
+            threshold = max(3.0 * r.ema_interval_s, 900.0)
+            gap = now - r.last_seen
+            if gap > threshold:
+                c["silent"] += 1
+                c["silent_calls"].append(r.callsign)
+                if r.last_gate:
+                    c["gate_of"][r.callsign] = r.last_gate
+                # When this station crossed its silence threshold
+                went = r.last_seen + threshold
+                if c["first_silent"] is None or went < c["first_silent"]:
+                    c["first_silent"] = went
+
+        out = []
+        for c in cells.values():
+            ratio = c["silent"] / c["baseline"] if c["baseline"] else 0.0
+            alert = c["silent"] >= min_silent and ratio >= min_ratio
+            cause = "outage"
+            if alert:
+                # Gates used by the silent stations — excluding silent
+                # stations that are themselves someone's gate (an igate that
+                # died takes its own beacon down with it).
+                raw_gates = set(c["gate_of"].values())
+                eff_gates = {g for call, g in c["gate_of"].items()
+                             if call not in raw_gates}
+                if len(eff_gates) == 1:
+                    only_gate = next(iter(eff_gates))
+                    if gate_active(only_gate) is False:
+                        cause = "igate"
+            b = _cell_bounds(c["cell"])
+            out.append({
+                "cell": c["cell"],
+                "baseline": c["baseline"],
+                "silent": c["silent"],
+                "ratio": round(ratio, 2),
+                "alert": alert,
+                "cause": cause if alert else "",
+                "silent_calls": sorted(c["silent_calls"])[:20],
+                "since": int(c["first_silent"]) if c["first_silent"] else None,
+                "bounds": b,
+            })
+        out.sort(key=lambda x: (-int(x["alert"]), -x["ratio"]))
+        return out

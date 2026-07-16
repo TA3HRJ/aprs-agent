@@ -6,7 +6,7 @@
  *
  * Developed by TA3HRJ & TA3PKS
  */
-const CACHE = "aprs-agent-v2";
+const CACHE = "aprs-agent-v3";
 const ICONS = ["/icon-192.png", "/icon-512.png", "/manifest.json", "/favicon.ico"];
 
 self.addEventListener("install", (e) => {
@@ -28,6 +28,9 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
+  // Never cache cross-origin traffic (map tiles, CDN) — the browser's own
+  // HTTP cache handles those; caching tiles here would balloon storage.
+  if (url.origin !== location.origin) return;
   if (url.pathname.startsWith("/api") || url.pathname.startsWith("/webhook") || url.pathname === "/ws") return;
 
   if (e.request.mode === "navigate" || url.pathname === "/") {

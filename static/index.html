@@ -8,6 +8,8 @@
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}[hidden]{display:none!important}
 :root{
@@ -115,6 +117,22 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 
 /* STATIONS PANEL */
 .sta-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.map-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+#map{flex:1;background:#1a1a1a}
+.map-sym{background:transparent;border:none}
+.map-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888;font-size:13px;z-index:5;pointer-events:none}
+.map-legend{position:absolute;left:8px;bottom:8px;z-index:1000;background:rgba(30,30,30,.85);padding:6px 10px;border-radius:6px;font-size:11px;display:flex;gap:12px;pointer-events:none}
+.map-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.map-legend em{font-style:normal;color:#ccc}
+.map-timeline{position:absolute;left:8px;right:8px;top:8px;z-index:1000;display:flex;gap:10px;align-items:center;background:rgba(30,30,30,.88);padding:6px 12px;border-radius:6px}
+.map-timeline input[type=range]{flex:1;accent-color:#62a0ea;height:16px}
+.tl-btn{background:#3a3a3a;border:1px solid #555;color:#e8e8e8;border-radius:4px;width:26px;height:22px;font-size:11px;cursor:pointer;line-height:1}
+.tl-btn:hover{background:#4a4a4a}
+.tl-label{font-size:11px;color:#ccc;min-width:110px;text-align:right;font-family:'Consolas',monospace}
+.tl-label.hist{color:#f5c211}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#2a2a2a;color:#e8e8e8}
+.leaflet-popup-content{font:12px/1.6 'Segoe UI',sans-serif}
+.leaflet-container a.leaflet-popup-close-button{color:#aaa}
 .sta-filters{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--sidebar);border-bottom:1px solid var(--border);flex-wrap:wrap}
 .sta-select{background:var(--view);color:var(--fg2);border:1px solid var(--border2);border-radius:6px;padding:3px 8px;font-size:12px;font-family:inherit;cursor:pointer}
 .sta-search{background:var(--view);color:var(--fg);border:1px solid var(--border2);border-radius:6px;padding:3px 8px;font-size:12px;font-family:inherit;flex:1;min-width:100px}
@@ -375,6 +393,7 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
   <div class="tab-bar">
     <button class="tab-btn active" id="tab-log" onclick="switchTab('log')" data-i="tab_log">Live Log</button>
     <button class="tab-btn" id="tab-sta" onclick="switchTab('sta')" data-i="tab_sta">Stations</button>
+    <button class="tab-btn" id="tab-map" onclick="switchTab('map')" data-i="tab_map">Map</button>
     <div class="tab-spacer"></div>
     <div class="log-header" style="background:transparent;border:none">
       <span class="log-chip" id="lc">0</span>
@@ -423,6 +442,22 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
       </table>
       <div class="sta-empty" id="sta-empty" hidden data-i="sta_empty">No stations heard yet — start the agent to begin receiving.</div>
     </div>
+  </div>
+
+  <!-- MAP PANEL -->
+  <div class="map-panel" id="map-view" hidden>
+    <div id="map"></div>
+    <div class="map-legend">
+      <span><i style="background:#e01b24"></i><em data-i="sil_outage">Regional silence (possible outage)</em></span>
+      <span><i style="background:#f5c211"></i><em data-i="sil_igate">IGate failure</em></span>
+    </div>
+    <div class="map-timeline" id="map-timeline" hidden>
+      <button class="tl-btn" id="tl-play" onclick="tlPlay()">▶</button>
+      <input type="range" id="tl-slider" min="0" max="0" step="600" value="0"
+             oninput="tlScrub(parseInt(this.value))">
+      <span class="tl-label" id="tl-label" data-i="tl_live">Live</span>
+    </div>
+    <div class="map-hint" id="map-hint" hidden data-i="map_offline">Map library could not be loaded — an internet connection is required for map tiles.</div>
   </div>
   <div class="heard-bar" id="heard" hidden>
     <span class="hl" data-i="heard_label">Last Heard</span>
@@ -528,7 +563,11 @@ const S={en:{
   about_title:"About APRS-Agent",about_desc:"A multi-extension APRS-IS agent for amateur radio operators.",about_devs:"Developers",about_source:"Source:",about_license:"MIT License",about_close:"Close",
   save_ok:"Config saved.",save_err:"Save failed.",reload_ok:"Config reloaded.",no_callsign:"Enter your callsign first.",
   btn_clear:"Clear",btn_autoscroll:"Auto Scroll",
-  tab_log:"Live Log",tab_sta:"Stations",
+  tab_log:"Live Log",tab_sta:"Stations",tab_map:"Map",
+  map_offline:"Map library could not be loaded — an internet connection is required for map tiles.",
+  sil_outage:"Regional silence (possible outage)",sil_igate:"IGate failure",
+  sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
+  tl_live:"Live",
   sta_h_call:"Callsign",sta_h_type:"Type",sta_h_loc:"Location",sta_h_org:"Organization",sta_h_freq:"Freq (MHz)",sta_h_status:"Status",sta_h_seen:"Last Heard",
   sta_empty:"No stations heard yet — start the agent to begin receiving.",
   sd_source:"Source",sd_first:"First seen",sd_packets:"Packets",sd_last:"Last packet",sd_aprs_live:"APRS live",sd_db_only:"DB only",sd_both:"APRS + DB",
@@ -579,7 +618,11 @@ const S={en:{
   about_title:"APRS-Agent Hakkında",about_desc:"Amatör radyo operatörleri için çok eklentili bir APRS-IS ajanı.",about_devs:"Geliştiriciler",about_source:"Kaynak:",about_license:"MIT Lisansı",about_close:"Kapat",
   save_ok:"Ayarlar kaydedildi.",save_err:"Kaydetme başarısız.",reload_ok:"Ayarlar yeniden yüklendi.",no_callsign:"Çağrı işaretinizi girin.",
   btn_clear:"Temizle",btn_autoscroll:"Otomatik Kaydır",
-  tab_log:"Canlı Log",tab_sta:"İstasyonlar",
+  tab_log:"Canlı Log",tab_sta:"İstasyonlar",tab_map:"Harita",
+  map_offline:"Harita kütüphanesi yüklenemedi — harita karoları için internet bağlantısı gerekir.",
+  sil_outage:"Bölgesel sessizlik (olası kesinti)",sil_igate:"IGate arızası",
+  sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
+  tl_live:"Canlı",
   sta_h_call:"Çağrı İşareti",sta_h_type:"Tür",sta_h_loc:"Konum",sta_h_org:"Dernek/Kuruluş",sta_h_freq:"Frek (MHz)",sta_h_status:"Durum",sta_h_seen:"Son Görülme",
   sta_empty:"Henüz istasyon duyulmadı — almaya başlamak için ajanı çalıştırın.",
   sd_source:"Kaynak",sd_first:"İlk görülme",sd_packets:"Paket",sd_last:"Son paket",sd_aprs_live:"APRS canlı",sd_db_only:"Yalnızca DB",sd_both:"APRS + DB",
@@ -699,17 +742,30 @@ function switchTab(tab){
   activeTab=tab;
   $('tab-log').className='tab-btn'+(tab==='log'?' active':'');
   $('tab-sta').className='tab-btn'+(tab==='sta'?' active':'');
+  $('tab-map').className='tab-btn'+(tab==='map'?' active':'');
   $('log').hidden=tab!=='log';
   $('sta-view').hidden=tab!=='sta';
+  $('map-view').hidden=tab!=='map';
   // log-header buttons only visible on log tab
   const lh=document.querySelector('.log-header');if(lh)lh.style.visibility=tab==='log'?'':'hidden';
-  if(tab==='sta'){fetchStations();if(!staRefreshTimer)staRefreshTimer=setInterval(fetchStations,5000)}
+  if(tab==='sta'||tab==='map'){fetchStations();if(!staRefreshTimer)staRefreshTimer=setInterval(fetchStations,5000)}
   else{clearInterval(staRefreshTimer);staRefreshTimer=null}
+  if(tab==='map')initMap();
 }
 
 // ── Stations ──
 async function fetchStations(){
-  try{const r=await api('GET','/api/stations');staData=r.stations||[];renderStations()}catch(e){}
+  try{
+    const r=await api('GET','/api/stations');staData=r.stations||[];
+    if(activeTab==='sta')renderStations();
+    if(activeTab==='map'){
+      renderMap();
+      if(tlLive){
+        try{const s=await api('GET','/api/silence');renderSilence(s.cells||[])}catch(e){}
+      }
+      tlRefreshRange();
+    }
+  }catch(e){}
 }
 function fmtAgoLong(s){if(s===null||s===undefined)return'—';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';const h=Math.floor(s/3600);return h+'h '+String(Math.floor(s%3600/60)).padStart(2,'0')+'m'}
 function fmtFreq(f){if(!f&&f!==0)return'';return parseFloat(f).toFixed(4)}
@@ -727,6 +783,118 @@ function aprsSym(r){
   const ov=r.symbol_overlay||((tbl!=='/'&&tbl!=='\\')?tbl:'');
   if(ov){const oc=ov.charCodeAt(0)-33;if(oc>=0&&oc<=95){const ocol=oc%16,orow=Math.floor(oc/16);h+='<span class="s-sym-ov" style="background-position:'+(-ocol*24)+'px '+(-orow*24)+'px"></span>';}}
   return h+'</span>';
+}
+// ── Map tab (Leaflet + OpenStreetMap) ──
+let map=null,mapMarkers={},mapFitted=false;
+function initMap(){
+  if(map){setTimeout(()=>map.invalidateSize(),60);renderMap();return}
+  if(typeof L==='undefined'){$('map-hint').hidden=false;return}
+  $('map-hint').hidden=true;
+  map=L.map('map').setView([39.0,35.0],6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+  setTimeout(()=>map.invalidateSize(),60);
+  renderMap();
+}
+function mapIcon(r){
+  return L.divIcon({html:aprsSym(r),className:'map-sym',iconSize:[24,24],iconAnchor:[12,12],popupAnchor:[0,-10]});
+}
+function mapPopup(r){
+  const loc=[r.city,r.district].filter(Boolean).join(', ')||r.locator||'';
+  let h='<b style="color:#62a0ea;cursor:pointer" onclick="mapDetail(\''+r.callsign+'\')">'+r.callsign+'</b><br>'+r.type;
+  if(loc)h+=' &middot; '+loc;
+  if(r.freq_mhz)h+='<br>'+fmtFreq(r.freq_mhz)+' MHz';
+  if(r.last_seen_ago_s!==null&&r.last_seen_ago_s!==undefined)
+    h+='<br><span style="opacity:.7">'+fmtAgoLong(r.last_seen_ago_s)+'</span>';
+  return h;
+}
+function mapDetail(cs){const r=staData.find(x=>x.callsign===cs);if(r)showDetail(r)}
+function renderMap(){
+  if(!map)return;
+  for(const r of staData){
+    if(r.lat===null||r.lat===undefined||r.lon===null||r.lon===undefined)continue;
+    const m=mapMarkers[r.callsign];
+    if(m){m.setLatLng([r.lat,r.lon]);m.setPopupContent(mapPopup(r))}
+    else{
+      mapMarkers[r.callsign]=L.marker([r.lat,r.lon],{icon:mapIcon(r),title:r.callsign})
+        .addTo(map).bindPopup(mapPopup(r));
+    }
+  }
+  if(!mapFitted){
+    const pts=Object.values(mapMarkers).map(m=>m.getLatLng());
+    if(pts.length){map.fitBounds(L.latLngBounds(pts).pad(0.15),{maxZoom:9});mapFitted=true}
+  }
+}
+// ── Map timeline: scrub back through recorded silence snapshots ──
+let tlRange=null,tlLive=true,tlTimer=null;
+async function tlRefreshRange(){
+  try{
+    const r=await api('GET','/api/silence/range');
+    tlRange=r.range;
+    const bar=$('map-timeline');
+    if(!tlRange){bar.hidden=true;return}
+    bar.hidden=false;
+    const s=$('tl-slider');
+    s.min=tlRange.min;s.max=tlRange.max+600;   // extra step = "live" position
+    if(tlLive)s.value=s.max;
+  }catch(e){}
+}
+function tlSetLabel(ts){
+  const l=$('tl-label');
+  if(ts===null){l.textContent=t('tl_live');l.classList.remove('hist')}
+  else{const d=new Date(ts*1000);l.textContent=d.toLocaleDateString()+' '+d.toLocaleTimeString().slice(0,5);l.classList.add('hist')}
+}
+async function tlScrub(v){
+  const s=$('tl-slider');
+  if(v>=parseInt(s.max)-1){  // rightmost = back to live
+    tlLive=true;tlSetLabel(null);
+    try{const r=await api('GET','/api/silence');renderSilence(r.cells||[])}catch(e){}
+    return;
+  }
+  tlLive=false;
+  try{
+    const h=await api('GET','/api/silence/history?ts='+v);
+    tlSetLabel(h.ts!==null?h.ts:v);
+    renderSilence(h.cells||[]);
+  }catch(e){}
+}
+function tlPlay(){
+  if(tlTimer){clearInterval(tlTimer);tlTimer=null;$('tl-play').textContent='▶';return}
+  const s=$('tl-slider');
+  if(tlLive)s.value=s.min;              // start from the oldest snapshot
+  $('tl-play').textContent='⏸';
+  tlTimer=setInterval(()=>{
+    let v=parseInt(s.value)+600;
+    if(v>=parseInt(s.max)){clearInterval(tlTimer);tlTimer=null;$('tl-play').textContent='▶';v=parseInt(s.max)}
+    s.value=v;tlScrub(v);
+  },500);
+}
+// ── Silence overlay: Maidenhead cells where stations fell silent together ──
+let silRects={};
+function silPopup(c){
+  const causeTxt=c.cause==='igate'?t('sil_igate'):t('sil_outage');
+  let h='<b>'+c.cell+'</b> — '+causeTxt+'<br>';
+  h+=t('sil_stats').replace('{s}',c.silent).replace('{b}',c.baseline)+' ('+Math.round(c.ratio*100)+'%)<br>';
+  if(c.since)h+=t('sil_since')+' '+fmtAgoLong(Math.max(0,Math.floor(Date.now()/1000-c.since)))+'<br>';
+  h+='<span style="opacity:.7;font-size:11px">'+c.silent_calls.join(', ')+'</span>';
+  return h;
+}
+function renderSilence(cells){
+  if(!map)return;
+  const seen={};
+  for(const c of cells){
+    if(!c.alert||!c.bounds)continue;
+    seen[c.cell]=1;
+    const color=c.cause==='igate'?'#f5c211':'#e01b24';
+    const opts={color:color,weight:1,fillColor:color,fillOpacity:0.10+0.30*Math.min(c.ratio,1)};
+    let rc=silRects[c.cell];
+    if(rc){rc.setStyle(opts);rc.setPopupContent(silPopup(c))}
+    else{silRects[c.cell]=L.rectangle(c.bounds,opts).addTo(map).bindPopup(silPopup(c))}
+  }
+  for(const cell in silRects){
+    if(!seen[cell]){map.removeLayer(silRects[cell]);delete silRects[cell]}
+  }
 }
 function renderStations(){
   const ftype=$('sta-ftype').value;

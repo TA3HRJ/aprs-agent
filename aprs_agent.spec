@@ -31,6 +31,7 @@ _hidden = [
     'aiosmtplib',
     'tomllib',
     'tomli_w',
+    'sqlite3',
     'pystray',
     'pystray._win32',
     'PIL',
