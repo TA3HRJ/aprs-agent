@@ -61,17 +61,26 @@ _DAY_CACHE = {"Cache-Control": "public, max-age=86400"}
 _GZ_CACHE: dict = {}
 
 
-def _gzipped_index() -> tuple[Path, bytes, str]:
+def _gzipped_index(public: bool = False) -> tuple[bytes, bytes, str]:
+    """Return (raw_html, gzipped_html, etag). The public variant injects a
+    window.PUBLIC flag so the page renders in read-only view mode."""
     path = _STATIC_DIR / "index.html"
     st = path.stat()
     key = (st.st_mtime_ns, st.st_size)
-    cached = _GZ_CACHE.get("index")
+    ck = "index-pub" if public else "index"
+    cached = _GZ_CACHE.get(ck)
     if not cached or cached[0] != key:
-        body = gzip.compress(path.read_bytes(), 9)
-        etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
-        cached = (key, body, etag)
-        _GZ_CACHE["index"] = cached
-    return path, cached[1], cached[2]
+        raw = path.read_bytes()
+        if public:
+            raw = raw.replace(
+                b"</head>",
+                b"<script>window.PUBLIC=true</script></head>", 1)
+        body = gzip.compress(raw, 9)
+        suffix = "-p" if public else ""
+        etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}{suffix}"'
+        cached = (key, raw, body, etag)
+        _GZ_CACHE[ck] = cached
+    return cached[1], cached[2], cached[3]
 
 
 class _QueueWriter:
@@ -125,6 +134,7 @@ class AgentManager:
         self.running = False
         self._log_queue: queue.Queue = queue.Queue(maxsize=2000)
         self._ws_clients: Set[web.WebSocketResponse] = set()
+        self._public_ws: Set[web.WebSocketResponse] = set()  # read-only viewers
         self._thread: Optional[threading.Thread] = None
         self._agent_loop: Optional[asyncio.AbstractEventLoop] = None
         self._stop_event: Optional[asyncio.Event] = None
@@ -695,23 +705,40 @@ class AgentManager:
                 self._last_stats_sent = now
                 payloads.append(self._stats_payload())
 
-            if payloads and self._ws_clients:
+            # Public viewers get only raw packet lines from the log — the
+            # operational lines ([smtp], [telegram], …) may carry private
+            # details (addresses, chat ids) and stay admin-only.
+            pub_payloads = []
+            for p in payloads:
+                if p.get("type") != "log":
+                    pub_payloads.append(p)
+                    continue
+                kept = "\n".join(l for l in p["text"].split("\n")
+                                 if l.startswith("[logger] "))
+                if kept:
+                    pub_payloads.append({"type": "log", "text": kept + "\n"})
+
+            for plist, clients in ((payloads, self._ws_clients),
+                                   (pub_payloads, self._public_ws)):
+                if not plist or not clients:
+                    continue
                 dead: Set[web.WebSocketResponse] = set()
-                for ws in list(self._ws_clients):
+                for ws in list(clients):
                     try:
-                        for payload in payloads:
+                        for payload in plist:
                             await ws.send_json(payload)
                     except Exception:
                         dead.add(ws)
-                self._ws_clients -= dead
+                clients -= dead
 
             await asyncio.sleep(0.15)
 
-    def add_ws(self, ws: web.WebSocketResponse) -> None:
-        self._ws_clients.add(ws)
+    def add_ws(self, ws: web.WebSocketResponse, public: bool = False) -> None:
+        (self._public_ws if public else self._ws_clients).add(ws)
 
     def remove_ws(self, ws: web.WebSocketResponse) -> None:
         self._ws_clients.discard(ws)
+        self._public_ws.discard(ws)
 
 
 # ── Routes ──────────────────────────────────────────────────────────────────
@@ -719,9 +746,8 @@ class AgentManager:
 routes = web.RouteTableDef()
 
 
-@routes.get("/")
-async def index(request: web.Request) -> web.Response:
-    path, gz_body, etag = _gzipped_index()
+def _index_response(request: web.Request, public: bool) -> web.Response:
+    raw, gz_body, etag = _gzipped_index(public)
     if request.headers.get("If-None-Match") == etag:
         return web.Response(status=304, headers={**_NO_CACHE, "ETag": etag})
     if "gzip" in request.headers.get("Accept-Encoding", ""):
@@ -731,7 +757,17 @@ async def index(request: web.Request) -> web.Response:
             charset="utf-8",
             headers={**_NO_CACHE, "ETag": etag, "Content-Encoding": "gzip"},
         )
-    return web.FileResponse(path, headers={**_NO_CACHE, "ETag": etag})
+    return web.Response(body=raw, content_type="text/html", charset="utf-8",
+                        headers={**_NO_CACHE, "ETag": etag})
+
+
+@routes.get("/")
+async def index(request: web.Request) -> web.Response:
+    return _index_response(request, public=False)
+
+
+async def public_index(request: web.Request) -> web.Response:
+    return _index_response(request, public=True)
 
 
 # ── PWA (installable web app) ───────────────────────────────────────────────
@@ -816,12 +852,11 @@ async def get_status(request: web.Request) -> web.Response:
     return web.json_response({"running": mgr.running})
 
 
-@routes.get("/ws")
-async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
+async def _ws_common(request: web.Request, public: bool) -> web.WebSocketResponse:
     ws = web.WebSocketResponse()
     await ws.prepare(request)
     mgr: AgentManager = request.app["manager"]
-    mgr.add_ws(ws)
+    mgr.add_ws(ws, public=public)
     await ws.send_json({"type": "status", "running": mgr.running})
     await ws.send_json(mgr._stats_payload())
     try:
@@ -830,6 +865,15 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     finally:
         mgr.remove_ws(ws)
     return ws
+
+
+@routes.get("/ws")
+async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
+    return await _ws_common(request, public=False)
+
+
+async def public_websocket_handler(request: web.Request) -> web.WebSocketResponse:
+    return await _ws_common(request, public=True)
 
 
 # ── WhatsApp webhook ────────────────────────────────────────────────────────
@@ -947,6 +991,34 @@ async def symbols(request: web.Request) -> web.Response:
 
 # ── App lifecycle ───────────────────────────────────────────────────────────
 
+def _build_public_app(mgr: "AgentManager") -> web.Application:
+    """Read-only public app: monitoring page + whitelisted GET endpoints.
+
+    Admin endpoints (config read/write, start/stop, webhooks) are simply not
+    registered here — this port can be exposed to the internet while the main
+    admin port stays on the local network.
+    """
+    papp = web.Application()
+    papp["manager"] = mgr
+    papp.add_routes([
+        web.get("/", public_index),
+        web.get("/ws", public_websocket_handler),
+        web.get("/manifest.json", manifest),
+        web.get("/sw.js", service_worker),
+        web.get("/icon-{size}.png", pwa_icon),
+        web.get("/favicon.ico", favicon),
+        web.get("/aprs-symbols-24-{table}.png", symbols),
+        web.get("/api/info", info),
+        web.get("/api/status", get_status),
+        web.get("/api/stations", get_stations),
+        web.get("/api/stations/{callsign}", get_station),
+        web.get("/api/silence", get_silence),
+        web.get("/api/silence/range", get_silence_range),
+        web.get("/api/silence/history", get_silence_history),
+    ])
+    return papp
+
+
 async def _persist_loop(mgr: "AgentManager") -> None:
     """Flush station records to SQLite once a minute; every 10 minutes also
     record a silence-cell snapshot for the map timeline."""
@@ -973,17 +1045,36 @@ async def on_startup(app: web.Application) -> None:
     mgr: AgentManager = app["manager"]
     app["log_task"] = asyncio.create_task(mgr.broadcast_logs())
     app["persist_task"] = asyncio.create_task(_persist_loop(mgr))
+    # Optional read-only public server on a separate port.
+    # load_config() calls sys.exit on a broken file — catch SystemExit too so
+    # a config problem can't silently kill the whole web app at startup.
+    try:
+        pport = int(mgr.get_config().get("public_port", 0) or 0)
+    except (Exception, SystemExit):
+        pport = 0
+    if pport:
+        prunner = web.AppRunner(_build_public_app(mgr))
+        await prunner.setup()
+        await web.TCPSite(prunner, "0.0.0.0", pport).start()
+        app["public_runner"] = prunner
+        print(f"[public] Read-only monitoring page → port {pport}",
+              file=sys.__stderr__)
     try:
         cfg = mgr.get_config()
         if cfg.get("auto_start_agent", False):
             mgr.start()
-    except Exception:
+    except (Exception, SystemExit):
         pass
 
 
 async def on_shutdown(app: web.Application) -> None:
     app["log_task"].cancel()
     app["persist_task"].cancel()
+    if "public_runner" in app:
+        try:
+            await app["public_runner"].cleanup()
+        except Exception:
+            pass
     mgr: AgentManager = app["manager"]
     if mgr.running:
         mgr.stop()

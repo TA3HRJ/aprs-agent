@@ -124,6 +124,10 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 .map-legend{position:absolute;left:8px;bottom:8px;z-index:1000;background:rgba(30,30,30,.85);padding:6px 10px;border-radius:6px;font-size:11px;display:flex;gap:12px;pointer-events:none}
 .map-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 .map-legend em{font-style:normal;color:#ccc}
+/* Public (read-only) view: window.PUBLIC hides everything admin */
+body.public .sidebar{display:none!important}
+body.public .act-btn{display:none!important}
+body.public #status{display:none!important}
 .map-timeline{position:absolute;left:8px;right:8px;top:8px;z-index:1000;display:flex;gap:10px;align-items:center;background:rgba(30,30,30,.88);padding:6px 12px;border-radius:6px}
 .map-timeline input[type=range]{flex:1;accent-color:#62a0ea;height:16px}
 .tl-btn{background:#3a3a3a;border:1px solid #555;color:#e8e8e8;border-radius:4px;width:26px;height:22px;font-size:11px;cursor:pointer;line-height:1}
@@ -162,7 +166,7 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
 .sta-empty{padding:40px;text-align:center;color:var(--dim);font-size:13px}
 
 /* STATION DETAIL MODAL */
-.sta-modal{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55)}
+.sta-modal{position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55)}
 .sta-modal[hidden]{display:none}
 .sta-card{background:var(--sidebar);border:1px solid var(--border2);border-radius:12px;padding:20px 24px;min-width:340px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;position:relative}
 .sta-card h3{font-size:18px;margin-bottom:4px;display:flex;align-items:center;gap:8px}
@@ -207,7 +211,7 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
 .ws-dot.on{background:var(--success)}
 
 /* MODAL */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;justify-content:center;align-items:center}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:5000;justify-content:center;align-items:center}
 .modal-bg.open{display:flex}
 .modal{background:var(--sidebar);border:1px solid var(--border2);border-radius:14px;padding:24px;min-width:340px;max-width:460px}
 .modal h3{font-size:16px;margin-bottom:12px} .modal p{font-size:13px;line-height:1.6;margin-bottom:8px;color:var(--fg2)}
@@ -242,6 +246,7 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
   <div id="full-feed-warn" style="display:none;margin:4px 8px 8px;padding:8px 12px;border-radius:6px;background:#3a3000;color:#dcdcaa;font-size:12px" data-i="full_feed_warn">⚠ Receives ALL worldwide APRS traffic (~50–100 pkt/s). Extensions only respond to their own whitelisted callsigns. Rate limit below is strongly recommended.</div>
   <div class="entry-row"><label data-i="rate_limit_pps">Rate limit (pkt/s)</label><input id="f-rate-limit" type="number" min="0" max="500" value="50" style="max-width:80px"><div class="hint" data-i="rate_limit_hint">Max packets dispatched to extensions per second. 0 = unlimited.</div></div>
   <div class="entry-row"><label data-i="repeater_db_path">Repeater DB Path</label><input id="f-rdb-path" type="text" placeholder="(optional) /path/to/repeaters.json"><div class="hint" data-i="repeater_db_hint">Path to a Turkey Repeaters JSON file. Stations tab will enrich matching callsigns with city, frequency and tone data.</div></div>
+  <div class="entry-row"><label data-i="pub_port">Public View Port</label><input id="f-public-port" type="number" min="0" max="65535" placeholder="0" style="max-width:100px"><div class="hint" data-i="pub_port_hint">Read-only Live Log / Stations / Map page on this port — no settings, no start/stop. 0 = off. Only this port is safe to expose to the internet.</div></div>
   <div class="action-row"><div class="content"><div class="title" data-i="autostart_agent">Auto-start agent</div></div><label class="adw-switch"><input type="checkbox" id="f-autostart-agent"><span></span></label></div>
   <div class="action-row"><div class="content"><div class="title" data-i="print_cfg">Print config on startup</div></div><label class="adw-switch"><input type="checkbox" id="f-print-cfg"><span></span></label></div>
 </div></div>
@@ -568,6 +573,8 @@ const S={en:{
   sil_outage:"Regional silence (possible outage)",sil_igate:"IGate failure",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
   tl_live:"Live",
+  pub_port:"Public View Port",
+  pub_port_hint:"Read-only Live Log / Stations / Map page on this port — no settings, no start/stop. 0 = off. Only this port is safe to expose to the internet.",
   sta_h_call:"Callsign",sta_h_type:"Type",sta_h_loc:"Location",sta_h_org:"Organization",sta_h_freq:"Freq (MHz)",sta_h_status:"Status",sta_h_seen:"Last Heard",
   sta_empty:"No stations heard yet — start the agent to begin receiving.",
   sd_source:"Source",sd_first:"First seen",sd_packets:"Packets",sd_last:"Last packet",sd_aprs_live:"APRS live",sd_db_only:"DB only",sd_both:"APRS + DB",
@@ -623,6 +630,8 @@ const S={en:{
   sil_outage:"Bölgesel sessizlik (olası kesinti)",sil_igate:"IGate arızası",
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
   tl_live:"Canlı",
+  pub_port:"Halka Açık İzleme Portu",
+  pub_port_hint:"Bu portta salt-okunur Canlı Log / İstasyonlar / Harita sayfası sunulur — ayar ve başlat/durdur yoktur. 0 = kapalı. İnternete yalnızca bu portu açın.",
   sta_h_call:"Çağrı İşareti",sta_h_type:"Tür",sta_h_loc:"Konum",sta_h_org:"Dernek/Kuruluş",sta_h_freq:"Frek (MHz)",sta_h_status:"Durum",sta_h_seen:"Son Görülme",
   sta_empty:"Henüz istasyon duyulmadı — almaya başlamak için ajanı çalıştırın.",
   sd_source:"Kaynak",sd_first:"İlk görülme",sd_packets:"Paket",sd_last:"Son paket",sd_aprs_live:"APRS canlı",sd_db_only:"Yalnızca DB",sd_both:"APRS + DB",
@@ -650,7 +659,7 @@ $('f-bcn-locator').addEventListener('input',function(){if(cu)return;const ll=m2l
 function loadCfg(cfg){
   $('f-server').value=cfg.server||'';$('f-port').value=cfg.port||14580;$('f-callsign').value=cfg.callsign||'';
   $('f-allowed-cs').value=csv(cfg.allowed_callsigns);$('f-print-cfg').checked=cfg.print_config_on_startup||false;$('f-autostart-agent').checked=cfg.auto_start_agent||false;
-  $('f-full-feed').checked=cfg.full_feed||false;$('f-rate-limit').value=cfg.rate_limit_pps!=null?cfg.rate_limit_pps:50;toggleFullFeedWarn();$('f-rdb-path').value=cfg.repeater_db_path||'';
+  $('f-full-feed').checked=cfg.full_feed||false;$('f-rate-limit').value=cfg.rate_limit_pps!=null?cfg.rate_limit_pps:50;toggleFullFeedWarn();$('f-rdb-path').value=cfg.repeater_db_path||'';$('f-public-port').value=cfg.public_port||0;
   const mon=cfg.monitor||{};$('f-mon-enabled').checked=mon.enabled||false;$('f-mon-channel').value=mon.notify_channel||'telegram';$('f-mon-interval').value=mon.check_interval_mins||10;$('f-mon-watch').value=(mon.watch_callsigns||[]).join(', ');
   const sai=cfg.station_ai||{};$('f-sai-enabled').checked=sai.enabled||false;$('f-sai-interval').value=sai.interval_hours||24;$('f-sai-batch').value=sai.max_batch||20;
   const l=(cfg.extensions||{}).logger||{};$('f-log-enabled').checked=l.enabled!==false;$('f-log-comments').checked=l.log_comments!==false;
@@ -685,7 +694,7 @@ function loadCfg(cfg){
 function getCfg(){return{
   server:$('f-server').value.trim(),port:parseInt($('f-port').value)||14580,callsign:$('f-callsign').value.trim().toUpperCase(),
   allowed_callsigns:lst($('f-allowed-cs').value),print_config_on_startup:$('f-print-cfg').checked,auto_start_agent:$('f-autostart-agent').checked,
-  full_feed:$('f-full-feed').checked,rate_limit_pps:Math.max(0,parseInt($('f-rate-limit').value)||50),repeater_db_path:$('f-rdb-path').value.trim(),
+  full_feed:$('f-full-feed').checked,rate_limit_pps:Math.max(0,parseInt($('f-rate-limit').value)||50),repeater_db_path:$('f-rdb-path').value.trim(),public_port:Math.max(0,parseInt($('f-public-port').value)||0),
   monitor:{enabled:$('f-mon-enabled').checked,notify_channel:$('f-mon-channel').value,check_interval_mins:Math.max(1,parseInt($('f-mon-interval').value)||10),watch_callsigns:$('f-mon-watch').value.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean)},
   station_ai:{enabled:$('f-sai-enabled').checked,interval_hours:Math.max(1,parseInt($('f-sai-interval').value)||24),max_batch:Math.max(1,parseInt($('f-sai-batch').value)||20)},
   extension_server:{enabled:$('f-ext-enabled').checked,host:$('f-ext-host').value.trim(),port:parseInt($('f-ext-port').value)||65080},
@@ -983,7 +992,11 @@ async function reloadCfg(){try{const p=$('hdr-cfg').value.trim();if(p)await api(
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
 
 // ── Init ──
-(async function(){try{const info=await api('GET','/api/info');$('hdr-ver').textContent='v'+info.version;$('hdr-cfg').value=info.config_path||'';$('about-ver').textContent='APRS-Agent v'+info.version;setStatus(info.running)}catch(e){}try{const cfg=await api('GET','/api/config');loadCfg(cfg)}catch(e){addLog('[web] Failed to load config\n')}connectWS();applyLang()})();
+(async function(){
+  if(window.PUBLIC)document.body.classList.add('public');
+  try{const info=await api('GET','/api/info');$('hdr-ver').textContent='v'+info.version;if(!window.PUBLIC)$('hdr-cfg').value=info.config_path||'';$('about-ver').textContent='APRS-Agent v'+info.version;if(!window.PUBLIC)setStatus(info.running)}catch(e){}
+  if(!window.PUBLIC){try{const cfg=await api('GET','/api/config');loadCfg(cfg)}catch(e){addLog('[web] Failed to load config\n')}}
+  connectWS();applyLang()})();
 </script>
 </body>
 </html>

@@ -18,6 +18,7 @@ several automation features useful for amateur radio operators.
 | 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, Stations tab, Map tab, gzip-compressed |
 | 🗺️ | **Silence Map** | Leaflet map of all heard stations with real APRS symbols; detects regions where stations fall silent together (per-station beacon-cadence baseline, Maidenhead cell clustering, igate-failure discrimination) and paints affected cells; timeline slider replays the last 14 days of snapshots; new alerts get an AI assessment (via AI Gateway) shown in cell popups and are sent to the Monitor notify channel (Telegram/email) |
 | 💾 | **Persistence** | Station records and beacon-cadence history survive restarts (SQLite `aprs_stations.db` next to the config, shared by both GUIs) |
+| 👁️ | **Public View** | Optional read-only monitoring page on a separate port (`public_port`): Live Log / Stations / Map only — no settings, no start/stop, no API keys, log stream filtered to packet lines. Safe to expose to the internet while the admin port stays local |
 | 📊 | **Stations Tab** | Live table of all heard stations — type, location, organization, frequency, online/offline status; Object packets parsed; location falls back to Maidenhead locator or coordinates |
 | 🗄️ | **Turkey Repeaters DB** | Enriches station records with city, district, frequency, tone, band, mode from a local JSON database |
 | 🔔 | **Repeater Monitor** | Detects when DB-matched repeaters go offline or come back; sends Telegram or email notification |

@@ -32,6 +32,13 @@ allowed_callsigns = ["N0CALL*"]
 # Print the full parsed configuration to the console on startup (true/false).
 print_config_on_startup = false
 
+# Read-only public monitoring page (Web GUI only). When set to a port number
+# (e.g. 8082), a second web page is served on that port showing only the
+# Live Log / Stations / Map views — no settings, no start/stop, no API keys.
+# That port is safe to forward to the internet; NEVER expose the admin port.
+# 0 = disabled.
+public_port = 0
+
 
 # =============================================================================
 # Extension Server (TCP)
