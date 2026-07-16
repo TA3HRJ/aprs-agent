@@ -1422,6 +1422,9 @@ class APRSAgentGUI:
         )
         # Stations panel: fed from the same logger lines as the Web GUI
         self._logger_line_re = re.compile(r'^\[logger\] (.+)$', re.M)
+        # Own Fixed Beacon: outbound, never echoed by APRS-IS — ingested
+        # locally (map-only) and flagged out of silence detection.
+        self._own_beacon_re = re.compile(r'^\[fixed_beacon\] beacon sent: (.+)$', re.M)
         self._station_db = StationDB()
         # SQLite persistence (same file the Web GUI uses) — keeps the
         # beacon-cadence baseline across restarts
@@ -2904,6 +2907,8 @@ class APRSAgentGUI:
                 # Feed the Stations panel from logger lines (same as Web GUI)
                 for raw in self._logger_line_re.findall(clean):
                     self._station_db.ingest(raw)
+                for raw in self._own_beacon_re.findall(clean):
+                    self._station_db.ingest(raw, own=True)
 
                 # RX/TX/error counters (classification mirrors web_gui.py)
                 counted = False

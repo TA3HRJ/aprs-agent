@@ -132,6 +132,7 @@ class StationRecord:
         "ema_interval_s",  # smoothed beacon interval (silence detection baseline)
         "last_gate",       # igate that last gated this station to APRS-IS
         "hour_counts",     # packets heard per local hour-of-day (diurnal profile)
+        "self_beacon",     # True = this agent's own Fixed Beacon (see below)
     )
 
     def __init__(self, callsign: str) -> None:
@@ -177,6 +178,12 @@ class StationRecord:
         self.ema_interval_s: Optional[float] = None
         self.last_gate: str = ""
         self.hour_counts: list[int] = [0] * 24
+        # The agent's own Fixed Beacon is self-generated: it keeps beaconing no
+        # matter what happens at its claimed location (the agent may even run on
+        # a VPS in another country). It must show on the map but must NEVER act
+        # as a silence sensor — otherwise it would be a phantom "still active"
+        # vote that masks a genuine outage in its cell.
+        self.self_beacon: bool = False
 
     def update_from_parsed(self, parsed: dict[str, Any]) -> None:
         """Merge fields extracted from a new APRS packet into this record."""
@@ -307,6 +314,7 @@ class StationRecord:
             "ai_analyzed":    self.ai_analyzed,
             "ema_interval_s": self.ema_interval_s,
             "last_gate":      self.last_gate,
+            "self_beacon":    self.self_beacon,
             "has_db":      self.db_record is not None,
             "online":      online,
             "first_seen":  int(self.first_seen),
@@ -361,8 +369,12 @@ class StationDB:
         return len(records)
 
     # ------------------------------------------------------------------
-    def ingest(self, raw_line: str) -> Optional[StationRecord]:
-        """Parse a raw APRS-IS line and update the station record."""
+    def ingest(self, raw_line: str, own: bool = False) -> Optional[StationRecord]:
+        """Parse a raw APRS-IS line and update the station record.
+
+        own=True marks the record as this agent's own Fixed Beacon, so it
+        appears on the map but is excluded from silence detection.
+        """
         parsed = parse_packet(raw_line)
         callsign = parsed.get("callsign", "")
         if not callsign:
@@ -380,6 +392,8 @@ class StationDB:
             rec = self._stations[callsign]
 
         rec.update_from_parsed(parsed)
+        if own:
+            rec.self_beacon = True
         return rec
 
     # ------------------------------------------------------------------
@@ -608,6 +622,8 @@ class StationDB:
 
         cells: dict[str, dict[str, Any]] = {}
         for r in self._stations.values():
+            if r.self_beacon:
+                continue    # self-generated — never a silence sensor
             if r.packet_count < min_history or not r.locator:
                 continue
             if r.lat is None or r.lon is None:

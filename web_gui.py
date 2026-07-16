@@ -114,6 +114,10 @@ class _QueueWriter:
 _SRC_CALL_RE = re.compile(r"^\[logger\] ([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)>", re.M)
 # Full raw APRS line extracted from logger output
 _SRC_LINE_RE = re.compile(r"^\[logger\] (.+)$", re.M)
+# The agent's own Fixed Beacon (outbound — never echoed back by APRS-IS).
+# Ingested locally so the station shows on the map; flagged so it is excluded
+# from silence detection.
+_OWN_BEACON_RE = re.compile(r"^\[fixed_beacon\] beacon sent: (.+)$", re.M)
 
 # Log-line classification for the RX/TX/error stat counters. These mirror the
 # browser's cls() classifier so the server-authoritative counts match what the
@@ -630,6 +634,10 @@ class AgentManager:
         now = time.time()
         for raw_line in _SRC_LINE_RE.findall(text):
             self._station_db.ingest(raw_line)
+        # The agent's own beacon never comes back through APRS-IS, so feed it
+        # into the registry from the outbound log line (map-only, no counters).
+        for raw_line in _OWN_BEACON_RE.findall(text):
+            self._station_db.ingest(raw_line, own=True)
         for call in _SRC_CALL_RE.findall(text):
             self._pkt_count += 1
             if call not in self._seen_calls:

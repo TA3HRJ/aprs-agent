@@ -20,7 +20,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "2.7.17"
+VERSION = "2.7.18"
 
 # tomllib is built-in from Python 3.11 onwards.
 # For older Python versions, install the 'tomli' package.

@@ -573,6 +573,7 @@ const S={en:{
   sil_outage:"Regional silence (possible outage)",sil_igate:"IGate failure",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
   tl_live:"Live",
+  own_station:"your station",
   pub_port:"Public View Port",
   pub_port_hint:"Read-only Live Log / Stations / Map page on this port — no settings, no start/stop. 0 = off. Only this port is safe to expose to the internet.",
   sta_h_call:"Callsign",sta_h_type:"Type",sta_h_loc:"Location",sta_h_org:"Organization",sta_h_freq:"Freq (MHz)",sta_h_status:"Status",sta_h_seen:"Last Heard",
@@ -630,6 +631,7 @@ const S={en:{
   sil_outage:"Bölgesel sessizlik (olası kesinti)",sil_igate:"IGate arızası",
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
   tl_live:"Canlı",
+  own_station:"kendi istasyonun",
   pub_port:"Halka Açık İzleme Portu",
   pub_port_hint:"Bu portta salt-okunur Canlı Log / İstasyonlar / Harita sayfası sunulur — ayar ve başlat/durdur yoktur. 0 = kapalı. İnternete yalnızca bu portu açın.",
   sta_h_call:"Çağrı İşareti",sta_h_type:"Tür",sta_h_loc:"Konum",sta_h_org:"Dernek/Kuruluş",sta_h_freq:"Frek (MHz)",sta_h_status:"Durum",sta_h_seen:"Son Görülme",
@@ -811,7 +813,9 @@ function mapIcon(r){
 }
 function mapPopup(r){
   const loc=[r.city,r.district].filter(Boolean).join(', ')||r.locator||'';
-  let h='<b style="color:#62a0ea;cursor:pointer" onclick="mapDetail(\''+r.callsign+'\')">'+r.callsign+'</b><br>'+r.type;
+  let h='<b style="color:#62a0ea;cursor:pointer" onclick="mapDetail(\''+r.callsign+'\')">'+r.callsign+'</b>';
+  if(r.self_beacon)h+=' <span style="color:#f5c211">&#9733; '+t('own_station')+'</span>';
+  h+='<br>'+r.type;
   if(loc)h+=' &middot; '+loc;
   if(r.freq_mhz)h+='<br>'+fmtFreq(r.freq_mhz)+' MHz';
   if(r.last_seen_ago_s!==null&&r.last_seen_ago_s!==undefined)
