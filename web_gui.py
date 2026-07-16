@@ -152,6 +152,9 @@ class AgentManager:
                       f"{self._sta_db_path}", file=sys.__stderr__)
         except Exception as e:
             print(f"[station-db] SQLite load failed: {e}", file=sys.__stderr__)
+        # Silence watch (Phase 4): active alert episodes + AI assessments
+        self._silence_active: dict[str, float] = {}
+        self._silence_ai_notes: dict[str, str] = {}
 
     def get_config(self) -> dict:
         return cfg_module.load_config(self.config_path)
@@ -256,6 +259,12 @@ class AgentManager:
             aprs_connection.start_server(config, ext_store)
         )
 
+        # Silence watch is always on: detection is cheap, and AI/notification
+        # steps degrade gracefully when their configs are missing.
+        asyncio.create_task(self._silence_watch_loop(config))
+        print("[silence] Silence watch started (first scan in 15m)",
+              file=sys.stderr)
+
         mon_cfg = config.get("monitor", {})
         if mon_cfg.get("enabled") and config.get("repeater_db_path", "").strip():
             asyncio.create_task(self._monitor_loop(config))
@@ -290,6 +299,124 @@ class AgentManager:
                     pass
 
         print("[agent] stopped.", file=sys.stderr)
+
+    # ── Silence watch: AI assessment + alerting (silence-map phase 4) ────────
+
+    async def _silence_watch_loop(self, config: dict) -> None:
+        """Scan for new silence-cell alerts every 5 minutes.
+
+        Each cell alerts once per episode (until it recovers). If the AI
+        Gateway is configured, an AI assessment is attached to the cell (shown
+        in map popups and stored with history snapshots); if the monitor
+        notify channel is configured, an alert message is sent there.
+        """
+        mon = config.get("monitor", {})
+        channel = mon.get("notify_channel", "")
+        ai_cfg = config.get("extensions", {}).get("ai_gateway", {})
+        ai_ok = bool(ai_cfg.get("provider") or ai_cfg.get("base_url"))
+
+        await asyncio.sleep(900)   # let cadence baselines settle first
+        while True:
+            try:
+                cells = self._station_db.silence_cells()
+            except Exception:
+                cells = []
+            alerts = {c["cell"]: c for c in cells if c["alert"]}
+
+            for cell, c in alerts.items():
+                if cell in self._silence_active:
+                    continue                     # already alerted this episode
+                self._silence_active[cell] = time.time()
+                note = ""
+                if ai_ok:
+                    try:
+                        note = await self._assess_silence(c, ai_cfg)
+                    except Exception as e:
+                        print(f"[silence] AI assessment failed: {e}",
+                              file=sys.stderr)
+                if note:
+                    self._silence_ai_notes[cell] = note
+                print(f"[silence] ALERT {cell}: {c['silent']}/{c['baseline']}"
+                      f" silent ({c['cause']})", file=sys.stderr)
+                if channel:
+                    try:
+                        await self._send_notification(
+                            self._format_silence_msg(c, note), channel, config)
+                    except Exception as e:
+                        print(f"[silence] notification error: {e}",
+                              file=sys.stderr)
+
+            # Episode over: cell recovered — allow future re-alerts
+            for cell in list(self._silence_active):
+                if cell not in alerts:
+                    del self._silence_active[cell]
+                    self._silence_ai_notes.pop(cell, None)
+                    print(f"[silence] cleared: {cell}", file=sys.stderr)
+
+            await asyncio.sleep(300)
+
+    async def _assess_silence(self, c: dict, ai_cfg: dict) -> str:
+        """Ask the AI Gateway to interpret a silence cluster. Returns a short
+        note like "[power_outage/high] …summary…" or "" on failure."""
+        provider = ai_cfg.get("provider", "puter")
+        api_key  = ai_cfg.get("api_key", "")
+        base_url = self._ai_base_url(provider, ai_cfg.get("base_url", ""))
+        model    = ai_cfg.get("model", "")
+
+        mins = ""
+        if c.get("since"):
+            mins = f"Silence began ~{max(0, int(time.time() - c['since']) // 60)} minutes ago.\n"
+        pre = ("all silent stations shared one igate which is itself silent"
+               if c["cause"] == "igate" else
+               "multiple igates involved — infrastructure/power outage possible")
+        prompt = (
+            "APRS network silence event.\n"
+            f"Maidenhead grid cell: {c['cell']}\n"
+            f"{c['silent']} of {c['baseline']} recently-active stations fell "
+            f"silent together (ratio {c['ratio']}).\n"
+            f"Preliminary signal: {pre}.\n"
+            f"Silent stations: {', '.join(c['silent_calls'][:10])}\n"
+            f"{mins}\n"
+            "Assess the most likely cause. Return ONLY valid JSON, no prose:\n"
+            '{"cause": "<power_outage|igate_failure|maintenance|propagation|unknown>", '
+            '"confidence": "<low|medium|high>", '
+            '"summary": "<one short plain-language sentence>"}'
+        )
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: self._call_ai_api(provider, base_url, api_key, model, prompt)
+        )
+        if not result:
+            return ""
+        cause = result.get("cause") or "unknown"
+        conf = result.get("confidence") or "low"
+        summary = (result.get("summary") or "").strip()
+        return f"[{cause}/{conf}] {summary}" if summary else f"[{cause}/{conf}]"
+
+    @staticmethod
+    def _ai_base_url(provider: str, base_url: str) -> str:
+        base_url = (base_url or "").rstrip("/")
+        if provider == "puter":
+            return base_url or "https://api.puter.com/puterai/openai/v1"
+        if provider == "groq":
+            return base_url or "https://api.groq.com/openai/v1"
+        if provider == "openrouter":
+            return base_url or "https://openrouter.ai/api/v1"
+        return base_url
+
+    @staticmethod
+    def _format_silence_msg(c: dict, note: str) -> str:
+        icon = "🟡" if c["cause"] == "igate" else "🔴"
+        cause = ("IGate failure" if c["cause"] == "igate"
+                 else "Regional silence — possible outage")
+        msg = (f"{icon} SILENCE ALERT — {c['cell']}\n"
+               f"{c['silent']} of {c['baseline']} stations silent "
+               f"({int(c['ratio'] * 100)}%)\n{cause}\n"
+               f"Stations: {', '.join(c['silent_calls'][:8])}")
+        if note:
+            msg += f"\nAI: {note}"
+        return msg
 
     # ── Repeater monitor ──────────────────────────────────────────────────────
 
@@ -374,15 +501,8 @@ class AgentManager:
 
         provider  = ai_cfg.get("provider", "puter")
         api_key   = ai_cfg.get("api_key", "")
-        base_url  = ai_cfg.get("base_url", "").rstrip("/")
+        base_url  = self._ai_base_url(provider, ai_cfg.get("base_url", ""))
         model     = ai_cfg.get("model", "")
-
-        if provider == "puter":
-            base_url = base_url or "https://api.puter.com/puterai/openai/v1"
-        elif provider == "groq":
-            base_url = base_url or "https://api.groq.com/openai/v1"
-        elif provider == "openrouter":
-            base_url = base_url or "https://openrouter.ai/api/v1"
 
         prompt = (
             f"Station callsign: {rec.callsign}\n"
@@ -771,6 +891,8 @@ async def get_silence(request: web.Request) -> web.Response:
         cells = mgr._station_db.silence_cells()
     except Exception:
         cells = []
+    for c in cells:
+        c["ai_note"] = mgr._silence_ai_notes.get(c["cell"], "")
     return web.json_response({"cells": cells})
 
 
@@ -841,7 +963,7 @@ async def _persist_loop(mgr: "AgentManager") -> None:
             try:
                 await asyncio.get_event_loop().run_in_executor(
                     None, mgr._station_db.record_silence_history,
-                    mgr._sta_db_path)
+                    mgr._sta_db_path, dict(mgr._silence_ai_notes))
             except Exception as e:
                 print(f"[station-db] history snapshot failed: {e}",
                       file=sys.__stderr__)

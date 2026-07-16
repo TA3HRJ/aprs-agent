@@ -59,12 +59,20 @@ def load_silence_history(path: str, ts: int) -> dict[str, Any]:
             snap_ts = row[0] if row and row[0] is not None else None
         if snap_ts is None:
             return empty
-        cells = []
-        for (cell, baseline, silent, ratio, alert, cause,
-             silent_calls, since) in con.execute(
+        try:
+            rows = list(con.execute(
+                "SELECT cell, baseline, silent, ratio, alert, cause,"
+                " silent_calls, since, ai_note FROM silence_history"
+                " WHERE ts = ?", (snap_ts,)))
+        except sqlite3.OperationalError:
+            # v2.7.15 schema without ai_note
+            rows = [r + ("",) for r in con.execute(
                 "SELECT cell, baseline, silent, ratio, alert, cause,"
                 " silent_calls, since FROM silence_history WHERE ts = ?",
-                (snap_ts,)):
+                (snap_ts,))]
+        cells = []
+        for (cell, baseline, silent, ratio, alert, cause,
+             silent_calls, since, ai_note) in rows:
             try:
                 calls = json.loads(silent_calls or "[]")
             except Exception:
@@ -73,6 +81,7 @@ def load_silence_history(path: str, ts: int) -> dict[str, Any]:
                 "cell": cell, "baseline": baseline, "silent": silent,
                 "ratio": ratio, "alert": bool(alert), "cause": cause,
                 "silent_calls": calls, "since": since,
+                "ai_note": ai_note or "",
                 "bounds": _cell_bounds(cell),
             })
         return {"ts": int(snap_ts), "cells": cells}
@@ -532,13 +541,17 @@ class StationDB:
 
     _HISTORY_RETENTION_S = 14 * 24 * 3600
 
-    def record_silence_history(self, path: str) -> int:
+    def record_silence_history(
+        self, path: str, ai_notes: Optional[dict[str, str]] = None,
+    ) -> int:
         """Append the current silence-cell state as a timestamped snapshot.
 
-        Only cells with at least one silent station are stored. Rows older
-        than the retention window are pruned. Returns rows written.
+        Only cells with at least one silent station are stored; AI assessments
+        (cell → note) are stored alongside so the timeline can replay them.
+        Rows older than the retention window are pruned. Returns rows written.
         """
         cells = [c for c in self.silence_cells() if c["silent"] >= 1]
+        ai_notes = ai_notes or {}
         now = int(time.time())
         con = sqlite3.connect(path)
         try:
@@ -546,13 +559,19 @@ class StationDB:
                 "CREATE TABLE IF NOT EXISTS silence_history ("
                 "ts INTEGER, cell TEXT, baseline INTEGER, silent INTEGER,"
                 "ratio REAL, alert INTEGER, cause TEXT, silent_calls TEXT,"
-                "since INTEGER, PRIMARY KEY (ts, cell))"
+                "since INTEGER, ai_note TEXT, PRIMARY KEY (ts, cell))"
             )
+            # Migrate v2.7.15 tables that predate the ai_note column
+            try:
+                con.execute(
+                    "ALTER TABLE silence_history ADD COLUMN ai_note TEXT")
+            except sqlite3.OperationalError:
+                pass
             con.executemany(
-                "INSERT OR REPLACE INTO silence_history VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO silence_history VALUES (?,?,?,?,?,?,?,?,?,?)",
                 [(now, c["cell"], c["baseline"], c["silent"], c["ratio"],
                   int(c["alert"]), c["cause"], json.dumps(c["silent_calls"]),
-                  c["since"]) for c in cells])
+                  c["since"], ai_notes.get(c["cell"], "")) for c in cells])
             con.execute("DELETE FROM silence_history WHERE ts < ?",
                         (now - self._HISTORY_RETENTION_S,))
             con.commit()

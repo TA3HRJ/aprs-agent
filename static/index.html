@@ -878,6 +878,7 @@ function silPopup(c){
   h+=t('sil_stats').replace('{s}',c.silent).replace('{b}',c.baseline)+' ('+Math.round(c.ratio*100)+'%)<br>';
   if(c.since)h+=t('sil_since')+' '+fmtAgoLong(Math.max(0,Math.floor(Date.now()/1000-c.since)))+'<br>';
   h+='<span style="opacity:.7;font-size:11px">'+c.silent_calls.join(', ')+'</span>';
+  if(c.ai_note)h+='<br><span style="color:#8ff0a4;font-size:11px">AI: '+c.ai_note+'</span>';
   return h;
 }
 function renderSilence(cells){
