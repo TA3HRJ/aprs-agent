@@ -175,6 +175,15 @@ class AgentManager:
                       f"{self._sta_db_path}", file=sys.__stderr__)
         except Exception as e:
             print(f"[station-db] SQLite load failed: {e}", file=sys.__stderr__)
+        # Lifelong uptime: seconds accumulated by every previous run. The
+        # current session is added on top when reported, and folded in here
+        # when the agent stops — so a restart (a release, a reboot) no longer
+        # loses the station's total service time.
+        try:
+            self._uptime_base = float(
+                station_db_module.load_meta(self._sta_db_path, "uptime_total", "0"))
+        except (ValueError, TypeError):
+            self._uptime_base = 0.0
         # Silence watch (Phase 4): active alert episodes + AI assessments
         self._silence_active: dict[str, float] = {}
         self._silence_ai_notes: dict[str, str] = {}
@@ -241,8 +250,27 @@ class AgentManager:
         finally:
             sys.stderr = self._original_stderr
             self.running = False
+            # Fold this session into the lifelong total before the clock resets
+            if self._started_at:
+                self._uptime_base += time.time() - self._started_at
+                self._started_at = None
+                self._save_uptime()
             self._agent_loop.close()
             self._agent_loop = None
+
+    def lifelong_uptime(self) -> float:
+        """Total seconds this station has been running, across all restarts."""
+        total = self._uptime_base
+        if self.running and self._started_at:
+            total += time.time() - self._started_at
+        return total
+
+    def _save_uptime(self) -> None:
+        try:
+            station_db_module.save_meta(
+                self._sta_db_path, "uptime_total", str(int(self.lifelong_uptime())))
+        except Exception as e:
+            print(f"[station-db] uptime save failed: {e}", file=sys.__stderr__)
 
     async def _agent_main(self) -> None:
         config = cfg_module.load_config(self.config_path)
@@ -758,6 +786,7 @@ class AgentManager:
             "type": "stats",
             "running": self.running,
             "uptime": int(now - self._started_at) if self.running and self._started_at else 0,
+            "uptime_total": int(self.lifelong_uptime()),
             "packets": self._pkt_count,
             "unique": self._unique_count,
             "unique_calls": self._unique_calls,
@@ -1145,6 +1174,9 @@ async def _persist_loop(mgr: "AgentManager") -> None:
                 None, mgr._station_db.save_sqlite, mgr._sta_db_path)
         except Exception as e:
             print(f"[station-db] SQLite save failed: {e}", file=sys.__stderr__)
+        if mgr.running:
+            # Checkpoint the lifelong counter so a crash costs at most a minute
+            await asyncio.get_event_loop().run_in_executor(None, mgr._save_uptime)
         if tick % 10 == 0 and mgr.running:
             try:
                 await asyncio.get_event_loop().run_in_executor(
@@ -1194,6 +1226,7 @@ async def on_shutdown(app: web.Application) -> None:
         mgr.stop()
     try:
         mgr._station_db.save_sqlite(mgr._sta_db_path)
+        mgr._save_uptime()
     except Exception:
         pass
 

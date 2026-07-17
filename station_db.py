@@ -22,6 +22,32 @@ from packet_parser import (
 )
 
 
+def save_meta(path: str, key: str, value: str) -> None:
+    """Store a small persistent counter/setting (e.g. lifelong uptime)."""
+    con = sqlite3.connect(path)
+    try:
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
+        con.execute("INSERT OR REPLACE INTO meta VALUES (?,?)", (key, value))
+        con.commit()
+    finally:
+        con.close()
+
+
+def load_meta(path: str, key: str, default: str = "") -> str:
+    if not Path(path).exists():
+        return default
+    con = sqlite3.connect(path)
+    try:
+        row = con.execute(
+            "SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return row[0] if row and row[0] is not None else default
+    except sqlite3.Error:
+        return default
+    finally:
+        con.close()
+
+
 def silence_history_range(path: str) -> Optional[dict[str, int]]:
     """Return {"min": ts, "max": ts} of stored snapshots, or None if empty."""
     if not Path(path).exists():
