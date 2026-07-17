@@ -233,6 +233,13 @@ class AgentManager:
         try:
             cfg = cfg_module.load_config(self.config_path)
             self._channel_map = self._build_channel_map(cfg)
+            grids = cfg.get("monitor", {}).get("silence_grids", []) or []
+            self._station_db.silence_grids = [
+                str(g).strip().upper() for g in grids if str(g).strip()]
+            if self._station_db.silence_grids:
+                self._log_queue.put(
+                    "[silence] Scoped to grids: "
+                    + ", ".join(self._station_db.silence_grids) + "\n")
             db_path = cfg.get("repeater_db_path", "").strip()
             if db_path:
                 n = self._station_db.load_repeater_db(db_path)

@@ -366,6 +366,11 @@ class StationDB:
         self._stations: dict[str, StationRecord] = {}
         # base_call → list of DB records for fast lookup
         self._repeater_index: dict[str, list[dict]] = {}
+        # Maidenhead fields (first two chars, e.g. "KM") that silence detection
+        # is scoped to. A prefix station filter such as p/TA also matches
+        # callsigns abroad, and clusters of those produced alerts for regions
+        # the operator does not care about. Empty = worldwide.
+        self.silence_grids: list[str] = []
 
     # ------------------------------------------------------------------
     def load_repeater_db(self, path: str) -> int:
@@ -659,6 +664,8 @@ class StationDB:
             if r.ema_interval_s is None:
                 continue                          # no cadence baseline yet
             cell = r.locator[:4].upper()
+            if self.silence_grids and cell[:2] not in self.silence_grids:
+                continue        # outside the region this station monitors
             c = cells.setdefault(cell, {
                 "cell": cell, "baseline": 0, "silent": 0,
                 "silent_calls": [], "gate_of": {}, "first_silent": None,
