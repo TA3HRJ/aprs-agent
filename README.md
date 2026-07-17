@@ -399,7 +399,7 @@ python web_gui.py --host 0.0.0.0 -p 8080  # listen on all interfaces (remote acc
 
 ### Web GUI Features
 
-- **Live stats bar** — RX / TX / Errors / Packets / Stations / Callsigns / Uptime / Lifelong, updated every 2 seconds via WebSocket. *Uptime* is the current session; *Lifelong* is the station's total service time, accumulated in the database across restarts, so releases and reboots no longer zero it
+- **Live stats bar** — RX / TX / Errors / Packets / Stations / Callsigns / Uptime / Lifetime, updated every 2 seconds via WebSocket. *Uptime* is the current session; *Lifetime* is the station's total service time, accumulated in the database across restarts, so releases and reboots no longer zero it
 - **Last Heard strip** — callsign chips above the stats bar; click a chip to filter the log to that station
 - **Stations tab** — live table of all heard stations with type/status/callsign filters and an Organization column (filled by AI analysis); APRS Object packets are correctly attributed to the object callsign; Location column falls back to Maidenhead locator or lat/lon; click any row for a detail panel showing coordinates, frequency, tone, EchoLink, weather data, AI-extracted org/description, and packet history; auto-refreshes every 5 seconds
 - **PWA — installable app** — on Chrome/Edge, use *Install* or *Add to Home Screen* to run without a browser tab; works on Android, iOS, Windows, and Mac

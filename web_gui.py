@@ -28,7 +28,7 @@ from collections import OrderedDict, deque
 from pathlib import Path
 from typing import Any, Optional, Set
 
-from aiohttp import web
+from aiohttp import WSCloseCode, web
 
 import config as cfg_module
 import aprs_connection
@@ -1216,12 +1216,24 @@ async def on_startup(app: web.Application) -> None:
 async def on_shutdown(app: web.Application) -> None:
     app["log_task"].cancel()
     app["persist_task"].cancel()
+    mgr: AgentManager = app["manager"]
+    # Close live WebSockets first. Their handlers sit in `async for _ in ws`
+    # until the client disconnects, and aiohttp's graceful shutdown waits for
+    # them — with a browser attached that wait runs out systemd's stop timeout
+    # and the process is SIGKILLed before it can save anything.
+    for ws in list(mgr._ws_clients) + list(mgr._public_ws):
+        try:
+            await ws.close(code=WSCloseCode.GOING_AWAY,
+                           message=b"server shutdown")
+        except Exception:
+            pass
+    mgr._ws_clients.clear()
+    mgr._public_ws.clear()
     if "public_runner" in app:
         try:
             await app["public_runner"].cleanup()
         except Exception:
             pass
-    mgr: AgentManager = app["manager"]
     if mgr.running:
         mgr.stop()
     try:
@@ -1270,7 +1282,10 @@ def main() -> None:
             webbrowser.open(url)
         threading.Thread(target=_open, daemon=True).start()
 
-    web.run_app(app, host=args.host, port=args.port, print=None)
+    # Bound the graceful-shutdown wait well under systemd's stop timeout, so a
+    # stuck connection can never turn a restart into a SIGKILL.
+    web.run_app(app, host=args.host, port=args.port, print=None,
+                shutdown_timeout=15)
 
 
 if __name__ == "__main__":
