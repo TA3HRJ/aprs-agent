@@ -335,6 +335,11 @@ _RE_OBJECT = re.compile(r'^;([^\*]{9})\*')
 # q-construct: the igate that put the packet on APRS-IS (qAR/qAO/qAS/qAC…)
 _RE_GATE = re.compile(r',qA[A-Z],([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)')
 
+# Message packet info field: ':' + 9-char addressee (space padded) + ':' + text
+_RE_MESSAGE = re.compile(r'^:(.{9}):(.*)$', re.DOTALL)
+# Telemetry definition messages — machine chatter, not conversation
+_RE_TELEMETRY_MSG = re.compile(r'^(PARM|UNIT|EQNS|BITS)\.')
+
 # Uncompressed position — works for all packet types (!, =, @, /, Object, etc.)
 # The optional \d{6}[zh] handles timestamped packets (@DDHHMMz or @DDHHMMh)
 _RE_POS_UNCOMP = re.compile(
@@ -473,6 +478,65 @@ def classify_symbol(table: str, symbol: str) -> str:
     if table not in ("/", "\\"):
         table = "\\"
     return _SYMBOL_TYPE.get((table, symbol), "unknown")
+
+
+def parse_message(raw_line: str) -> Optional[dict[str, Any]]:
+    """Parse an APRS message packet, or return None if it isn't one.
+
+    Format:  FROM>DEST,path::ADDRESSEE:text{id
+    The info field starts after the FIRST ':' (the header separator); the
+    message body itself contains further ':' characters.
+
+    Returned dict:
+      from, to, text, msg_id, kind, ts
+    where kind is one of: msg, bulletin, ack, rej, telemetry
+    """
+    m = _RE_CALLSIGN.match(raw_line)
+    if not m:
+        return None
+    src = m.group(1)
+
+    colon_idx = raw_line.find(":")
+    if colon_idx == -1:
+        return None
+    info = raw_line[colon_idx + 1:]
+
+    mm = _RE_MESSAGE.match(info)
+    if not mm:
+        return None
+
+    to = mm.group(1).strip()
+    body = mm.group(2).rstrip("\r\n")
+    if not to:
+        return None
+
+    # Trailing '{id' is the message number used for acknowledgements
+    msg_id = ""
+    if "{" in body:
+        body, _, msg_id = body.rpartition("{")
+        msg_id = msg_id.strip()
+
+    text = body.strip()
+    low = text.lower()
+    if low.startswith("ack"):
+        kind = "ack"
+    elif low.startswith("rej"):
+        kind = "rej"
+    elif _RE_TELEMETRY_MSG.match(text):
+        kind = "telemetry"
+    elif to.upper().startswith("BLN"):
+        kind = "bulletin"
+    else:
+        kind = "msg"
+
+    return {
+        "from": src,
+        "to": to,
+        "text": text,
+        "msg_id": msg_id,
+        "kind": kind,
+        "ts": int(time.time()),
+    }
 
 
 def parse_packet(raw_line: str) -> dict[str, Any]:

@@ -128,6 +128,32 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 body.public .sidebar{display:none!important}
 body.public .act-btn{display:none!important}
 body.public #status{display:none!important}
+/* Message bodies may carry private bridge traffic — admin only */
+body.public #tab-msg{display:none!important}
+/* RX/TX/error counters are operator diagnostics — meaningless (and alarming)
+   to a visitor, who has no context for them */
+body.public .stat-bar .cell.diag{display:none!important}
+/* Public header — the sidebar carries the identity on the admin view */
+.pub-hdr{display:flex;align-items:center;gap:12px;padding:9px 14px;background:var(--sidebar);border-bottom:1px solid var(--border2);flex-wrap:wrap}
+.pub-logo{width:26px;height:26px;border-radius:5px;background:#1c71d8;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.pub-id{min-width:0}
+.pub-title{font-size:14px;font-weight:600;color:var(--fg)}
+.pub-sub{font-size:11px;color:var(--dim)}
+.pub-actions{margin-left:auto;display:flex;gap:6px;align-items:center}
+.pub-live{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:4px;margin-right:4px}
+.pub-live .dot{width:7px;height:7px;border-radius:50%;background:#5a5a5a}
+.pub-live.on .dot{background:#57e389}
+.pub-live.on{color:#57e389}
+/* One-line "what is this tab" strip */
+.tab-caption{padding:6px 14px;background:rgba(28,113,216,.12);border-bottom:1px solid var(--border2);font-size:11px;color:#a9c8e0}
+/* Active silence events */
+.alert-panel{max-height:132px;overflow-y:auto;border-bottom:1px solid var(--border2);background:rgba(224,27,36,.07)}
+.alert-row{display:flex;gap:8px;align-items:baseline;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px}
+.alert-row:last-child{border-bottom:none}
+.alert-cell{font-weight:600;color:#f66;font-family:'Consolas',monospace}
+.alert-cell.ig{color:#f5c211}
+.alert-txt{color:var(--fg2)}
+.alert-ai{color:#8ff0a4}
 .map-timeline{position:absolute;left:8px;right:8px;top:8px;z-index:1000;display:flex;gap:10px;align-items:center;background:rgba(30,30,30,.88);padding:6px 12px;border-radius:6px}
 .map-timeline input[type=range]{flex:1;accent-color:#62a0ea;height:16px}
 .tl-btn{background:#3a3a3a;border:1px solid #555;color:#e8e8e8;border-radius:4px;width:26px;height:22px;font-size:11px;cursor:pointer;line-height:1}
@@ -395,10 +421,24 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
 
 <!-- LOG PANEL -->
 <div class="log-panel">
+  <!-- PUBLIC HEADER (read-only view only — the sidebar carries this on admin) -->
+  <div class="pub-hdr" id="pub-hdr" hidden>
+    <div class="pub-logo">📡</div>
+    <div class="pub-id">
+      <div class="pub-title" id="pub-title">APRS Monitoring Station</div>
+      <div class="pub-sub" id="pub-sub"></div>
+    </div>
+    <div class="pub-actions">
+      <span class="pub-live" id="pub-live"><span class="dot"></span><span data-i="pub_live">live</span></span>
+      <button class="log-btn" id="pub-lang" onclick="toggleLang()">TR</button>
+      <button class="log-btn" onclick="$('about-bg').classList.add('open')" data-i="btn_about">About</button>
+    </div>
+  </div>
   <div class="tab-bar">
     <button class="tab-btn active" id="tab-log" onclick="switchTab('log')" data-i="tab_log">Live Log</button>
     <button class="tab-btn" id="tab-sta" onclick="switchTab('sta')" data-i="tab_sta">Stations</button>
     <button class="tab-btn" id="tab-map" onclick="switchTab('map')" data-i="tab_map">Map</button>
+    <button class="tab-btn" id="tab-msg" onclick="switchTab('msg')" data-i="tab_msg">Messages</button>
     <div class="tab-spacer"></div>
     <div class="log-header" style="background:transparent;border:none">
       <span class="log-chip" id="lc">0</span>
@@ -406,6 +446,10 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
       <button class="log-btn active" id="asB" onclick="togAs()" data-i="btn_autoscroll">Auto Scroll</button>
     </div>
   </div>
+  <!-- What am I looking at? (public view only) -->
+  <div class="tab-caption" id="tab-caption" hidden></div>
+  <!-- Active silence events (both views) -->
+  <div class="alert-panel" id="alert-panel" hidden></div>
   <div class="log-view" id="log"></div>
 
   <!-- STATIONS PANEL -->
@@ -449,6 +493,35 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
     </div>
   </div>
 
+  <!-- MESSAGES PANEL -->
+  <div class="sta-panel" id="msg-view" hidden>
+    <div class="sta-filters">
+      <select class="sta-select" id="msg-fdir" onchange="renderMsgs()">
+        <option value="" data-i="msg_all">All</option>
+        <option value="rx" data-i="msg_rx">Received</option>
+        <option value="tx" data-i="msg_tx">Sent</option>
+      </select>
+      <input class="sta-search" id="msg-fsearch" placeholder="Search…" data-i="msg_search" oninput="renderMsgs()">
+      <span class="sta-count" id="msg-cnt">0</span>
+    </div>
+    <div class="sta-table-wrap" id="msg-wrap">
+      <table class="sta" id="msg-tbl">
+        <thead>
+          <tr>
+            <th data-i="msg_h_time" style="width:70px">Time</th>
+            <th style="width:40px"></th>
+            <th data-i="msg_h_from" style="width:100px">From</th>
+            <th data-i="msg_h_to" style="width:100px">To</th>
+            <th data-i="msg_h_chan" style="width:80px">Channel</th>
+            <th data-i="msg_h_text">Message</th>
+          </tr>
+        </thead>
+        <tbody id="msg-body"></tbody>
+      </table>
+      <div class="sta-empty" id="msg-empty" hidden data-i="msg_empty">No APRS messages yet — they appear here as they are heard or sent.</div>
+    </div>
+  </div>
+
   <!-- MAP PANEL -->
   <div class="map-panel" id="map-view" hidden>
     <div id="map"></div>
@@ -468,9 +541,9 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
     <span class="hl" data-i="heard_label">Last Heard</span>
   </div>
   <div class="stat-bar">
-    <div class="cell"><div class="v" id="xRX">0</div><div class="l" data-i="st_rx">Received</div></div>
-    <div class="cell"><div class="v" id="xTX">0</div><div class="l" data-i="st_tx">Sent</div></div>
-    <div class="cell"><div class="v" id="xER">0</div><div class="l" data-i="st_err">Errors</div></div>
+    <div class="cell diag"><div class="v" id="xRX">0</div><div class="l" data-i="st_rx">Received</div></div>
+    <div class="cell diag"><div class="v" id="xTX">0</div><div class="l" data-i="st_tx">Sent</div></div>
+    <div class="cell diag"><div class="v" id="xER">0</div><div class="l" data-i="st_err">Errors</div></div>
     <div class="cell"><div class="v" id="xPK">0</div><div class="l" data-i="st_pk">Packets</div></div>
     <div class="cell"><div class="v" id="xST">0</div><div class="l" data-i="st_stations">Stations</div></div>
     <div class="cell"><div class="v" id="xCS">0</div><div class="l" data-i="st_calls">Callsigns</div></div>
@@ -574,6 +647,14 @@ const S={en:{
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
   tl_live:"Live",
   own_station:"your station",
+  tab_msg:"Messages",
+  msg_h_time:"Time",msg_h_from:"From",msg_h_to:"To",msg_h_chan:"Channel",msg_h_text:"Message",
+  msg_empty:"No APRS messages yet — they appear here as they are heard or sent.",
+  msg_all:"All",msg_rx:"Received",msg_tx:"Sent",msg_search:"Search…",
+  pub_default_title:"APRS Monitoring Station",pub_live:"live",
+  cap_log:"Raw APRS packets exactly as they arrive from the APRS-IS network, in real time.",
+  cap_sta:"Every station heard by this receiver — type, location, frequency and whether it is currently active.",
+  cap_map:"Live position of every station heard. A red square means many stations in that area fell silent together — a possible power outage; amber means the local internet gateway failed.",
   pub_port:"Public View Port",
   pub_port_hint:"Read-only Live Log / Stations / Map page on this port — no settings, no start/stop. 0 = off. Only this port is safe to expose to the internet.",
   sta_h_call:"Callsign",sta_h_type:"Type",sta_h_loc:"Location",sta_h_org:"Organization",sta_h_freq:"Freq (MHz)",sta_h_status:"Status",sta_h_seen:"Last Heard",
@@ -632,6 +713,14 @@ const S={en:{
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
   tl_live:"Canlı",
   own_station:"kendi istasyonun",
+  tab_msg:"Mesajlar",
+  msg_h_time:"Saat",msg_h_from:"Gönderen",msg_h_to:"Alıcı",msg_h_chan:"Kanal",msg_h_text:"Mesaj",
+  msg_empty:"Henüz APRS mesajı yok — duyulan ve gönderilen mesajlar burada görünür.",
+  msg_all:"Tümü",msg_rx:"Alınan",msg_tx:"Gönderilen",msg_search:"Ara…",
+  pub_default_title:"APRS İzleme İstasyonu",pub_live:"canlı",
+  cap_log:"APRS-IS ağından geldiği anda, ham APRS paketleri.",
+  cap_sta:"Bu alıcının duyduğu tüm istasyonlar — tür, konum, frekans ve şu an aktif olup olmadıkları.",
+  cap_map:"Duyulan her istasyonun canlı konumu. Kırmızı kare, o bölgedeki birçok istasyonun aynı anda susduğunu gösterir — olası elektrik kesintisi; amber ise yerel internet geçidinin arızalandığı anlamına gelir.",
   pub_port:"Halka Açık İzleme Portu",
   pub_port_hint:"Bu portta salt-okunur Canlı Log / İstasyonlar / Harita sayfası sunulur — ayar ve başlat/durdur yoktur. 0 = kapalı. İnternete yalnızca bu portu açın.",
   sta_h_call:"Çağrı İşareti",sta_h_type:"Tür",sta_h_loc:"Konum",sta_h_org:"Dernek/Kuruluş",sta_h_freq:"Frek (MHz)",sta_h_status:"Durum",sta_h_seen:"Son Görülme",
@@ -640,7 +729,19 @@ const S={en:{
   sta_online:"Çevrimiçi",sta_offline:"Çevrimdışı",sta_db_only:"Yalnızca DB",sta_unknown:"—"
 }};
 function t(k){return(S[lang]&&S[lang][k])||S.en[k]||k}
-function applyLang(){document.querySelectorAll('[data-i]').forEach(el=>{const k=el.getAttribute('data-i');const v=t(k);if(el.tagName==='INPUT')el.placeholder=v;else el.textContent=v});$('btn-lang').textContent=lang==='en'?'TR':'EN'}
+let pubTitle='',pubCall='';
+function applyPubHdr(){
+  if(!window.PUBLIC)return;
+  const title=pubTitle||t('pub_default_title');
+  $('pub-title').textContent=pubCall?(pubCall+' · '+title):title;
+}
+function applyLang(){
+  document.querySelectorAll('[data-i]').forEach(el=>{const k=el.getAttribute('data-i');const v=t(k);if(el.tagName==='INPUT')el.placeholder=v;else el.textContent=v});
+  const lbl=lang==='en'?'TR':'EN';
+  $('btn-lang').textContent=lbl;
+  const pl=$('pub-lang');if(pl)pl.textContent=lbl;
+  applyPubHdr();updCaption();
+}
 function toggleLang(){lang=lang==='en'?'tr':'en';applyLang()}
 
 // ── Section collapse/expand ──
@@ -713,7 +814,7 @@ function getCfg(){return{
   }}}
 
 // ── Status ──
-function setStatus(r){const el=$('status');if(r){el.textContent=t('status_running');el.className='status status-on';$('btn-start').disabled=true;$('btn-stop').disabled=false}else{el.textContent=t('status_stopped');el.className='status status-off';$('btn-start').disabled=false;$('btn-stop').disabled=true}}
+function setStatus(r){const el=$('status');if(r){el.textContent=t('status_running');el.className='status status-on';$('btn-start').disabled=true;$('btn-stop').disabled=false}else{el.textContent=t('status_stopped');el.className='status status-off';$('btn-start').disabled=false;$('btn-stop').disabled=true}const pl=$('pub-live');if(pl)pl.className='pub-live'+(r?' on':'')}
 
 // ── Log ──
 function cls(l){if(!l)return'raw';if(l.includes('[ai-gateway] RX'))return'ai-rx';if(l.includes('[ai-gateway] TX'))return'ai-tx';if(l.includes('[ai-gateway] AI response'))return'ai-resp';if(/\[ai-gateway\].*error|failed/i.test(l))return'ai-err';if(/error|fail|fatal/i.test(l))return'err';if(/::/i.test(l))return'msg';if(/:([!\/=@])/i.test(l))return'pos';return'raw'}
@@ -754,14 +855,26 @@ function switchTab(tab){
   $('tab-log').className='tab-btn'+(tab==='log'?' active':'');
   $('tab-sta').className='tab-btn'+(tab==='sta'?' active':'');
   $('tab-map').className='tab-btn'+(tab==='map'?' active':'');
+  $('tab-msg').className='tab-btn'+(tab==='msg'?' active':'');
   $('log').hidden=tab!=='log';
   $('sta-view').hidden=tab!=='sta';
   $('map-view').hidden=tab!=='map';
+  $('msg-view').hidden=tab!=='msg';
   // log-header buttons only visible on log tab
   const lh=document.querySelector('.log-header');if(lh)lh.style.visibility=tab==='log'?'':'hidden';
   if(tab==='sta'||tab==='map'){fetchStations();if(!staRefreshTimer)staRefreshTimer=setInterval(fetchStations,5000)}
   else{clearInterval(staRefreshTimer);staRefreshTimer=null}
   if(tab==='map')initMap();
+  if(tab==='msg'){if(!msgLoaded)fetchMsgs();else renderMsgs()}
+  updCaption();
+}
+// Public visitors get one line of context per tab; operators don't need it
+function updCaption(){
+  const c=$('tab-caption');
+  if(!window.PUBLIC){c.hidden=true;return}
+  const k={log:'cap_log',sta:'cap_sta',map:'cap_map'}[activeTab];
+  if(!k){c.hidden=true;return}
+  c.textContent=t(k);c.hidden=false;
 }
 
 // ── Stations ──
@@ -769,14 +882,14 @@ async function fetchStations(){
   try{
     const r=await api('GET','/api/stations');staData=r.stations||[];
     if(activeTab==='sta')renderStations();
-    if(activeTab==='map'){
-      renderMap();
-      if(tlLive){
-        try{const s=await api('GET','/api/silence');renderSilence(s.cells||[])}catch(e){}
-      }
-      tlRefreshRange();
-    }
+    if(activeTab==='map'){renderMap();tlRefreshRange()}
   }catch(e){}
+}
+// Silence is polled on its own timer, independent of the active tab, so the
+// alert panel is up to date wherever the visitor happens to be looking.
+async function pollSilence(){
+  if(!tlLive)return;          // timeline is showing a past snapshot
+  try{const s=await api('GET','/api/silence');renderSilence(s.cells||[])}catch(e){}
 }
 function fmtAgoLong(s){if(s===null||s===undefined)return'—';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';const h=Math.floor(s/3600);return h+'h '+String(Math.floor(s%3600/60)).padStart(2,'0')+'m'}
 function fmtFreq(f){if(!f&&f!==0)return'';return parseFloat(f).toFixed(4)}
@@ -839,6 +952,49 @@ function renderMap(){
     if(pts.length){map.fitBounds(L.latLngBounds(pts).pad(0.15),{maxZoom:9});mapFitted=true}
   }
 }
+// ── Messages ──
+let msgData=[],msgLoaded=false;
+const MSG_MAX=400;
+async function fetchMsgs(){
+  try{const r=await api('GET','/api/messages');msgData=r.msgs||[];msgLoaded=true;renderMsgs()}catch(e){}
+}
+function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML}
+function fmtClock(ts){const d=new Date(ts*1000);return d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+function renderMsgs(){
+  const fdir=$('msg-fdir').value;
+  const fs=$('msg-fsearch').value.toUpperCase();
+  const rows=msgData.filter(m=>{
+    if(fdir&&m.dir!==fdir)return false;
+    if(fs&&!(m.from+' '+m.to+' '+m.text).toUpperCase().includes(fs))return false;
+    return true;
+  });
+  $('msg-cnt').textContent=rows.length+' / '+msgData.length;
+  $('msg-empty').hidden=msgData.length>0;
+  const b=$('msg-body');b.innerHTML='';
+  // newest first
+  for(const m of rows.slice().reverse()){
+    const tr=document.createElement('tr');
+    const isTx=m.dir==='tx';
+    const arrow=isTx?'<span style="color:#57e389" title="sent">▲</span>'
+                    :'<span style="color:#62a0ea" title="received">▼</span>';
+    const chan=m.channel&&m.channel!=='APRS'
+      ?'<span style="background:rgba(98,160,234,.18);color:#8ab4f8;padding:1px 6px;border-radius:8px;font-size:10px">'+esc(m.channel)+'</span>'
+      :'<span style="color:var(--dim);font-size:10px">APRS</span>';
+    const bln=m.kind==='bulletin'?'<span style="color:#f5c211" title="bulletin">✦ </span>':'';
+    tr.innerHTML='<td style="color:var(--dim)">'+fmtClock(m.ts)+'</td>'+
+      '<td>'+arrow+'</td>'+
+      '<td style="color:'+(isTx?'var(--dim)':'var(--accent2)')+'">'+esc(m.from)+'</td>'+
+      '<td style="color:'+(isTx?'var(--accent2)':'var(--dim)')+'">'+esc(m.to)+'</td>'+
+      '<td>'+chan+'</td>'+
+      '<td style="white-space:normal;max-width:none" title="'+esc(m.text)+'">'+bln+esc(m.text)+'</td>';
+    b.appendChild(tr);
+  }
+}
+function onMsgs(list){
+  for(const m of list){msgData.push(m);if(msgData.length>MSG_MAX)msgData.shift()}
+  if(activeTab==='msg')renderMsgs();
+}
+
 // ── Map timeline: scrub back through recorded silence snapshots ──
 let tlRange=null,tlLive=true,tlTimer=null;
 async function tlRefreshRange(){
@@ -894,7 +1050,28 @@ function silPopup(c){
   if(c.ai_note)h+='<br><span style="color:#8ff0a4;font-size:11px">AI: '+c.ai_note+'</span>';
   return h;
 }
+// Active silence events, listed above the panel so a visitor sees them
+// without having to find and click a red square on the map.
+function renderAlerts(cells){
+  const on=cells.filter(c=>c.alert);
+  const p=$('alert-panel');
+  if(!on.length){p.hidden=true;p.innerHTML='';return}
+  p.innerHTML='';
+  for(const c of on){
+    const igate=c.cause==='igate';
+    const d=document.createElement('div');
+    d.className='alert-row';
+    let h='<span class="alert-cell'+(igate?' ig':'')+'">'+esc(c.cell)+'</span>'+
+      '<span class="alert-txt">'+t('sil_stats').replace('{s}',c.silent).replace('{b}',c.baseline)+
+      ' &middot; '+t(igate?'sil_igate':'sil_outage')+'</span>';
+    if(c.ai_note)h+='<span class="alert-ai">'+esc(c.ai_note)+'</span>';
+    d.innerHTML=h;
+    p.appendChild(d);
+  }
+  p.hidden=false;
+}
 function renderSilence(cells){
+  renderAlerts(cells);
   if(!map)return;
   const seen={};
   for(const c of cells){
@@ -982,7 +1159,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail()});
 
 // ── WebSocket ──
 let ws=null;
-function connectWS(){const p=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(p+'//'+location.host+'/ws');ws.onopen=()=>{$('ws-dot').classList.add('on')};ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='log')addLog(d.text);if(d.type==='status')setStatus(d.running);if(d.type==='stats')onStats(d)};ws.onclose=()=>{$('ws-dot').classList.remove('on');setTimeout(connectWS,2000)};ws.onerror=()=>ws.close()}
+function connectWS(){const p=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(p+'//'+location.host+'/ws');ws.onopen=()=>{$('ws-dot').classList.add('on')};ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='log')addLog(d.text);if(d.type==='status')setStatus(d.running);if(d.type==='stats')onStats(d);if(d.type==='msgs')onMsgs(d.msgs||[])};ws.onclose=()=>{$('ws-dot').classList.remove('on');setTimeout(connectWS,2000)};ws.onerror=()=>ws.close()}
 
 // ── API ──
 async function api(m,p,b){const o={method:m,headers:{}};if(b!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}return(await fetch(p,o)).json()}
@@ -997,10 +1174,32 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch
 
 // ── Init ──
 (async function(){
-  if(window.PUBLIC)document.body.classList.add('public');
-  try{const info=await api('GET','/api/info');$('hdr-ver').textContent='v'+info.version;if(!window.PUBLIC)$('hdr-cfg').value=info.config_path||'';$('about-ver').textContent='APRS-Agent v'+info.version;if(!window.PUBLIC)setStatus(info.running)}catch(e){}
+  if(window.PUBLIC){
+    document.body.classList.add('public');
+    $('pub-hdr').hidden=false;
+    // Visitors are mostly Turkish hams; honour the browser's preference.
+    // The UI still defaults to English everywhere else.
+    if((navigator.language||'').toLowerCase().startsWith('tr'))lang='tr';
+  }
+  try{
+    const info=await api('GET','/api/info');
+    $('hdr-ver').textContent='v'+info.version;
+    $('about-ver').textContent='APRS-Agent v'+info.version;
+    if(window.PUBLIC){
+      const title=(info.public_title||'').trim();
+      const cs=(info.callsign||'').trim();
+      pubTitle=title;pubCall=(cs&&cs!=='N0CALL')?cs:'';
+      $('pub-sub').textContent=(info.public_subtitle||'').trim();
+      applyPubHdr();
+    }else{
+      $('hdr-cfg').value=info.config_path||'';
+      setStatus(info.running);
+    }
+  }catch(e){}
   if(!window.PUBLIC){try{const cfg=await api('GET','/api/config');loadCfg(cfg)}catch(e){addLog('[web] Failed to load config\n')}}
-  connectWS();applyLang()})();
+  connectWS();applyLang();
+  pollSilence();setInterval(pollSilence,15000);
+})();
 </script>
 </body>
 </html>

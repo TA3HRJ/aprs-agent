@@ -5,6 +5,13 @@ APRS-Agent GUI
 ==============
 Graphical interface for configuring and running APRS-Agent.
 
+FEATURE-FROZEN AS OF v2.8.0.
+This interface is complete and supported, but new features go to the Web GUI
+(web_gui.py), which runs on any platform and as an installable PWA. The map,
+silence detection UI, messages panel and public view live there and will not be
+ported here. Shared behaviour (packet_parser, station_db) still reaches this GUI
+automatically, so parsing/persistence improvements continue to apply.
+
 Features:
   - Form-based configuration editor for all settings
   - Start / Stop the APRS agent with one click

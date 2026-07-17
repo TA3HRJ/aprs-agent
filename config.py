@@ -20,7 +20,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "2.7.18"
+VERSION = "2.8.0"
 
 # tomllib is built-in from Python 3.11 onwards.
 # For older Python versions, install the 'tomli' package.
@@ -63,6 +63,9 @@ DEFAULTS: dict[str, Any] = {
     # Read-only public monitoring page (0 = disabled). Serves Live Log /
     # Stations / Map without any admin endpoints — safe to expose.
     "public_port": 0,
+    # Identity shown in the public page header (empty = generic defaults)
+    "public_title": "",
+    "public_subtitle": "",
     "monitor": {
         "enabled": False,
         "watch_callsigns": [],

@@ -39,6 +39,13 @@ print_config_on_startup = false
 # 0 = disabled.
 public_port = 0
 
+# Title and one-line description shown in the public page header, next to your
+# callsign. Leave empty for a generic title.
+#   public_title    = "APRS Monitoring Station"
+#   public_subtitle = "Live view of the APRS network"
+public_title = ""
+public_subtitle = ""
+
 
 # =============================================================================
 # Extension Server (TCP)

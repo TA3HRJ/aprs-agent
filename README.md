@@ -8,16 +8,21 @@ several automation features useful for amateur radio operators.
 > **Note:** Using this software requires a valid amateur radio license.
 > The APRS-IS network is for licensed amateur radio operators only.
 
+> **Desktop GUI is feature-frozen as of v2.8.0.** It still works and is still
+> shipped, but new development happens in the **Web GUI**.
+> See [Desktop GUI — feature freeze](#desktop-gui--feature-freeze).
+
 ---
 
 ## Features
 
 | | Feature | Description |
 |---|---|---|
-| 🖥️ | **Desktop GUI** | Form-based config editor, Start/Stop, system tray, EN/TR language toggle, live stats bar (RX/TX/Errors/Packets/Stations/Callsigns/Uptime), Live Log + Stations bottom panel with real APRS symbol icons and type/status/search filters |
+| 🖥️ | **Desktop GUI** *(frozen at v2.8.0)* | Form-based config editor, Start/Stop, system tray, EN/TR language toggle, live stats bar (RX/TX/Errors/Packets/Stations/Callsigns/Uptime), Live Log + Stations bottom panel with real APRS symbol icons and type/status/search filters |
 | 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, Stations tab, Map tab, gzip-compressed |
 | 🗺️ | **Silence Map** | Leaflet map of all heard stations with real APRS symbols; detects regions where stations fall silent together (per-station beacon-cadence baseline, Maidenhead cell clustering, igate-failure discrimination) and paints affected cells; timeline slider replays the last 14 days of snapshots; new alerts get an AI assessment (via AI Gateway) shown in cell popups and are sent to the Monitor notify channel (Telegram/email). The agent's own Fixed Beacon is shown on the map but excluded from silence detection (it is self-generated and would otherwise be a phantom "still active" vote) |
 | 💾 | **Persistence** | Station records and beacon-cadence history survive restarts (SQLite `aprs_stations.db` next to the config, shared by both GUIs) |
+| 💬 | **Messages Tab** | Every APRS message the agent hears or sends, in one panel — time, direction, from, to, text, and the bridge it belongs to (AI / Telegram / WhatsApp / Email / …). Outgoing messages are captured from the send loop, since APRS-IS never echoes our own traffic. Rolling buffer of the last 400 messages, pushed live over WebSocket; ack/telemetry chatter filtered out. Admin only — not exposed on the public view |
 | 👁️ | **Public View** | Optional read-only monitoring page on a separate port (`public_port`): Live Log / Stations / Map only — no settings, no start/stop, no API keys, log stream filtered to packet lines. Safe to expose to the internet while the admin port stays local |
 | 📊 | **Stations Tab** | Live table of all heard stations — type, location, organization, frequency, online/offline status; Object packets parsed; location falls back to Maidenhead locator or coordinates |
 | 🗄️ | **Turkey Repeaters DB** | Enriches station records with city, district, frequency, tone, band, mode from a local JSON database |
@@ -39,11 +44,39 @@ several automation features useful for amateur radio operators.
 ## Quick Start — Windows (.exe)
 
 1. Download the latest release from the [Releases](https://github.com/TA3HRJ/aprs-agent/releases) page
-2. Extract the zip and run **`aprs-agent-web.exe`** (Web GUI) or **`aprs-agent-gui.exe`** (Desktop GUI)
+2. Extract the zip and run **`aprs-agent-web.exe`** — this is the recommended interface
 3. Enter your callsign in the **Connection** tab and click **Save Config**
 4. Click **▶ Start**
 
 No Python installation required for the pre-built Windows executable.
+
+The Desktop GUI (`aprs-agent-gui.exe`) is published separately as a final build —
+see [Desktop GUI — feature freeze](#desktop-gui--feature-freeze).
+
+---
+
+## Desktop GUI — feature freeze
+
+The Desktop GUI (`gui.py` / `aprs-agent-gui.exe`) is **feature-frozen as of v2.8.0**.
+
+**It is not abandoned and it is not broken.** It remains fully functional:
+configuration editor, Start/Stop, system tray, EN/TR toggle, live log, live stats
+and the Stations panel with real APRS symbols all work. Because it imports the same
+`packet_parser` and `station_db` modules as the Web GUI, it automatically keeps the
+shared improvements — packet parsing, SQLite persistence, beacon-cadence tracking
+and the station registry.
+
+**What it will not get:** the Map / Silence Map, the Messages panel, silence alerts
+with AI assessment, the public monitoring view, and anything added after v2.8.0.
+
+**Why:** the Web GUI runs everywhere — Windows, Linux servers, and phones as an
+installable PWA — while the tkinter desktop app is Windows-only. Maintaining two
+interfaces in parallel doubled the work for features (maps, live pushes) that the
+browser does better. Development continues in the Web GUI.
+
+**If you use the Desktop GUI:** keep using it, or switch to `aprs-agent-web.exe`
+and open `http://localhost:8080` — the configuration file is identical and both
+share the same station database.
 
 ---
 

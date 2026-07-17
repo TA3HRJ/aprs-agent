@@ -24,7 +24,7 @@ import sys
 import threading
 import time
 import webbrowser
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from pathlib import Path
 from typing import Any, Optional, Set
 
@@ -35,6 +35,7 @@ import aprs_connection
 import extension_server as ext_server_module
 from extensions import ExtensionRegistry
 import station_db as station_db_module
+from packet_parser import parse_message
 from station_db import StationDB
 
 
@@ -118,6 +119,14 @@ _SRC_LINE_RE = re.compile(r"^\[logger\] (.+)$", re.M)
 # Ingested locally so the station shows on the map; flagged so it is excluded
 # from silence detection.
 _OWN_BEACON_RE = re.compile(r"^\[fixed_beacon\] beacon sent: (.+)$", re.M)
+# Outbound packets, printed by the APRS-IS send loop for every extension.
+# APRS-IS never echoes our own traffic, so this is the only way to see the
+# messages we send (AI replies, Telegram/WhatsApp/email bridges).
+_TX_LINE_RE = re.compile(r"^--> (.+)$", re.M)
+
+# Messages panel: rolling in-memory buffer (~400 × ~500 B ≈ 200 KB)
+_MSG_BUFFER = 400
+_MSG_DEDUP_S = 30      # same message re-gated by another igate
 
 # Log-line classification for the RX/TX/error stat counters. These mirror the
 # browser's cls() classifier so the server-authoritative counts match what the
@@ -169,6 +178,10 @@ class AgentManager:
         # Silence watch (Phase 4): active alert episodes + AI assessments
         self._silence_active: dict[str, float] = {}
         self._silence_ai_notes: dict[str, str] = {}
+        # Messages panel: rolling buffer of APRS messages (in + out)
+        self._messages: deque = deque(maxlen=_MSG_BUFFER)
+        self._msg_seen: dict[tuple, int] = {}   # dedup key → last seen ts
+        self._channel_map: dict[str, str] = {}  # callsign → AI/Telegram/…
 
     def get_config(self) -> dict:
         return cfg_module.load_config(self.config_path)
@@ -210,6 +223,7 @@ class AgentManager:
         # detection) survives restarts.
         try:
             cfg = cfg_module.load_config(self.config_path)
+            self._channel_map = self._build_channel_map(cfg)
             db_path = cfg.get("repeater_db_path", "").strip()
             if db_path:
                 n = self._station_db.load_repeater_db(db_path)
@@ -630,6 +644,71 @@ class AgentManager:
                     s.sendmail(from_email, recipients, mime.as_string())
             await loop.run_in_executor(None, _send)
 
+    def _build_channel_map(self, config: dict) -> dict[str, str]:
+        """Map callsigns to the bridge they belong to, so each message can be
+        labelled AI / Telegram / WhatsApp / Email / …
+
+        Both sides are covered: the addressee that triggers an extension
+        (incoming) and the callsign an extension sends from (outgoing).
+        """
+        ext = config.get("extensions", {})
+        m: dict[str, str] = {}
+
+        def add(names, label: str) -> None:
+            for n in names or []:
+                n = str(n).strip().upper()
+                if n and n != "N0CALL":
+                    m.setdefault(n, label)
+
+        ai = ext.get("ai_gateway", {})
+        add([ai.get("callsign", "")] + list(ai.get("trigger_aliases", [])), "AI")
+        tg = ext.get("telegram", {})
+        add([tg.get("from_callsign", "")] + list(tg.get("allowed_recepients", [])),
+            "Telegram")
+        wa = ext.get("whatsapp", {})
+        add([wa.get("from_callsign", "")] + list(wa.get("allowed_recepients", [])),
+            "WhatsApp")
+        im = ext.get("imap", {})
+        add([im.get("from_callsign", "")], "Email")
+        sm = ext.get("smtp", {})
+        # smtp spells it "recipients"; the other extensions use "recepients"
+        add(list(sm.get("allowed_recipients", []))
+            + list(sm.get("allowed_recepients", [])), "Email")
+        add(list(ext.get("twitter", {}).get("allowed_recepients", [])), "Twitter")
+        add(list(ext.get("bluesky", {}).get("allowed_recepients", [])), "Bluesky")
+        return m
+
+    def _track_messages(self, text: str) -> list:
+        """Pull APRS messages out of the log stream and store them.
+
+        Incoming messages come from the logger lines; outgoing ones from the
+        send loop's '-->' lines, because APRS-IS never echoes our own traffic
+        back to us. Returns the newly stored messages (for the WebSocket push).
+        """
+        new = []
+        for direction, raws in (("rx", _SRC_LINE_RE.findall(text)),
+                                ("tx", _TX_LINE_RE.findall(text))):
+            for raw in raws:
+                msg = parse_message(raw)
+                # ack/rej and telemetry definitions are machine chatter
+                if not msg or msg["kind"] not in ("msg", "bulletin"):
+                    continue
+                key = (msg["from"], msg["to"], msg["text"], msg["msg_id"])
+                last = self._msg_seen.get(key)
+                if last is not None and msg["ts"] - last < _MSG_DEDUP_S:
+                    continue          # same message gated via another igate
+                self._msg_seen[key] = msg["ts"]
+                if len(self._msg_seen) > 4 * _MSG_BUFFER:
+                    cutoff = msg["ts"] - _MSG_DEDUP_S
+                    self._msg_seen = {k: v for k, v in self._msg_seen.items()
+                                      if v >= cutoff}
+                msg["dir"] = direction
+                who = msg["to"] if direction == "rx" else msg["from"]
+                msg["channel"] = self._channel_map.get(who.upper(), "APRS")
+                self._messages.append(msg)
+                new.append(msg)
+        return new
+
     def _track_stations(self, text: str) -> None:
         now = time.time()
         for raw_line in _SRC_LINE_RE.findall(text):
@@ -707,6 +786,9 @@ class AgentManager:
                 self._track_stations(text)
                 self._count_log_lines(text)
                 payloads.append({"type": "log", "text": text})
+                new_msgs = self._track_messages(text)
+                if new_msgs:
+                    payloads.append({"type": "msgs", "msgs": new_msgs})
 
             now = time.time()
             if now - self._last_stats_sent >= _STATS_INTERVAL:
@@ -718,6 +800,10 @@ class AgentManager:
             # details (addresses, chat ids) and stay admin-only.
             pub_payloads = []
             for p in payloads:
+                if p.get("type") == "msgs":
+                    # Message bodies can carry private details (mail addresses,
+                    # bridge traffic) — admin only.
+                    continue
                 if p.get("type") != "log":
                     pub_payloads.append(p)
                     continue
@@ -802,11 +888,23 @@ async def pwa_icon(request: web.Request) -> web.Response:
 @routes.get("/api/info")
 async def info(request: web.Request) -> web.Response:
     mgr: AgentManager = request.app["manager"]
-    return web.json_response({
+    try:
+        cfg = mgr.get_config()
+    except (Exception, SystemExit):
+        cfg = {}
+    data = {
         "version": cfg_module.VERSION,
-        "config_path": mgr.config_path,
         "running": mgr.running,
-    })
+        # Public page header identity (callsign is public by definition — it
+        # is beaconed to APRS-IS)
+        "callsign": cfg.get("callsign", ""),
+        "public_title": cfg.get("public_title", ""),
+        "public_subtitle": cfg.get("public_subtitle", ""),
+    }
+    if not request.app.get("public"):
+        # The config file path is operator information — admin app only
+        data["config_path"] = mgr.config_path
+    return web.json_response(data)
 
 
 @routes.get("/api/config")
@@ -948,6 +1046,13 @@ async def get_silence(request: web.Request) -> web.Response:
     return web.json_response({"cells": cells})
 
 
+@routes.get("/api/messages")
+async def get_messages(request: web.Request) -> web.Response:
+    """Recent APRS messages (newest last). Admin only — not on the public app."""
+    mgr: AgentManager = request.app["manager"]
+    return web.json_response({"msgs": list(mgr._messages)})
+
+
 @routes.get("/api/silence/range")
 async def get_silence_range(request: web.Request) -> web.Response:
     """Time range of stored silence snapshots (map timeline slider bounds)."""
@@ -1008,6 +1113,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
     """
     papp = web.Application()
     papp["manager"] = mgr
+    papp["public"] = True
     papp.add_routes([
         web.get("/", public_index),
         web.get("/ws", public_websocket_handler),
