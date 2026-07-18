@@ -818,7 +818,7 @@ function loadCfg(cfg){
 function getCfg(){return{
   server:$('f-server').value.trim(),port:parseInt($('f-port').value)||14580,callsign:$('f-callsign').value.trim().toUpperCase(),
   allowed_callsigns:lst($('f-allowed-cs').value),print_config_on_startup:$('f-print-cfg').checked,auto_start_agent:$('f-autostart-agent').checked,
-  full_feed:$('f-full-feed').checked,rate_limit_pps:Math.max(0,parseInt($('f-rate-limit').value)||50),repeater_db_path:$('f-rdb-path').value.trim(),public_port:Math.max(0,parseInt($('f-public-port').value)||0),
+  full_feed:$('f-full-feed').checked,rate_limit_pps:(function(){const v=parseInt($('f-rate-limit').value,10);return isNaN(v)?50:Math.max(0,v)})(),repeater_db_path:$('f-rdb-path').value.trim(),public_port:Math.max(0,parseInt($('f-public-port').value)||0),
   monitor:{enabled:$('f-mon-enabled').checked,notify_channel:$('f-mon-channel').value,check_interval_mins:Math.max(1,parseInt($('f-mon-interval').value)||10),watch_callsigns:$('f-mon-watch').value.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean),silence_grids:$('f-mon-grids').value.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean),silence_digest_mins:Math.max(0,parseInt($('f-mon-digest').value)||0)},
   station_ai:{enabled:$('f-sai-enabled').checked,interval_hours:Math.max(1,parseInt($('f-sai-interval').value)||24),max_batch:Math.max(1,parseInt($('f-sai-batch').value)||20)},
   extension_server:{enabled:$('f-ext-enabled').checked,host:$('f-ext-host').value.trim(),port:parseInt($('f-ext-port').value)||65080},
