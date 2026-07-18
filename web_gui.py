@@ -1117,9 +1117,18 @@ async def wa_webhook_incoming(request: web.Request) -> web.Response:
 
 @routes.get("/api/stations")
 async def get_stations(request: web.Request) -> web.Response:
+    """Slim station list for the table and the map. Full records are served
+    per-station by /api/stations/{callsign}. Capped so a worldwide feed
+    (40k+ stations) cannot produce a 40 MB response every poll."""
     mgr: AgentManager = request.app["manager"]
-    stations = mgr._station_db.get_all()
-    return web.json_response({"stations": stations, "count": len(stations)})
+    try:
+        limit = max(0, min(int(request.query.get("limit", 4000)), 20000))
+    except ValueError:
+        limit = 4000
+    stations, total = mgr._station_db.get_slim(limit)
+    return web.json_response(
+        {"stations": stations, "count": total,
+         "capped": total > len(stations)})
 
 
 @routes.get("/api/silence")

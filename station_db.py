@@ -434,6 +434,32 @@ class StationDB:
         rows.sort(key=lambda r: r["last_seen"] or 0, reverse=True)
         return rows
 
+    # Fields the stations table, map markers and popups actually consume.
+    # Everything else (comment, last_packet, wx, DB enrichment details…) is
+    # served per-station by /api/stations/{callsign} when a row is opened —
+    # on a full worldwide feed the complete dump grew past 40 MB per poll.
+    _SLIM_FIELDS = (
+        "callsign", "type", "icon", "symbol", "symbol_table",
+        "symbol_overlay", "city", "district", "locator", "lat", "lon",
+        "freq_mhz", "ai_org", "online", "last_seen", "last_seen_ago_s",
+        "self_beacon",
+    )
+
+    def get_slim(self, limit: int = 0) -> tuple[list[dict[str, Any]], int]:
+        """List view of the registry: only the fields the station table and
+        the map need, most recently heard first, optionally capped at
+        `limit` rows. Returns (rows, total_station_count)."""
+        recs = sorted(self._stations.values(),
+                      key=lambda r: r.last_seen or 0, reverse=True)
+        total = len(recs)
+        if limit > 0:
+            recs = recs[:limit]
+        out = []
+        for r in recs:
+            d = r.to_dict()
+            out.append({k: d[k] for k in self._SLIM_FIELDS})
+        return out, total
+
     def get_one(self, callsign: str) -> Optional[dict[str, Any]]:
         rec = self._stations.get(callsign)
         return rec.to_dict() if rec else None

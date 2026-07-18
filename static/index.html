@@ -120,6 +120,7 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 .map-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
 #map{flex:1;background:#1a1a1a}
 .map-sym{background:transparent;border:none}
+.clus{background:rgba(28,113,216,.85);border:2px solid #b8d4f5;border-radius:50%;color:#fff;font-weight:600;font-size:11px;text-align:center;box-sizing:border-box;cursor:pointer}
 .map-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888;font-size:13px;z-index:5;pointer-events:none}
 .map-legend{position:absolute;left:8px;bottom:50px;z-index:1000;background:rgba(30,30,30,.85);padding:6px 10px;border-radius:6px;font-size:11px;display:flex;gap:12px;pointer-events:none}
 .map-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
@@ -901,9 +902,10 @@ function updCaption(){
 }
 
 // ── Stations ──
+let staTotal=0;
 async function fetchStations(){
   try{
-    const r=await api('GET','/api/stations');staData=r.stations||[];
+    const r=await api('GET','/api/stations');staData=r.stations||[];staTotal=r.count||staData.length;
     if(activeTab==='sta')renderStations();
     if(activeTab==='map'){renderMap();tlRefreshRange()}
   }catch(e){}
@@ -941,6 +943,7 @@ function initMap(){
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(map);
+  map.on('moveend zoomend',()=>{if(mapClusterMode)renderMap()});
   setTimeout(()=>map.invalidateSize(),60);
   renderMap();
 }
@@ -959,20 +962,68 @@ function mapPopup(r){
   return h;
 }
 function mapDetail(cs){const r=staData.find(x=>x.callsign===cs);if(r)showDetail(r)}
+// Above CLUSTER_MIN plotted stations the map switches to grid clustering at
+// low zoom and viewport-only markers at high zoom — a worldwide feed brings
+// 40k+ stations and a DOM marker per station freezes the browser.
+const CLUSTER_MIN=2000,MAX_MARKERS=1500;
+let mapClusterMode=false;
+function addStaMarker(r){
+  mapMarkers[r.callsign]=L.marker([r.lat,r.lon],{icon:mapIcon(r),title:r.callsign})
+    .addTo(map).bindPopup(mapPopup(r));
+}
+function clearStaMarkers(){
+  for(const cs in mapMarkers)map.removeLayer(mapMarkers[cs]);
+  mapMarkers={};
+}
 function renderMap(){
   if(!map)return;
-  for(const r of staData){
-    if(r.lat===null||r.lat===undefined||r.lon===null||r.lon===undefined)continue;
-    const m=mapMarkers[r.callsign];
-    if(m){m.setLatLng([r.lat,r.lon]);m.setPopupContent(mapPopup(r))}
-    else{
-      mapMarkers[r.callsign]=L.marker([r.lat,r.lon],{icon:mapIcon(r),title:r.callsign})
-        .addTo(map).bindPopup(mapPopup(r));
-    }
+  const pts=staData.filter(r=>r.lat!==null&&r.lat!==undefined&&r.lon!==null&&r.lon!==undefined);
+  if(!mapFitted&&pts.length){
+    map.fitBounds(L.latLngBounds(pts.map(r=>[r.lat,r.lon])).pad(0.15),{maxZoom:9});
+    mapFitted=true;
   }
-  if(!mapFitted){
-    const pts=Object.values(mapMarkers).map(m=>m.getLatLng());
-    if(pts.length){map.fitBounds(L.latLngBounds(pts).pad(0.15),{maxZoom:9});mapFitted=true}
+  if(pts.length<=CLUSTER_MIN){
+    // Small registry: keep the classic incremental per-station markers
+    if(mapClusterMode){clearStaMarkers();mapClusterMode=false}
+    for(const r of pts){
+      const m=mapMarkers[r.callsign];
+      if(m){m.setLatLng([r.lat,r.lon]);m.setPopupContent(mapPopup(r))}
+      else addStaMarker(r);
+    }
+    return;
+  }
+  // Big registry: full rebuild each pass, but bounded. Skip while a popup
+  // is open so the rebuild doesn't close it under the user.
+  if(map._popup&&map._popup.isOpen&&map._popup.isOpen())return;
+  clearStaMarkers();mapClusterMode=true;
+  const z=map.getZoom();
+  if(z<9){
+    const cell=360/Math.pow(2,z+3);   // bucket size shrinks as you zoom in
+    const buckets={};
+    for(const r of pts){
+      const k=Math.floor(r.lat/cell)+'_'+Math.floor(r.lon/cell);
+      (buckets[k]=buckets[k]||[]).push(r);
+    }
+    for(const k in buckets){
+      const b=buckets[k];
+      if(b.length===1){addStaMarker(b[0]);continue}
+      const lat=b.reduce((s,r)=>s+r.lat,0)/b.length;
+      const lon=b.reduce((s,r)=>s+r.lon,0)/b.length;
+      const sz=b.length>=1000?40:b.length>=100?34:28;
+      const ic=L.divIcon({html:'<div class="clus" style="width:'+sz+'px;height:'+sz+'px;line-height:'+sz+'px">'+(b.length>=1000?(b.length/1000).toFixed(1)+'k':b.length)+'</div>',
+        className:'map-sym',iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]});
+      const cs='⚙'+k; // cluster pseudo-callsign key
+      mapMarkers[cs]=L.marker([lat,lon],{icon:ic}).addTo(map)
+        .on('click',()=>map.setView([lat,lon],Math.min(z+2,10)));
+    }
+  }else{
+    const bounds=map.getBounds().pad(0.2);
+    let shown=0;
+    for(const r of pts){          // pts is most-recent-first from the API
+      if(!bounds.contains([r.lat,r.lon]))continue;
+      if(++shown>MAX_MARKERS)break;
+      addStaMarker(r);
+    }
   }
 }
 // ── Messages ──
@@ -1124,10 +1175,13 @@ function renderStations(){
     if(fsearch&&!r.callsign.includes(fsearch)&&!(r.city||'').toUpperCase().includes(fsearch))return false;
     return true;
   });
-  $('sta-cnt').textContent=rows.length+' / '+staData.length;
+  $('sta-cnt').textContent=rows.length+' / '+staTotal;
   const body=$('sta-body');body.innerHTML='';
   $('sta-empty').hidden=rows.length>0||staData.length===0?rows.length>0:true;
   if(staData.length===0)$('sta-empty').hidden=false;
+  // Rebuilt every 5 s — cap the DOM so a worldwide registry can't turn each
+  // refresh into a 200 ms reflow. Filters/search still see the full list.
+  rows=rows.slice(0,1500);
   for(const r of rows){
     const tr=document.createElement('tr');
     const cityLoc=[r.city,r.district].filter(Boolean).join(', ');
@@ -1145,7 +1199,10 @@ function renderStations(){
     body.appendChild(tr);
   }
 }
-function showDetail(r){
+async function showDetail(r){
+  // The list endpoint is slim (table/map fields only) — fetch the full
+  // record for the detail panel; fall back to the slim row on error.
+  try{const full=await api('GET','/api/stations/'+encodeURIComponent(r.callsign));if(full&&full.callsign)r=full}catch(e){}
   $('sd-title').innerHTML=aprsSym(r)+' '+r.callsign;
   const srcLabel=r.has_db&&r.packet_count>0?t('sd_both'):r.has_db?t('sd_db_only'):t('sd_aprs_live');
   let html='';
