@@ -588,6 +588,7 @@ class StationDB:
 
     def record_silence_history(
         self, path: str, ai_notes: Optional[dict[str, str]] = None,
+        episode_starts: Optional[dict[str, float]] = None,
     ) -> int:
         """Append the current silence-cell state as a timestamped snapshot.
 
@@ -597,6 +598,14 @@ class StationDB:
         """
         cells = [c for c in self.silence_cells() if c["silent"] >= 1]
         ai_notes = ai_notes or {}
+        episode_starts = episode_starts or {}
+        for c in cells:
+            # Anchor "since" to the current alert episode's start, not the
+            # longest-silent individual station — a cell that recovered and
+            # re-alerted should show the new episode, not a stale one.
+            start = episode_starts.get(c["cell"])
+            if c["alert"] and start:
+                c["since"] = int(start)
         now = int(time.time())
         con = sqlite3.connect(path)
         try:

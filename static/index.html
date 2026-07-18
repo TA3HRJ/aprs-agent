@@ -155,10 +155,10 @@ body.public .stat-bar .cell.diag{display:none!important}
 .alert-txt{color:var(--fg2)}
 .alert-ai{color:#8ff0a4}
 .map-timeline{position:absolute;left:8px;right:8px;top:8px;z-index:1000;display:flex;gap:10px;align-items:center;background:rgba(30,30,30,.88);padding:6px 12px;border-radius:6px}
-.map-timeline input[type=range]{flex:1;accent-color:#62a0ea;height:16px}
+.map-timeline input[type=range]{flex:1;min-width:0;accent-color:#62a0ea;height:16px}
 .tl-btn{background:#3a3a3a;border:1px solid #555;color:#e8e8e8;border-radius:4px;width:26px;height:22px;font-size:11px;cursor:pointer;line-height:1}
 .tl-btn:hover{background:#4a4a4a}
-.tl-label{font-size:11px;color:#ccc;min-width:110px;text-align:right;font-family:'Consolas',monospace}
+.tl-label{font-size:11px;color:#ccc;min-width:110px;text-align:right;font-family:'Consolas',monospace;white-space:nowrap;flex-shrink:0}
 .tl-label.hist{color:#f5c211}
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#2a2a2a;color:#e8e8e8}
 .leaflet-popup-content{font:12px/1.6 'Segoe UI',sans-serif}
@@ -514,7 +514,7 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
       <table class="sta" id="msg-tbl">
         <thead>
           <tr>
-            <th data-i="msg_h_time" style="width:70px">Time</th>
+            <th data-i="msg_h_time" style="width:70px" title="24h, local device time">Time</th>
             <th style="width:40px"></th>
             <th data-i="msg_h_from" style="width:100px">From</th>
             <th data-i="msg_h_to" style="width:100px">To</th>
@@ -653,7 +653,7 @@ const S={en:{
   map_offline:"Map library could not be loaded — an internet connection is required for map tiles.",
   sil_outage:"Regional silence (possible outage)",sil_igate:"IGate failure",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
-  tl_live:"Live",
+  tl_live:"Live",tz_local:"local",
   own_station:"your station",
   tab_msg:"Messages",
   msg_h_time:"Time",msg_h_from:"From",msg_h_to:"To",msg_h_chan:"Channel",msg_h_text:"Message",
@@ -720,7 +720,7 @@ const S={en:{
   map_offline:"Harita kütüphanesi yüklenemedi — harita karoları için internet bağlantısı gerekir.",
   sil_outage:"Bölgesel sessizlik (olası kesinti)",sil_igate:"IGate arızası",
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
-  tl_live:"Canlı",
+  tl_live:"Canlı",tz_local:"yerel",
   own_station:"kendi istasyonun",
   tab_msg:"Mesajlar",
   msg_h_time:"Saat",msg_h_from:"Gönderen",msg_h_to:"Alıcı",msg_h_chan:"Kanal",msg_h_text:"Mesaj",
@@ -970,7 +970,7 @@ async function fetchMsgs(){
   try{const r=await api('GET','/api/messages');msgData=r.msgs||[];msgLoaded=true;renderMsgs()}catch(e){}
 }
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML}
-function fmtClock(ts){const d=new Date(ts*1000);return d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+function fmtClock(ts){const d=new Date(ts*1000);return d.toLocaleTimeString(undefined,{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'})}
 function renderMsgs(){
   const fdir=$('msg-fdir').value;
   const fs=$('msg-fsearch').value.toUpperCase();
@@ -1023,7 +1023,9 @@ async function tlRefreshRange(){
 function tlSetLabel(ts){
   const l=$('tl-label');
   if(ts===null){l.textContent=t('tl_live');l.classList.remove('hist')}
-  else{const d=new Date(ts*1000);l.textContent=d.toLocaleDateString()+' '+d.toLocaleTimeString().slice(0,5);l.classList.add('hist')}
+  else{const d=new Date(ts*1000);const p2=n=>String(n).padStart(2,'0');
+    l.textContent=p2(d.getDate())+'.'+p2(d.getMonth()+1)+' '+p2(d.getHours())+':'+p2(d.getMinutes())+' ('+t('tz_local')+')';
+    l.classList.add('hist')}
 }
 async function tlScrub(v){
   const s=$('tl-slider');
@@ -1149,7 +1151,7 @@ function showDetail(r){
   if(r.wx_pressure_mb)html+=row('Pressure',r.wx_pressure_mb+' mb');
   html+='<hr>';
   html+=row(t('sd_source'),srcLabel);
-  html+=row(t('sd_first'),r.first_seen?new Date(r.first_seen*1000).toLocaleTimeString():'—');
+  html+=row(t('sd_first'),r.first_seen?(new Date(r.first_seen*1000).toLocaleTimeString(undefined,{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'})+' ('+t('tz_local')+')'):'—');
   html+=row(t('sd_packets'),r.packet_count||0);
   if(r.ai_org||r.ai_description){
     html+='<hr>';

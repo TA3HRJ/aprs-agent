@@ -1079,6 +1079,13 @@ async def get_silence(request: web.Request) -> web.Response:
         cells = []
     for c in cells:
         c["ai_note"] = mgr._silence_ai_notes.get(c["cell"], "")
+        # "since" is the start of the current alert *episode*, not the
+        # longest-silent individual station in the cluster — a cell that
+        # recovered and re-alerted should show the new episode's start, not
+        # get anchored to one station that never came back.
+        episode_start = mgr._silence_active.get(c["cell"])
+        if c["alert"] and episode_start:
+            c["since"] = int(episode_start)
     return web.json_response({"cells": cells})
 
 
@@ -1188,7 +1195,8 @@ async def _persist_loop(mgr: "AgentManager") -> None:
             try:
                 await asyncio.get_event_loop().run_in_executor(
                     None, mgr._station_db.record_silence_history,
-                    mgr._sta_db_path, dict(mgr._silence_ai_notes))
+                    mgr._sta_db_path, dict(mgr._silence_ai_notes),
+                    dict(mgr._silence_active))
             except Exception as e:
                 print(f"[station-db] history snapshot failed: {e}",
                       file=sys.__stderr__)
