@@ -121,7 +121,7 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 #map{flex:1;background:#1a1a1a}
 .map-sym{background:transparent;border:none}
 .map-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888;font-size:13px;z-index:5;pointer-events:none}
-.map-legend{position:absolute;left:8px;bottom:8px;z-index:1000;background:rgba(30,30,30,.85);padding:6px 10px;border-radius:6px;font-size:11px;display:flex;gap:12px;pointer-events:none}
+.map-legend{position:absolute;left:8px;bottom:50px;z-index:1000;background:rgba(30,30,30,.85);padding:6px 10px;border-radius:6px;font-size:11px;display:flex;gap:12px;pointer-events:none}
 .map-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 .map-legend em{font-style:normal;color:#ccc}
 /* Public (read-only) view: window.PUBLIC hides everything admin */
@@ -154,12 +154,17 @@ body.public .stat-bar .cell.diag{display:none!important}
 .alert-cell.ig{color:#f5c211}
 .alert-txt{color:var(--fg2)}
 .alert-ai{color:#8ff0a4}
-.map-timeline{position:absolute;left:8px;right:8px;top:8px;z-index:1000;display:flex;gap:10px;align-items:center;background:rgba(30,30,30,.88);padding:6px 12px;border-radius:6px}
+/* Anchored to the map's BOTTOM edge: the alert panel above the map grows and
+   shrinks (also while scrubbing history), which moves the map's top edge —
+   a top-anchored bar would drag the play button around under the cursor. */
+.map-timeline{position:absolute;left:8px;right:8px;bottom:8px;z-index:1000;display:flex;gap:10px;align-items:center;background:rgba(30,30,30,.88);padding:6px 12px;border-radius:6px}
 .map-timeline input[type=range]{flex:1;min-width:0;accent-color:#62a0ea;height:16px}
 .tl-btn{background:#3a3a3a;border:1px solid #555;color:#e8e8e8;border-radius:4px;width:26px;height:22px;font-size:11px;cursor:pointer;line-height:1}
 .tl-btn:hover{background:#4a4a4a}
 .tl-label{font-size:11px;color:#ccc;min-width:110px;text-align:right;font-family:'Consolas',monospace;white-space:nowrap;flex-shrink:0}
 .tl-label.hist{color:#f5c211}
+/* Lift the attribution above the bottom-anchored timeline bar */
+.leaflet-bottom.leaflet-right{margin-bottom:42px}
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#2a2a2a;color:#e8e8e8}
 .leaflet-popup-content{font:12px/1.6 'Segoe UI',sans-serif}
 .leaflet-container a.leaflet-popup-close-button{color:#aaa}
@@ -661,7 +666,7 @@ const S={en:{
   msg_h_time:"Time",msg_h_from:"From",msg_h_to:"To",msg_h_chan:"Channel",msg_h_text:"Message",
   msg_empty:"No APRS messages yet — they appear here as they are heard or sent.",
   msg_all:"All",msg_rx:"Received",msg_tx:"Sent",msg_search:"Search…",
-  pub_default_title:"APRS Monitoring Station",pub_live:"live",
+  pub_default_title:"APRS-Agent",pub_default_sub:"AI-assisted regional silence analysis on the live APRS-IS feed",pub_live:"live",
   cap_log:"Raw APRS packets exactly as they arrive from the APRS-IS network, in real time.",
   cap_sta:"Every station heard by this receiver — type, location, frequency and whether it is currently active.",
   cap_map:"Live position of every station heard. A red square means many stations in that area fell silent together — a possible power outage; amber means the local internet gateway failed.",
@@ -728,7 +733,7 @@ const S={en:{
   msg_h_time:"Saat",msg_h_from:"Gönderen",msg_h_to:"Alıcı",msg_h_chan:"Kanal",msg_h_text:"Mesaj",
   msg_empty:"Henüz APRS mesajı yok — duyulan ve gönderilen mesajlar burada görünür.",
   msg_all:"Tümü",msg_rx:"Alınan",msg_tx:"Gönderilen",msg_search:"Ara…",
-  pub_default_title:"APRS İzleme İstasyonu",pub_live:"canlı",
+  pub_default_title:"APRS-Agent",pub_default_sub:"Canlı APRS-IS akışında yapay zeka destekli bölgesel sessizlik analizi",pub_live:"canlı",
   cap_log:"APRS-IS ağından geldiği anda, ham APRS paketleri.",
   cap_sta:"Bu alıcının duyduğu tüm istasyonlar — tür, konum, frekans ve şu an aktif olup olmadıkları.",
   cap_map:"Duyulan her istasyonun canlı konumu. Kırmızı kare, o bölgedeki birçok istasyonun aynı anda susduğunu gösterir — olası elektrik kesintisi; amber ise yerel internet geçidinin arızalandığı anlamına gelir.",
@@ -740,11 +745,13 @@ const S={en:{
   sta_online:"Çevrimiçi",sta_offline:"Çevrimdışı",sta_db_only:"Yalnızca DB",sta_unknown:"—"
 }};
 function t(k){return(S[lang]&&S[lang][k])||S.en[k]||k}
-let pubTitle='',pubCall='';
+let pubTitle='',pubCall='',pubSub='';
 function applyPubHdr(){
   if(!window.PUBLIC)return;
   const title=pubTitle||t('pub_default_title');
-  $('pub-title').textContent=pubCall?(pubCall+' · '+title):title;
+  $('pub-title').textContent=pubCall?(title+' · '+pubCall):title;
+  // Subtitle from config wins; otherwise a language-aware product default
+  $('pub-sub').textContent=pubSub||t('pub_default_sub');
 }
 function applyLang(){
   document.querySelectorAll('[data-i]').forEach(el=>{const k=el.getAttribute('data-i');const v=t(k);if(el.tagName==='INPUT')el.placeholder=v;else el.textContent=v});
@@ -1204,7 +1211,7 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch
       const title=(info.public_title||'').trim();
       const cs=(info.callsign||'').trim();
       pubTitle=title;pubCall=(cs&&cs!=='N0CALL')?cs:'';
-      $('pub-sub').textContent=(info.public_subtitle||'').trim();
+      pubSub=(info.public_subtitle||'').trim();
       applyPubHdr();
     }else{
       $('hdr-cfg').value=info.config_path||'';

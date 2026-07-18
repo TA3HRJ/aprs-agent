@@ -40,7 +40,8 @@ print_config_on_startup = false
 public_port = 0
 
 # Title and one-line description shown in the public page header, next to your
-# callsign. Leave empty for a generic title.
+# callsign. Leave empty for the defaults: "APRS-Agent · CALLSIGN" and a
+# language-aware product description.
 #   public_title    = "APRS Monitoring Station"
 #   public_subtitle = "Live view of the APRS network"
 public_title = ""
