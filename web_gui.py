@@ -187,6 +187,10 @@ class AgentManager:
         # Silence watch (Phase 4): active alert episodes + AI assessments
         self._silence_active: dict[str, float] = {}
         self._silence_ai_notes: dict[str, str] = {}
+        # Digest mode: alerts queued here between flushes (list of (ts, cell
+        # dict, ai note)); lost on restart, same as the episode state above.
+        self._silence_pending: list = []
+        self._silence_last_flush = time.time()
         # Messages panel: rolling buffer of APRS messages (in + out)
         self._messages: deque = deque(maxlen=_MSG_BUFFER)
         self._msg_seen: dict[tuple, int] = {}   # dedup key → last seen ts
@@ -371,10 +375,12 @@ class AgentManager:
         Each cell alerts once per episode (until it recovers). If the AI
         Gateway is configured, an AI assessment is attached to the cell (shown
         in map popups and stored with history snapshots); if the monitor
-        notify channel is configured, an alert message is sent there.
+        notify channel is configured, an alert message is sent there —
+        immediately, or batched into one message every silence_digest_mins.
         """
         mon = config.get("monitor", {})
         channel = mon.get("notify_channel", "")
+        digest_mins = max(0, int(mon.get("silence_digest_mins", 0) or 0))
         ai_cfg = config.get("extensions", {}).get("ai_gateway", {})
         ai_ok = bool(ai_cfg.get("provider") or ai_cfg.get("base_url"))
 
@@ -402,12 +408,16 @@ class AgentManager:
                 print(f"[silence] ALERT {cell}: {c['silent']}/{c['baseline']}"
                       f" silent ({c['cause']})", file=sys.stderr)
                 if channel:
-                    try:
-                        await self._send_notification(
-                            self._format_silence_msg(c, note), channel, config)
-                    except Exception as e:
-                        print(f"[silence] notification error: {e}",
-                              file=sys.stderr)
+                    if digest_mins > 0:
+                        self._silence_pending.append((time.time(), c, note))
+                    else:
+                        try:
+                            await self._send_notification(
+                                self._format_silence_msg(c, note),
+                                channel, config)
+                        except Exception as e:
+                            print(f"[silence] notification error: {e}",
+                                  file=sys.stderr)
 
             # Episode over: cell recovered — allow future re-alerts
             for cell in list(self._silence_active):
@@ -415,6 +425,20 @@ class AgentManager:
                     del self._silence_active[cell]
                     self._silence_ai_notes.pop(cell, None)
                     print(f"[silence] cleared: {cell}", file=sys.stderr)
+
+            # Digest mode: flush the queued alerts as one combined message
+            if (digest_mins > 0 and self._silence_pending
+                    and time.time() - self._silence_last_flush
+                    >= digest_mins * 60):
+                msg = self._format_silence_digest(
+                    self._silence_pending, digest_mins)
+                self._silence_pending = []
+                self._silence_last_flush = time.time()
+                try:
+                    await self._send_notification(msg, channel, config)
+                except Exception as e:
+                    print(f"[silence] digest notification error: {e}",
+                          file=sys.stderr)
 
             await asyncio.sleep(300)
 
@@ -479,6 +503,35 @@ class AgentManager:
                f"Stations: {', '.join(c['silent_calls'][:8])}")
         if note:
             msg += f"\nAI: {note}"
+        return msg
+
+    @staticmethod
+    def _format_silence_digest(pending: list, digest_mins: int) -> str:
+        """One combined notification for all alerts queued since the last
+        flush. Telegram caps messages at 4096 chars — stop adding lines
+        before that and summarise the rest."""
+        head = (f"🔕 SILENCE DIGEST — {len(pending)} new alert"
+                f"{'s' if len(pending) != 1 else ''} in the last "
+                f"{digest_mins} min")
+        lines = []
+        for ts, c, note in pending:
+            icon = "🟡" if c["cause"] == "igate" else "🔴"
+            hhmm = time.strftime("%H:%M", time.localtime(ts))
+            line = (f"{icon} {hhmm} {c['cell']} — {c['silent']}/"
+                    f"{c['baseline']} silent"
+                    + (" (igate)" if c["cause"] == "igate" else ""))
+            if note:
+                line += f"\n   AI: {note}"
+            lines.append(line)
+        msg = head
+        shown = 0
+        for line in lines:
+            if len(msg) + len(line) + 1 > 3900:
+                break
+            msg += "\n" + line
+            shown += 1
+        if shown < len(lines):
+            msg += f"\n… and {len(lines) - shown} more"
         return msg
 
     # ── Repeater monitor ──────────────────────────────────────────────────────
