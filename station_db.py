@@ -445,12 +445,23 @@ class StationDB:
         "self_beacon",
     )
 
-    def get_slim(self, limit: int = 0) -> tuple[list[dict[str, Any]], int]:
+    def get_slim(
+        self, limit: int = 0,
+        bbox: "Optional[tuple[float, float, float, float]]" = None,
+    ) -> tuple[list[dict[str, Any]], int]:
         """List view of the registry: only the fields the station table and
         the map need, most recently heard first, optionally capped at
-        `limit` rows. Returns (rows, total_station_count)."""
-        recs = sorted(self._stations.values(),
+        `limit` rows. `bbox` = (south, west, north, east) keeps only
+        stations inside that box (applied before the cap, so a zoomed map
+        view gets every station of the area even when the global list is
+        capped). Returns (rows, total_matching_count)."""
+        recs = sorted(list(self._stations.values()),
                       key=lambda r: r.last_seen or 0, reverse=True)
+        if bbox is not None:
+            s, w, n, e = bbox
+            recs = [r for r in recs
+                    if r.lat is not None and r.lon is not None
+                    and s <= r.lat <= n and w <= r.lon <= e]
         total = len(recs)
         if limit > 0:
             recs = recs[:limit]
@@ -547,7 +558,12 @@ class StationDB:
                  r.freq_mhz, r.tone_hz, r.comment, r.ai_org, r.ai_description,
                  int(r.ai_analyzed), r.ema_interval_s, r.last_gate,
                  json.dumps(r.hour_counts))
-                for r in self._stations.values()
+                # list() snapshot: this runs in an executor thread while the
+                # event loop keeps ingesting — iterating the live dict raised
+                # "dictionary changed size during iteration" ~20% of flushes
+                # on the 90 pkt/s worldwide feed. list(dict.values()) is a
+                # single C-level call, atomic under the GIL.
+                for r in list(self._stations.values())
             ]
             con.executemany(
                 "INSERT OR REPLACE INTO stations VALUES ("
@@ -622,7 +638,10 @@ class StationDB:
         (cell → note) are stored alongside so the timeline can replay them.
         Rows older than the retention window are pruned. Returns rows written.
         """
-        cells = [c for c in self.silence_cells() if c["silent"] >= 1]
+        # Only alert cells: the timeline replay paints alert cells only, and
+        # worldwide the "any silent station" criterion produced 1000+ rows
+        # per 10-minute snapshot (~140k/day) for cells nobody would see.
+        cells = [c for c in self.silence_cells() if c["alert"]]
         ai_notes = ai_notes or {}
         episode_starts = episode_starts or {}
         for c in cells:
@@ -687,7 +706,9 @@ class StationDB:
             return (now - g.last_seen) < 1800    # heard in last 30 min
 
         cells: dict[str, dict[str, Any]] = {}
-        for r in self._stations.values():
+        # list() snapshot — also called from executor threads (history
+        # snapshots) while the event loop mutates the dict.
+        for r in list(self._stations.values()):
             if r.self_beacon:
                 continue    # self-generated — never a silence sensor
             if r.packet_count < min_history or not r.locator:

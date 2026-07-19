@@ -1125,7 +1125,15 @@ async def get_stations(request: web.Request) -> web.Response:
         limit = max(0, min(int(request.query.get("limit", 4000)), 20000))
     except ValueError:
         limit = 4000
-    stations, total = mgr._station_db.get_slim(limit)
+    bbox = None
+    raw = request.query.get("bbox", "")
+    if raw:
+        try:
+            s, w, n, e = (float(x) for x in raw.split(","))
+            bbox = (s, w, n, e)
+        except (ValueError, TypeError):
+            bbox = None
+    stations, total = mgr._station_db.get_slim(limit, bbox)
     return web.json_response(
         {"stations": stations, "count": total,
          "capped": total > len(stations)})

@@ -906,6 +906,7 @@ let staTotal=0;
 async function fetchStations(){
   try{
     const r=await api('GET','/api/stations');staData=r.stations||[];staTotal=r.count||staData.length;
+    vpKey='';   // viewport cache is one poll old now — refetch on next render
     if(activeTab==='sta')renderStations();
     if(activeTab==='map'){renderMap();tlRefreshRange()}
   }catch(e){}
@@ -961,7 +962,7 @@ function mapPopup(r){
     h+='<br><span style="opacity:.7">'+fmtAgoLong(r.last_seen_ago_s)+'</span>';
   return h;
 }
-function mapDetail(cs){const r=staData.find(x=>x.callsign===cs);if(r)showDetail(r)}
+function mapDetail(cs){const r=staData.find(x=>x.callsign===cs)||(vpData||[]).find(x=>x.callsign===cs)||{callsign:cs};showDetail(r)}
 // Above CLUSTER_MIN plotted stations the map switches to grid clustering at
 // low zoom and viewport-only markers at high zoom — a worldwide feed brings
 // 40k+ stations and a DOM marker per station freezes the browser.
@@ -1017,13 +1018,32 @@ function renderMap(){
         .on('click',()=>map.setView([lat,lon],Math.min(z+2,10)));
     }
   }else{
-    const bounds=map.getBounds().pad(0.2);
-    let shown=0;
-    for(const r of pts){          // pts is most-recent-first from the API
-      if(!bounds.contains([r.lat,r.lon]))continue;
-      if(++shown>MAX_MARKERS)break;
-      addStaMarker(r);
-    }
+    fetchViewport();   // async: pulls EVERY station of the visible area
+  }
+}
+// High-zoom cluster mode: the global list is capped, so ask the server for
+// the stations inside the current view — this guarantees that zooming in
+// shows every station of that area regardless of worldwide volume.
+let vpData=null,vpKey='',vpBusy=false;
+async function fetchViewport(){
+  if(!map||vpBusy)return;
+  const b=map.getBounds().pad(0.2);
+  const key=b.getSouth().toFixed(2)+','+b.getWest().toFixed(2)+','+b.getNorth().toFixed(2)+','+b.getEast().toFixed(2);
+  if(key===vpKey&&vpData){drawViewport();return}
+  vpBusy=true;
+  try{const r=await api('GET','/api/stations?limit=3000&bbox='+key);vpData=r.stations||[];vpKey=key}catch(e){}
+  vpBusy=false;
+  drawViewport();
+}
+function drawViewport(){
+  if(!map||!mapClusterMode||map.getZoom()<9)return;
+  if(map._popup&&map._popup.isOpen&&map._popup.isOpen())return;
+  clearStaMarkers();
+  let shown=0;
+  for(const r of (vpData||[])){
+    if(r.lat===null||r.lat===undefined||r.lon===null||r.lon===undefined)continue;
+    if(++shown>MAX_MARKERS)break;
+    addStaMarker(r);
   }
 }
 // ── Messages ──
