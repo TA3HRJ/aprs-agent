@@ -159,6 +159,7 @@ class StationRecord:
         "last_gate",       # igate that last gated this station to APRS-IS
         "hour_counts",     # packets heard per local hour-of-day (diurnal profile)
         "self_beacon",     # True = this agent's own Fixed Beacon (see below)
+        "is_object",       # True = APRS Object packet (event advisory, not infra)
     )
 
     def __init__(self, callsign: str) -> None:
@@ -210,6 +211,13 @@ class StationRecord:
         # as a silence sensor — otherwise it would be a phantom "still active"
         # vote that masks a genuine outage in its cell.
         self.self_beacon: bool = False
+        # Object packets (;NAME*…) describe events, not infrastructure:
+        # fire/incident advisories from emergency services, hamfest markers…
+        # They expire by design when the event closes, so they must never be
+        # silence sensors (a cell of expired advisories is not an outage).
+        # Persisted to SQLite — the flag must survive the hourly-update
+        # restarts, or every deploy would re-arm this false-positive class.
+        self.is_object: bool = False
 
     def update_from_parsed(self, parsed: dict[str, Any]) -> None:
         """Merge fields extracted from a new APRS packet into this record."""
@@ -223,6 +231,8 @@ class StationRecord:
             else:
                 self.ema_interval_s = 0.3 * dt + 0.7 * self.ema_interval_s
         self.hour_counts[time.localtime(ts).tm_hour] += 1
+        if parsed.get("object_sender"):
+            self.is_object = True
         if parsed.get("gate"):
             self.last_gate = parsed["gate"]
         self.last_seen    = ts
@@ -341,6 +351,7 @@ class StationRecord:
             "ema_interval_s": self.ema_interval_s,
             "last_gate":      self.last_gate,
             "self_beacon":    self.self_beacon,
+            "is_object":      self.is_object,
             "has_db":      self.db_record is not None,
             "online":      online,
             "first_seen":  int(self.first_seen),
@@ -534,7 +545,7 @@ class StationDB:
         "lat", "lon", "locator", "symbol", "symbol_table", "symbol_overlay",
         "station_type", "icon", "city", "district", "freq_mhz", "tone_hz",
         "comment", "ai_org", "ai_description", "ai_analyzed",
-        "ema_interval_s", "last_gate", "hour_counts",
+        "ema_interval_s", "last_gate", "hour_counts", "is_object",
     )
 
     def save_sqlite(self, path: str) -> int:
@@ -549,15 +560,22 @@ class StationDB:
                 "station_type TEXT, icon TEXT, city TEXT, district TEXT,"
                 "freq_mhz REAL, tone_hz REAL, comment TEXT,"
                 "ai_org TEXT, ai_description TEXT, ai_analyzed INTEGER,"
-                "ema_interval_s REAL, last_gate TEXT, hour_counts TEXT)"
+                "ema_interval_s REAL, last_gate TEXT, hour_counts TEXT,"
+                "is_object INTEGER)"
             )
+            # Migrate pre-v2.9.3 tables that lack the is_object column
+            try:
+                con.execute(
+                    "ALTER TABLE stations ADD COLUMN is_object INTEGER")
+            except sqlite3.OperationalError:
+                pass
             rows = [
                 (r.callsign, r.first_seen, r.last_seen, r.packet_count,
                  r.lat, r.lon, r.locator, r.symbol, r.symbol_table,
                  r.symbol_overlay, r.station_type, r.icon, r.city, r.district,
                  r.freq_mhz, r.tone_hz, r.comment, r.ai_org, r.ai_description,
                  int(r.ai_analyzed), r.ema_interval_s, r.last_gate,
-                 json.dumps(r.hour_counts))
+                 json.dumps(r.hour_counts), int(r.is_object))
                 # list() snapshot: this runs in an executor thread while the
                 # event loop keeps ingesting — iterating the live dict raised
                 # "dictionary changed size during iteration" ~20% of flushes
@@ -579,6 +597,14 @@ class StationDB:
             return 0
         con = sqlite3.connect(path)
         try:
+            # load runs BEFORE the first save at startup — migrate here too,
+            # or the SELECT below fails on a pre-v2.9.3 database and the
+            # whole persisted registry is silently lost.
+            try:
+                con.execute(
+                    "ALTER TABLE stations ADD COLUMN is_object INTEGER")
+            except sqlite3.OperationalError:
+                pass
             cur = con.execute(
                 "SELECT " + ",".join(self._SQL_COLS) + " FROM stations")
             n = 0
@@ -608,6 +634,7 @@ class StationDB:
                 r.ai_analyzed  = bool(d["ai_analyzed"])
                 r.ema_interval_s = d["ema_interval_s"]
                 r.last_gate    = d["last_gate"] or ""
+                r.is_object    = bool(d.get("is_object") or 0)
                 try:
                     hc = json.loads(d["hour_counts"] or "[]")
                     if isinstance(hc, list) and len(hc) == 24:
@@ -711,6 +738,8 @@ class StationDB:
         for r in list(self._stations.values()):
             if r.self_beacon:
                 continue    # self-generated — never a silence sensor
+            if r.is_object:
+                continue    # event advisory object — expires by design
             if r.packet_count < min_history or not r.locator:
                 continue
             if r.lat is None or r.lon is None:

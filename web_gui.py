@@ -442,6 +442,40 @@ class AgentManager:
 
             await asyncio.sleep(300)
 
+    def _cell_context(self, c: dict) -> str:
+        """Ground truth for the AI: what the silent stations were saying, and
+        who in the same cell is still alive. Lets the model tell an expired
+        event advisory or a service feed apart from a real infrastructure
+        outage — without this it confidently guessed 'power outage' for a
+        cluster of closed fire advisories."""
+        cell = c["cell"]
+        silent = set(c["silent_calls"])
+        sil_lines: list[str] = []
+        act_lines: list[str] = []
+        act_n = 0
+        now = time.time()
+        for r in list(self._station_db._stations.values()):
+            if not r.locator or r.locator[:4].upper() != cell:
+                continue
+            if r.callsign in silent:
+                if len(sil_lines) < 6:
+                    cm = (r.comment or "").strip()[:90]
+                    sil_lines.append(
+                        f"- {r.callsign} ({r.station_type})"
+                        + (f": {cm}" if cm else ""))
+            elif (now - r.last_seen) < 3600:
+                act_n += 1
+                if len(act_lines) < 3:
+                    act_lines.append(f"- {r.callsign} ({r.station_type})")
+        out = ""
+        if sil_lines:
+            out += ("Silent station details (type, last comment):\n"
+                    + "\n".join(sil_lines) + "\n")
+        if act_n:
+            out += (f"Stations in the same cell still active: {act_n}, e.g.\n"
+                    + "\n".join(act_lines) + "\n")
+        return out
+
     async def _assess_silence(self, c: dict, ai_cfg: dict) -> str:
         """Ask the AI Gateway to interpret a silence cluster. Returns a short
         note like "[power_outage/high] …summary…" or "" on failure."""
@@ -463,9 +497,15 @@ class AgentManager:
             f"silent together (ratio {c['ratio']}).\n"
             f"Preliminary signal: {pre}.\n"
             f"Silent stations: {', '.join(c['silent_calls'][:10])}\n"
-            f"{mins}\n"
+            f"{mins}"
+            f"{self._cell_context(c)}\n"
+            "Consider that some APRS 'stations' are event advisory objects "
+            "(incidents, fire warnings, markers) published by services — "
+            "those expire by design when the event closes, which is not an "
+            "outage.\n"
             "Assess the most likely cause. Return ONLY valid JSON, no prose:\n"
-            '{"cause": "<power_outage|igate_failure|maintenance|propagation|unknown>", '
+            '{"cause": "<power_outage|igate_failure|maintenance|propagation'
+            '|event_expired|unknown>", '
             '"confidence": "<low|medium|high>", '
             '"summary": "<one short plain-language sentence>"}'
         )
