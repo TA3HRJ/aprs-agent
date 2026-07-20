@@ -32,6 +32,29 @@ allowed_callsigns = ["N0CALL*"]
 # Print the full parsed configuration to the console on startup (true/false).
 print_config_on_startup = false
 
+# Start receiving from APRS-IS automatically when the program launches,
+# instead of waiting for you to click Start (true/false). Useful for running
+# as a background service.
+auto_start_agent = false
+
+# Receive ALL worldwide APRS traffic (port 10152) instead of the filtered
+# feed on the port above, ignoring allowed_callsigns entirely (true/false).
+# ~50-100 packets/second — pair with rate_limit_pps below, or leave that at
+# 0 only if you have also disabled per-packet processing you don't need.
+full_feed = false
+
+# Maximum packets per second dispatched to extensions (Logger, AI Gateway,
+# silence detection, ...). Only matters with full_feed; the raw APRS-IS
+# connection itself is never throttled. 0 = unlimited.
+rate_limit_pps = 50
+
+# Path to a Turkey Repeaters JSON database (see the Turkey Repeaters project).
+# Enriches matching stations in the Stations tab with city, district,
+# frequency, tone and band, and is required for the Repeater Monitor below.
+# Leave empty to disable.
+#   repeater_db_path = "C:/path/to/repeaters.json"
+repeater_db_path = ""
+
 # Read-only public monitoring page (Web GUI only). When set to a port number
 # (e.g. 8082), a second web page is served on that port showing only the
 # Live Log / Stations / Map views — no settings, no start/stop, no API keys.
@@ -46,6 +69,50 @@ public_port = 0
 #   public_subtitle = "Live view of the APRS network"
 public_title = ""
 public_subtitle = ""
+
+
+# =============================================================================
+# Monitor (Repeater Monitor + Silence Map)
+# =============================================================================
+# Repeater Monitor notifies when a DB-matched repeater goes offline or comes
+# back (requires repeater_db_path above). The Silence Map runs independently
+# and always watches for regions where many stations fall silent together —
+# these settings only shape its notifications and scope, not whether it runs.
+
+[monitor]
+enabled = false
+
+# Comma-separated base callsigns to watch for the Repeater Monitor. Empty =
+# watch every repeater in the DB.
+watch_callsigns = []
+
+notify_channel = "telegram"   # "telegram" or "smtp"
+check_interval_mins = 10
+
+# Maidenhead grid fields (first 2 characters) that silence detection is
+# scoped to. A prefix station filter such as allowed_callsigns = ["TA*"]
+# also matches callsigns abroad, and their outages would otherwise raise
+# alerts too. Example: ["KM", "KN", "LM", "LN"] for Turkey. Empty = worldwide.
+silence_grids = []
+
+# Batch silence alerts into one combined notification every N minutes,
+# instead of one message per alert — recommended once silence_grids is
+# empty (worldwide), where individual alerts can flood the channel.
+# 0 = send each alert immediately.
+silence_digest_mins = 0
+
+
+# =============================================================================
+# Station AI (organisation extraction)
+# =============================================================================
+# Periodically sends heard stations' beacon comments to AI to extract an
+# organisation name and description, shown in the Stations tab. Requires the
+# AI Gateway extension below to be configured (same provider/API key reused).
+
+[station_ai]
+enabled = false
+interval_hours = 24   # run every N hours
+max_batch = 20        # max stations analysed per run
 
 
 # =============================================================================

@@ -2,9 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>APRS-Agent</title>
 <meta name="theme-color" content="#242424">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
@@ -19,7 +21,11 @@
   --accent:#3584e4;--accent-fg:#fff;--accent2:#78aeed;
   --success:#57e389;--warn:#f5c211;--error:#f66151;--r:10px;
 }
-body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--fg);height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:15px;line-height:1.4}
+body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--fg);height:100vh;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;font-size:15px;line-height:1.4;
+  /* iOS standalone (Home Screen) mode draws under the notch/Dynamic Island
+     and home indicator per viewport-fit=cover — these are 0 in a normal
+     Safari tab, where the browser chrome already owns that space. */
+  padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
 .split{display:flex;flex:1;overflow:hidden}
 
 /* SIDEBAR */
@@ -277,8 +283,14 @@ body.public .sb-toggle{display:none!important}
   .map-timeline{gap:6px;padding:4px 8px}
   .tl-label{min-width:0;font-size:10px}
   .map-legend{display:none}
-  .tab-btn{padding:8px 10px;font-size:12px;white-space:nowrap}
-  .tab-bar{overflow-x:auto}
+  .tab-btn{padding:10px 12px;font-size:12px;white-space:nowrap;min-height:44px}
+  .tab-bar{overflow-x:auto;height:auto;min-height:44px;
+    padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  .sb-toggle{min-width:44px;font-size:17px;flex-shrink:0}
+  .sb-close{min-width:44px;min-height:44px;font-size:15px}
+  /* Settings overlay covers the full screen incl. under the notch */
+  .side-header{padding-top:calc(8px + env(safe-area-inset-top));flex-wrap:wrap}
+  .hdr-btn{min-height:36px;padding:8px 14px;font-size:14px}
 }
 </style>
 </head>
@@ -707,7 +719,9 @@ const S={en:{
   sta_h_call:"Callsign",sta_h_type:"Type",sta_h_loc:"Location",sta_h_org:"Organization",sta_h_freq:"Freq (MHz)",sta_h_status:"Status",sta_h_seen:"Last Heard",
   sta_empty:"No stations heard yet — start the agent to begin receiving.",
   sd_source:"Source",sd_first:"First seen",sd_packets:"Packets",sd_last:"Last packet",sd_aprs_live:"APRS live",sd_db_only:"DB only",sd_both:"APRS + DB",
-  sta_online:"Online",sta_offline:"Offline",sta_db_only:"DB only",sta_unknown:"—"
+  sta_online:"Online",sta_offline:"Offline",sta_db_only:"DB only",sta_unknown:"—",
+  sta_ftype_all:"All Types",sta_ftype_repeater:"🔁 Repeater",sta_ftype_weather:"🌤 Weather",sta_ftype_digi:"📡 Digi",sta_ftype_igate:"🛰 IGate",sta_ftype_mobile:"🚗 Mobile",sta_ftype_echolink:"🔗 EchoLink",sta_ftype_unknown:"❓ Unknown",
+  sta_fonline_all:"All Status",sta_fonline_on:"🟢 Online",sta_fonline_off:"🔴 Offline",sta_fonline_db:"⬜ DB Only"
 },tr:{
   g_conn:"Bağlantı",g_logger:"Logger",g_beacon:"Sabit Konum",g_email:"E-Posta",g_station_ai:"İstasyon AI",g_monitor:"İzleyici",g_ext:"Ext. Sunucu",g_config:"Ayar Dosyası",
   sai_enabled:"AI İstasyon Analizi",sai_sub:"İstasyon yorumlarını periyodik olarak AI'a gönder — dernek adı ve açıklama çıkarır. AI Gateway ayarlarını kullanır.",
@@ -776,7 +790,9 @@ const S={en:{
   sta_h_call:"Çağrı İşareti",sta_h_type:"Tür",sta_h_loc:"Konum",sta_h_org:"Dernek/Kuruluş",sta_h_freq:"Frek (MHz)",sta_h_status:"Durum",sta_h_seen:"Son Görülme",
   sta_empty:"Henüz istasyon duyulmadı — almaya başlamak için ajanı çalıştırın.",
   sd_source:"Kaynak",sd_first:"İlk görülme",sd_packets:"Paket",sd_last:"Son paket",sd_aprs_live:"APRS canlı",sd_db_only:"Yalnızca DB",sd_both:"APRS + DB",
-  sta_online:"Çevrimiçi",sta_offline:"Çevrimdışı",sta_db_only:"Yalnızca DB",sta_unknown:"—"
+  sta_online:"Çevrimiçi",sta_offline:"Çevrimdışı",sta_db_only:"Yalnızca DB",sta_unknown:"—",
+  sta_ftype_all:"Tüm Türler",sta_ftype_repeater:"🔁 Röle",sta_ftype_weather:"🌤 Hava İstasyonu",sta_ftype_digi:"📡 Digi",sta_ftype_igate:"🛰 IGate",sta_ftype_mobile:"🚗 Mobil",sta_ftype_echolink:"🔗 EchoLink",sta_ftype_unknown:"❓ Bilinmiyor",
+  sta_fonline_all:"Tüm Durumlar",sta_fonline_on:"🟢 Çevrimiçi",sta_fonline_off:"🔴 Çevrimdışı",sta_fonline_db:"⬜ Yalnızca DB"
 }};
 function t(k){return(S[lang]&&S[lang][k])||S.en[k]||k}
 let pubTitle='',pubCall='',pubSub='';
@@ -789,6 +805,16 @@ function applyPubHdr(){
 }
 function applyLang(){
   document.querySelectorAll('[data-i]').forEach(el=>{const k=el.getAttribute('data-i');const v=t(k);if(el.tagName==='INPUT')el.placeholder=v;else el.textContent=v});
+  // <select data-i-opt="prefix"> — each <option> translated as prefix_<value>
+  // (empty value → prefix_all). Was declared but never wired up: the
+  // Stations tab's Type/Status filters stayed in English under TR.
+  document.querySelectorAll('[data-i-opt]').forEach(sel=>{
+    const prefix=sel.getAttribute('data-i-opt');
+    for(const opt of sel.options){
+      const k=prefix+'_'+(opt.value||'all');
+      if(S[lang]&&S[lang][k])opt.textContent=S[lang][k];
+    }
+  });
   const lbl=lang==='en'?'TR':'EN';
   $('btn-lang').textContent=lbl;
   const pl=$('pub-lang');if(pl)pl.textContent=lbl;
@@ -1302,7 +1328,21 @@ let ws=null;
 function connectWS(){const p=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(p+'//'+location.host+'/ws');ws.onopen=()=>{$('ws-dot').classList.add('on')};ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='log')addLog(d.text);if(d.type==='status')setStatus(d.running);if(d.type==='stats')onStats(d);if(d.type==='msgs')onMsgs(d.msgs||[])};ws.onclose=()=>{$('ws-dot').classList.remove('on');setTimeout(connectWS,2000)};ws.onerror=()=>ws.close()}
 
 // ── API ──
-async function api(m,p,b){const o={method:m,headers:{}};if(b!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}return(await fetch(p,o)).json()}
+async function api(m,p,b){
+  const o={method:m,headers:{}};
+  if(b!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}
+  const res=await fetch(p,o);
+  // A stuck 401 mostly hits standalone iOS Home-Screen apps: no browser
+  // chrome there to force a reload, so the page does it for itself. Guarded
+  // to once per load — a *persistent* 401 (wrong saved credentials) must
+  // still surface as a normal fetch failure, not a reload loop.
+  if(res.status===401&&!sessionStorage.getItem('reloaded401')){
+    sessionStorage.setItem('reloaded401','1');
+    location.reload();
+    throw new Error('401, reloading');
+  }
+  return res.json();
+}
 async function startAgent(){const cs=$('f-callsign').value.trim();if(!cs||cs==='N0CALL'){alert(t('no_callsign'));return}$('btn-start').disabled=true;await api('POST','/api/start')}
 async function stopAgent(){$('btn-stop').disabled=true;await api('POST','/api/stop')}
 async function saveCfg(){try{const r=await api('POST','/api/config',getCfg());addLog('[web] '+(r.ok?t('save_ok'):t('save_err'))+'\n')}catch(e){addLog('[web] '+t('save_err')+'\n')}}

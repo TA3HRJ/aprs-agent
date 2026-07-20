@@ -6,7 +6,7 @@
  *
  * Developed by TA3HRJ & TA3PKS
  */
-const CACHE = "aprs-agent-v3";
+const CACHE = "aprs-agent-v4";
 const ICONS = ["/icon-192.png", "/icon-512.png", "/manifest.json", "/favicon.ico"];
 
 self.addEventListener("install", (e) => {
@@ -37,8 +37,15 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       fetch(e.request)
         .then((r) => {
-          const copy = r.clone();
-          caches.open(CACHE).then((c) => c.put("/", copy));
+          // Only cache a genuinely-loaded shell. Caching a 401 (Basic Auth
+          // not yet satisfied — happens on cold launches of the iOS
+          // Home-Screen standalone app) would trap every future offline
+          // fallback on that error page, with no browser chrome available
+          // in standalone mode to force a reload out of it.
+          if (r.ok) {
+            const copy = r.clone();
+            caches.open(CACHE).then((c) => c.put("/", copy));
+          }
           return r;
         })
         .catch(() => caches.match("/"))
@@ -51,8 +58,10 @@ self.addEventListener("fetch", (e) => {
       (hit) =>
         hit ||
         fetch(e.request).then((r) => {
-          const copy = r.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy));
+          if (r.ok) {
+            const copy = r.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, copy));
+          }
           return r;
         })
     )
