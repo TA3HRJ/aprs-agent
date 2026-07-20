@@ -94,6 +94,7 @@
   .req  { background: #fdecea; color: var(--req); border: 1px solid #f5c6c1; }
   .opt  { background: #eafaf1; color: var(--opt); border: 1px solid #a9dfbf; }
   .info { background: #e8f4fd; color: var(--accent2); border: 1px solid #aed6f1; }
+  .web  { background: #f4ecfb; color: #6c3fa8; border: 1px solid #d9bdf0; }
 
   /* ── Tables ── */
   table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; }
@@ -155,7 +156,7 @@
 <div id="tr" class="section active">
 
   <h1>APRS-Agent</h1>
-  <p class="subtitle">Kullanım Kılavuzu · v1.0.0</p>
+  <p class="subtitle">Kullanım Kılavuzu</p>
 
   <h2>APRS-Agent Nedir?</h2>
 
@@ -171,8 +172,14 @@
     <ul>
       <li>APRS-IS ağından gelen paketleri ekranda gösterir (<strong>Logger</strong>)</li>
       <li>Konumunuzu belirli aralıklarla ağa gönderir (<strong>Sabit Konum / Fixed Beacon</strong>)</li>
+      <li>Duyulan tüm istasyonları tablo ve harita üzerinde gösterir, gerçek APRS sembolleriyle (<strong>İstasyonlar / Harita</strong> — Web GUI)</li>
+      <li>Bir bölgede (veya tüm dünyada) çok sayıda istasyonun aynı anda susmasını tespit eder ve olası elektrik kesintisi uyarısı verir (<strong>Sessizlik Haritası</strong> — Web GUI)</li>
+      <li>Türkiye Röle Veritabanı ile eşleşen istasyonları şehir/frekans/ton bilgisiyle zenginleştirir ve çevrimdışı olduklarında bildirim gönderir (<strong>Röle İzleyici</strong>)</li>
+      <li>Duyulan istasyonların beacon yorumlarını yapay zekaya göndererek kulüp/kurum adını ve açıklamasını otomatik çıkarır (<strong>AI İstasyon Analizi</strong>)</li>
       <li>Size gelen APRS mesajlarını Twitter/X'e iletir (<strong>Twitter</strong>)</li>
       <li>Size gelen APRS mesajlarını Bluesky'a iletir (<strong>Bluesky</strong>) — ücretsiz API</li>
+      <li>Çift yönlü APRS ↔ WhatsApp mesajlaşması sağlar (<strong>WhatsApp</strong>)</li>
+      <li>Çift yönlü APRS ↔ Telegram mesajlaşması sağlar, tamamen ücretsiz (<strong>Telegram</strong>)</li>
       <li>Gelen APRS mesajlarına yapay zeka ile otomatik yanıt verir (<strong>AI Gateway</strong>)</li>
       <li>E-posta gelen kutusunu yoklayarak yeni e-postaları APRS mesajı olarak iletir (<strong>IMAP Alma</strong>)</li>
       <li>Size gelen APRS mesajlarını e-posta olarak yönlendirir (<strong>SMTP E-posta</strong>)</li>
@@ -187,10 +194,24 @@
     Passcode otomatik hesaplanır — sizin bir şey yapmanız gerekmez.
   </div>
 
+  <div class="callout note">
+    <strong>🖥️ Web GUI mi, Masaüstü GUI mi?</strong>
+    Program iki arayüzle gelir: tarayıcı tabanlı <strong>Web GUI</strong> (herhangi bir
+    işletim sisteminde çalışır, telefondan da erişilebilir) ve Windows'a özel
+    <strong>Masaüstü GUI</strong> (tkinter, sistem tepsisi ikonu). Masaüstü GUI
+    <strong>v2.8.0'dan itibaren özellik olarak donduruldu</strong> — hâlâ çalışır ve
+    paket ayrıştırma/istasyon veritabanı iyileştirmelerini otomatik alır, ama
+    Harita, Sessizlik Haritası, Mesajlar sekmesi ve Herkese Açık İzleme Sayfası
+    gibi yeni özellikler <strong>sadece Web GUI'de</strong> bulunur. Yeni kurulumlar için
+    Web GUI (<code>aprs-agent-web.exe</code> veya <code>python web_gui.py</code>) önerilir.
+  </div>
+
   <h2>Hızlı Başlangıç – Adım Adım</h2>
 
   <ol class="steps">
-    <li><div>Programı çalıştırın: <code>python gui.py</code> ya da <code>aprs-agent-gui.exe</code></div></li>
+    <li><div>Programı çalıştırın: <code>python web_gui.py</code> ya da <code>aprs-agent-web.exe</code>
+        (önerilen) — tarayıcınız otomatik olarak <code>http://localhost:8080</code> adresini açar.
+        Masaüstü GUI'yi kullanmak isterseniz <code>python gui.py</code> ya da <code>aprs-agent-gui.exe</code>.</div></li>
     <li><div>
       <strong>Bağlantı</strong> sekmesine gidin.
       Çağrı işaretinizi girin (zorunlu).
@@ -231,11 +252,33 @@
         <td><span class="badge req">Zorunlu</span></td>
       </tr>
       <tr>
-        <td><span class="field-name">İzin verilen çağrı işaretleri</span></td>
+        <td><span class="field-name">İstasyon Filtresi</span></td>
         <td>Hangi istasyonlardan gelen paketleri görmek istediğinizi belirler.
-            Joker karakter kullanılabilir: <code>TA3HRJ*</code> (TA3 ile başlayan herkes).
-            Kendi çağrı işaretinizi yazmak, sadece size gelen paketleri gösterir.</td>
+            Joker karakter kullanılabilir: <code>TA*</code> (TA ile başlayan herkes,
+            birden çok önek virgülle ayrılabilir: <code>TA*, TB*, YM*</code>).</td>
         <td><span class="badge req">Zorunlu</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Tüm Dünya Akışı</span></td>
+        <td>Açılırsa İstasyon Filtresi yok sayılır ve dünyadaki <strong>tüm</strong> APRS-IS
+            trafiği alınır (port 10152, ~50-100 paket/sn). Sessizlik Haritası'nı
+            tek bir bölgeyle sınırlamak istemiyorsanız (örn. tüm dünyayı izlemek
+            için) kullanılır. Açıksanız aşağıdaki hız sınırını ayarlamanız önerilir.</td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Hız sınırı (pkt/sn)</span></td>
+        <td>Eklentilere (Logger, AI Gateway, Sessizlik tespiti vb.) saniyede en fazla
+            kaç paket iletileceği. Sadece Tüm Dünya Akışı ile birlikte önemlidir —
+            ham APRS-IS bağlantısının kendisi hiçbir zaman kısıtlanmaz.
+            <code>0</code> = sınırsız.</td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Otomatik Başlat</span></td>
+        <td>Program açılırken <strong>▶ Başlat</strong> butonuna basmayı beklemeden
+            APRS-IS'e otomatik bağlanır. Arka planda servis olarak çalıştırırken kullanışlıdır.</td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
       </tr>
     </table>
   </div>
@@ -324,6 +367,155 @@
       <a href="https://www.levinecentral.com/ham/grid_square.php" target="_blank">levinecentral.com/ham/grid_square.php</a>
       adresine gidin, haritada yerinize tıklayın.
     </div>
+    <div class="callout note" style="margin-top:12px;">
+      <strong>ℹ️ Kendi beacon'ınız haritada</strong>
+      Web GUI'nin Harita sekmesinde kendi istasyonunuz "your station" rozetiyle
+      görünür, ama Sessizlik Haritası'nda bir sensör olarak sayılmaz — çünkü
+      kendi beacon'ınız istasyonun bulunduğu yerdeki gerçek durumdan bağımsız
+      olarak yayın yapmaya devam eder (agent farklı bir sunucuda çalışıyor olabilir).
+    </div>
+  </div>
+
+  <h2>İstasyonlar ve Harita <span class="badge web">Web GUI</span></h2>
+
+  <div class="card">
+    <div class="card-title">📊 İstasyonlar Sekmesi</div>
+    <p>
+      APRS-IS'ten duyulan her istasyonu canlı bir tablo olarak listeler — tür,
+      konum, kuruluş, frekans, çevrimiçi/çevrimdışı durumu ve son duyulma zamanı.
+      Bir satıra tıklayarak koordinatlar, ton, EchoLink, hava durumu ve AI
+      analiz sonuçlarını gösteren bir detay paneli açabilirsiniz.
+      Tür/durum/arama filtreleri ile listeyi daraltabilirsiniz.
+    </p>
+    <div class="callout note">
+      <strong>🌍 Dünya modunda kırpma</strong>
+      Tüm Dünya Akışı açıkken kayıt sayısı on binleri bulabilir; tablo ve
+      liste bu durumda en yeni 4000 istasyonla sınırlanır (sayaç toplam
+      sayıyı gösterir). Detay paneli her zaman güncel, eksiksiz kaydı çeker.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🗺️ Harita Sekmesi</div>
+    <p>
+      Duyulan tüm istasyonların canlı konumunu, gerçek APRS sembol setiyle
+      (aprs.fi ile aynı sprite'lar) bir Leaflet haritasında gösterir.
+      Kırmızı kareler bir bölgede çok sayıda istasyonun aynı anda susmasını
+      (olası elektrik kesintisi), amber kareler ise sadece o bölgenin igate'inin
+      düştüğünü işaret eder — bkz. aşağıdaki <strong>Sessizlik Haritası</strong>.
+    </p>
+    <p>
+      Haritanın altındaki zaman çizelgesi son 14 günün anlık görüntülerinde
+      geriye gidip önceki uyarıları tekrar oynatmanızı sağlar; ▶ ile otomatik
+      oynatma yapabilirsiniz.
+    </p>
+    <div class="callout note">
+      <strong>🌍 Dünya modunda kümeleme</strong>
+      2000'den fazla istasyon haritaya düşünce görünüm otomatik değişir: uzak
+      zoom'da sayı rozetli kümeler (tıklayınca yakınlaşır), yakın zoom'da ise o
+      an göründüğünüz bölgenin <strong>tüm</strong> istasyonları sunucudan çekilir.
+      2000'in altında (örn. sadece Türkiye izlerken) davranış eskisiyle birebir aynıdır.
+    </div>
+  </div>
+
+  <h2>Sessizlik Haritası ve İzleme</h2>
+
+  <div class="card">
+    <div class="card-title">🔴 Sessizlik Tespiti</div>
+    <p>
+      Her istasyonun kendi beacon aralığına göre bir "normal" temposu öğrenilir.
+      Bir Maidenhead karesinde (4 karakter, örn. <code>KM38</code>) normalde aktif
+      istasyonların büyük kısmı aynı anda beklenenden çok daha uzun süre sessiz
+      kalırsa, bu bölge <strong>olası elektrik kesintisi</strong> olarak işaretlenir.
+      Eğer sessiz kalan tüm istasyonlar tek bir igate üzerinden geliyorsa ve o
+      igate de sessizse, sebep <strong>igate arızası</strong> olarak ayırt edilir.
+    </p>
+    <p>
+      AI Gateway yapılandırılmışsa, her yeni uyarı için yapay zekadan kısa bir
+      değerlendirme istenir (harita popup'larında ve Telegram/e-posta
+      bildirimlerinde görünür). APRS <strong>Object paketleri</strong> (olay/uyarı
+      nesneleri — örn. acil durum servislerinin yangın uyarıları) tasarım
+      gereği süresi dolduğunda kaybolduğundan, sessizlik sensörü olarak
+      hiçbir zaman sayılmazlar.
+    </p>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr>
+        <td><span class="field-name">Sessizlik haritası bölgesi</span></td>
+        <td>Sessizlik tespitinin sınırlandığı Maidenhead alanları (ilk 2 karakter).
+            Bir önek filtresi (örn. <code>TA*</code>) yurt dışındaki çağrı işaretlerini
+            de yakalayabilir; bu ayar olmadan onların kesintileri de uyarı üretir.
+            Örnek: Türkiye için <code>KM, KN, LM, LN</code>. Boş bırakılırsa tüm dünya izlenir.</td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Sessizlik uyarı özeti (dk)</span></td>
+        <td>Sessizlik uyarılarını N dakikada bir tek birleşik bildirim olarak
+            gönderir, her uyarı için ayrı mesaj atmak yerine. Bölge boş
+            (tüm dünya) bırakıldığında kanalın uyarıya boğulmaması için önerilir.
+            <code>0</code> = her uyarı anında gönderilir.</td>
+        <td><span class="badge opt">İsteğe bağlı</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔔 Röle İzleyici</div>
+    <p>
+      Aşağıdaki Türkiye Röle Veritabanı'ndaki röleleri izler; bir röle
+      çevrimdışı olduğunda veya geri geldiğinde Telegram/e-posta ile bildirim
+      gönderir. <code>Röle DB Dosyası</code> ayarının yapılmış olması gerekir.
+    </p>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr><td><span class="field-name">Röle İzleyici</span></td><td>Bu özelliği etkinleştirir.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Bildirim kanalı</span></td><td><code>telegram</code> veya <code>smtp</code>.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Kontrol aralığı (dk)</span></td><td>Röle durumu kaç dakikada bir kontrol edilsin. Varsayılan: 10.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">İzlenecek çağrı işaretleri</span></td><td>Virgülle ayrılmış çağrı işaretleri. Boş bırakılırsa veritabanındaki tüm röleler izlenir.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+    </table>
+    <div class="callout tip" style="margin-top:12px;">
+      <strong>Örnek bildirim</strong>
+      🔴 YM5KAD şu an ÇEVRİMDIŞI (son duyulma 1s 23dk önce)<br>
+      Adana · 145.7000 MHz · FM
+    </div>
+  </div>
+
+  <h2>Türkiye Röle Veritabanı</h2>
+
+  <div class="card">
+    <div class="card-title">🗄️ Röle DB Dosyası</div>
+    <p>
+      İstasyonlar sekmesini şehir, ilçe, frekans, CTCSS tonu, bant ve mod
+      bilgisiyle zenginleştirir — canlı bir paket gerekmeden, sadece çağrı
+      işareti eşleşmesiyle çalışır. Güncel veritabanını
+      <a href="https://github.com/TA3HRJ/turkey-repeaters" target="_blank">Turkey Repeaters</a>
+      projesinden indirebilirsiniz. Röle İzleyici de bu dosyayı kullanır.
+    </p>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr><td><span class="field-name">Röle DB Dosyası</span></td><td>İndirdiğiniz JSON dosyasının tam yolu.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+    </table>
+  </div>
+
+  <h2>AI İstasyon Analizi</h2>
+
+  <div class="card">
+    <div class="card-title">🤖 AI İstasyon Analizi</div>
+    <p>
+      Duyulan istasyonların beacon yorumlarını periyodik olarak yapay zekaya
+      göndererek kulüp/kurum adını ve kısa bir açıklamayı otomatik çıkarır;
+      sonuçlar İstasyonlar sekmesinin <strong>Organization</strong> sütununda ve
+      detay panelinde görünür. AI Gateway'in yapılandırılmış olması gerekir
+      (aynı sağlayıcı/API anahtarı tekrar kullanılır). Her istasyon oturum
+      başına bir kez analiz edilir; tatil/bayram gibi geçici mesajlar
+      token boşa harcamamak için otomatik atlanır.
+    </p>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr><td><span class="field-name">AI İstasyon Analizi</span></td><td>Bu özelliği etkinleştirir.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Her (saat) çalış</span></td><td>Kaç saatte bir yeni bir tur çalışsın. Varsayılan: 24.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">Her turda maksimum</span></td><td>Bir turda en fazla kaç istasyonun analiz edileceği. Varsayılan: 20.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+    </table>
   </div>
 
   <h2>Twitter / X Sekmesi</h2>
@@ -371,6 +563,65 @@
     </table>
   </div>
 
+  <h2>WhatsApp Sekmesi</h2>
+
+  <div class="card">
+    <div class="card-title">📱 WhatsApp Entegrasyonu</div>
+    <p>
+      Meta Cloud API üzerinden çift yönlü APRS ↔ WhatsApp mesajlaşması sağlar.
+      Size gelen bir APRS mesajı (belirli bir takma ada gönderilmiş) WhatsApp'a
+      iletilir; WhatsApp'tan <code>ÇAĞRI-İŞARETİ Mesaj</code> formatında yazılan
+      bir mesaj da APRS'e gönderilir.
+    </p>
+    <div class="callout warn">
+      <strong>⚠️ Meta Business hesabı gereklidir</strong>
+      <a href="https://business.facebook.com" target="_blank">Meta Business</a>
+      panelinden bir WhatsApp uygulaması oluşturup Telefon Numarası ID ve
+      Erişim Token almanız, ayrıca gelen mesajlar için webhook adresinizi
+      (<code>https://SUNUCUNUZ/webhook/whatsapp</code>) Meta'ya kaydetmeniz gerekir.
+    </div>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr><td><span class="field-name">Telefon Numarası ID</span></td><td>Meta Business panelinden.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Erişim Token</span></td><td>Meta Business panelinden.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Webhook Doğrulama Token</span></td><td>Kendi belirlediğiniz bir dize — Meta webhook ayarıyla eşleşmeli.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Alıcı Telefon</span></td><td>Giden mesajlar için varsayılan WhatsApp numarası.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">İzin verilen APRS alıcıları / göndericileri</span></td><td>APRS → WhatsApp yönü için takma ad ve çağrı işareti filtreleri.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Gönderen çağrı işareti</span></td><td>WhatsApp → APRS yönünde kullanılacak SSID.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">İzin verilen telefon numaraları</span></td><td>Sadece bu numaralar APRS'i tetikleyebilir. Boş = herkes.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+    </table>
+  </div>
+
+  <h2>Telegram Sekmesi</h2>
+
+  <div class="card">
+    <div class="card-title">💬 Telegram Entegrasyonu</div>
+    <p>
+      Çift yönlü APRS ↔ Telegram mesajlaşması sağlar — tamamen ücretsiz,
+      webhook gerekmez (Telegram'ın bot API'si yoklanarak/polling ile çalışır).
+      Sessizlik Haritası uyarıları da bu kanaldan gönderilebilir (bkz. Monitor).
+    </p>
+    <div class="callout tip">
+      <strong>🤖 Bot Token nasıl alınır?</strong>
+      Telegram'da <code>@BotFather</code> ile konuşup <code>/newbot</code> komutunu
+      verin. Chat ID'nizi öğrenmek için <code>@userinfobot</code> ile konuşabilirsiniz.
+    </div>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr><td><span class="field-name">Bot Token</span></td><td>@BotFather'dan alınır.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Chat ID</span></td><td>Telegram kullanıcı veya grup ID'niz.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">İzin verilen APRS alıcıları / göndericileri</span></td><td>APRS → Telegram yönü için takma ad ve çağrı işareti filtreleri. Varsayılan takma ad: <code>TGSEND</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Telegram'ı yokla</span></td><td>Telegram → APRS yönünü açar: bot chat'ine <code>ÇAĞRI-İŞARETİ Mesaj</code> yazarak APRS'e gönderebilirsiniz.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">Yoklama aralığı (sn)</span></td><td>Telegram'ın kaç saniyede bir kontrol edileceği. Varsayılan: 5.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+    </table>
+    <div class="callout warn" style="margin-top:12px;">
+      <strong>⚠️ Bir bot token'ı yalnızca tek bir agent tarafından dinlenebilir</strong>
+      Aynı bot token'ıyla iki agent (örn. hem ev bilgisayarınız hem bir sunucu)
+      aynı anda "Telegram'ı yokla" ile çalışırsa Telegram <code>409 Conflict</code>
+      hatası verir. Sadece birini polling modunda açık tutun.
+    </div>
+  </div>
+
   <h2>AI Gateway Sekmesi</h2>
 
   <div class="card">
@@ -378,7 +629,9 @@
     <p>
       Gelen APRS mesajlarına yapay zeka ile otomatik yanıt verir.
       Mesaj yapılandırılmış çağrı işaretine gönderildiğinde AI sağlayıcıya sorulur
-      ve cevap APRS mesajı olarak geri gönderilir.
+      ve cevap APRS mesajı olarak geri gönderilir. Aynı sağlayıcı/API anahtarı
+      AI İstasyon Analizi ve Sessizlik Haritası değerlendirmeleri tarafından da
+      kullanılır.
     </p>
     <div class="callout tip">
       <strong>✅ Ücretsiz seçenekler mevcut</strong>
@@ -437,6 +690,46 @@
     </table>
   </div>
 
+  <h2>Mesajlar Sekmesi <span class="badge web">Web GUI</span></h2>
+
+  <div class="card">
+    <div class="card-title">💬 Mesajlar</div>
+    <p>
+      Ajanın duyduğu veya gönderdiği <strong>her</strong> APRS mesajını tek bir panelde
+      listeler: saat, yön, gönderen, alıcı, metin ve mesajın ait olduğu köprü
+      (AI / Telegram / WhatsApp / E-posta / …). Giden mesajlar gönderim
+      döngüsünden yakalanır, çünkü APRS-IS kendi trafiğinizi size geri
+      göstermez. Son 400 mesajlık kayan bir tampon tutulur; ack/telemetri
+      trafiği otomatik filtrelenir. <strong>Sadece admin panelde görünür</strong> — Herkese
+      Açık İzleme Sayfası'nda bulunmaz (özel köprü içeriklerini korumak için).
+    </p>
+  </div>
+
+  <h2>Herkese Açık İzleme Sayfası <span class="badge web">Web GUI</span></h2>
+
+  <div class="card">
+    <div class="card-title">👁️ Public View</div>
+    <p>
+      Admin panelinizi (ayarlar, API anahtarları, Başlat/Durdur) hiç açığa
+      çıkarmadan, sadece <strong>Canlı Log / İstasyonlar / Harita</strong> görünümlerini
+      internete güvenle açmanızı sağlar. Ayrı bir port üzerinde çalışır ve bu
+      port dışarıya açılabilir; admin portu (varsayılan 8080) ise
+      <strong>her zaman</strong> yerel ağınızda kalmalıdır.
+    </p>
+    <table>
+      <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
+      <tr><td><span class="field-name">Halka Açık İzleme Portu</span></td><td>Bu portta salt-okunur sayfa sunulur. <code>0</code> = kapalı.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">Başlık / Alt başlık</span></td><td>Sayfa üstünde çağrı işaretinizin yanında görünecek metin. Boş bırakılırsa "APRS-Agent · ÇAĞRI-İŞARETİNİZ" ve dile göre bir açıklama gösterilir.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+    </table>
+    <div class="callout warn" style="margin-top:12px;">
+      <strong>⚠️ Sadece bu portu dışarı açın</strong>
+      Admin portunun (8080) kendi kimlik doğrulaması <strong>yoktur</strong> — dışarıya
+      açık bırakılırsa herkes ayarlarınızı değiştirebilir ve API anahtarlarınızı
+      görebilir. Uzaktan erişim için reverse proxy (nginx/Apache) + Basic Auth
+      arkasına almanız önerilir; Public View portu bu korumaya gerek duymaz.
+    </div>
+  </div>
+
   <h2>Extension Sunucu Sekmesi</h2>
 
   <div class="card">
@@ -467,9 +760,29 @@
   </div>
 
   <div class="card">
+    <h3>Web GUI mi kullanmalıyım, Masaüstü GUI mi?</h3>
+    <p>Yeni bir kurulum yapıyorsanız <strong>Web GUI</strong>'yi kullanın — Harita,
+       Sessizlik Haritası, Mesajlar sekmesi ve Herkese Açık İzleme Sayfası
+       sadece orada bulunur, ve Linux sunucular/telefonlar dahil her yerde
+       çalışır. Masaüstü GUI hâlâ çalışır ama v2.8.0'dan itibaren yeni
+       özellik almıyor (bkz. yukarıdaki not).</p>
+  </div>
+
+  <div class="card">
+    <h3>Sessizlik Haritası'ndaki bir uyarı ne anlama gelir?</h3>
+    <p>Bir Maidenhead karesindeki normalde aktif istasyonların çoğu aynı
+       anda, beklenenden çok daha uzun süre sessiz kaldı — bu genellikle
+       bölgesel bir elektrik kesintisine işaret eder. Tek bir igate'in
+       düşmesinden kaynaklanıyorsa "IGate arızası" olarak ayrı gösterilir.
+       Bölgeyi sınırlamak için Monitor ayarlarındaki
+       <code>silence_grids</code>'i kullanabilirsiniz.</p>
+  </div>
+
+  <div class="card">
     <h3>Program kapatıldığında çalışmaya devam ediyor mu?</h3>
     <p>Hayır. Bilgisayar açıldığında otomatik başlaması için
-       Windows Görev Zamanlayıcısı'na kaydetmeniz gerekir.
+       Windows Görev Zamanlayıcısı'na kaydetmeniz veya Linux'ta systemd
+       servisi olarak çalıştırmanız gerekir.
        Ayrıntılı açıklama için <code>README.md</code> dosyasına bakın.</p>
   </div>
 
@@ -482,7 +795,7 @@
 
   <hr style="border:none;border-top:1px solid var(--border);margin:40px 0 16px;">
   <p style="color:var(--muted);font-size:.85em;text-align:center;">
-    APRS-Agent v1.0.0 · MIT Lisansı · TA3HRJ &amp; TA3PKS ·
+    APRS-Agent · MIT Lisansı · TA3HRJ &amp; TA3PKS ·
     <a href="https://github.com/TA3HRJ/aprs-agent" target="_blank">github.com/TA3HRJ/aprs-agent</a>
   </p>
 
@@ -493,7 +806,7 @@
 <div id="en" class="section">
 
   <h1>APRS-Agent</h1>
-  <p class="subtitle">User Guide · v1.0.0</p>
+  <p class="subtitle">User Guide</p>
 
   <h2>What is APRS-Agent?</h2>
 
@@ -507,8 +820,14 @@
     <ul>
       <li>Display incoming APRS packets in a live log window (<strong>Logger</strong>)</li>
       <li>Periodically broadcast your station position to APRS maps (<strong>Fixed Beacon</strong>)</li>
+      <li>Show every heard station in a table and on a map with real APRS symbols (<strong>Stations / Map</strong> — Web GUI)</li>
+      <li>Detect when many stations in a region (or worldwide) fall silent together and raise a possible power-outage alert (<strong>Silence Map</strong> — Web GUI)</li>
+      <li>Enrich matching stations from the Turkey Repeaters database with city/frequency/tone and notify when a repeater goes offline (<strong>Repeater Monitor</strong>)</li>
+      <li>Send heard stations' beacon comments to AI to automatically extract an organisation name and description (<strong>AI Station Analysis</strong>)</li>
       <li>Forward incoming APRS messages to Twitter/X (<strong>Twitter</strong>)</li>
       <li>Forward incoming APRS messages to Bluesky (<strong>Bluesky</strong>) — free API</li>
+      <li>Bidirectional APRS ↔ WhatsApp messaging (<strong>WhatsApp</strong>)</li>
+      <li>Bidirectional APRS ↔ Telegram messaging, completely free (<strong>Telegram</strong>)</li>
       <li>Auto-respond to incoming APRS messages using AI (<strong>AI Gateway</strong>)</li>
       <li>Poll email inbox and forward new emails as APRS messages (<strong>IMAP Receive</strong>)</li>
       <li>Forward incoming APRS messages to email (<strong>SMTP</strong>)</li>
@@ -523,10 +842,24 @@
     need to do anything special.
   </div>
 
+  <div class="callout note">
+    <strong>🖥️ Web GUI or Desktop GUI?</strong>
+    The program ships with two interfaces: the browser-based <strong>Web GUI</strong>
+    (runs on any OS, reachable from a phone too) and the Windows-only
+    <strong>Desktop GUI</strong> (tkinter, system tray icon). The Desktop GUI has been
+    <strong>feature-frozen since v2.8.0</strong> — it still works and automatically
+    inherits packet-parsing/station-database improvements, but new features
+    like the Map, Silence Map, Messages tab and Public View are <strong>Web GUI
+    only</strong>. New installs should use the Web GUI
+    (<code>aprs-agent-web.exe</code> or <code>python web_gui.py</code>).
+  </div>
+
   <h2>Quick Start – Step by Step</h2>
 
   <ol class="steps">
-    <li><div>Run the program: <code>python gui.py</code> or <code>aprs-agent-gui.exe</code></div></li>
+    <li><div>Run the program: <code>python web_gui.py</code> or <code>aprs-agent-web.exe</code>
+        (recommended) — your browser opens automatically to <code>http://localhost:8080</code>.
+        For the Desktop GUI instead, use <code>python gui.py</code> or <code>aprs-agent-gui.exe</code>.</div></li>
     <li><div>
       Go to the <strong>Connection</strong> tab and enter your callsign (required).
     </div></li>
@@ -565,11 +898,33 @@
         <td><span class="badge req">Required</span></td>
       </tr>
       <tr>
-        <td><span class="field-name">Allowed callsigns</span></td>
+        <td><span class="field-name">Station Filter</span></td>
         <td>Which stations' packets to receive. Wildcards are supported:
-            <code>TA3HRJ*</code> = all callsigns starting with TA3HRJ.
-            Entering just your callsign shows only packets addressed to you.</td>
+            <code>TA*</code> = all callsigns starting with TA (multiple prefixes can
+            be comma-separated: <code>TA*, TB*, YM*</code>).</td>
         <td><span class="badge req">Required</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Full World Feed</span></td>
+        <td>When on, the Station Filter is ignored and <strong>all</strong> worldwide
+            APRS-IS traffic is received (port 10152, ~50-100 packets/sec).
+            Used to run the Silence Map worldwide instead of one region.
+            Setting a rate limit below is strongly recommended when enabled.</td>
+        <td><span class="badge opt">Optional</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Rate limit (pkt/s)</span></td>
+        <td>Maximum packets dispatched to extensions (Logger, AI Gateway,
+            silence detection, ...) per second. Only matters with the Full
+            World Feed — the raw APRS-IS connection itself is never
+            throttled. <code>0</code> = unlimited.</td>
+        <td><span class="badge opt">Optional</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Auto-start</span></td>
+        <td>Connects to APRS-IS automatically on launch, without waiting for
+            you to click Start. Useful when running as a background service.</td>
+        <td><span class="badge opt">Optional</span></td>
       </tr>
     </table>
   </div>
@@ -656,6 +1011,158 @@
       Visit <a href="https://www.levinecentral.com/ham/grid_square.php" target="_blank">levinecentral.com/ham/grid_square.php</a>
       and click your location on the map.
     </div>
+    <div class="callout note" style="margin-top:12px;">
+      <strong>ℹ️ Your own beacon on the map</strong>
+      Your station shows on the Web GUI's Map tab with a "your station"
+      badge, but it is never counted as a Silence Map sensor — it keeps
+      beaconing regardless of the real situation at the claimed location
+      (the agent may even run on a server in another country).
+    </div>
+  </div>
+
+  <h2>Stations and Map <span class="badge web">Web GUI</span></h2>
+
+  <div class="card">
+    <div class="card-title">📊 Stations Tab</div>
+    <p>
+      Lists every station heard from APRS-IS as a live table — type,
+      location, organisation, frequency, online/offline status and last
+      heard time. Click any row for a detail panel showing coordinates,
+      tone, EchoLink, weather data and AI analysis results. Type/status/search
+      filters let you narrow the list.
+    </p>
+    <div class="callout note">
+      <strong>🌍 Capping in world mode</strong>
+      With the Full World Feed on, the registry can reach tens of thousands
+      of stations; the list is then capped at the 4000 most recently heard
+      (the counter still shows the true total). The detail panel always
+      fetches the full, current record regardless of the cap.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🗺️ Map Tab</div>
+    <p>
+      Shows the live position of every heard station on a Leaflet map,
+      using the real APRS symbol set (same sprites as aprs.fi). Red squares
+      mark a region where many stations fell silent together (possible
+      power outage); amber squares mean only that region's igate itself
+      went down — see <strong>Silence Map</strong> below.
+    </p>
+    <p>
+      The timeline below the map lets you scrub back through the last 14
+      days of recorded snapshots and replay past alerts; use ▶ for
+      automatic playback.
+    </p>
+    <div class="callout note">
+      <strong>🌍 Clustering in world mode</strong>
+      Once more than 2000 stations would be plotted, the map switches
+      behaviour automatically: numbered cluster badges at low zoom (click
+      to zoom in), and every station of the currently visible area fetched
+      from the server at high zoom. Below that threshold (e.g. watching
+      only Turkey) behaviour is exactly as before.
+    </div>
+  </div>
+
+  <h2>Silence Map and Monitor</h2>
+
+  <div class="card">
+    <div class="card-title">🔴 Silence Detection</div>
+    <p>
+      Each station's "normal" beacon cadence is learned automatically. When
+      most of the normally-active stations in a Maidenhead cell (4
+      characters, e.g. <code>KM38</code>) fall silent for far longer than
+      expected at the same time, that cell is flagged as a <strong>possible
+      power outage</strong>. If every silent station in the cell shares one
+      igate and that igate is itself silent, the cause is reported as an
+      <strong>igate failure</strong> instead.
+    </p>
+    <p>
+      If the AI Gateway is configured, each new alert gets a short AI
+      assessment (shown in map popups and in Telegram/email notifications).
+      APRS <strong>Object packets</strong> (event/advisory objects — e.g. fire
+      warnings from emergency services) expire by design when the event
+      closes, so they are never counted as silence sensors.
+    </p>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr>
+        <td><span class="field-name">Silence map region</span></td>
+        <td>Maidenhead fields (first 2 characters) that silence detection is
+            limited to. A prefix station filter (e.g. <code>TA*</code>) also
+            matches callsigns abroad, whose outages would otherwise raise
+            alerts too. Example: <code>KM, KN, LM, LN</code> for Turkey. Empty =
+            worldwide.</td>
+        <td><span class="badge opt">Optional</span></td>
+      </tr>
+      <tr>
+        <td><span class="field-name">Silence alert digest (min)</span></td>
+        <td>Batch silence alerts into one combined notification every N
+            minutes, instead of one message per alert. Recommended once the
+            region is left empty (worldwide), where individual alerts would
+            flood the channel. <code>0</code> = send each alert immediately.</td>
+        <td><span class="badge opt">Optional</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔔 Repeater Monitor</div>
+    <p>
+      Watches the repeaters listed in the Turkey Repeaters database below
+      and sends a Telegram/email notification when one goes offline or
+      comes back. Requires the <code>Repeater DB Path</code> setting.
+    </p>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr><td><span class="field-name">Repeater Monitor</span></td><td>Enables this feature.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Notify via</span></td><td><code>telegram</code> or <code>smtp</code>.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Check interval (min)</span></td><td>How often repeater status is checked. Default: 10.</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Watch callsigns</span></td><td>Comma-separated base callsigns. Empty = watch every repeater in the database.</td><td><span class="badge opt">Optional</span></td></tr>
+    </table>
+    <div class="callout tip" style="margin-top:12px;">
+      <strong>Notification example</strong>
+      🔴 YM5KAD is now OFFLINE (last heard 1h 23m ago)<br>
+      Adana · 145.7000 MHz · FM
+    </div>
+  </div>
+
+  <h2>Turkey Repeaters DB</h2>
+
+  <div class="card">
+    <div class="card-title">🗄️ Repeater DB Path</div>
+    <p>
+      Enriches the Stations tab with city, district, frequency, CTCSS tone,
+      band and mode — matched by callsign alone, no live packet needed.
+      Download the latest database from the
+      <a href="https://github.com/TA3HRJ/turkey-repeaters" target="_blank">Turkey Repeaters</a>
+      project. The Repeater Monitor above also relies on this file.
+    </p>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr><td><span class="field-name">Repeater DB Path</span></td><td>Full path to the downloaded JSON file.</td><td><span class="badge opt">Optional</span></td></tr>
+    </table>
+  </div>
+
+  <h2>AI Station Analysis</h2>
+
+  <div class="card">
+    <div class="card-title">🤖 AI Station Analysis</div>
+    <p>
+      Periodically sends heard stations' beacon comments to AI to extract an
+      organisation name and short description; results appear in the
+      Stations tab's <strong>Organization</strong> column and detail panel.
+      Requires the AI Gateway to be configured first (same provider/API key
+      is reused). Each station is analysed once per session; transient
+      comments (holiday greetings, seasonal messages) are skipped
+      automatically to avoid wasting tokens.
+    </p>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr><td><span class="field-name">AI Station Analysis</span></td><td>Enables this feature.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Run every (hours)</span></td><td>How often a new pass runs. Default: 24.</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Max per run</span></td><td>Maximum stations analysed per pass. Default: 20.</td><td><span class="badge opt">Optional</span></td></tr>
+    </table>
   </div>
 
   <h2>Twitter / X Tab</h2>
@@ -704,6 +1211,66 @@
     </table>
   </div>
 
+  <h2>WhatsApp Tab</h2>
+
+  <div class="card">
+    <div class="card-title">📱 WhatsApp Integration</div>
+    <p>
+      Bidirectional APRS ↔ WhatsApp messaging via the Meta Cloud API. An
+      APRS message addressed to a configured alias is forwarded to
+      WhatsApp; a message typed as <code>CALLSIGN Message text</code> on
+      WhatsApp is forwarded to APRS.
+    </p>
+    <div class="callout warn">
+      <strong>⚠️ A Meta Business account is required</strong>
+      Create a WhatsApp app in the
+      <a href="https://business.facebook.com" target="_blank">Meta Business</a>
+      dashboard to get a Phone Number ID and Access Token, and register your
+      webhook URL (<code>https://YOUR_SERVER/webhook/whatsapp</code>) with Meta
+      for incoming messages.
+    </div>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr><td><span class="field-name">Phone Number ID</span></td><td>From the Meta Business dashboard.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Access Token</span></td><td>From the Meta Business dashboard.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Webhook Verify Token</span></td><td>A string you choose — must match your Meta webhook configuration.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Recipient Phone</span></td><td>Default WhatsApp number for outgoing messages.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Allowed APRS recipients / senders</span></td><td>Addressee and callsign filters for the APRS → WhatsApp direction.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">From callsign</span></td><td>SSID used for the WhatsApp → APRS direction.</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Allowed phone numbers</span></td><td>Only these numbers can trigger APRS. Empty = anyone.</td><td><span class="badge opt">Optional</span></td></tr>
+    </table>
+  </div>
+
+  <h2>Telegram Tab</h2>
+
+  <div class="card">
+    <div class="card-title">💬 Telegram Integration</div>
+    <p>
+      Bidirectional APRS ↔ Telegram messaging — completely free, no webhook
+      needed (the Telegram bot API is polled). Silence Map alerts can also
+      be sent through this channel (see Monitor above).
+    </p>
+    <div class="callout tip">
+      <strong>🤖 Getting a Bot Token</strong>
+      Talk to <code>@BotFather</code> on Telegram and use <code>/newbot</code>.
+      To find your Chat ID, talk to <code>@userinfobot</code>.
+    </div>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr><td><span class="field-name">Bot Token</span></td><td>From @BotFather.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Chat ID</span></td><td>Your Telegram user or group ID.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Allowed APRS recipients / senders</span></td><td>Addressee and callsign filters for the APRS → Telegram direction. Default addressee: <code>TGSEND</code></td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Poll Telegram</span></td><td>Enables the Telegram → APRS direction: type <code>CALLSIGN Message</code> in the bot chat to send to APRS.</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Poll interval (sec)</span></td><td>How often Telegram is checked. Default: 5.</td><td><span class="badge opt">Optional</span></td></tr>
+    </table>
+    <div class="callout warn" style="margin-top:12px;">
+      <strong>⚠️ A bot token can only be polled by one agent at a time</strong>
+      If the same bot token is polled by two agents at once (e.g. your home
+      PC and a server), Telegram returns a <code>409 Conflict</code> error.
+      Keep polling enabled on only one of them.
+    </div>
+  </div>
+
   <h2>AI Gateway Tab</h2>
 
   <div class="card">
@@ -711,7 +1278,9 @@
     <p>
       Auto-responds to incoming APRS messages using AI.
       When a message is addressed to the configured callsign, it is sent to
-      the AI provider and the response is returned as an APRS message.
+      the AI provider and the response is returned as an APRS message. The
+      same provider/API key is also used by AI Station Analysis and Silence
+      Map assessments.
     </p>
     <div class="callout tip">
       <strong>✅ Free options available</strong>
@@ -771,6 +1340,46 @@
     </table>
   </div>
 
+  <h2>Messages Tab <span class="badge web">Web GUI</span></h2>
+
+  <div class="card">
+    <div class="card-title">💬 Messages</div>
+    <p>
+      Lists <strong>every</strong> APRS message the agent hears or sends in one
+      panel — time, direction, from, to, text, and which bridge it belongs
+      to (AI / Telegram / WhatsApp / Email / …). Outgoing messages are
+      captured from the send loop, since APRS-IS never echoes your own
+      traffic back to you. A rolling buffer of the last 400 messages is
+      kept; ack/telemetry chatter is filtered out automatically. <strong>Admin
+      only</strong> — not exposed on the Public View, to keep bridge content private.
+    </p>
+  </div>
+
+  <h2>Public View <span class="badge web">Web GUI</span></h2>
+
+  <div class="card">
+    <div class="card-title">👁️ Public View</div>
+    <p>
+      Lets you safely expose just the <strong>Live Log / Stations / Map</strong>
+      views to the internet, without ever exposing your admin panel
+      (settings, API keys, Start/Stop). It runs on a separate port that is
+      safe to forward — the admin port (default 8080) must <strong>always</strong>
+      stay on your local network.
+    </p>
+    <table>
+      <tr><th>Field</th><th>Description</th><th>Status</th></tr>
+      <tr><td><span class="field-name">Public View Port</span></td><td>Read-only page served on this port. <code>0</code> = disabled.</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Title / Subtitle</span></td><td>Text shown at the top of the page next to your callsign. Leave empty for the defaults: "APRS-Agent · YOUR_CALLSIGN" and a language-aware description.</td><td><span class="badge opt">Optional</span></td></tr>
+    </table>
+    <div class="callout warn" style="margin-top:12px;">
+      <strong>⚠️ Only forward this port</strong>
+      The admin port (8080) has <strong>no authentication of its own</strong> —
+      if left exposed, anyone can change your settings and see your API
+      keys. For remote access, put it behind a reverse proxy (nginx/Apache)
+      with Basic Auth; the Public View port needs no such protection.
+    </div>
+  </div>
+
   <h2>Extension Server Tab</h2>
 
   <div class="card">
@@ -798,8 +1407,26 @@
   </div>
 
   <div class="card">
+    <h3>Should I use the Web GUI or the Desktop GUI?</h3>
+    <p>For a new install, use the <strong>Web GUI</strong> — the Map, Silence
+       Map, Messages tab and Public View exist only there, and it runs
+       anywhere, including Linux servers and phones. The Desktop GUI still
+       works but has received no new features since v2.8.0 (see the note above).</p>
+  </div>
+
+  <div class="card">
+    <h3>What does a Silence Map alert mean?</h3>
+    <p>Most of the normally-active stations in a Maidenhead cell fell
+       silent at the same time, for far longer than expected — usually a
+       sign of a regional power outage. If it's caused by a single igate
+       going down, it's shown separately as an "IGate failure". You can
+       scope the region with <code>silence_grids</code> in the Monitor settings.</p>
+  </div>
+
+  <div class="card">
     <h3>Does the agent keep running when I close the window?</h3>
-    <p>No. To start automatically at boot, add it to Windows Task Scheduler.
+    <p>No. To start automatically at boot, add it to Windows Task Scheduler,
+       or run it as a systemd service on Linux.
        See <code>README.md</code> for details.</p>
   </div>
 
@@ -812,7 +1439,7 @@
 
   <hr style="border:none;border-top:1px solid var(--border);margin:40px 0 16px;">
   <p style="color:var(--muted);font-size:.85em;text-align:center;">
-    APRS-Agent v1.0.0 · MIT License · TA3HRJ &amp; TA3PKS ·
+    APRS-Agent · MIT License · TA3HRJ &amp; TA3PKS ·
     <a href="https://github.com/TA3HRJ/aprs-agent" target="_blank">github.com/TA3HRJ/aprs-agent</a>
   </p>
 
