@@ -26,6 +26,11 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
      and home indicator per viewport-fit=cover — these are 0 in a normal
      Safari tab, where the browser chrome already owns that space. */
   padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+/* 100vh on mobile Safari is the height with the address/tab bar HIDDEN —
+   when it's shown (the common case), the bottom of a 100vh element sits
+   underneath it. 100dvh tracks the bar's actual current state; kept behind
+   a @supports gate since 100vh above already covers older browsers. */
+@supports (height:100dvh){body{height:100dvh}}
 .split{display:flex;flex:1;overflow:hidden}
 
 /* SIDEBAR */
@@ -284,8 +289,13 @@ body.public .sb-toggle{display:none!important}
   .tl-label{min-width:0;font-size:10px}
   .map-legend{display:none}
   .tab-btn{padding:10px 12px;font-size:12px;white-space:nowrap;min-height:44px}
-  .tab-bar{overflow-x:auto;height:auto;min-height:44px;
+  /* Sekmeler + ⚙ tek satırda kalır; log sayacı/Clear/Auto Scroll (yalnızca
+     Live Log sekmesinde görünür) o satıra sığmadığından kendi satırına
+     taşar — önceden overflow-x:auto ile sağa kayıp kesiliyordu. */
+  .tab-bar{flex-wrap:wrap;height:auto;min-height:44px;
     padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  .tab-spacer{flex-basis:0}
+  .log-header{flex:1 1 100%;justify-content:flex-end;min-height:36px}
   .sb-toggle{min-width:44px;font-size:17px;flex-shrink:0}
   .sb-close{min-width:44px;min-height:44px;font-size:15px}
   /* Settings overlay covers the full screen incl. under the notch */
@@ -1328,15 +1338,20 @@ let ws=null;
 function connectWS(){const p=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(p+'//'+location.host+'/ws');ws.onopen=()=>{$('ws-dot').classList.add('on')};ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='log')addLog(d.text);if(d.type==='status')setStatus(d.running);if(d.type==='stats')onStats(d);if(d.type==='msgs')onMsgs(d.msgs||[])};ws.onclose=()=>{$('ws-dot').classList.remove('on');setTimeout(connectWS,2000)};ws.onerror=()=>ws.close()}
 
 // ── API ──
-async function api(m,p,b){
+// reloadOn401: only for the initial bootstrap calls (see the init IIFE) — a
+// stuck 401 there mostly hits standalone iOS Home-Screen apps with no
+// browser chrome to force a reload, so the page does it for itself, once
+// per load (sessionStorage-guarded). Background polling (stations, silence,
+// messages — every few seconds, forever) must NOT opt in: a full-page
+// reload from Basic Auth re-challenges Safari's credential prompt, so
+// reloading on every transient blip from a 15-second poll would turn one
+// hiccup into a repeated password-prompt loop instead of just skipping a
+// cycle and trying again next tick.
+async function api(m,p,b,{reloadOn401}={}){
   const o={method:m,headers:{}};
   if(b!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}
   const res=await fetch(p,o);
-  // A stuck 401 mostly hits standalone iOS Home-Screen apps: no browser
-  // chrome there to force a reload, so the page does it for itself. Guarded
-  // to once per load — a *persistent* 401 (wrong saved credentials) must
-  // still surface as a normal fetch failure, not a reload loop.
-  if(res.status===401&&!sessionStorage.getItem('reloaded401')){
+  if(res.status===401&&reloadOn401&&!sessionStorage.getItem('reloaded401')){
     sessionStorage.setItem('reloaded401','1');
     location.reload();
     throw new Error('401, reloading');
@@ -1362,7 +1377,7 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch
     if((navigator.language||'').toLowerCase().startsWith('tr'))lang='tr';
   }
   try{
-    const info=await api('GET','/api/info');
+    const info=await api('GET','/api/info',undefined,{reloadOn401:true});
     $('hdr-ver').textContent='v'+info.version;
     $('about-ver').textContent='APRS-Agent v'+info.version;
     if(window.PUBLIC){
@@ -1376,7 +1391,7 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch
       setStatus(info.running);
     }
   }catch(e){}
-  if(!window.PUBLIC){try{const cfg=await api('GET','/api/config');loadCfg(cfg)}catch(e){addLog('[web] Failed to load config\n')}}
+  if(!window.PUBLIC){try{const cfg=await api('GET','/api/config',undefined,{reloadOn401:true});loadCfg(cfg)}catch(e){addLog('[web] Failed to load config\n')}}
   connectWS();applyLang();
   pollSilence();setInterval(pollSilence,15000);
 })();
