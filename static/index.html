@@ -950,8 +950,11 @@ function switchTab(tab){
   $('sta-view').hidden=tab!=='sta';
   $('map-view').hidden=tab!=='map';
   $('msg-view').hidden=tab!=='msg';
-  // log-header buttons only visible on log tab
-  const lh=document.querySelector('.log-header');if(lh)lh.style.visibility=tab==='log'?'':'hidden';
+  // log-header (counter/Clear/Auto Scroll) only on the log tab. display:none,
+  // NOT visibility:hidden — on mobile it wraps to its own row, and a hidden
+  // row still reserves its height, leaving an empty gap under the tab bar on
+  // the Stations/Map/Messages tabs.
+  const lh=document.querySelector('.log-header');if(lh)lh.style.display=tab==='log'?'':'none';
   if(tab==='sta'||tab==='map'){fetchStations();if(!staRefreshTimer)staRefreshTimer=setInterval(fetchStations,5000)}
   else{clearInterval(staRefreshTimer);staRefreshTimer=null}
   if(tab==='map')initMap();
@@ -1338,23 +1341,21 @@ let ws=null;
 function connectWS(){const p=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(p+'//'+location.host+'/ws');ws.onopen=()=>{$('ws-dot').classList.add('on')};ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='log')addLog(d.text);if(d.type==='status')setStatus(d.running);if(d.type==='stats')onStats(d);if(d.type==='msgs')onMsgs(d.msgs||[])};ws.onclose=()=>{$('ws-dot').classList.remove('on');setTimeout(connectWS,2000)};ws.onerror=()=>ws.close()}
 
 // ── API ──
-// reloadOn401: only for the initial bootstrap calls (see the init IIFE) — a
-// stuck 401 there mostly hits standalone iOS Home-Screen apps with no
-// browser chrome to force a reload, so the page does it for itself, once
-// per load (sessionStorage-guarded). Background polling (stations, silence,
-// messages — every few seconds, forever) must NOT opt in: a full-page
-// reload from Basic Auth re-challenges Safari's credential prompt, so
-// reloading on every transient blip from a 15-second poll would turn one
-// hiccup into a repeated password-prompt loop instead of just skipping a
-// cycle and trying again next tick.
-async function api(m,p,b,{reloadOn401}={}){
+// The admin panel sits behind Apache form-login (session cookie). When the
+// session is missing/expired, an authenticated fetch is 302-redirected to
+// the login page, so the response body is login HTML, not JSON. Detect that
+// (or a 401 from the Basic-Auth IP fallback) and bounce to the login page
+// once — authBounced resets naturally on the next page load, so a fresh
+// login returns cleanly. Without this a poll would keep parsing login HTML
+// as JSON and the app would look frozen instead of asking you to sign in.
+let authBounced=false;
+async function api(m,p,b){
   const o={method:m,headers:{}};
   if(b!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}
   const res=await fetch(p,o);
-  if(res.status===401&&reloadOn401&&!sessionStorage.getItem('reloaded401')){
-    sessionStorage.setItem('reloaded401','1');
-    location.reload();
-    throw new Error('401, reloading');
+  if(res.status===401||(res.redirected&&/\/login\.html/.test(res.url))){
+    if(!authBounced){authBounced=true;location.href='/login.html'}
+    throw new Error('not authenticated');
   }
   return res.json();
 }
@@ -1377,7 +1378,7 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch
     if((navigator.language||'').toLowerCase().startsWith('tr'))lang='tr';
   }
   try{
-    const info=await api('GET','/api/info',undefined,{reloadOn401:true});
+    const info=await api('GET','/api/info');
     $('hdr-ver').textContent='v'+info.version;
     $('about-ver').textContent='APRS-Agent v'+info.version;
     if(window.PUBLIC){
@@ -1391,7 +1392,7 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch
       setStatus(info.running);
     }
   }catch(e){}
-  if(!window.PUBLIC){try{const cfg=await api('GET','/api/config',undefined,{reloadOn401:true});loadCfg(cfg)}catch(e){addLog('[web] Failed to load config\n')}}
+  if(!window.PUBLIC){try{const cfg=await api('GET','/api/config');loadCfg(cfg)}catch(e){addLog('[web] Failed to load config\n')}}
   connectWS();applyLang();
   pollSilence();setInterval(pollSilence,15000);
 })();
