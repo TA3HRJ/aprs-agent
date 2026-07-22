@@ -20,7 +20,7 @@ several automation features useful for amateur radio operators.
 |---|---|---|
 | 🖥️ | **Desktop GUI** *(frozen at v2.8.0)* | Form-based config editor, Start/Stop, system tray, EN/TR language toggle, live stats bar (RX/TX/Errors/Packets/Stations/Callsigns/Uptime), Live Log + Stations bottom panel with real APRS symbol icons and type/status/search filters |
 | 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, Stations tab, Map tab, gzip-compressed |
-| 🗺️ | **Silence Map** | Leaflet map of all heard stations with real APRS symbols; detects regions where stations fall silent together (per-station beacon-cadence baseline, Maidenhead cell clustering, igate-failure discrimination) and paints affected cells; timeline slider replays the last 14 days of snapshots; new alerts get an AI assessment (via AI Gateway) shown in cell popups and are sent to the Monitor notify channel (Telegram/email). The agent's own Fixed Beacon is shown on the map but excluded from silence detection (it is self-generated and would otherwise be a phantom "still active" vote). Detection can be scoped to your own region with `monitor.silence_grids` (Maidenhead fields, e.g. `["KM","KN","LM","LN"]` for Turkey) — a prefix station filter such as `p/TA` also matches callsigns abroad, and without this their outages raise alerts too |
+| 🗺️ | **Silence Map** | Leaflet map of all heard stations with real APRS symbols; detects regions where stations fall silent together (per-station beacon-cadence baseline, Maidenhead cell clustering, igate-failure discrimination) and paints affected cells; timeline slider replays the last 14 days of snapshots; new alerts get an AI assessment (via AI Gateway) shown in cell popups and are sent to the Monitor notify channel (Telegram/email). The agent's own Fixed Beacon is shown on the map but excluded from silence detection (it is self-generated and would otherwise be a phantom "still active" vote). Detection can be scoped to your own region with `monitor.silence_grids` (Maidenhead fields, e.g. `["KM","KN","LM","LN"]` for Turkey) — a prefix station filter such as `p/TA` also matches callsigns abroad, and without this their outages raise alerts too. For worldwide monitoring, `monitor.silence_digest_mins` batches alerts into one combined notification per interval. APRS Object packets (event advisories that expire by design) are never counted as silence sensors |
 | 💾 | **Persistence** | Station records, beacon-cadence history and the station's lifelong uptime survive restarts (SQLite `aprs_stations.db` next to the config, shared by both GUIs) |
 | 💬 | **Messages Tab** | Every APRS message the agent hears or sends, in one panel — time, direction, from, to, text, and the bridge it belongs to (AI / Telegram / WhatsApp / Email / …). Outgoing messages are captured from the send loop, since APRS-IS never echoes our own traffic. Rolling buffer of the last 400 messages, pushed live over WebSocket; ack/telemetry chatter filtered out. Admin only — not exposed on the public view |
 | 👁️ | **Public View** | Optional read-only monitoring page on a separate port (`public_port`): Live Log / Stations / Map only — no settings, no start/stop, no API keys, log stream filtered to packet lines. Safe to expose to the internet while the admin port stays local |
@@ -196,6 +196,11 @@ enabled             = true
 notify_channel      = "telegram"     # "telegram" or "smtp"
 check_interval_mins = 10
 watch_callsigns     = []             # empty = watch all DB repeaters
+silence_grids       = []             # Maidenhead fields silence detection is scoped to
+                                     # (e.g. ["KM","KN","LM","LN"] = Turkey; empty = worldwide)
+silence_digest_mins = 0              # batch silence alerts into one combined message
+                                     # every N minutes (0 = send each alert immediately;
+                                     # recommended for worldwide monitoring)
 ```
 
 Notification example:
@@ -406,6 +411,8 @@ python web_gui.py --host 0.0.0.0 -p 8080  # listen on all interfaces (remote acc
 - **Efficient delivery** — `index.html` is served gzip-compressed (~14 KB instead of 55 KB) with ETag caching; the page loads instantly on repeat visits
 - **Bounded log** — the log panel keeps the last 10 000 lines; memory stays flat even after days of continuous operation
 - **Full World Feed** — optional port 10152 mode receives all worldwide APRS traffic; built-in token-bucket rate limiter prevents CPU overload
+- **Scales to the worldwide feed** — above 2000 plotted stations the map switches to grid clustering (numbered badges, click to zoom) with viewport-only markers at high zoom, fetching every station of the visible area from the server; the stations API serves a slim capped list (~1.3 MB instead of 40+ MB) and the detail panel fetches the full record per station; below that threshold a regional setup looks exactly as before
+- **Phone layout** — on screens ≤ 700 px the settings sidebar folds behind a ⚙ overlay, the silence-alert list collapses to a one-line tappable summary, and the stat bar wraps into two rows; safe-area aware for notched iPhones
 
 ---
 
