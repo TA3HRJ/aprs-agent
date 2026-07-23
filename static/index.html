@@ -412,7 +412,7 @@ body.public .sb-toggle{display:none!important}
 
 <!-- AI GATEWAY -->
 <div class="pref-group"><label>AI Gateway</label><div class="pref-box">
-  <div class="action-row"><div class="content"><div class="title">AI Gateway</div><div class="subtitle" data-i="ai_sub">Auto-respond to APRS messages with AI</div></div><label class="adw-switch"><input type="checkbox" id="f-ai-enabled"><span></span></label></div>
+  <div class="action-row"><div class="content"><div class="title">AI Gateway</div><div class="subtitle" data-i="ai_sub">Auto-respond to APRS messages with AI. This is the master switch for ALL AI calls — turning it off also stops Silence Map, Propagation and Station AI assessments, even if those are individually enabled below</div></div><label class="adw-switch"><input type="checkbox" id="f-ai-enabled"><span></span></label></div>
   <div class="entry-row"><label data-i="ai_callsign">AI Callsign</label><input id="f-ai-callsign" type="text" placeholder="N0CALL" style="text-transform:uppercase;max-width:140px"></div>
   <div class="entry-row"><label data-i="ai_provider">Provider</label>
     <select id="f-ai-provider"><option value="puter">Puter (Free)</option><option value="groq">Groq</option><option value="openrouter">OpenRouter</option><option value="custom">Custom Endpoint</option></select></div>
@@ -700,7 +700,7 @@ const S={en:{
   tg_hashtag:"Add #APRS hashtag",tg_recepients:"Allowed APRS recipients",tg_senders:"Allowed APRS senders",tg_cs_hint:"Comma-separated callsigns",
   tg_inbound_title:"Receive — Telegram → Radio",tg_poll_enabled:"Poll Telegram",tg_poll_sub:"Forward Telegram messages to APRS",
   tg_poll_interval:"Poll interval (sec)",tg_from_call:"From callsign",tg_from_hint:"APRS sender for Telegram messages",tg_aprs_dest:"Default APRS destination",tg_dest_hint:"Messages without callsign prefix go here",
-  ai_sub:"Auto-respond to APRS messages with AI",ai_callsign:"AI Callsign",ai_provider:"Provider",ai_api_key:"API Key",ai_base_url:"Custom Base URL",ai_base_url_hint:"Only for custom provider",
+  ai_sub:"Auto-respond to APRS messages with AI. This is the master switch for ALL AI calls — turning it off also stops Silence Map, Propagation and Station AI assessments, even if those are individually enabled below.",ai_callsign:"AI Callsign",ai_provider:"Provider",ai_api_key:"API Key",ai_base_url:"Custom Base URL",ai_base_url_hint:"Only for custom provider",
   ai_model:"Model",ai_model_hint:"Leave empty for provider default",ai_system_prompt:"System Prompt",ai_trigger_prefix:"Trigger Prefix",ai_trigger_prefix_hint:"Only messages starting with this prefix trigger AI",
   ai_trigger_aliases:"Trigger Aliases",ai_trigger_aliases_hint:"Extra APRS addressees, comma-separated",ai_extra_sms:"Extra SMS Parts",
   ai_wl_enabled:"Whitelist",ai_wl_sub:"Only respond to listed callsigns",ai_whitelist:"Allowed Callsigns",ai_whitelist_hint:"Wildcards OK",
@@ -773,7 +773,7 @@ const S={en:{
   tg_hashtag:"#APRS hashtag ekle",tg_recepients:"İzin verilen APRS alıcıları",tg_senders:"İzin verilen APRS göndericileri",tg_cs_hint:"Virgülle ayırılmış çağrı işaretleri",
   tg_inbound_title:"Al — Telegram → Telsiz",tg_poll_enabled:"Telegram'ı yokla",tg_poll_sub:"Telegram mesajlarını APRS'e ilet",
   tg_poll_interval:"Yoklama aralığı (sn)",tg_from_call:"Gönderen çağrı işareti",tg_from_hint:"Telegram mesajları için APRS gönderen",tg_aprs_dest:"Varsayılan APRS hedefi",tg_dest_hint:"Çağrı işareti belirtilmeyen mesajlar buraya gider",
-  ai_sub:"Gelen APRS mesajlarına AI ile yanıt ver",ai_callsign:"AI Çağrı İşareti",ai_provider:"Sağlayıcı",ai_api_key:"API Anahtarı",ai_base_url:"Özel Base URL",ai_base_url_hint:"Sadece özel sağlayıcı için",
+  ai_sub:"Gelen APRS mesajlarına AI ile yanıt ver. Bu, TÜM AI çağrıları için ana anahtardır — kapatınca aşağıda ayrı ayrı açık olsalar bile Sessizlik Haritası, Propagasyon ve İstasyon AI değerlendirmeleri de durur.",ai_callsign:"AI Çağrı İşareti",ai_provider:"Sağlayıcı",ai_api_key:"API Anahtarı",ai_base_url:"Özel Base URL",ai_base_url_hint:"Sadece özel sağlayıcı için",
   ai_model:"Model",ai_model_hint:"Varsayılan için boş bırakın",ai_system_prompt:"Sistem Promptu",ai_trigger_prefix:"Tetikleme Ön Eki",ai_trigger_prefix_hint:"Sadece bu ön ekle başlayanlar AI'ı tetikler",
   ai_trigger_aliases:"Tetikleme Takma Adları",ai_trigger_aliases_hint:"Ek APRS alıcı adları, virgülle ayır",ai_extra_sms:"Ek SMS Parçası",
   ai_wl_enabled:"Whitelist",ai_wl_sub:"Sadece listedeki çağrı işaretlerine yanıt ver",ai_whitelist:"İzin Verilen Çağrı İşaretleri",ai_whitelist_hint:"Joker karakter OK",

@@ -369,12 +369,15 @@ class AgentManager:
         sai_cfg = config.get("station_ai", {})
         if sai_cfg.get("enabled"):
             ai_ext = config.get("extensions", {}).get("ai_gateway", {})
-            if ai_ext.get("provider") or ai_ext.get("base_url"):
+            # Station AI reuses the AI Gateway's credentials, so it must be
+            # enabled too — matches the silence/propagation ai_ok fix
+            # (same reasoning: a provider string alone is not "configured").
+            if ai_ext.get("enabled") and (ai_ext.get("provider") or ai_ext.get("base_url")):
                 asyncio.create_task(self._ai_analysis_loop(config))
                 hours = sai_cfg.get("interval_hours", 24)
                 print(f"[station-ai] AI analysis started (every {hours}h, first run in 10m)", file=sys.stderr)
             else:
-                print("[station-ai] WARNING: station_ai enabled but ai_gateway not configured", file=sys.stderr)
+                print("[station-ai] WARNING: station_ai enabled but ai_gateway not configured/enabled", file=sys.stderr)
 
         await self._stop_event.wait()
         server_task.cancel()
@@ -409,7 +412,16 @@ class AgentManager:
         channel = mon.get("notify_channel", "")
         digest_mins = max(0, int(mon.get("silence_digest_mins", 0) or 0))
         ai_cfg = config.get("extensions", {}).get("ai_gateway", {})
-        ai_ok = bool(ai_cfg.get("provider") or ai_cfg.get("base_url"))
+        # Silence/propagation assessment reuses the AI Gateway's provider
+        # config (documented as such), so its "enabled" toggle must be the
+        # one master switch that actually stops all auto-triggered AI calls.
+        # Previously this only checked whether a provider string was set —
+        # "puter" is always present in DEFAULTS, so disabling AI Gateway in
+        # the UI silently did NOT stop these calls (confirmed live: 258
+        # calls with enabled=false since last restart, burning a fresh
+        # Puter key). ai_gateway.enabled is now required.
+        ai_ok = bool(ai_cfg.get("enabled")
+                    and (ai_cfg.get("provider") or ai_cfg.get("base_url")))
 
         await asyncio.sleep(900)   # let cadence baselines settle first
         while True:
