@@ -178,6 +178,8 @@ body.public .stat-bar .cell.diag{display:none!important}
 /* Lift the attribution above the bottom-anchored timeline bar */
 .leaflet-bottom.leaflet-right{margin-bottom:42px}
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#2a2a2a;color:#e8e8e8}
+/* Scrollable (maxHeight-capped) popups: Leaflet's default light borders */
+.leaflet-popup-scrolled{border-top:1px solid #454545;border-bottom:1px solid #454545}
 .leaflet-popup-content{font:12px/1.6 'Segoe UI',sans-serif}
 .leaflet-container a.leaflet-popup-close-button{color:#aaa}
 .sta-filters{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--sidebar);border-bottom:1px solid var(--border);flex-wrap:wrap}
@@ -1269,7 +1271,15 @@ function renderSilence(cells){
     const opts={color:color,weight:1,fillColor:color,fillOpacity:0.10+0.30*Math.min(c.ratio,1)};
     let rc=silRects[c.cell];
     if(rc){rc.setStyle(opts);rc.setPopupContent(silPopup(c))}
-    else{silRects[c.cell]=L.rectangle(c.bounds,opts).addTo(map).bindPopup(silPopup(c))}
+    else{
+      // Adaptive popup: long AI notes + long station lists used to overflow
+      // the balloon past the map edge. maxHeight makes Leaflet scroll the
+      // content inside the balloon instead; width stays inside the viewport
+      // on phones.
+      silRects[c.cell]=L.rectangle(c.bounds,opts).addTo(map)
+        .bindPopup(silPopup(c),{maxWidth:Math.min(340,window.innerWidth-48),
+                                maxHeight:Math.min(280,Math.floor(window.innerHeight*0.45))});
+    }
   }
   for(const cell in silRects){
     if(!seen[cell]){map.removeLayer(silRects[cell]);delete silRects[cell]}
