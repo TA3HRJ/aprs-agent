@@ -566,13 +566,31 @@ class AgentManager:
                      "links": ls})
             except Exception as e:
                 print(f"[prop] history write failed: {e}", file=sys.stderr)
-            if channel:
+            # Notification is scoped to a region of interest, independent of
+            # detection: the map/timeline always show every worldwide
+            # opening (already recorded above), but a US↔Western-Europe
+            # event is not actionable for an operator who only watches
+            # Turkey — pinging them for it just trains them to ignore the
+            # channel. Relevant means EITHER end of ANY link in the group
+            # falls in the configured grids, so e.g. a South-Africa-to-
+            # Turkey opening still notifies (the Turkish gate matches) even
+            # though the sender is on another continent.
+            notify_grids = config.get("monitor", {}).get(
+                "prop_notify_grids", []) or []
+            relevant = not notify_grids or any(
+                _latlon_to_locator(l["s_lat"], l["s_lon"])[:2] in notify_grids
+                or _latlon_to_locator(l["g_lat"], l["g_lon"])[:2] in notify_grids
+                for l in ls)
+            if channel and relevant:
                 try:
                     await self._send_notification(
                         self._format_prop_msg(region, ls, note),
                         channel, config)
                 except Exception as e:
                     print(f"[prop] notification error: {e}", file=sys.stderr)
+            elif channel:
+                print(f"[prop] {region} outside prop_notify_grids — "
+                      "recorded, not notified", file=sys.stderr)
 
         # Episode over: region quiet again — allow future re-alerts
         for region in list(self._prop_active):

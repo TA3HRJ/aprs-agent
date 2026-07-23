@@ -101,6 +101,14 @@ silence_grids = []
 # 0 = send each alert immediately.
 silence_digest_mins = 0
 
+# Maidenhead fields a band-opening (RF propagation) NOTIFICATION is limited
+# to — matches if EITHER end of any link in the opening falls in these
+# fields, so a cross-continent opening reaching your region still notifies.
+# The map and timeline always show every opening worldwide regardless of
+# this setting; it only scopes the Telegram/email message.
+# Example: ["KM", "KN", "LM", "LN"] for Turkey. Empty = notify on every opening.
+prop_notify_grids = []
+
 
 # =============================================================================
 # Station AI (organisation extraction)

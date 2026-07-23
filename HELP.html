@@ -522,8 +522,14 @@
       propagasyon değil) ve 5000 km üzeri veri hataları hiç sayılmaz.
     </div>
     <p>
-      Ek bir ayar gerekmez — tespit her zaman açıktır; bildirimler Monitor
-      bölümündeki bildirim kanalını kullanır.
+      Tespit her zaman açıktır ve haritada dünya çapında görünür. Ancak
+      <strong>bildirimi</strong> kendi bölgenizle sınırlamak isterseniz Monitor
+      bölümündeki <code>Propagasyon bildirim bölgesi</code> ayarını kullanın
+      (örn. Türkiye için <code>KM, KN, LM, LN</code>) — açılmadaki linklerin
+      herhangi bir ucu bu alanlara düşerse bildirim gelir, düşmezse harita
+      yine gösterir ama Telegram/e-posta sessiz kalır. Kıtalar arası bir
+      açılma (örn. Güney Afrika → Türkiye gate'i) bile, sizin bölgenizi
+      içerdiği için yine bildirilir.
     </p>
   </div>
 
@@ -1225,8 +1231,14 @@
       5000 km (data errors) are never counted at all.
     </div>
     <p>
-      No extra settings required — detection is always on; notifications
-      use the Monitor section's notify channel.
+      Detection is always on and the map always shows every opening
+      worldwide. To scope the <strong>notification</strong> to your own
+      region, use the Monitor section's <code>Propagation notify region</code>
+      setting (e.g. <code>KM, KN, LM, LN</code> for Turkey) — a notification
+      is sent if either end of any link in the opening falls in those
+      fields; otherwise the map still shows it, but Telegram/email stays
+      quiet. A cross-continent opening (e.g. South Africa reaching a
+      Turkish gate) still notifies, since it involves your region.
     </p>
   </div>
 

@@ -20,7 +20,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "2.10.9"
+VERSION = "2.10.10"
 
 # tomllib is built-in from Python 3.11 onwards.
 # For older Python versions, install the 'tomli' package.
@@ -76,6 +76,13 @@ DEFAULTS: dict[str, Any] = {
         # Batch silence alerts into one notification every N minutes
         # (0 = send each alert immediately)
         "silence_digest_mins": 0,
+        # Maidenhead fields (first 2 characters) a propagation opening must
+        # touch — on either the sender's or the gate's end of at least one
+        # link — to be NOTIFIED. The map/timeline still show every opening
+        # worldwide; this only scopes the Telegram/email message, since a
+        # US-to-Western-Europe opening is not actionable for an operator who
+        # only cares about their own region. Empty = notify on every opening.
+        "prop_notify_grids": [],
     },
     "station_ai": {
         "enabled": False,
