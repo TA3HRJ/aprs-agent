@@ -591,6 +591,7 @@ body.public .sb-toggle{display:none!important}
     <div class="map-legend">
       <span><i style="background:#e01b24"></i><em data-i="sil_outage">Regional silence (possible outage)</em></span>
       <span><i style="background:#f5c211"></i><em data-i="sil_igate">IGate failure</em></span>
+      <span><i style="background:#2ec27e"></i><em data-i="leg_prop">Propagation link</em></span>
     </div>
     <div class="map-timeline" id="map-timeline" hidden>
       <button class="tl-btn" id="tl-play" onclick="tlPlay()">▶</button>
@@ -714,6 +715,7 @@ const S={en:{
   sil_outage:"Regional silence (possible outage)",sil_igate:"IGate failure",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
   al_sum:"{n} active silence alerts",
+  leg_prop:"Propagation link",prop_link:"Realised RF link — possible band opening",
   tl_live:"Live",tz_local:"local",
   own_station:"your station",
   tab_msg:"Messages",
@@ -723,7 +725,7 @@ const S={en:{
   pub_default_title:"APRS-Agent",pub_default_sub:"AI-assisted regional silence analysis on the live APRS-IS feed",pub_live:"live",
   cap_log:"Raw APRS packets exactly as they arrive from the APRS-IS network, in real time.",
   cap_sta:"Every station heard by this receiver — type, location, frequency and whether it is currently active.",
-  cap_map:"Live position of every station heard. A red square means many stations in that area fell silent together — a possible power outage; amber means the local internet gateway failed.",
+  cap_map:"Live position of every station heard. A red square means many stations in that area fell silent together — a possible power outage; amber means the local internet gateway failed. Dashed lines are unusually long radio links — a possible band opening.",
   pub_port:"Public View Port",
   pub_port_hint:"Read-only Live Log / Stations / Map page on this port — no settings, no start/stop. 0 = off. Only this port is safe to expose to the internet.",
   sta_h_call:"Callsign",sta_h_type:"Type",sta_h_loc:"Location",sta_h_org:"Organization",sta_h_freq:"Freq (MHz)",sta_h_status:"Status",sta_h_seen:"Last Heard",
@@ -785,6 +787,7 @@ const S={en:{
   sil_outage:"Bölgesel sessizlik (olası kesinti)",sil_igate:"IGate arızası",
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
   al_sum:"{n} aktif sessizlik uyarısı",
+  leg_prop:"Propagasyon linki",prop_link:"Gerçekleşmiş RF linki — olası bant açılması",
   tl_live:"Canlı",tz_local:"yerel",
   own_station:"kendi istasyonun",
   tab_msg:"Mesajlar",
@@ -794,7 +797,7 @@ const S={en:{
   pub_default_title:"APRS-Agent",pub_default_sub:"Canlı APRS-IS akışında yapay zeka destekli bölgesel sessizlik analizi",pub_live:"canlı",
   cap_log:"APRS-IS ağından geldiği anda, ham APRS paketleri.",
   cap_sta:"Bu alıcının duyduğu tüm istasyonlar — tür, konum, frekans ve şu an aktif olup olmadıkları.",
-  cap_map:"Duyulan her istasyonun canlı konumu. Kırmızı kare, o bölgedeki birçok istasyonun aynı anda susduğunu gösterir — olası elektrik kesintisi; amber ise yerel internet geçidinin arızalandığı anlamına gelir.",
+  cap_map:"Duyulan her istasyonun canlı konumu. Kırmızı kare, o bölgedeki birçok istasyonun aynı anda susduğunu gösterir — olası elektrik kesintisi; amber ise yerel internet geçidinin arızalandığı anlamına gelir. Kesikli çizgiler alışılmadık uzunlukta telsiz linkleri — olası bant açılması.",
   pub_port:"Halka Açık İzleme Portu",
   pub_port_hint:"Bu portta salt-okunur Canlı Log / İstasyonlar / Harita sayfası sunulur — ayar ve başlat/durdur yoktur. 0 = kapalı. İnternete yalnızca bu portu açın.",
   sta_h_call:"Çağrı İşareti",sta_h_type:"Tür",sta_h_loc:"Konum",sta_h_org:"Dernek/Kuruluş",sta_h_freq:"Frek (MHz)",sta_h_status:"Durum",sta_h_seen:"Son Görülme",
@@ -977,7 +980,12 @@ async function fetchStations(){
     const r=await api('GET','/api/stations');staData=r.stations||[];staTotal=r.count||staData.length;
     vpKey='';   // viewport cache is one poll old now — refetch on next render
     if(activeTab==='sta')renderStations();
-    if(activeTab==='map'){renderMap();tlRefreshRange()}
+    if(activeTab==='map'){
+      renderMap();tlRefreshRange();
+      // Propagation layer rides the same 5 s poll; the response is small
+      // (recent anomalous links only, usually empty).
+      try{const p=await api('GET','/api/prop');renderProp(p.links||[])}catch(e){}
+    }
   }catch(e){}
 }
 // Silence is polled on its own timer, independent of the active tab, so the
@@ -1258,6 +1266,34 @@ function renderSilence(cells){
   }
   for(const cell in silRects){
     if(!seen[cell]){map.removeLayer(silRects[cell]);delete silRects[cell]}
+  }
+}
+// ── RF propagation layer: anomalous links as great-circle lines ──
+// A line = one packet that really travelled that far on RF (qAR/qAO, no
+// digis). Colour deepens with distance. Only links from the last hour are
+// drawn — an opening is a live event, not an archive (history in phase 3).
+let propLines={};
+const PROP_SHOW_S=3600;
+function propColor(km){return km<600?'#2ec27e':km<1200?'#62a0ea':'#dc8add'}
+function renderProp(links){
+  if(!map)return;
+  // While the timeline shows a past snapshot, live lines would lie — hide.
+  if(!tlLive)links=[];
+  const now=Date.now()/1000,seen={};
+  for(const l of links){
+    if(now-l.ts>PROP_SHOW_S)continue;
+    const k=l.call+'|'+l.gate+'|'+l.ts;
+    seen[k]=1;
+    if(propLines[k])continue;              // immutable once drawn
+    const col=propColor(l.km);
+    propLines[k]=L.polyline([[l.s_lat,l.s_lon],[l.g_lat,l.g_lon]],
+      {color:col,weight:2,opacity:.75,dashArray:'6 6'}).addTo(map)
+      .bindPopup('<b style="color:'+col+'">'+esc(l.call)+' ⇄ '+esc(l.gate)+'</b><br>'
+        +l.km+' km · '+fmtAgoLong(Math.max(0,Math.floor(now-l.ts)))+'<br>'
+        +'<span style="opacity:.7">'+t('prop_link')+'</span>');
+  }
+  for(const k in propLines){
+    if(!seen[k]){map.removeLayer(propLines[k]);delete propLines[k]}
   }
 }
 function renderStations(){
