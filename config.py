@@ -20,7 +20,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "2.10.11"
+VERSION = "2.10.12"
 
 # tomllib is built-in from Python 3.11 onwards.
 # For older Python versions, install the 'tomli' package.
@@ -164,7 +164,13 @@ DEFAULTS: dict[str, Any] = {
             "enabled": False,
             "callsign": "N0CALL",
             "provider": "puter",
+            # Legacy single-key field — kept only so configs saved before
+            # per-provider keys still work (resolve_ai_api_key() falls back
+            # to it). New saves populate api_keys instead.
             "api_key": "",
+            # provider id -> API key, so switching providers recalls that
+            # provider's own key instead of overwriting one shared field.
+            "api_keys": {},
             "base_url": "",
             "model": "",
             "system_prompt": "",
@@ -195,6 +201,14 @@ DEFAULTS: dict[str, Any] = {
         },
     },
 }
+
+
+def resolve_ai_api_key(ai_cfg: dict[str, Any], provider: str) -> str:
+    """The AI Gateway API key for `provider`, from the per-provider
+    api_keys dict — falling back to the legacy flat api_key field for
+    configs saved before per-provider keys existed (pre-v2.10.12)."""
+    keys = ai_cfg.get("api_keys") or {}
+    return keys.get(provider) or ai_cfg.get("api_key", "") or ""
 
 
 def strip_ssid(callsign: str) -> str:

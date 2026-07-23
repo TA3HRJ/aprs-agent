@@ -24,7 +24,7 @@ from typing import Optional
 import aprslib
 
 from . import Extension
-from config import strip_ssid
+from config import strip_ssid, resolve_ai_api_key
 
 _TR_MAP = str.maketrans(
     "çÇğĞıİöÖşŞüÜâÂîÎûÛ",
@@ -43,12 +43,20 @@ _PROVIDER_URLS = {
     "puter":      "https://api.puter.com/puterai/openai/v1/",
     "groq":       "https://api.groq.com/openai/v1/",
     "openrouter": "https://openrouter.ai/api/v1/",
+    "openai":     "https://api.openai.com/v1/",
+    "deepseek":   "https://api.deepseek.com/v1/",
+    # Anthropic is not OpenAI-compatible (see _do_ask) — this is the host
+    # only, "/v1/messages" is appended where it's actually used.
+    "anthropic":  "https://api.anthropic.com",
 }
 
 _PROVIDER_MODELS = {
     "puter":      "gpt-4o-mini",
     "groq":       "llama-3.3-70b-versatile",
     "openrouter": "meta-llama/llama-3.3-70b-instruct:free",
+    "openai":     "gpt-4o-mini",
+    "deepseek":   "deepseek-chat",
+    "anthropic":  "claude-3-5-haiku-20241022",
 }
 
 
@@ -89,11 +97,11 @@ class AIGateway(Extension):
         self._own_writer: Optional[asyncio.Queue] = None
         self._msg_counter = 0
 
-        provider = config.get("provider", "puter")
-        self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(provider, _PROVIDER_URLS["puter"])
-        self._model = config.get("model", "") or _PROVIDER_MODELS.get(provider, "gpt-4o-mini")
+        self._provider = config.get("provider", "puter")
+        self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(self._provider, _PROVIDER_URLS["puter"])
+        self._model = config.get("model", "") or _PROVIDER_MODELS.get(self._provider, "gpt-4o-mini")
         self.log(
-            f"initialized | provider={provider} "
+            f"initialized | provider={self._provider} "
             f"| model={self._model} "
             f"| callsign={config.get('callsign', '')}"
         )
@@ -102,7 +110,7 @@ class AIGateway(Extension):
         cfg = self._config
         if not cfg.get("callsign"):
             raise ValueError("AI Gateway: callsign is required")
-        if not cfg.get("api_key"):
+        if not resolve_ai_api_key(cfg, cfg.get("provider", "puter")):
             raise ValueError("AI Gateway: api_key is required")
 
     @property
@@ -134,13 +142,37 @@ class AIGateway(Extension):
             "Answer in the same language as the question."
         )
 
-        api_key = cfg["api_key"]
+        api_key = resolve_ai_api_key(cfg, self._provider)
         base_url = self._base_url
         model = self._model
+        provider = self._provider
+        max_tokens = 40 + (extra * 35)
         loop = asyncio.get_running_loop()
 
         def _do_ask():
             import httpx
+            if provider == "anthropic":
+                # Anthropic's Messages API is not OpenAI-compatible:
+                # different endpoint, auth header, and response shape.
+                with httpx.Client(timeout=20) as http_client:
+                    r = http_client.post(
+                        base_url.rstrip("/") + "/v1/messages",
+                        headers={"x-api-key": api_key,
+                                 "anthropic-version": "2023-06-01",
+                                 "content-type": "application/json"},
+                        json={
+                            "model": model,
+                            "max_tokens": max_tokens,
+                            "system": system_prompt,
+                            "messages": [{"role": "user", "content": question}],
+                        },
+                    )
+                    r.raise_for_status()
+                    data = r.json()
+                    return "".join(
+                        b.get("text", "") for b in data.get("content", [])
+                        if b.get("type") == "text"
+                    ).strip()
             from openai import OpenAI
             with httpx.Client() as http_client:
                 client = OpenAI(
@@ -150,7 +182,7 @@ class AIGateway(Extension):
                 )
                 resp = client.chat.completions.create(
                     model=model,
-                    max_tokens=40 + (extra * 35),
+                    max_tokens=max_tokens,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": question},

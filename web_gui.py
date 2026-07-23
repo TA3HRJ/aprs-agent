@@ -602,7 +602,7 @@ class AgentManager:
                            ai_cfg: dict) -> str:
         """Short AI read on an opening: tropo vs sporadic-E vs other."""
         provider = ai_cfg.get("provider", "puter")
-        api_key = ai_cfg.get("api_key", "")
+        api_key = cfg_module.resolve_ai_api_key(ai_cfg, provider)
         base_url = self._ai_base_url(provider, ai_cfg.get("base_url", ""))
         model = ai_cfg.get("model", "")
         pairs = "\n".join(
@@ -683,7 +683,7 @@ class AgentManager:
         """Ask the AI Gateway to interpret a silence cluster. Returns a short
         note like "[power_outage/high] …summary…" or "" on failure."""
         provider = ai_cfg.get("provider", "puter")
-        api_key  = ai_cfg.get("api_key", "")
+        api_key  = cfg_module.resolve_ai_api_key(ai_cfg, provider)
         base_url = self._ai_base_url(provider, ai_cfg.get("base_url", ""))
         model    = ai_cfg.get("model", "")
 
@@ -733,6 +733,14 @@ class AgentManager:
             return base_url or "https://api.groq.com/openai/v1"
         if provider == "openrouter":
             return base_url or "https://openrouter.ai/api/v1"
+        if provider == "openai":
+            return base_url or "https://api.openai.com/v1"
+        if provider == "deepseek":
+            return base_url or "https://api.deepseek.com/v1"
+        if provider == "anthropic":
+            # Different API shape (see _call_ai_api) — this is the host
+            # only, "/v1/messages" is appended there, not "/chat/completions".
+            return base_url or "https://api.anthropic.com"
         return base_url
 
     @staticmethod
@@ -859,7 +867,7 @@ class AgentManager:
             return
 
         provider  = ai_cfg.get("provider", "puter")
-        api_key   = ai_cfg.get("api_key", "")
+        api_key   = cfg_module.resolve_ai_api_key(ai_cfg, provider)
         base_url  = self._ai_base_url(provider, ai_cfg.get("base_url", ""))
         model     = ai_cfg.get("model", "")
 
@@ -894,36 +902,61 @@ class AgentManager:
         self._ai_calls += 1
         import urllib.request, json as _json
 
-        default_models = {
-            "puter": "gpt-4o-mini",
-            "groq":  "llama-3.1-8b-instant",
-        }
-        payload = {
-            "model": model or default_models.get(provider, ""),
-            "messages": [
-                {"role": "system",
-                 "content": "You extract structured data from APRS beacon text. "
-                            "Return ONLY valid JSON, no prose."},
-                {"role": "user", "content": prompt},
-            ],
-            "max_tokens": 120,
-            "temperature": 0,
-        }
-        url = base_url.rstrip("/") + "/chat/completions"
+        system_msg = ("You extract structured data from APRS beacon text. "
+                      "Return ONLY valid JSON, no prose.")
 
-        headers = {"Content-Type": "application/json"}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
+        if provider == "anthropic":
+            # Anthropic's Messages API is not OpenAI-compatible: different
+            # endpoint, auth header, and request/response shape.
+            url = base_url.rstrip("/") + "/v1/messages"
+            payload = {
+                "model": model or "claude-3-5-haiku-20241022",
+                "max_tokens": 120,
+                "system": system_msg,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            headers = {"Content-Type": "application/json",
+                       "anthropic-version": "2023-06-01"}
+            if api_key:
+                headers["x-api-key"] = api_key
+            req = urllib.request.Request(
+                url, data=_json.dumps(payload).encode(), headers=headers)
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = _json.loads(resp.read())
+            text = "".join(
+                block.get("text", "") for block in data.get("content", [])
+                if block.get("type") == "text")
+        else:
+            default_models = {
+                "puter": "gpt-4o-mini",
+                "groq":  "llama-3.1-8b-instant",
+                "openai": "gpt-4o-mini",
+                "deepseek": "deepseek-chat",
+            }
+            payload = {
+                "model": model or default_models.get(provider, ""),
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": prompt},
+                ],
+                "max_tokens": 120,
+                "temperature": 0,
+            }
+            url = base_url.rstrip("/") + "/chat/completions"
 
-        req = urllib.request.Request(
-            url, data=_json.dumps(payload).encode(), headers=headers
-        )
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = _json.loads(resp.read())
+            headers = {"Content-Type": "application/json"}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
 
-        text = (data.get("choices", [{}])[0]
-                    .get("message", {})
-                    .get("content", ""))
+            req = urllib.request.Request(
+                url, data=_json.dumps(payload).encode(), headers=headers
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = _json.loads(resp.read())
+
+            text = (data.get("choices", [{}])[0]
+                        .get("message", {})
+                        .get("content", ""))
 
         text = text.strip()
         # Strip markdown code fences if present

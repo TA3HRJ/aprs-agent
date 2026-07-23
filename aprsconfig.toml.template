@@ -345,13 +345,12 @@ enabled = false
 # The callsign that triggers AI responses (messages addressed to this callsign)
 callsign = "N0CALL"
 
-# AI provider: "puter" (free), "groq", "openrouter", or "custom"
+# AI provider: "openai" (ChatGPT), "anthropic" (Claude), "deepseek", "groq",
+# "openrouter", "puter" (free), or "custom"
 provider = "puter"
 
-# API key from your provider (Puter: puter.com, Groq: console.groq.com)
-api_key = ""
-
-# Custom base URL (only needed if provider = "custom")
+# Custom base URL — only needed to override a provider's default endpoint
+# (e.g. a proxy), or required if provider = "custom"
 base_url = ""
 
 # AI model name (leave empty for provider default)
@@ -374,6 +373,20 @@ whitelist_enabled = false
 
 # Only respond to these callsigns (wildcards OK: TA3*)
 whitelist = []
+
+# One API key per provider, so switching "provider" above recalls that
+# provider's own key automatically instead of overwriting a single field.
+# Only the key matching the active provider is used. Must come after every
+# other [extensions.ai_gateway] key above — TOML cannot reopen a table once
+# a subtable of it has been declared.
+[extensions.ai_gateway.api_keys]
+puter = ""
+groq = ""
+openrouter = ""
+openai = ""
+anthropic = ""
+deepseek = ""
+custom = ""
 
 # --- IMAP Email Receiver ---
 # Polls your email inbox and forwards new emails as APRS messages.

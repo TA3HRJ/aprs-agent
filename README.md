@@ -31,7 +31,7 @@ several automation features useful for amateur radio operators.
 | 🧠 | **AI Station Analysis** | Periodically sends beacon comments to AI to extract organisation name and description — results shown in Stations tab; skips seasonal/greeting messages |
 | 📡 | **Fixed Beacon** | Periodically sends your station's position — with APRS symbol picker and Maidenhead / QTH Locator support |
 | 🪵 | **Logger** | Logs incoming APRS packets to the terminal, with type and keyword filters |
-| 🤖 | **AI Gateway** | Auto-responds to APRS messages using AI (Puter/Groq/OpenRouter — free options available) |
+| 🤖 | **AI Gateway** | Auto-responds to APRS messages using AI (ChatGPT/Claude/DeepSeek/Groq/OpenRouter/Puter/custom — free options available); a separate API key is stored per provider, recalled automatically when you switch |
 | 🐦 | **Twitter / X** | Forwards APRS messages addressed to `TWSEND` to your Twitter/X account |
 | 🦋 | **Bluesky** | Forwards APRS messages addressed to `BSKYSEND` to your Bluesky account (free API) |
 | 📥 | **IMAP Receive** | Polls email inbox and forwards new emails as APRS messages to the radio |
@@ -264,8 +264,7 @@ Inspired by [aprs-ai-gateway](https://github.com/ArdaYalinOzkan/aprs-ai-gateway)
 [extensions.ai_gateway]
 enabled        = true
 callsign       = "YOUR_CALLSIGN"
-provider       = "puter"              # puter, groq, openrouter, or custom
-api_key        = "your-api-key"       # from provider dashboard (required even on free tier)
+provider       = "puter"              # openai, anthropic, deepseek, groq, openrouter, puter, or custom
 base_url       = ""                   # leave empty for built-in providers
 model          = ""                   # leave empty to use provider default
 system_prompt  = ""                   # optional: custom system prompt
@@ -273,6 +272,12 @@ trigger_prefix = ""                   # optional: only respond if message starts
 extra_sms      = 1                    # 0 = single 64-char reply, 1–5 = multi-part
 whitelist_enabled = false
 whitelist      = []                   # callsigns allowed to use AI (empty = everyone)
+
+# One key per provider — switching "provider" above recalls that provider's
+# own key automatically (required even on a provider's free tier)
+[extensions.ai_gateway.api_keys]
+puter = "your-puter-key"
+# groq, openrouter, openai, anthropic, deepseek, custom = "..." as needed
 ```
 
 To ask the AI via APRS, send a message to the configured callsign:
