@@ -191,6 +191,9 @@ class AgentManager:
         # dict, ai note)); lost on restart, same as the episode state above.
         self._silence_pending: list = []
         self._silence_last_flush = time.time()
+        # Propagation openings: active episodes per Maidenhead field
+        # (region → first-detected ts). Alert once per episode, like silence.
+        self._prop_active: dict[str, float] = {}
         # Messages panel: rolling buffer of APRS messages (in + out)
         self._messages: deque = deque(maxlen=_MSG_BUFFER)
         self._msg_seen: dict[tuple, int] = {}   # dedup key → last seen ts
@@ -452,7 +455,119 @@ class AgentManager:
                     print(f"[silence] digest notification error: {e}",
                           file=sys.stderr)
 
+            # ── Propagation openings (same 5-min cadence) ──
+            try:
+                await self._prop_watch(channel, ai_ok, ai_cfg, config)
+            except Exception as e:
+                print(f"[prop] watch error: {e}", file=sys.stderr)
+
             await asyncio.sleep(300)
+
+    async def _prop_watch(self, channel: str, ai_ok: bool,
+                          ai_cfg: dict, config: dict) -> None:
+        """Group recent anomalous RF links into opening events.
+
+        One long link is never an event — a single misconfigured GPS can
+        fake any distance. An opening needs at least two DIFFERENT senders
+        in the same Maidenhead field (of the link midpoints) within the
+        last 30 minutes. Alerts once per episode; the episode ends when the
+        region has produced no anomalous links for a scan.
+        """
+        from packet_parser import _latlon_to_locator
+        now = time.time()
+        recent = [l for l in list(self._station_db._prop_links)
+                  if now - l["ts"] < 1800]
+        groups: dict[str, list] = {}
+        for l in recent:
+            mid_lat = (l["s_lat"] + l["g_lat"]) / 2
+            mid_lon = (l["s_lon"] + l["g_lon"]) / 2
+            region = _latlon_to_locator(mid_lat, mid_lon)[:2]
+            groups.setdefault(region, []).append(l)
+
+        for region, ls in groups.items():
+            senders = {l["call"].split("-")[0] for l in ls}
+            if len(senders) < 2:
+                continue                    # single sender = no event
+            if region in self._prop_active:
+                continue                    # already alerted this episode
+            self._prop_active[region] = now
+            note = ""
+            if ai_ok:
+                try:
+                    note = await self._assess_prop(region, ls, ai_cfg)
+                except Exception as e:
+                    print(f"[prop] AI assessment failed: {e}", file=sys.stderr)
+            max_km = max(l["km"] for l in ls)
+            print(f"[prop] OPENING {region}: {len(ls)} links from "
+                  f"{len(senders)} senders, max {max_km} km", file=sys.stderr)
+            try:
+                await asyncio.get_event_loop().run_in_executor(
+                    None, station_db_module.record_prop_event,
+                    self._sta_db_path,
+                    {"ts": int(now), "region": region, "note": note,
+                     "links": ls})
+            except Exception as e:
+                print(f"[prop] history write failed: {e}", file=sys.stderr)
+            if channel:
+                try:
+                    await self._send_notification(
+                        self._format_prop_msg(region, ls, note),
+                        channel, config)
+                except Exception as e:
+                    print(f"[prop] notification error: {e}", file=sys.stderr)
+
+        # Episode over: region quiet again — allow future re-alerts
+        for region in list(self._prop_active):
+            if region not in groups:
+                del self._prop_active[region]
+                print(f"[prop] cleared: {region}", file=sys.stderr)
+
+    async def _assess_prop(self, region: str, ls: list,
+                           ai_cfg: dict) -> str:
+        """Short AI read on an opening: tropo vs sporadic-E vs other."""
+        provider = ai_cfg.get("provider", "puter")
+        api_key = ai_cfg.get("api_key", "")
+        base_url = self._ai_base_url(provider, ai_cfg.get("base_url", ""))
+        model = ai_cfg.get("model", "")
+        pairs = "\n".join(
+            f"- {l['call']} to {l['gate']}: {l['km']} km" for l in ls[:8])
+        prompt = (
+            "VHF/UHF radio propagation event on the APRS network.\n"
+            f"Maidenhead field: {region}\n"
+            f"{len(ls)} unusually long station-to-igate RF links in the last "
+            f"30 minutes (normal is under ~150 km):\n{pairs}\n"
+            f"UTC time: {time.strftime('%H:%M', time.gmtime())}, "
+            f"month: {time.strftime('%B', time.gmtime())}.\n"
+            "Assess the most likely mode. Return ONLY valid JSON, no prose:\n"
+            '{"cause": "<tropo|sporadic_e|aurora|unknown>", '
+            '"confidence": "<low|medium|high>", '
+            '"summary": "<one short plain-language sentence>"}'
+        )
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: self._call_ai_api(provider, base_url, api_key, model,
+                                      prompt))
+        if not result:
+            return ""
+        cause = result.get("cause") or "unknown"
+        conf = result.get("confidence") or "low"
+        summary = (result.get("summary") or "").strip()
+        return f"[{cause}/{conf}] {summary}" if summary else f"[{cause}/{conf}]"
+
+    @staticmethod
+    def _format_prop_msg(region: str, ls: list, note: str) -> str:
+        max_km = max(l["km"] for l in ls)
+        senders = len({l["call"].split("-")[0] for l in ls})
+        msg = (f"📡 BAND OPENING — {region}\n"
+               f"{len(ls)} long RF links from {senders} stations, "
+               f"up to {int(max_km)} km\n")
+        msg += "\n".join(
+            f"{l['call']} ⇄ {l['gate']} · {int(l['km'])} km"
+            for l in ls[:6])
+        if note:
+            msg += f"\nAI: {note}"
+        return msg
 
     def _cell_context(self, c: dict) -> str:
         """Ground truth for the AI: what the silent stations were saying, and
@@ -1223,6 +1338,20 @@ async def get_prop(request: web.Request) -> web.Response:
     return web.json_response(data)
 
 
+@routes.get("/api/prop/history")
+async def get_prop_history(request: web.Request) -> web.Response:
+    """Links of propagation events near ?ts= (map timeline scrubbing)."""
+    mgr: AgentManager = request.app["manager"]
+    try:
+        ts = int(request.query.get("ts", "0"))
+    except ValueError:
+        ts = 0
+    loop = asyncio.get_event_loop()
+    links = await loop.run_in_executor(
+        None, station_db_module.load_prop_history, mgr._sta_db_path, ts)
+    return web.json_response({"links": links})
+
+
 @routes.get("/api/messages")
 async def get_messages(request: web.Request) -> web.Response:
     """Recent APRS messages (newest last). Admin only — not on the public app."""
@@ -1307,6 +1436,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/api/silence/range", get_silence_range),
         web.get("/api/silence/history", get_silence_history),
         web.get("/api/prop", get_prop),
+        web.get("/api/prop/history", get_prop_history),
     ])
     return papp
 

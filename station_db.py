@@ -119,6 +119,49 @@ def load_silence_history(path: str, ts: int) -> dict[str, Any]:
         con.close()
 
 
+def record_prop_event(path: str, event: dict[str, Any]) -> None:
+    """Append one propagation-opening event (event-driven, not periodic:
+    openings are rare, a row per event keeps the table tiny). Prunes rows
+    older than the same retention window the silence history uses."""
+    con = sqlite3.connect(path)
+    try:
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS prop_history ("
+            "ts INTEGER, region TEXT, note TEXT, links TEXT)")
+        con.execute(
+            "INSERT INTO prop_history VALUES (?,?,?,?)",
+            (int(event["ts"]), event["region"], event.get("note", ""),
+             json.dumps(event["links"])))
+        con.execute("DELETE FROM prop_history WHERE ts < ?",
+                    (int(time.time()) - StationDB._HISTORY_RETENTION_S,))
+        con.commit()
+    finally:
+        con.close()
+
+
+def load_prop_history(path: str, ts: int,
+                      window_s: int = 1800) -> list[dict[str, Any]]:
+    """Links of every propagation event within ±window_s of ts (for the map
+    timeline: scrubbing near an opening replays its links)."""
+    if not Path(path).exists():
+        return []
+    con = sqlite3.connect(path)
+    try:
+        links: list[dict[str, Any]] = []
+        for (note, raw) in con.execute(
+                "SELECT note, links FROM prop_history"
+                " WHERE ts BETWEEN ? AND ?", (ts - window_s, ts + window_s)):
+            try:
+                links.extend(json.loads(raw or "[]"))
+            except Exception:
+                pass
+        return links
+    except sqlite3.Error:
+        return []
+    finally:
+        con.close()
+
+
 def _cell_bounds(cell4: str) -> Optional[list[list[float]]]:
     """Bounds of a 4-char Maidenhead square: [[south, west], [north, east]].
 

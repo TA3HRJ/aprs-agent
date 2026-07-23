@@ -983,8 +983,9 @@ async function fetchStations(){
     if(activeTab==='map'){
       renderMap();tlRefreshRange();
       // Propagation layer rides the same 5 s poll; the response is small
-      // (recent anomalous links only, usually empty).
-      try{const p=await api('GET','/api/prop');renderProp(p.links||[])}catch(e){}
+      // (recent anomalous links only, usually empty). Not while the
+      // timeline is scrubbed — the poll would sweep the historical lines.
+      if(tlLive){try{const p=await api('GET','/api/prop');renderProp(p.links||[])}catch(e){}}
     }
   }catch(e){}
 }
@@ -1192,6 +1193,7 @@ async function tlScrub(v){
   if(v>=parseInt(s.max)-1){  // rightmost = back to live
     tlLive=true;tlSetLabel(null);
     try{const r=await api('GET','/api/silence');renderSilence(r.cells||[])}catch(e){}
+    try{const p=await api('GET','/api/prop');renderProp(p.links||[])}catch(e){}
     return;
   }
   tlLive=false;
@@ -1199,6 +1201,11 @@ async function tlScrub(v){
     const h=await api('GET','/api/silence/history?ts='+v);
     tlSetLabel(h.ts!==null?h.ts:v);
     renderSilence(h.cells||[]);
+  }catch(e){}
+  // Openings recorded near the scrubbed time replay as historical lines
+  try{
+    const ph=await api('GET','/api/prop/history?ts='+v);
+    renderProp(ph.links||[],true);
   }catch(e){}
 }
 function tlPlay(){
@@ -1275,13 +1282,15 @@ function renderSilence(cells){
 let propLines={};
 const PROP_SHOW_S=3600;
 function propColor(km){return km<600?'#2ec27e':km<1200?'#62a0ea':'#dc8add'}
-function renderProp(links){
+function renderProp(links,hist){
   if(!map)return;
-  // While the timeline shows a past snapshot, live lines would lie — hide.
-  if(!tlLive)links=[];
+  // While the timeline shows a past snapshot, only HISTORICAL links (from
+  // /api/prop/history near the scrubbed time) may be drawn — live lines
+  // over a past snapshot would lie, and vice versa.
+  if(!hist&&!tlLive)links=[];
   const now=Date.now()/1000,seen={};
   for(const l of links){
-    if(now-l.ts>PROP_SHOW_S)continue;
+    if(!hist&&now-l.ts>PROP_SHOW_S)continue;
     const k=l.call+'|'+l.gate+'|'+l.ts;
     seen[k]=1;
     if(propLines[k])continue;              // immutable once drawn
