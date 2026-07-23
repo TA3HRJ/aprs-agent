@@ -204,6 +204,31 @@ class AgentManager:
         # Propagation openings: active episodes per Maidenhead field
         # (region → first-detected ts). Alert once per episode, like silence.
         self._prop_active: dict[str, float] = {}
+        # Restore alert episodes (silence + propagation) so a restart doesn't
+        # blind the "Since" duration or re-fire notifications for an outage
+        # already in progress. Only trusted if the checkpoint is recent — if
+        # the agent was down for a while, cells may have flapped through
+        # several real episodes in the meantime, and none of that history is
+        # recoverable; starting fresh is more honest than resurrecting a
+        # stale start time or duplicating a still-open episode's alert.
+        try:
+            ckpt = float(station_db_module.load_meta(
+                self._sta_db_path, "episodes_checkpoint_ts", "0"))
+        except (ValueError, TypeError):
+            ckpt = 0.0
+        if ckpt and (time.time() - ckpt) <= 1800:
+            try:
+                self._silence_active.update(json.loads(
+                    station_db_module.load_meta(
+                        self._sta_db_path, "silence_episodes", "{}")))
+            except Exception:
+                pass
+            try:
+                self._prop_active.update(json.loads(
+                    station_db_module.load_meta(
+                        self._sta_db_path, "prop_episodes", "{}")))
+            except Exception:
+                pass
         # Messages panel: rolling buffer of APRS messages (in + out)
         self._messages: deque = deque(maxlen=_MSG_BUFFER)
         self._msg_seen: dict[tuple, int] = {}   # dedup key → last seen ts
@@ -307,6 +332,15 @@ class AgentManager:
                 self._sta_db_path, "uptime_total", str(int(self.lifelong_uptime())))
             station_db_module.save_meta(
                 self._sta_db_path, "ai_calls_total", str(self._ai_calls))
+            # Episode checkpoint rides the same cadence (60 s + shutdown).
+            station_db_module.save_meta(
+                self._sta_db_path, "silence_episodes",
+                json.dumps(self._silence_active))
+            station_db_module.save_meta(
+                self._sta_db_path, "prop_episodes",
+                json.dumps(self._prop_active))
+            station_db_module.save_meta(
+                self._sta_db_path, "episodes_checkpoint_ts", str(time.time()))
         except Exception as e:
             print(f"[station-db] uptime save failed: {e}", file=sys.__stderr__)
 

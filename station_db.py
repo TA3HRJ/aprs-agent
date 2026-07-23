@@ -433,6 +433,17 @@ class StationDB:
     PROP_MIN_SAMPLES = 20
     # EMA smoothing for per-gate distance statistics.
     _PROP_ALPHA = 0.05
+
+    # Station types that move under their own power (or a person's) — a
+    # weak silence sensor. It falling quiet usually means it drove/walked
+    # out of coverage, not that its area lost power; a real regional outage
+    # is still caught by the area's stationary repeaters/igates/houses.
+    _MOBILE_TYPES = frozenset({
+        "mobile", "car", "jeep", "truck", "bus", "van", "motorcycle",
+        "ambulance", "police", "railway", "aircraft", "helo", "balloon",
+        "glider", "rocket", "ship", "yacht", "canoe", "bike",
+        "walker", "girl", "phone", "mic-e",
+    })
     # Histogram bucket upper bounds (km) for threshold calibration.
     _PROP_BUCKETS = (25, 50, 100, 150, 200, 300, 500, 800, 1200, 2000, 5000)
 
@@ -962,6 +973,8 @@ class StationDB:
                 continue    # self-generated — never a silence sensor
             if r.is_object:
                 continue    # event advisory object — expires by design
+            if r.station_type in self._MOBILE_TYPES:
+                continue    # moves under its own power — weak silence sensor
             if not self._matches_feed(r.callsign):
                 continue    # feed can't hear it — its silence says nothing
             if r.packet_count < min_history or not r.locator:
