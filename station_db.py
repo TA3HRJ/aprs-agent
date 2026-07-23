@@ -570,14 +570,30 @@ class StationDB:
         lat, lon = parsed.get("lat"), parsed.get("lon")
         if lat is None or lon is None:     # need the position from THIS packet
             return
+        if abs(lat) < 0.5 and abs(lon) < 0.5:
+            # "Null Island": an uninitialised GPS beacons 0°N 0°E, which is
+            # 4300-4900 km from European gates — just under the 5000 km data
+            # error cap. Live feed showed these as dramatic fake purple
+            # lines. There is no land (and no APRS) within half a degree of
+            # (0,0) — open Gulf of Guinea.
+            return
         if parsed.get("altitude_m", 0) > self.PROP_MAX_ALT_M:
             return                          # balloon — line of sight, not propagation
         gate = parsed.get("gate", "")
         if not gate or gate == rec.callsign or gate == rec.base_call:
             return                          # gate heard itself
+        if gate.split("-")[0] == rec.base_call:
+            # Sender and gate share a base callsign: one owner's tracker
+            # "heard" by their own igate hundreds of km away almost always
+            # means one of their devices has stale/misconfigured
+            # coordinates, not propagation. A real opening will be
+            # evidenced by other stations anyway.
+            return
         g = self._stations.get(gate)
         if g is None or g.lat is None or g.lon is None:
             return                          # gate position unknown (yet)
+        if abs(g.lat) < 0.5 and abs(g.lon) < 0.5:
+            return                          # gate itself parked on Null Island
         if g.is_object or g.self_beacon:
             return
 

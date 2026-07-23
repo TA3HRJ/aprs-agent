@@ -593,7 +593,9 @@ body.public .sb-toggle{display:none!important}
     <div class="map-legend">
       <span><i style="background:#e01b24"></i><em data-i="sil_outage">Regional silence (possible outage)</em></span>
       <span><i style="background:#f5c211"></i><em data-i="sil_igate">IGate failure</em></span>
-      <span><i style="background:#2ec27e"></i><em data-i="leg_prop">Propagation link</em></span>
+      <span><i style="background:#2ec27e"></i><em data-i="leg_prop1">Opening &lt; 600 km</em></span>
+      <span><i style="background:#62a0ea"></i><em data-i="leg_prop2">600–1200 km</em></span>
+      <span><i style="background:#dc8add"></i><em data-i="leg_prop3">&gt; 1200 km</em></span>
     </div>
     <div class="map-timeline" id="map-timeline" hidden>
       <button class="tl-btn" id="tl-play" onclick="tlPlay()">▶</button>
@@ -717,7 +719,8 @@ const S={en:{
   sil_outage:"Regional silence (possible outage)",sil_igate:"IGate failure",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
   al_sum:"{n} active silence alerts",
-  leg_prop:"Propagation link",prop_link:"Realised RF link — possible band opening",
+  leg_prop1:"Opening < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
+  prop_link:"Realised RF link — possible band opening",
   tl_live:"Live",tz_local:"local",
   own_station:"your station",
   tab_msg:"Messages",
@@ -789,7 +792,8 @@ const S={en:{
   sil_outage:"Bölgesel sessizlik (olası kesinti)",sil_igate:"IGate arızası",
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
   al_sum:"{n} aktif sessizlik uyarısı",
-  leg_prop:"Propagasyon linki",prop_link:"Gerçekleşmiş RF linki — olası bant açılması",
+  leg_prop1:"Açılma < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
+  prop_link:"Gerçekleşmiş RF linki — olası bant açılması",
   tl_live:"Canlı",tz_local:"yerel",
   own_station:"kendi istasyonun",
   tab_msg:"Mesajlar",
