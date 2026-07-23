@@ -402,6 +402,15 @@ class StationDB:
         # callsigns abroad, and clusters of those produced alerts for regions
         # the operator does not care about. Empty = worldwide.
         self.silence_grids: list[str] = []
+        # What the current APRS-IS feed can hear (allowed_callsigns patterns;
+        # empty = full feed). Stations outside this scope are invisible to the
+        # feed, so their "silence" says nothing — after narrowing the filter,
+        # the registry's foreign stations must not raise outage alerts.
+        self.feed_filter: list[str] = []
+        # Wall-clock of the last ingested packet: if the agent itself has
+        # heard nothing for a while (APRS-IS down), it is deaf and cannot
+        # judge anyone's silence.
+        self.last_ingest_ts: float = 0.0
         # ── RF propagation link engine (phase 1) ──
         # Per-gate running stats of realised RF link distances (km):
         # gate → [count, ema_mean, ema_var]. In-memory only; baselines
@@ -466,11 +475,27 @@ class StationDB:
             rec = self._stations[callsign]
 
         rec.update_from_parsed(parsed)
+        self.last_ingest_ts = time.time()
         if own:
             rec.self_beacon = True
         if not own:
             self._ingest_prop_link(parsed, rec)
         return rec
+
+    def _matches_feed(self, callsign: str) -> bool:
+        """Can the current feed hear this station at all?"""
+        if not self.feed_filter:
+            return True
+        base = callsign.split("-")[0]
+        for pat in self.feed_filter:
+            if pat == "*":
+                return True
+            if pat.endswith("*"):
+                if callsign.startswith(pat[:-1]):
+                    return True
+            elif callsign == pat or base == pat:
+                return True
+        return False
 
     # ── RF propagation link engine ────────────────────────────────────
     @staticmethod
@@ -858,6 +883,12 @@ class StationDB:
         """
         now = time.time()
 
+        # Deaf guard: if WE have heard nothing for 10 minutes, the problem is
+        # our own feed (APRS-IS down, reconnecting) — everyone would look
+        # silent, and none of it would be true. No judgement while deaf.
+        if self.last_ingest_ts and (now - self.last_ingest_ts) > 600:
+            return []
+
         def gate_active(gate: str) -> Optional[bool]:
             g = self._stations.get(gate)
             if g is None or g.packet_count == 0:
@@ -872,6 +903,8 @@ class StationDB:
                 continue    # self-generated — never a silence sensor
             if r.is_object:
                 continue    # event advisory object — expires by design
+            if not self._matches_feed(r.callsign):
+                continue    # feed can't hear it — its silence says nothing
             if r.packet_count < min_history or not r.locator:
                 continue
             if r.lat is None or r.lon is None:

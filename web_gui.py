@@ -244,6 +244,18 @@ class AgentManager:
                 self._log_queue.put(
                     "[silence] Scoped to grids: "
                     + ", ".join(self._station_db.silence_grids) + "\n")
+            # Tell silence detection what the feed can actually hear. After
+            # narrowing from full feed to a prefix filter, the registry still
+            # holds tens of thousands of foreign stations — all "silent" only
+            # because we stopped listening, which painted the whole world red
+            # for the 24 h baseline window. Out-of-scope stations must not be
+            # silence sensors.
+            if cfg.get("full_feed", False):
+                self._station_db.feed_filter = []
+            else:
+                self._station_db.feed_filter = [
+                    str(c).strip().upper()
+                    for c in cfg.get("allowed_callsigns", []) if str(c).strip()]
             db_path = cfg.get("repeater_db_path", "").strip()
             if db_path:
                 n = self._station_db.load_repeater_db(db_path)
