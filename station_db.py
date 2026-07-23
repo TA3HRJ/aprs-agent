@@ -465,6 +465,15 @@ class StationDB:
         # heard nothing for a while (APRS-IS down), it is deaf and cannot
         # judge anyone's silence.
         self.last_ingest_ts: float = 0.0
+        # Shared get_slim() cache: the sort + per-station dict build is the
+        # expensive part (O(n log n) over the whole registry) and identical
+        # for every viewer regardless of their bbox/limit — with many
+        # concurrent visitors polling every 5s, redoing it per request was
+        # the actual cost, not the JSON encoding. Recomputed at most once
+        # per _SLIM_CACHE_TTL; per-request bbox/limit filtering stays cheap
+        # list-comprehension work on top of the shared result.
+        self._slim_cache: Optional[list[dict[str, Any]]] = None
+        self._slim_cache_ts: float = 0.0
         # ── RF propagation link engine (phase 1) ──
         # Per-gate running stats of realised RF link distances (km):
         # gate → [count, ema_mean, ema_var]. In-memory only; baselines
@@ -683,6 +692,26 @@ class StationDB:
         "self_beacon",
     )
 
+    _SLIM_CACHE_TTL = 2.0
+
+    def _slim_all(self) -> list[dict[str, Any]]:
+        """The shared, cached base for get_slim(): every station, slim
+        fields only, most recently heard first. Rebuilt at most once per
+        _SLIM_CACHE_TTL regardless of how many callers ask."""
+        now = time.time()
+        if (self._slim_cache is not None
+                and now - self._slim_cache_ts < self._SLIM_CACHE_TTL):
+            return self._slim_cache
+        recs = sorted(list(self._stations.values()),
+                      key=lambda r: r.last_seen or 0, reverse=True)
+        out = []
+        for r in recs:
+            d = r.to_dict()
+            out.append({k: d[k] for k in self._SLIM_FIELDS})
+        self._slim_cache = out
+        self._slim_cache_ts = now
+        return out
+
     def get_slim(
         self, limit: int = 0,
         bbox: "Optional[tuple[float, float, float, float]]" = None,
@@ -693,21 +722,24 @@ class StationDB:
         stations inside that box (applied before the cap, so a zoomed map
         view gets every station of the area even when the global list is
         capped). Returns (rows, total_matching_count)."""
-        recs = sorted(list(self._stations.values()),
-                      key=lambda r: r.last_seen or 0, reverse=True)
+        rows = self._slim_all()
         if bbox is not None:
             s, w, n, e = bbox
-            recs = [r for r in recs
-                    if r.lat is not None and r.lon is not None
-                    and s <= r.lat <= n and w <= r.lon <= e]
-        total = len(recs)
+            rows = [r for r in rows
+                    if r["lat"] is not None and r["lon"] is not None
+                    and s <= r["lat"] <= n and w <= r["lon"] <= e]
+        total = len(rows)
         if limit > 0:
-            recs = recs[:limit]
-        out = []
-        for r in recs:
-            d = r.to_dict()
-            out.append({k: d[k] for k in self._SLIM_FIELDS})
-        return out, total
+            rows = rows[:limit]
+        return rows, total
+
+    def slim_cache_token(self) -> str:
+        """Cheap version stamp for the current get_slim() base — changes
+        exactly when _slim_all() would recompute. Used for ETag: identical
+        bbox/limit requests within the same cache window return the same
+        bytes, so a client holding a matching ETag can be told 304 instead
+        of re-encoding/re-sending the payload."""
+        return str(int(self._slim_cache_ts * 1000))
 
     def get_one(self, callsign: str) -> Optional[dict[str, Any]]:
         rec = self._stations.get(callsign)

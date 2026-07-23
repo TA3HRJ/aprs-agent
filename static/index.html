@@ -985,9 +985,24 @@ function updCaption(){
 
 // ── Stations ──
 let staTotal=0;
+// The server ETags /api/stations against its ~2s shared cache (same bytes
+// for every visitor polling the same bbox/limit in that window). Sending it
+// back as If-None-Match lets an unchanged poll return a bodyless 304 instead
+// of the full station list — most polls with many concurrent visitors.
+let staEtag=null;
 async function fetchStations(){
   try{
-    const r=await api('GET','/api/stations');staData=r.stations||[];staTotal=r.count||staData.length;
+    const o={headers:{}};
+    if(staEtag)o.headers['If-None-Match']=staEtag;
+    const res=await fetch('/api/stations',o);
+    if(res.status===401||(res.redirected&&/\/login\.html/.test(res.url))){
+      if(!authBounced){authBounced=true;location.href='/login.html'}
+      return;
+    }
+    if(res.status===304)return;   // unchanged since our last poll
+    staEtag=res.headers.get('ETag');
+    const r=await res.json();
+    staData=r.stations||[];staTotal=r.count||staData.length;
     vpKey='';   // viewport cache is one poll old now — refetch on next render
     if(activeTab==='sta')renderStations();
     if(activeTab==='map'){

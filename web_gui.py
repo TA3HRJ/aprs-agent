@@ -1150,16 +1150,25 @@ class AgentManager:
                                    (pub_payloads, self._public_ws)):
                 if not plist or not clients:
                     continue
+                # Serialize each payload ONCE and send the same text frame to
+                # every client, instead of ws.send_json() re-encoding it per
+                # client — with many concurrent visitors that redundant
+                # json.dumps() was the actual cost, not the network write.
+                texts = [json.dumps(p) for p in plist]
                 dead: Set[web.WebSocketResponse] = set()
                 for ws in list(clients):
                     try:
-                        for payload in plist:
-                            await ws.send_json(payload)
+                        for text in texts:
+                            await ws.send_str(text)
                     except Exception:
                         dead.add(ws)
                 clients -= dead
 
-            await asyncio.sleep(0.15)
+            # 500ms batches more log lines per WS frame under heavy traffic
+            # (many concurrent visitors, or the full worldwide feed) — the
+            # log panel already renders in bulk, so visitors do not
+            # perceive the wider tick.
+            await asyncio.sleep(0.5)
 
     def add_ws(self, ws: web.WebSocketResponse, public: bool = False) -> None:
         (self._public_ws if public else self._ws_clients).add(ws)
@@ -1373,17 +1382,26 @@ async def get_stations(request: web.Request) -> web.Response:
     except ValueError:
         limit = 4000
     bbox = None
-    raw = request.query.get("bbox", "")
-    if raw:
+    raw_bbox = request.query.get("bbox", "")
+    if raw_bbox:
         try:
-            s, w, n, e = (float(x) for x in raw.split(","))
+            s, w, n, e = (float(x) for x in raw_bbox.split(","))
             bbox = (s, w, n, e)
         except (ValueError, TypeError):
             bbox = None
-    stations, total = mgr._station_db.get_slim(limit, bbox)
+    db = mgr._station_db
+    db._slim_all()  # ensure the cache token reflects the current window
+    # Identical bbox/limit within the same ~2s cache window produce
+    # byte-identical JSON — repeat pollers (several browser tabs open on
+    # the same view, a visitor's map re-render) can skip the re-send.
+    etag = f'"{db.slim_cache_token()}-{limit}-{raw_bbox}"'
+    if request.headers.get("If-None-Match") == etag:
+        return web.Response(status=304, headers={"ETag": etag})
+    stations, total = db.get_slim(limit, bbox)
     return web.json_response(
         {"stations": stations, "count": total,
-         "capped": total > len(stations)})
+         "capped": total > len(stations)},
+        headers={"ETag": etag})
 
 
 @routes.get("/api/silence")
