@@ -1199,6 +1199,18 @@ async def get_silence(request: web.Request) -> web.Response:
     return web.json_response({"cells": cells})
 
 
+@routes.get("/api/prop")
+async def get_prop(request: web.Request) -> web.Response:
+    """RF propagation: recent anomalous links + calibration statistics."""
+    mgr: AgentManager = request.app["manager"]
+    try:
+        data = mgr._station_db.prop_summary()
+    except Exception:
+        data = {"links": [], "total_links": 0, "anomalous": 0,
+                "gates": 0, "hist": []}
+    return web.json_response(data)
+
+
 @routes.get("/api/messages")
 async def get_messages(request: web.Request) -> web.Response:
     """Recent APRS messages (newest last). Admin only — not on the public app."""
@@ -1282,6 +1294,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/api/silence", get_silence),
         web.get("/api/silence/range", get_silence_range),
         web.get("/api/silence/history", get_silence_history),
+        web.get("/api/prop", get_prop),
     ])
     return papp
 

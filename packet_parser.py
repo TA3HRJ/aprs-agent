@@ -332,8 +332,14 @@ _RE_CALLSIGN = re.compile(r'^([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)')
 # Object packet: ;NAME     * — name is 9 chars (any printable except *)
 _RE_OBJECT = re.compile(r'^;([^\*]{9})\*')
 
-# q-construct: the igate that put the packet on APRS-IS (qAR/qAO/qAS/qAC…)
-_RE_GATE = re.compile(r',qA[A-Z],([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)')
+# q-construct: the igate that put the packet on APRS-IS. The TYPE letter
+# matters for propagation tracking: qAR/qAO = heard on RF by that gate
+# (a real radio link whose distance can be measured), qAC/qAS = the packet
+# entered APRS-IS over the internet (no RF link to measure).
+_RE_GATE = re.compile(r',qA([A-Z]),([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)')
+
+# Altitude from the standard /A=nnnnnn comment extension (feet)
+_RE_ALTITUDE = re.compile(r'/A=(-?\d{5,6})')
 
 # Message packet info field: ':' + 9-char addressee (space padded) + ':' + text
 _RE_MESSAGE = re.compile(r'^:(.{9}):(.*)$', re.DOTALL)
@@ -575,10 +581,47 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
     colon_idx = raw_line.find(":")
     info = raw_line[colon_idx + 1:] if colon_idx != -1 else ""
 
-    # Which igate put this packet on APRS-IS (from the header's q-construct)
-    gm = _RE_GATE.search(raw_line[:colon_idx] if colon_idx != -1 else raw_line)
+    # Which igate put this packet on APRS-IS (from the header's q-construct),
+    # and how it got there — the basis of RF propagation tracking.
+    header = raw_line[:colon_idx] if colon_idx != -1 else raw_line
+    gm = _RE_GATE.search(header)
     if gm:
-        result["gate"] = gm.group(1)
+        result["q_type"] = gm.group(1)
+        result["gate"] = gm.group(2)
+
+    # Internet-origin marker: the packet never touched RF on its way in.
+    tcpip = ",TCPIP" in header or ",TCPXX" in header
+    if tcpip:
+        result["tcpip"] = True
+
+    # Was the packet repeated by a digipeater before reaching the gate?
+    # Used path elements carry a trailing '*'; TCPIP* is the internet marker,
+    # not a digi. A digipeated packet's sender→gate distance spans several
+    # hops, so only non-digipeated packets give a clean single RF link.
+    digipeated = False
+    for elem in header.split(",")[1:]:
+        if elem.startswith("qA"):
+            break
+        if elem.endswith("*") and not elem.startswith(("TCPIP", "TCPXX")):
+            digipeated = True
+            break
+    if digipeated:
+        result["digipeated"] = True
+
+    # Altitude (feet → metres) from /A=nnnnnn. High-altitude senders
+    # (balloons) have 500+ km line-of-sight legitimately — that is geometry,
+    # not propagation, so the link engine excludes them.
+    am = _RE_ALTITUDE.search(raw_line[colon_idx + 1:]) if colon_idx != -1 else None
+    if am:
+        try:
+            result["altitude_m"] = int(int(am.group(1)) * 0.3048)
+        except ValueError:
+            pass
+
+    # One clean, measurable RF link: heard on RF by the gate (qAR/qAO),
+    # no internet leg, no digi hops in between.
+    if gm and gm.group(1) in ("R", "O") and not tcpip and not digipeated:
+        result["rf_direct"] = True
 
     # Object packet: sender is the framing station; the named object is the
     # real station we care about.  Override callsign with the object name.

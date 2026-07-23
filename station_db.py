@@ -9,8 +9,10 @@ Developed by TA3HRJ & TA3PKS
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any, Optional
 
@@ -373,6 +375,24 @@ class StationDB:
         stations = db.get_all()                        # list of dicts
     """
 
+    # ── RF propagation constants (phase 1 defaults; calibrated against the
+    #    live worldwide feed — see the v2.10.0 calibration notes) ──
+    # A link shorter than this is never anomalous, whatever the baseline:
+    # normal VHF/UHF terrestrial range plus a wide margin.
+    PROP_MIN_KM = 300.0
+    # Links longer than this are treated as data errors (GPS garbage,
+    # misconfigured coordinates) — even extreme sporadic-E stays below it.
+    PROP_MAX_KM = 5000.0
+    # Senders above this altitude (balloons) see 500+ km by line of sight —
+    # geometry, not propagation.
+    PROP_MAX_ALT_M = 3000
+    # Gate baselines firm up after this many measured links.
+    PROP_MIN_SAMPLES = 20
+    # EMA smoothing for per-gate distance statistics.
+    _PROP_ALPHA = 0.05
+    # Histogram bucket upper bounds (km) for threshold calibration.
+    _PROP_BUCKETS = (25, 50, 100, 150, 200, 300, 500, 800, 1200, 2000, 5000)
+
     def __init__(self) -> None:
         self._stations: dict[str, StationRecord] = {}
         # base_call → list of DB records for fast lookup
@@ -382,6 +402,18 @@ class StationDB:
         # callsigns abroad, and clusters of those produced alerts for regions
         # the operator does not care about. Empty = worldwide.
         self.silence_grids: list[str] = []
+        # ── RF propagation link engine (phase 1) ──
+        # Per-gate running stats of realised RF link distances (km):
+        # gate → [count, ema_mean, ema_var]. In-memory only; baselines
+        # re-learn within hours of a restart, like the beacon cadences.
+        self._gate_stats: dict[str, list[float]] = {}
+        # Recent anomalous links for /api/prop and (later) the map layer
+        self._prop_links: deque = deque(maxlen=500)
+        # Calibration: global distance histogram + counters, so thresholds
+        # can be tuned from live-feed evidence instead of guesses.
+        self._prop_total = 0
+        self._prop_anomalous = 0
+        self._prop_hist = [0] * len(self._PROP_BUCKETS)
 
     # ------------------------------------------------------------------
     def load_repeater_db(self, path: str) -> int:
@@ -436,7 +468,107 @@ class StationDB:
         rec.update_from_parsed(parsed)
         if own:
             rec.self_beacon = True
+        if not own:
+            self._ingest_prop_link(parsed, rec)
         return rec
+
+    # ── RF propagation link engine ────────────────────────────────────
+    @staticmethod
+    def _haversine_km(lat1: float, lon1: float,
+                      lat2: float, lon2: float) -> float:
+        rlat1, rlat2 = math.radians(lat1), math.radians(lat2)
+        dlat = rlat2 - rlat1
+        dlon = math.radians(lon2 - lon1)
+        a = (math.sin(dlat / 2) ** 2
+             + math.cos(rlat1) * math.cos(rlat2) * math.sin(dlon / 2) ** 2)
+        return 6371.0 * 2 * math.asin(math.sqrt(a))
+
+    def _ingest_prop_link(self, parsed: dict[str, Any],
+                          rec: StationRecord) -> None:
+        """Measure the realised RF link of a direct, RF-gated position packet.
+
+        Every qAR/qAO packet that reached its igate without digi hops is one
+        radio path whose length we know exactly: sender's (fresh, in-packet)
+        position to the gate's known position. Per-gate baselines separate
+        "this gate always hears far" (a mountain-top LoRa igate) from "the
+        band just opened" (tropo / sporadic-E).
+        """
+        if not parsed.get("rf_direct"):
+            return
+        if "object_sender" in parsed:      # object's position, not sender's
+            return
+        if rec.self_beacon:
+            return
+        lat, lon = parsed.get("lat"), parsed.get("lon")
+        if lat is None or lon is None:     # need the position from THIS packet
+            return
+        if parsed.get("altitude_m", 0) > self.PROP_MAX_ALT_M:
+            return                          # balloon — line of sight, not propagation
+        gate = parsed.get("gate", "")
+        if not gate or gate == rec.callsign or gate == rec.base_call:
+            return                          # gate heard itself
+        g = self._stations.get(gate)
+        if g is None or g.lat is None or g.lon is None:
+            return                          # gate position unknown (yet)
+        if g.is_object or g.self_beacon:
+            return
+
+        dist = self._haversine_km(lat, lon, g.lat, g.lon)
+        if dist > self.PROP_MAX_KM:
+            return                          # GPS garbage / misconfigured coords
+
+        # Calibration histogram + totals
+        self._prop_total += 1
+        for i, ub in enumerate(self._PROP_BUCKETS):
+            if dist <= ub:
+                self._prop_hist[i] += 1
+                break
+
+        # Per-gate EMA baseline (mean + variance). The anomaly decision uses
+        # the PRE-update baseline: folding the outlier in first would inflate
+        # σ and let the outlier mask itself. The link still updates the
+        # baseline afterwards, so a permanently misconfigured "DX" station
+        # gradually becomes that gate's normal and stops alerting.
+        st = self._gate_stats.get(gate)
+        if st is None:
+            st = self._gate_stats[gate] = [0.0, dist, 0.0]
+        count, mean, var = st
+        a = self._PROP_ALPHA
+        st[0] = count + 1
+        st[1] = (1 - a) * mean + a * dist
+        st[2] = (1 - a) * var + a * (dist - mean) ** 2
+
+        # Anomaly: beyond the absolute floor AND well beyond this gate's own
+        # normal — or the gate is too new to have a normal, in which case the
+        # absolute floor alone decides (phase 3's ≥2-independent-pairs rule
+        # is the defence against a single bogus sender).
+        if dist < self.PROP_MIN_KM:
+            return
+        if count >= self.PROP_MIN_SAMPLES:
+            sigma = math.sqrt(max(var, 0.0))
+            if dist < max(3 * mean, mean + 4 * sigma):
+                return
+        self._prop_anomalous += 1
+        self._prop_links.append({
+            "ts": parsed.get("ts", int(time.time())),
+            "call": rec.callsign, "gate": gate,
+            "km": round(dist, 1),
+            "s_lat": round(lat, 4), "s_lon": round(lon, 4),
+            "g_lat": round(g.lat, 4), "g_lon": round(g.lon, 4),
+        })
+
+    def prop_summary(self, max_links: int = 200) -> dict[str, Any]:
+        """Current propagation picture: recent anomalous links + calibration
+        stats (global distance histogram, per-gate baseline count)."""
+        links = list(self._prop_links)[-max_links:]
+        return {
+            "links": links,
+            "total_links": self._prop_total,
+            "anomalous": self._prop_anomalous,
+            "gates": len(self._gate_stats),
+            "hist": [{"lt": ub, "n": n} for ub, n
+                     in zip(self._PROP_BUCKETS, self._prop_hist)],
+        }
 
     # ------------------------------------------------------------------
     def get_all(self) -> list[dict[str, Any]]:
