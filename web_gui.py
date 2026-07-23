@@ -184,6 +184,16 @@ class AgentManager:
                 station_db_module.load_meta(self._sta_db_path, "uptime_total", "0"))
         except (ValueError, TypeError):
             self._uptime_base = 0.0
+        # Lifetime AI analysis call counter (silence + propagation + station
+        # AI — the auto-triggered calls that eat the provider quota; the AI
+        # Gateway's user-triggered RF replies are its own concern). Persisted
+        # so the operator can watch the Puter/Groq quota across restarts.
+        try:
+            self._ai_calls = int(
+                station_db_module.load_meta(self._sta_db_path,
+                                            "ai_calls_total", "0"))
+        except (ValueError, TypeError):
+            self._ai_calls = 0
         # Silence watch (Phase 4): active alert episodes + AI assessments
         self._silence_active: dict[str, float] = {}
         self._silence_ai_notes: dict[str, str] = {}
@@ -295,6 +305,8 @@ class AgentManager:
         try:
             station_db_module.save_meta(
                 self._sta_db_path, "uptime_total", str(int(self.lifelong_uptime())))
+            station_db_module.save_meta(
+                self._sta_db_path, "ai_calls_total", str(self._ai_calls))
         except Exception as e:
             print(f"[station-db] uptime save failed: {e}", file=sys.__stderr__)
 
@@ -811,9 +823,11 @@ class AgentManager:
                     file=sys.stderr
                 )
 
-    @staticmethod
-    def _call_ai_api(provider: str, base_url: str, api_key: str,
+    def _call_ai_api(self, provider: str, base_url: str, api_key: str,
                      model: str, prompt: str) -> "dict | None":
+        # Counts attempts, not successes: quota-wise a request that reaches
+        # the provider is spent whether or not the JSON parses.
+        self._ai_calls += 1
         import urllib.request, json as _json
 
         default_models = {
@@ -1160,6 +1174,8 @@ async def info(request: web.Request) -> web.Response:
     if not request.app.get("public"):
         # The config file path is operator information — admin app only
         data["config_path"] = mgr.config_path
+        # Lifetime AI analysis calls (quota watch) — operator info too
+        data["ai_calls"] = mgr._ai_calls
     return web.json_response(data)
 
 
