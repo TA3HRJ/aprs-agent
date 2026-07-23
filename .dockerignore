@@ -1,0 +1,13 @@
+.git
+.github
+__pycache__
+*.pyc
+build
+dist
+*.zip
+*.spec
+aprsconfig.toml
+aprs_stations.db
+HELP.html
+README.md
+LICENSE

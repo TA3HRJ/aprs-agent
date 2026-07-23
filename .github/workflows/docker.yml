@@ -1,0 +1,39 @@
+name: Docker build test
+
+# Builds the image and boots the Web GUI with a fresh default config,
+# then hits the API — proves the Dockerfile actually produces a working
+# container. Runs when anything the image depends on changes.
+on:
+  push:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "requirements.txt"
+      - "*.py"
+      - "extensions/**"
+      - "static/**"
+      - ".github/workflows/docker.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t aprs-agent-test .
+
+      - name: Boot container (fresh /data, default config)
+        run: |
+          docker run -d --name aprs-test -p 8080:8080 aprs-agent-test
+          sleep 20
+          docker logs aprs-test
+
+      - name: Smoke test /api/info
+        run: |
+          curl -sf http://127.0.0.1:8080/api/info | tee /dev/stderr | grep -q '"version"'
+
+      - name: Smoke test /api/status
+        run: |
+          curl -sf http://127.0.0.1:8080/api/status | grep -q running

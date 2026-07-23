@@ -174,6 +174,7 @@
       <li>Konumunuzu belirli aralıklarla ağa gönderir (<strong>Sabit Konum / Fixed Beacon</strong>)</li>
       <li>Duyulan tüm istasyonları tablo ve harita üzerinde gösterir, gerçek APRS sembolleriyle (<strong>İstasyonlar / Harita</strong> — Web GUI)</li>
       <li>Bir bölgede (veya tüm dünyada) çok sayıda istasyonun aynı anda susmasını tespit eder ve olası elektrik kesintisi uyarısı verir (<strong>Sessizlik Haritası</strong> — Web GUI)</li>
+      <li>Alışılmadık uzunlukta RF linklerinden bant açılmalarını (tropo/Sporadik-E) tespit eder ve bildirir (<strong>RF Propagasyon Takibi</strong> — Web GUI)</li>
       <li>Türkiye Röle Veritabanı ile eşleşen istasyonları şehir/frekans/ton bilgisiyle zenginleştirir ve çevrimdışı olduklarında bildirim gönderir (<strong>Röle İzleyici</strong>)</li>
       <li>Duyulan istasyonların beacon yorumlarını yapay zekaya göndererek kulüp/kurum adını ve açıklamasını otomatik çıkarır (<strong>AI İstasyon Analizi</strong>)</li>
       <li>Size gelen APRS mesajlarını Twitter/X'e iletir (<strong>Twitter</strong>)</li>
@@ -405,9 +406,16 @@
       düştüğünü işaret eder — bkz. aşağıdaki <strong>Sessizlik Haritası</strong>.
     </p>
     <p>
+      <strong>Kesikli çizgiler</strong> alışılmadık uzunlukta gerçekleşmiş telsiz
+      linkleridir — olası bant açılması (bkz. aşağıdaki
+      <strong>RF Propagasyon Takibi</strong>). Renk mesafeyle koyulaşır:
+      yeşil &lt; 600 km, mavi &lt; 1200 km, mor üzeri.
+    </p>
+    <p>
       Haritanın altındaki zaman çizelgesi son 14 günün anlık görüntülerinde
       geriye gidip önceki uyarıları tekrar oynatmanızı sağlar; ▶ ile otomatik
-      oynatma yapabilirsiniz.
+      oynatma yapabilirsiniz. Kayıtlı bir açılmanın yakınına gelindiğinde o
+      açılmanın linkleri de haritada belirir.
     </p>
     <div class="callout note">
       <strong>🌍 Dünya modunda kümeleme</strong>
@@ -478,6 +486,45 @@
       🔴 YM5KAD şu an ÇEVRİMDIŞI (son duyulma 1s 23dk önce)<br>
       Adana · 145.7000 MHz · FM
     </div>
+  </div>
+
+  <h2>RF Propagasyon Takibi</h2>
+
+  <div class="card">
+    <div class="card-title">📡 Bant Açılması Tespiti</div>
+    <p>
+      Bir igate'in RF üzerinden duyup APRS-IS'e aktardığı her paket
+      (<code>qAR</code>/<code>qAO</code>), uzunluğu tam olarak bilinen
+      <strong>gerçekleşmiş bir telsiz linkidir</strong>: gönderenin paketteki
+      konumu ile igate'in konumu arası mesafe. VHF/UHF'te normal menzil
+      ~50–150 km'dir; aynı bölgede linkler topluca çok daha uzağa uzanmaya
+      başlarsa bu, <strong>troposferik kanal</strong> veya
+      <strong>Sporadik-E</strong> açılmasının doğrudan kanıtıdır.
+    </p>
+    <p>
+      Her gate için "normalde ne kadar uzaktan duyar" temposu otomatik
+      öğrenilir — dağ tepesindeki bir LoRa gate'in rutin uzun linkleri alarm
+      üretmez, ama aynı gate'in kendi normalinin çok üstüne çıkması üretir.
+      Anormal linkler haritada <strong>kesikli çizgiler</strong> olarak
+      görünür. Aynı Maidenhead alanında 30 dakika içinde <strong>en az iki
+      FARKLI gönderenden</strong> anormal link gelirse bu bir
+      <strong>açılma olayı</strong> olur: bildirim kanalına
+      "📡 BAND OPENING" mesajı gider, AI Gateway ayarlıysa kısa bir
+      değerlendirme eklenir (tropo / Sporadik-E / aurora) ve olay 14 gün
+      boyunca zaman çizelgesinden tekrar oynatılabilir.
+    </p>
+    <div class="callout note">
+      <strong>ℹ️ Neden tek uzun link olay sayılmaz?</strong>
+      Yanlış yapılandırılmış tek bir GPS istediği mesafeyi "uydurabilirsiniz";
+      iki bağımsız istasyon aynı bölgede aynı anda uyduramaz. Ayrıca
+      internet kaynaklı paketler (<code>TCPIP</code>), digipeat'li paketler,
+      Object'ler, 3000 m üzerindeki balonlar (görüş hattı geometrisi,
+      propagasyon değil) ve 5000 km üzeri veri hataları hiç sayılmaz.
+    </div>
+    <p>
+      Ek bir ayar gerekmez — tespit her zaman açıktır; bildirimler Monitor
+      bölümündeki bildirim kanalını kullanır.
+    </p>
   </div>
 
   <h2>Türkiye Röle Veritabanı</h2>
@@ -779,6 +826,15 @@
   </div>
 
   <div class="card">
+    <h3>Haritadaki kesikli çizgiler ne anlama gelir?</h3>
+    <p>Alışılmadık uzunlukta gerçekleşmiş bir telsiz linki — bir istasyonun
+       sinyali, o bölgedeki igate'lerin normalde duyduğundan çok daha uzaktan
+       duyuldu. Aynı bölgede birden fazla istasyondan gelirse bu bir bant
+       açılmasıdır (tropo/Sporadik-E); "📡 BAND OPENING" bildirimi de gönderilir.
+       Renk mesafeyle koyulaşır: yeşil &lt; 600 km, mavi &lt; 1200 km, mor üzeri.</p>
+  </div>
+
+  <div class="card">
     <h3>Program kapatıldığında çalışmaya devam ediyor mu?</h3>
     <p>Hayır. Bilgisayar açıldığında otomatik başlaması için
        Windows Görev Zamanlayıcısı'na kaydetmeniz veya Linux'ta systemd
@@ -822,6 +878,7 @@
       <li>Periodically broadcast your station position to APRS maps (<strong>Fixed Beacon</strong>)</li>
       <li>Show every heard station in a table and on a map with real APRS symbols (<strong>Stations / Map</strong> — Web GUI)</li>
       <li>Detect when many stations in a region (or worldwide) fall silent together and raise a possible power-outage alert (<strong>Silence Map</strong> — Web GUI)</li>
+      <li>Detect band openings (tropo/sporadic-E) from unusually long RF links and notify (<strong>RF Propagation Tracking</strong> — Web GUI)</li>
       <li>Enrich matching stations from the Turkey Repeaters database with city/frequency/tone and notify when a repeater goes offline (<strong>Repeater Monitor</strong>)</li>
       <li>Send heard stations' beacon comments to AI to automatically extract an organisation name and description (<strong>AI Station Analysis</strong>)</li>
       <li>Forward incoming APRS messages to Twitter/X (<strong>Twitter</strong>)</li>
@@ -1050,9 +1107,16 @@
       went down — see <strong>Silence Map</strong> below.
     </p>
     <p>
+      <strong>Dashed lines</strong> are unusually long realised radio links —
+      a possible band opening (see <strong>RF Propagation Tracking</strong>
+      below). Colour deepens with distance: green &lt; 600 km,
+      blue &lt; 1200 km, purple beyond.
+    </p>
+    <p>
       The timeline below the map lets you scrub back through the last 14
       days of recorded snapshots and replay past alerts; use ▶ for
-      automatic playback.
+      automatic playback. Scrubbing near a recorded opening also replays
+      its links on the map.
     </p>
     <div class="callout note">
       <strong>🌍 Clustering in world mode</strong>
@@ -1125,6 +1189,45 @@
       🔴 YM5KAD is now OFFLINE (last heard 1h 23m ago)<br>
       Adana · 145.7000 MHz · FM
     </div>
+  </div>
+
+  <h2>RF Propagation Tracking</h2>
+
+  <div class="card">
+    <div class="card-title">📡 Band-Opening Detection</div>
+    <p>
+      Every packet an igate hears on RF and forwards to APRS-IS
+      (<code>qAR</code>/<code>qAO</code>) is a <strong>realised radio
+      link</strong> whose length is known exactly: the sender's in-packet
+      position to the igate's position. Normal VHF/UHF range is ~50–150 km;
+      when links in an area collectively start reaching much further, that
+      is direct evidence of a <strong>tropospheric duct</strong> or
+      <strong>sporadic-E</strong> opening.
+    </p>
+    <p>
+      Each gate's "how far does it normally hear" baseline is learned
+      automatically — a mountain-top LoRa gate's routine long links never
+      alert, but the same gate exceeding its own normal does. Anomalous
+      links appear on the map as <strong>dashed lines</strong>. When
+      anomalous links arrive from <strong>at least two DIFFERENT
+      senders</strong> in the same Maidenhead field within 30 minutes, that
+      becomes an <strong>opening event</strong>: a "📡 BAND OPENING"
+      notification is sent, an AI assessment is attached when the AI
+      Gateway is configured (tropo / sporadic-E / aurora), and the event
+      replays from the timeline for 14 days.
+    </p>
+    <div class="callout note">
+      <strong>ℹ️ Why is a single long link never an event?</strong>
+      One misconfigured GPS can fake any distance; two independent stations
+      in the same area at the same time cannot. Internet-origin packets
+      (<code>TCPIP</code>), digipeated packets, Objects, balloons above
+      3000 m (line-of-sight geometry, not propagation) and links over
+      5000 km (data errors) are never counted at all.
+    </div>
+    <p>
+      No extra settings required — detection is always on; notifications
+      use the Monitor section's notify channel.
+    </p>
   </div>
 
   <h2>Turkey Repeaters DB</h2>
@@ -1421,6 +1524,15 @@
        sign of a regional power outage. If it's caused by a single igate
        going down, it's shown separately as an "IGate failure". You can
        scope the region with <code>silence_grids</code> in the Monitor settings.</p>
+  </div>
+
+  <div class="card">
+    <h3>What do the dashed lines on the map mean?</h3>
+    <p>An unusually long realised radio link — a station was heard from far
+       beyond what that area's igates normally reach. Multiple stations in
+       the same area means a band opening (tropo/sporadic-E) and a
+       "📡 BAND OPENING" notification is sent. Colour deepens with
+       distance: green &lt; 600 km, blue &lt; 1200 km, purple beyond.</p>
   </div>
 
   <div class="card">

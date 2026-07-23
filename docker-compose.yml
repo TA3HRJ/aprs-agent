@@ -1,0 +1,22 @@
+# APRS-Agent — docker compose example
+#
+#   docker compose up -d
+#
+# First run writes ./data/aprsconfig.toml — set your callsign there or via
+# the Web GUI at http://localhost:8080, then restart. Station database and
+# config persist in ./data.
+
+services:
+  aprs-agent:
+    build: .
+    container_name: aprs-agent
+    restart: unless-stopped
+    ports:
+      # Admin panel — NO built-in auth: keep it on localhost, or put a
+      # reverse proxy with authentication in front of it.
+      - "127.0.0.1:8080:8080"
+      # Read-only public page (only serves once public_port = 8082 is set
+      # in the config). Safe to expose.
+      - "8082:8082"
+    volumes:
+      - ./data:/data
