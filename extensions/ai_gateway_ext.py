@@ -55,7 +55,9 @@ _PROVIDER_MODELS = {
     "groq":       "llama-3.3-70b-versatile",
     "openrouter": "meta-llama/llama-3.3-70b-instruct:free",
     "openai":     "gpt-4o-mini",
-    "deepseek":   "deepseek-chat",
+    # "deepseek-chat" is a legacy alias for this model, deprecating
+    # 2026-07-24 -- using the real name directly so it keeps working.
+    "deepseek":   "deepseek-v4-flash",
     "anthropic":  "claude-3-5-haiku-20241022",
 }
 
@@ -251,6 +253,19 @@ class AIGateway(Extension):
         if len(self._processed) > 10000:
             self._processed = set(list(self._processed)[-5000:])
 
+        # Ack immediately -- it means "your message was received", not
+        # "answered", so it shouldn't wait on the AI call or the whitelist
+        # check below. Previously the ack was only sent as handle()'s return
+        # value, after the full AI round-trip completed. A slow/cold
+        # provider call can easily outlast the sender's own retry timeout,
+        # causing it to resend with a NEW message id before our ack arrives
+        # -- each retry then looks like a genuinely new message and gets its
+        # own AI call. Observed live: an 11s cold-start DeepSeek call led to
+        # 3 retries 12-13s apart, 3 separate AI answers, for one question.
+        if msg_id and self._own_writer:
+            ack = f"{my_call}>APRS,TCPIP*::{sender_full:<9}:ack{msg_id}\r\n"
+            await self._own_writer.put(ack.encode("utf-8"))
+
         prefix = cfg.get("trigger_prefix", "").upper()
         if prefix:
             if not raw_msg.upper().startswith(prefix):
@@ -286,9 +301,5 @@ class AIGateway(Extension):
             self.log(f"TX to {sender_full}: {part}")
             if i < len(parts) - 1:
                 await asyncio.sleep(5)
-
-        if msg_id:
-            ack = f"{my_call}>APRS,TCPIP*::{sender_full:<9}:ack{msg_id}\r\n"
-            return ack.encode("utf-8")
 
         return None

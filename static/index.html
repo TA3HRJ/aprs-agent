@@ -1400,14 +1400,22 @@ function renderProp(links,hist){
     seen[k]=1;
     if(propLines[k])continue;              // immutable once drawn
     const col=propColor(l.km);
-    propLines[k]=L.polyline([[l.s_lat,l.s_lon],[l.g_lat,l.g_lon]],
-      {color:col,weight:2,opacity:.75,dashArray:'6 6'}).addTo(map)
-      .bindPopup('<b style="color:'+col+'">'+esc(l.call)+' ⇄ '+esc(l.gate)+'</b><br>'
+    const coords=[[l.s_lat,l.s_lon],[l.g_lat,l.g_lon]];
+    const popupHtml='<b style="color:'+col+'">'+esc(l.call)+' ⇄ '+esc(l.gate)+'</b><br>'
         +l.km+' km · '+fmtAgoLong(Math.max(0,Math.floor(now-l.ts)))+'<br>'
-        +'<span style="opacity:.7">'+t('prop_link')+'</span>');
+        +'<span style="opacity:.7">'+t('prop_link')+'</span>';
+    // A thin dashed line is hard to point at precisely, so an invisible
+    // wide line underneath does the actual hit-testing (click AND hover)
+    // while the visible line on top stays visually unobtrusive.
+    const hit=L.polyline(coords,{color:col,weight:16,opacity:0}).addTo(map)
+      .bindPopup(popupHtml)
+      .on('mouseover',function(){this.openPopup()})
+      .on('mouseout',function(){this.closePopup()});
+    const vis=L.polyline(coords,{color:col,weight:3,opacity:.8,dashArray:'6 6',interactive:false}).addTo(map);
+    propLines[k]={hit:hit,vis:vis,remove:function(){map.removeLayer(hit);map.removeLayer(vis)}};
   }
   for(const k in propLines){
-    if(!seen[k]){map.removeLayer(propLines[k]);delete propLines[k]}
+    if(!seen[k]){propLines[k].remove();delete propLines[k]}
   }
 }
 function renderStations(){

@@ -986,7 +986,9 @@ class AgentManager:
                 "puter": "gpt-4o-mini",
                 "groq":  "llama-3.1-8b-instant",
                 "openai": "gpt-4o-mini",
-                "deepseek": "deepseek-chat",
+                # "deepseek-chat" is a legacy alias for this model,
+                # deprecating 2026-07-24 -- use the real name directly.
+                "deepseek": "deepseek-v4-flash",
             }
             payload = {
                 "model": model or default_models.get(provider, ""),
