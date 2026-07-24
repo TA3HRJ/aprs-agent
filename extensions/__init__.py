@@ -56,13 +56,27 @@ class Extension(ABC):
         pass
 
     def log(self, msg: str) -> None:
-        print(f"\033[32m[{self.name}]\033[0m {msg}", file=sys.stderr)
+        self._emit(f"\033[32m[{self.name}]\033[0m {msg}")
 
     def error(self, msg: str) -> None:
-        print(f"\033[31m[{self.name}]\033[0m {msg}", file=sys.stderr)
+        self._emit(f"\033[31m[{self.name}]\033[0m {msg}")
 
     def warn(self, msg: str) -> None:
-        print(f"\033[33m[{self.name}]\033[0m {msg}", file=sys.stderr)
+        self._emit(f"\033[33m[{self.name}]\033[0m {msg}")
+
+    @staticmethod
+    def _emit(line: str) -> None:
+        # The Web GUI redirects sys.stderr to a queue feeding the browser's
+        # Live Log for the whole time the agent runs, so a plain print() here
+        # never reaches the real process stderr that journald captures.
+        # Every extension logs through this method (init lines, RX/TX,
+        # errors), so without this a server-side operator has no way to
+        # confirm from journalctl whether e.g. AI Gateway actually
+        # initialized after a config change — same gap already fixed for
+        # the silence/prop watch loops in AgentManager._log_both.
+        print(line, file=sys.stderr)
+        if sys.stderr is not sys.__stderr__:
+            print(line, file=sys.__stderr__)
 
 
 class ExtensionRegistry:
