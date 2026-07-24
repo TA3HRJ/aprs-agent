@@ -2716,8 +2716,20 @@ class APRSAgentGUI:
 
     def _save_config(self) -> None:
         try:
-            cfg = self._form_to_config()
-            cfg_module.sync_config_to_file(cfg, self._cfg_path_var.get())
+            path = self._cfg_path_var.get()
+            # Merge onto the full on-disk config rather than writing the
+            # form's dict as-is. This GUI has no fields for settings added
+            # to the Web GUI after it was feature-frozen (per-provider AI
+            # keys, public view port/title, silence/prop notification
+            # scoping) — a raw dump here would silently erase them on every
+            # Save/Start, exactly the kind of accidental config-wipe already
+            # seen once this session with a raw tomli_w.dump().
+            try:
+                base_cfg = cfg_module.load_config(path)
+            except Exception:
+                base_cfg = {}
+            cfg = cfg_module._deep_merge(base_cfg, self._form_to_config())
+            cfg_module.sync_config_to_file(cfg, path)
             self._log(self._t("save_ok"), "green")
         except Exception as e:
             messagebox.showerror("Error", self._t("save_err").format(e))
@@ -2730,7 +2742,14 @@ class APRSAgentGUI:
             messagebox.showwarning("", self._t("no_callsign"))
             return
         self._save_config()
-        cfg = self._form_to_config()
+        # Re-read from disk (not _form_to_config() again) so the running
+        # agent gets fields this GUI has no form for too — per-provider AI
+        # keys above all, or AI Gateway calls silently fail with no key even
+        # though one is configured (just not in this GUI's flat field).
+        try:
+            cfg = cfg_module.load_config(self._cfg_path_var.get())
+        except Exception:
+            cfg = self._form_to_config()
         # Station records persist across restarts (SQLite) — no reset here.
         db_path = self._v_repeater_db.get().strip()
         if db_path:
