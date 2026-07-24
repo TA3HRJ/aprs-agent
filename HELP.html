@@ -230,6 +230,13 @@
     </div></li>
   </ol>
 
+  <div class="callout warn">
+    <strong>Kaydet, çalışan ajanı yeniden başlatmaz.</strong> Ajan zaten çalışırken bir ayarı değiştirip
+    (ör. AI sağlayıcısı, bildirim kanalı) Kaydet'e basarsanız, değişiklik dosyaya yazılır ama çalışan
+    ajan bunu görmez — devreye girmesi için <strong>■ Durdur</strong> sonra <strong>▶ Başlat</strong>
+    gerekir. Web GUI çalışırken Kaydet'e basıldığında log penceresinde bu hatırlatmayı gösterir.
+  </div>
+
   <h2>Bağlantı Sekmesi</h2>
 
   <div class="card">
@@ -441,9 +448,12 @@
     <p>
       AI Gateway yapılandırılmışsa, her yeni uyarı için yapay zekadan kısa bir
       değerlendirme istenir (harita popup'larında ve Telegram/e-posta
-      bildirimlerinde görünür). APRS <strong>Object paketleri</strong> (olay/uyarı
-      nesneleri — örn. acil durum servislerinin yangın uyarıları) tasarım
-      gereği süresi dolduğunda kaybolduğundan, sessizlik sensörü olarak
+      bildirimlerinde görünür). Aynı hücre 3 saat içinde tekrar susup tekrar
+      alarm verirse (kararsız/"flapping" bölge), yeni bir AI çağrısı yapılmaz —
+      önceki değerlendirme yeniden kullanılır; bu, geniş alan izlemede AI
+      kullanımını gereksiz yere katlamaz. APRS <strong>Object paketleri</strong>
+      (olay/uyarı nesneleri — örn. acil durum servislerinin yangın uyarıları)
+      tasarım gereği süresi dolduğunda kaybolduğundan, sessizlik sensörü olarak
       hiçbir zaman sayılmazlar.
     </p>
     <table>
@@ -510,8 +520,10 @@
       FARKLI gönderenden</strong> anormal link gelirse bu bir
       <strong>açılma olayı</strong> olur: bildirim kanalına
       "📡 BAND OPENING" mesajı gider, AI Gateway ayarlıysa kısa bir
-      değerlendirme eklenir (tropo / Sporadik-E / aurora) ve olay 14 gün
-      boyunca zaman çizelgesinden tekrar oynatılabilir.
+      değerlendirme eklenir (tropo / Sporadik-E / aurora — aynı bölge 3 saat
+      içinde tekrar açılırsa yeni bir AI çağrısı yapılmadan önceki
+      değerlendirme yeniden kullanılır) ve olay 14 gün boyunca zaman
+      çizelgesinden tekrar oynatılabilir.
     </p>
     <div class="callout note">
       <strong>ℹ️ Neden tek uzun link olay sayılmaz?</strong>
@@ -769,6 +781,13 @@
       port dışarıya açılabilir; admin portu (varsayılan 8080) ise
       <strong>her zaman</strong> yerel ağınızda kalmalıdır.
     </p>
+    <p>
+      Sekme çubuğunun altında, hangi özelliklerin şu an gerçekten aktif olduğunu
+      gösteren küçük bir rozet satırı bulunur (AI Gateway, İstasyon AI, Röle
+      İzleyici, Dünya Akışı, mesajlaşma eklentileri) — hem admin panelde hem bu
+      sayfada görünür; Başlat/Durdur/Kaydet gibi komutları içermez, sadece
+      salt-okunur bir durum özetidir.
+    </p>
     <table>
       <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
       <tr><td><span class="field-name">Halka Açık İzleme Portu</span></td><td>Bu portta salt-okunur sayfa sunulur. <code>0</code> = kapalı.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
@@ -938,6 +957,14 @@
       If you see <em>"TA3HRJ verified"</em> (your callsign) in the log, you're connected.
     </div></li>
   </ol>
+
+  <div class="callout warn">
+    <strong>Save writes the file, it doesn't restart the agent.</strong> If you change a setting
+    (a different AI provider, a new notify channel, …) while the agent is already running and click
+    Save, the change is written to disk but the running agent doesn't see it — it only takes effect
+    after <strong>■ Stop</strong> then <strong>▶ Start</strong>. The Web GUI shows this reminder in
+    the log whenever you Save while running.
+  </div>
 
   <h2>Connection Tab</h2>
 
@@ -1150,7 +1177,10 @@
     <p>
       If the AI Gateway is configured, each new alert gets a short AI
       assessment (shown in map popups and in Telegram/email notifications).
-      APRS <strong>Object packets</strong> (event/advisory objects — e.g. fire
+      If the same cell clears and re-alerts again within 3 hours (a flapping
+      region), no new AI call is made — the previous assessment is reused, so
+      wide-area monitoring doesn't multiply AI usage unnecessarily. APRS
+      <strong>Object packets</strong> (event/advisory objects — e.g. fire
       warnings from emergency services) expire by design when the event
       closes, so they are never counted as silence sensors.
     </p>
@@ -1219,8 +1249,10 @@
       senders</strong> in the same Maidenhead field within 30 minutes, that
       becomes an <strong>opening event</strong>: a "📡 BAND OPENING"
       notification is sent, an AI assessment is attached when the AI
-      Gateway is configured (tropo / sporadic-E / aurora), and the event
-      replays from the timeline for 14 days.
+      Gateway is configured (tropo / sporadic-E / aurora — if the same
+      region opens again within 3 hours, the previous assessment is reused
+      instead of making a new AI call), and the event replays from the
+      timeline for 14 days.
     </p>
     <div class="callout note">
       <strong>ℹ️ Why is a single long link never an event?</strong>
@@ -1480,6 +1512,12 @@
       (settings, API keys, Start/Stop). It runs on a separate port that is
       safe to forward — the admin port (default 8080) must <strong>always</strong>
       stay on your local network.
+    </p>
+    <p>
+      Below the tab bar, a small badge row shows which features are actually
+      active right now (AI Gateway, Station AI, Repeater Monitor, World Feed,
+      messaging extensions) — shown on both the admin panel and this page; it
+      carries no Start/Stop/Save commands, just a read-only status summary.
     </p>
     <table>
       <tr><th>Field</th><th>Description</th><th>Status</th></tr>

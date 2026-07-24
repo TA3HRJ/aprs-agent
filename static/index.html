@@ -120,7 +120,7 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 .ll{padding:1px 8px;border-radius:6px;word-break:break-all;white-space:pre-wrap}
 .ll:hover{background:rgba(255,255,255,.04)}
 .ll.raw{color:var(--dim)} .ll.msg{color:#99c1f1} .ll.pos{color:#8ff0a4}
-.ll.err{color:var(--error)} .ll.wx{color:var(--warn)}
+.ll.err{color:var(--error)} .ll.wx{color:var(--warn)} .ll.warn{color:var(--warn)}
 .ll.ai-rx{color:var(--accent2);background:rgba(53,132,228,.1);border-left:3px solid var(--accent);padding-left:10px;margin:3px 0}
 .ll.ai-tx{color:var(--success);border-left:3px solid #26a269;padding-left:10px;margin:2px 0}
 .ll.ai-resp{color:#dc8add;border-left:3px solid #9141ac;padding-left:10px;margin:2px 0}
@@ -733,6 +733,7 @@ const S={en:{
   heard_label:"Last Heard",st_rx:"Received",st_tx:"Sent",st_err:"Errors",st_pk:"Packets",st_stations:"Stations",st_calls:"Callsigns",st_uptime:"Uptime",st_lifetime:"Lifetime",btn_about:"About",
   about_title:"About APRS-Agent",about_desc:"A multi-extension APRS-IS agent for amateur radio operators.",about_devs:"Developers",about_source:"Source:",about_infra:"Infrastructure",about_infra_detail:"Contabo VPS, Germany · Ubuntu 22.04 LTS",about_ai_calls:"AI analysis calls (lifetime):",about_license:"MIT License",about_close:"Close",
   save_ok:"Config saved.",save_err:"Save failed.",reload_ok:"Config reloaded.",no_callsign:"Enter your callsign first.",
+  save_restart_hint:"⚠ The running agent won't see this change until you Stop and Start it again.",
   btn_clear:"Clear",btn_autoscroll:"Auto Scroll",
   tab_log:"Live Log",tab_sta:"Stations",tab_map:"Map",
   map_offline:"Map library could not be loaded — an internet connection is required for map tiles.",
@@ -811,6 +812,7 @@ const S={en:{
   heard_label:"Son Duyulan",st_rx:"Alınan",st_tx:"Gönderilen",st_err:"Hata",st_pk:"Paket",st_stations:"İstasyon",st_calls:"Çağrı İşareti",st_uptime:"Süre",st_lifetime:"Toplam Süre",btn_about:"Hakkında",
   about_title:"APRS-Agent Hakkında",about_desc:"Amatör radyo operatörleri için çok eklentili bir APRS-IS ajanı.",about_devs:"Geliştiriciler",about_source:"Kaynak:",about_infra:"Altyapı",about_infra_detail:"Contabo VPS, Almanya · Ubuntu 22.04 LTS",about_ai_calls:"AI analiz çağrısı (toplam):",about_license:"MIT Lisansı",about_close:"Kapat",
   save_ok:"Ayarlar kaydedildi.",save_err:"Kaydetme başarısız.",reload_ok:"Ayarlar yeniden yüklendi.",no_callsign:"Çağrı işaretinizi girin.",
+  save_restart_hint:"⚠ Çalışan ajan bu değişikliği görmeyecek — Durdur'a basıp tekrar Başlat'a basmanız gerekir.",
   btn_clear:"Temizle",btn_autoscroll:"Otomatik Kaydır",
   tab_log:"Canlı Log",tab_sta:"İstasyonlar",tab_map:"Harita",
   map_offline:"Harita kütüphanesi yüklenemedi — harita karoları için internet bağlantısı gerekir.",
@@ -984,10 +986,11 @@ function getCfg(){return{
   }}}
 
 // ── Status ──
-function setStatus(r){const el=$('status');if(r){el.textContent=t('status_running');el.className='status status-on';$('btn-start').disabled=true;$('btn-stop').disabled=false}else{el.textContent=t('status_stopped');el.className='status status-off';$('btn-start').disabled=false;$('btn-stop').disabled=true}const pl=$('pub-live');if(pl)pl.className='pub-live'+(r?' on':'')}
+let agentRunning=false;
+function setStatus(r){agentRunning=r;const el=$('status');if(r){el.textContent=t('status_running');el.className='status status-on';$('btn-start').disabled=true;$('btn-stop').disabled=false}else{el.textContent=t('status_stopped');el.className='status status-off';$('btn-start').disabled=false;$('btn-stop').disabled=true}const pl=$('pub-live');if(pl)pl.className='pub-live'+(r?' on':'')}
 
 // ── Log ──
-function cls(l){if(!l)return'raw';if(l.includes('[ai-gateway] RX'))return'ai-rx';if(l.includes('[ai-gateway] TX'))return'ai-tx';if(l.includes('[ai-gateway] AI response'))return'ai-resp';if(/\[ai-gateway\].*error|failed/i.test(l))return'ai-err';if(/error|fail|fatal/i.test(l))return'err';if(/::/i.test(l))return'msg';if(/:([!\/=@])/i.test(l))return'pos';return'raw'}
+function cls(l){if(!l)return'raw';if(l.includes('⚠')&&l.startsWith('[web]'))return'warn';if(l.includes('[ai-gateway] RX'))return'ai-rx';if(l.includes('[ai-gateway] TX'))return'ai-tx';if(l.includes('[ai-gateway] AI response'))return'ai-resp';if(/\[ai-gateway\].*error|failed/i.test(l))return'ai-err';if(/error|fail|fatal/i.test(l))return'err';if(/::/i.test(l))return'msg';if(/:([!\/=@])/i.test(l))return'pos';return'raw'}
 const MAX_LOG=500;function addLog(text){const log=$('log');const lines=text.split('\n');for(const line of lines){if(!line)continue;const el=document.createElement('div');el.className='ll '+cls(line);el.textContent=line;if(heardFilter&&!line.includes(heardFilter))el.style.display='none';log.appendChild(el);if(log.children.length>MAX_LOG)log.removeChild(log.firstChild)}logCount=log.children.length;$('lc').textContent=logCount;if(autoScroll)log.scrollTop=log.scrollHeight}
 // RX/TX/error counters are server-authoritative (delivered via onStats), so they
 // survive a page refresh. Clearing the log only empties the on-screen buffer.
@@ -1508,7 +1511,7 @@ async function api(m,p,b){
 }
 async function startAgent(){const cs=$('f-callsign').value.trim();if(!cs||cs==='N0CALL'){alert(t('no_callsign'));return}$('btn-start').disabled=true;await api('POST','/api/start')}
 async function stopAgent(){$('btn-stop').disabled=true;await api('POST','/api/stop')}
-async function saveCfg(){try{const r=await api('POST','/api/config',getCfg());addLog('[web] '+(r.ok?t('save_ok'):t('save_err'))+'\n');refreshModStatus()}catch(e){addLog('[web] '+t('save_err')+'\n')}}
+async function saveCfg(){try{const r=await api('POST','/api/config',getCfg());addLog('[web] '+(r.ok?t('save_ok'):t('save_err'))+'\n');if(r.ok&&agentRunning)addLog('[web] '+t('save_restart_hint')+'\n');refreshModStatus()}catch(e){addLog('[web] '+t('save_err')+'\n')}}
 async function refreshModStatus(){try{const info=await api('GET','/api/info');renderModStatus(info.active)}catch(e){}}
 async function reloadCfg(){try{const p=$('hdr-cfg').value.trim();if(p)await api('POST','/api/config-path',{path:p});const c=await api('GET','/api/config');loadCfg(c);addLog('[web] '+t('reload_ok')+'\n')}catch(e){addLog('[web] '+t('save_err')+'\n')}}
 // Status updates arrive via WebSocket "stats" messages every 2s — no polling needed.

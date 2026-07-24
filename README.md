@@ -155,6 +155,8 @@ All settings are in `aprsconfig.toml`.
 The file is fully self-documented with comments.
 In the GUI, all settings can be edited in the form — no manual file editing needed.
 
+> **Save writes the file, it doesn't restart the agent.** If the agent is already running, a changed setting (a new AI provider, a different notify channel, …) only takes effect after you Stop and Start it again — the Web GUI shows a reminder in the log when you Save while running.
+
 ### Minimum required settings
 
 ```toml
@@ -447,6 +449,8 @@ python web_gui.py --host 0.0.0.0 -p 8080  # listen on all interfaces (remote acc
 - **Propagation layer** — anomalous RF links draw as dashed great-circle lines (green < 600 km, blue < 1200 km, purple beyond) with sender/gate/distance popups; recorded openings replay from the timeline slider
 - **Scales to the worldwide feed** — above 2000 plotted stations the map switches to grid clustering (numbered badges, click to zoom) with viewport-only markers at high zoom, fetching every station of the visible area from the server; the stations API serves a slim capped list (~1.3 MB instead of 40+ MB) and the detail panel fetches the full record per station; below that threshold a regional setup looks exactly as before
 - **Phone layout** — on screens ≤ 700 px the settings sidebar folds behind a ⚙ overlay, the silence-alert list collapses to a one-line tappable summary, and the stat bar wraps into two rows; safe-area aware for notched iPhones
+- **Module status indicator** — a compact badge row under the tab bar shows which features are actually active right now (AI Gateway, Station AI, Repeater Monitor, World Feed, and each messaging extension), on both the admin and public views
+- **AI-call cooling-off** — a silence or propagation cell that clears and re-alerts within 3 hours reuses its previous AI assessment instead of spending a fresh API call, so a flapping region doesn't multiply AI usage
 
 ---
 
