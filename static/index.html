@@ -158,6 +158,13 @@ body.public .stat-bar .cell.diag{display:none!important}
 .pub-live.on{color:#57e389}
 /* One-line "what is this tab" strip */
 .tab-caption{padding:6px 14px;background:rgba(28,113,216,.12);border-bottom:1px solid var(--border2);font-size:11px;color:#a9c8e0}
+/* Which modules are actually active — read-only, same on admin & public */
+.mod-status{display:flex;flex-wrap:wrap;gap:3px 10px;padding:5px 14px;border-bottom:1px solid var(--border2);font-size:10px}
+.mod-status .mb{display:flex;align-items:center;gap:4px;color:var(--dim)}
+.mod-status .mb .dot{width:6px;height:6px;border-radius:50%;background:#5a5a5a;flex-shrink:0}
+.mod-status .mb.on{color:var(--fg2)}
+.mod-status .mb.on .dot{background:#57e389}
+.mod-status .mb.warn .dot{background:#f5c211}
 /* Active silence events */
 .alert-panel{max-height:132px;overflow-y:auto;border-bottom:1px solid var(--border2);background:rgba(224,27,36,.07)}
 .alert-row{display:flex;gap:8px;align-items:baseline;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px}
@@ -510,6 +517,8 @@ body.public .sb-toggle{display:none!important}
       <button class="log-btn active" id="asB" onclick="togAs()" data-i="btn_autoscroll">Auto Scroll</button>
     </div>
   </div>
+  <!-- Which modules are actually running right now (both views) -->
+  <div class="mod-status" id="mod-status" hidden></div>
   <!-- What am I looking at? (public view only) -->
   <div class="tab-caption" id="tab-caption" hidden></div>
   <!-- Active silence events (both views). On phones the row list collapses
@@ -749,7 +758,11 @@ const S={en:{
   sd_source:"Source",sd_first:"First seen",sd_packets:"Packets",sd_last:"Last packet",sd_aprs_live:"APRS live",sd_db_only:"DB only",sd_both:"APRS + DB",
   sta_online:"Online",sta_offline:"Offline",sta_db_only:"DB only",sta_unknown:"—",
   sta_ftype_all:"All Types",sta_ftype_repeater:"🔁 Repeater",sta_ftype_weather:"🌤 Weather",sta_ftype_digi:"📡 Digi",sta_ftype_igate:"🛰 IGate",sta_ftype_mobile:"🚗 Mobile",sta_ftype_echolink:"🔗 EchoLink",sta_ftype_unknown:"❓ Unknown",
-  sta_fonline_all:"All Status",sta_fonline_on:"🟢 Online",sta_fonline_off:"🔴 Offline",sta_fonline_db:"⬜ DB Only"
+  sta_fonline_all:"All Status",sta_fonline_on:"🟢 Online",sta_fonline_off:"🔴 Offline",sta_fonline_db:"⬜ DB Only",
+  mod_title:"Active modules",
+  mod_ai:"AI",mod_ai_off:"AI Gateway is off — no automatic AI calls anywhere in the app",mod_ai_on:"AI Gateway is on — Silence Map / Propagation / Station AI can call it",
+  mod_station_ai:"Station AI",mod_repeater_monitor:"Repeater Monitor",mod_full_feed:"World Feed",mod_ext_server:"Ext. Server",
+  mod_telegram:"Telegram",mod_whatsapp:"WhatsApp",mod_twitter:"Twitter",mod_bluesky:"Bluesky",mod_smtp:"SMTP",mod_imap:"IMAP"
 },tr:{
   g_conn:"Bağlantı",g_logger:"Logger",g_beacon:"Sabit Konum",g_email:"E-Posta",g_station_ai:"İstasyon AI",g_monitor:"İzleyici",g_ext:"Ext. Sunucu",g_config:"Ayar Dosyası",
   sai_enabled:"AI İstasyon Analizi",sai_sub:"İstasyon yorumlarını periyodik olarak AI'a gönder — dernek adı ve açıklama çıkarır. AI Gateway ayarlarını kullanır.",
@@ -823,7 +836,11 @@ const S={en:{
   sd_source:"Kaynak",sd_first:"İlk görülme",sd_packets:"Paket",sd_last:"Son paket",sd_aprs_live:"APRS canlı",sd_db_only:"Yalnızca DB",sd_both:"APRS + DB",
   sta_online:"Çevrimiçi",sta_offline:"Çevrimdışı",sta_db_only:"Yalnızca DB",sta_unknown:"—",
   sta_ftype_all:"Tüm Türler",sta_ftype_repeater:"🔁 Röle",sta_ftype_weather:"🌤 Hava İstasyonu",sta_ftype_digi:"📡 Digi",sta_ftype_igate:"🛰 IGate",sta_ftype_mobile:"🚗 Mobil",sta_ftype_echolink:"🔗 EchoLink",sta_ftype_unknown:"❓ Bilinmiyor",
-  sta_fonline_all:"Tüm Durumlar",sta_fonline_on:"🟢 Çevrimiçi",sta_fonline_off:"🔴 Çevrimdışı",sta_fonline_db:"⬜ Yalnızca DB"
+  sta_fonline_all:"Tüm Durumlar",sta_fonline_on:"🟢 Çevrimiçi",sta_fonline_off:"🔴 Çevrimdışı",sta_fonline_db:"⬜ Yalnızca DB",
+  mod_title:"Aktif modüller",
+  mod_ai:"AI",mod_ai_off:"AI Gateway kapalı — uygulamada hiçbir otomatik AI çağrısı yapılmaz",mod_ai_on:"AI Gateway açık — Sessizlik Haritası / Propagasyon / İstasyon AI onu çağırabilir",
+  mod_station_ai:"İstasyon AI",mod_repeater_monitor:"Röle İzleyici",mod_full_feed:"Dünya Akışı",mod_ext_server:"Ext. Sunucu",
+  mod_telegram:"Telegram",mod_whatsapp:"WhatsApp",mod_twitter:"Twitter",mod_bluesky:"Bluesky",mod_smtp:"SMTP",mod_imap:"IMAP"
 }};
 function t(k){return(S[lang]&&S[lang][k])||S.en[k]||k}
 let pubTitle='',pubCall='',pubSub='';
@@ -849,7 +866,37 @@ function applyLang(){
   const lbl=lang==='en'?'TR':'EN';
   $('btn-lang').textContent=lbl;
   const pl=$('pub-lang');if(pl)pl.textContent=lbl;
-  applyPubHdr();updCaption();
+  applyPubHdr();updCaption();renderModStatus();
+}
+// Which modules are actually doing something right now (from /api/info's
+// "active" dict) — a compact, read-only badge row shown on both admin and
+// public views. Deliberately NOT part of the "Running" action bar: that bar
+// carries Start/Stop/Save commands and is hidden entirely on public.
+let lastActive=null;
+function renderModStatus(active){
+  if(active)lastActive=active;
+  const a=lastActive;
+  const el=$('mod-status');
+  if(!el)return;
+  if(!a){el.hidden=true;return}
+  const rows=[
+    ['ai',a.ai,a.ai?t('mod_ai_on'):t('mod_ai_off'),true],
+    ['station_ai',a.station_ai,'',false],
+    ['repeater_monitor',a.repeater_monitor,'',false],
+    ['full_feed',a.full_feed,'',false],
+    ['ext_server',a.extension_server,'',false],
+    ['telegram',a.telegram,'',false],
+    ['whatsapp',a.whatsapp,'',false],
+    ['twitter',a.twitter,'',false],
+    ['bluesky',a.bluesky,'',false],
+    ['smtp',a.smtp,'',false],
+    ['imap',a.imap,'',false]
+  ];
+  el.title=t('mod_title');
+  el.innerHTML=rows.filter(([k,on,ti,always])=>on||always).map(([k,on,ti])=>
+    '<span class="mb'+(on?' on':'')+'" title="'+ti+'"><span class="dot"></span>'+t('mod_'+k)+'</span>'
+  ).join('');
+  el.hidden=false;
 }
 function toggleLang(){lang=lang==='en'?'tr':'en';applyLang()}
 
@@ -1461,7 +1508,8 @@ async function api(m,p,b){
 }
 async function startAgent(){const cs=$('f-callsign').value.trim();if(!cs||cs==='N0CALL'){alert(t('no_callsign'));return}$('btn-start').disabled=true;await api('POST','/api/start')}
 async function stopAgent(){$('btn-stop').disabled=true;await api('POST','/api/stop')}
-async function saveCfg(){try{const r=await api('POST','/api/config',getCfg());addLog('[web] '+(r.ok?t('save_ok'):t('save_err'))+'\n')}catch(e){addLog('[web] '+t('save_err')+'\n')}}
+async function saveCfg(){try{const r=await api('POST','/api/config',getCfg());addLog('[web] '+(r.ok?t('save_ok'):t('save_err'))+'\n');refreshModStatus()}catch(e){addLog('[web] '+t('save_err')+'\n')}}
+async function refreshModStatus(){try{const info=await api('GET','/api/info');renderModStatus(info.active)}catch(e){}}
 async function reloadCfg(){try{const p=$('hdr-cfg').value.trim();if(p)await api('POST','/api/config-path',{path:p});const c=await api('GET','/api/config');loadCfg(c);addLog('[web] '+t('reload_ok')+'\n')}catch(e){addLog('[web] '+t('save_err')+'\n')}}
 // Status updates arrive via WebSocket "stats" messages every 2s — no polling needed.
 
@@ -1483,6 +1531,7 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch
     $('about-ver').textContent='APRS-Agent v'+info.version;
     // Quota watch — the admin app reports lifetime AI analysis calls
     if(typeof info.ai_calls==='number'){$('about-ai-n').textContent=info.ai_calls;$('about-ai').hidden=false}
+    renderModStatus(info.active);
     if(window.PUBLIC){
       const title=(info.public_title||'').trim();
       const cs=(info.callsign||'').trim();

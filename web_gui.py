@@ -138,6 +138,7 @@ _ERR_RE = re.compile(r"error|fail|fatal", re.I)
 
 _MAX_STATIONS = 200     # last-heard chip table (most recent N callsigns)
 _STATS_INTERVAL = 2.0   # seconds between stats pushes to browsers
+_AI_NOTE_COOLDOWN_S = 3 * 3600   # reuse a silence/prop AI note this long
 
 
 class AgentManager:
@@ -229,6 +230,14 @@ class AgentManager:
                         self._sta_db_path, "prop_episodes", "{}")))
             except Exception:
                 pass
+        # AI-note cooldown cache: cell/region -> (note, generated_ts). A cell
+        # that recovers and re-alerts minutes later doesn't need a fresh AI
+        # read — the previous verdict is reused within _AI_NOTE_COOLDOWN_S,
+        # which is where a meaningful share of world-mode AI call volume was
+        # going (flapping cells re-alerting repeatedly). RAM-only, same as
+        # the propagation link stats — re-learns within hours of a restart.
+        self._silence_note_cache: dict[str, tuple[str, float]] = {}
+        self._prop_note_cache: dict[str, tuple[str, float]] = {}
         # Messages panel: rolling buffer of APRS messages (in + out)
         self._messages: deque = deque(maxlen=_MSG_BUFFER)
         self._msg_seen: dict[tuple, int] = {}   # dedup key → last seen ts
@@ -344,6 +353,20 @@ class AgentManager:
         except Exception as e:
             print(f"[station-db] uptime save failed: {e}", file=sys.__stderr__)
 
+    @staticmethod
+    def _log_both(msg: str) -> None:
+        """Write to both the web Live Log (sys.stderr, redirected to the
+        browser's log queue while the agent is running) and the real
+        process stderr (sys.__stderr__, always captured by journald).
+        Without this, ops-relevant lines — new silence/propagation alerts,
+        episodes clearing — were invisible to `journalctl` for the entire
+        time the agent was running, which made auditing "why did the AI
+        get called" impossible from the server side, only from the web UI.
+        """
+        print(msg, file=sys.stderr)
+        if sys.stderr is not sys.__stderr__:
+            print(msg, file=sys.__stderr__)
+
     async def _agent_main(self) -> None:
         config = cfg_module.load_config(self.config_path)
 
@@ -390,8 +413,7 @@ class AgentManager:
         # Silence watch is always on: detection is cheap, and AI/notification
         # steps degrade gracefully when their configs are missing.
         asyncio.create_task(self._silence_watch_loop(config))
-        print("[silence] Silence watch started (first scan in 15m)",
-              file=sys.stderr)
+        self._log_both("[silence] Silence watch started (first scan in 15m)")
 
         mon_cfg = config.get("monitor", {})
         if mon_cfg.get("enabled") and config.get("repeater_db_path", "").strip():
@@ -470,16 +492,28 @@ class AgentManager:
                     continue                     # already alerted this episode
                 self._silence_active[cell] = time.time()
                 note = ""
-                if ai_ok:
+                now_ts = time.time()
+                cached = self._silence_note_cache.get(cell)
+                if cached and now_ts - cached[1] < _AI_NOTE_COOLDOWN_S:
+                    # Same cell recently assessed and recovered since — the
+                    # verdict (power outage / igate failure) is unlikely to
+                    # have changed in the meantime, so reuse it instead of
+                    # spending another AI call on a cell that's just flapping.
+                    note = cached[0]
+                    self._log_both(f"[silence] {cell}: reusing cached AI "
+                                   f"note (cooldown, "
+                                   f"{int((_AI_NOTE_COOLDOWN_S - (now_ts - cached[1])) / 60)}m left)")
+                elif ai_ok:
                     try:
                         note = await self._assess_silence(c, ai_cfg)
                     except Exception as e:
-                        print(f"[silence] AI assessment failed: {e}",
-                              file=sys.stderr)
+                        self._log_both(f"[silence] AI assessment failed: {e}")
                 if note:
                     self._silence_ai_notes[cell] = note
-                print(f"[silence] ALERT {cell}: {c['silent']}/{c['baseline']}"
-                      f" silent ({c['cause']})", file=sys.stderr)
+                    self._silence_note_cache[cell] = (note, now_ts)
+                self._log_both(
+                    f"[silence] ALERT {cell}: {c['silent']}/{c['baseline']}"
+                    f" silent ({c['cause']})")
                 if channel:
                     if digest_mins > 0:
                         self._silence_pending.append((time.time(), c, note))
@@ -489,15 +523,21 @@ class AgentManager:
                                 self._format_silence_msg(c, note),
                                 channel, config)
                         except Exception as e:
-                            print(f"[silence] notification error: {e}",
-                                  file=sys.stderr)
+                            self._log_both(f"[silence] notification error: {e}")
 
             # Episode over: cell recovered — allow future re-alerts
             for cell in list(self._silence_active):
                 if cell not in alerts:
                     del self._silence_active[cell]
                     self._silence_ai_notes.pop(cell, None)
-                    print(f"[silence] cleared: {cell}", file=sys.stderr)
+                    self._log_both(f"[silence] cleared: {cell}")
+
+            # Prune cooled-down cache entries regardless of alert state, so
+            # the dict doesn't grow forever with cells that never re-alert.
+            now_ts = time.time()
+            for cell in list(self._silence_note_cache):
+                if now_ts - self._silence_note_cache[cell][1] >= _AI_NOTE_COOLDOWN_S:
+                    del self._silence_note_cache[cell]
 
             # Digest mode: flush the queued alerts as one combined message
             if (digest_mins > 0 and self._silence_pending
@@ -510,14 +550,13 @@ class AgentManager:
                 try:
                     await self._send_notification(msg, channel, config)
                 except Exception as e:
-                    print(f"[silence] digest notification error: {e}",
-                          file=sys.stderr)
+                    self._log_both(f"[silence] digest notification error: {e}")
 
             # ── Propagation openings (same 5-min cadence) ──
             try:
                 await self._prop_watch(channel, ai_ok, ai_cfg, config)
             except Exception as e:
-                print(f"[prop] watch error: {e}", file=sys.stderr)
+                self._log_both(f"[prop] watch error: {e}")
 
             await asyncio.sleep(300)
 
@@ -550,14 +589,25 @@ class AgentManager:
                 continue                    # already alerted this episode
             self._prop_active[region] = now
             note = ""
-            if ai_ok:
+            cached = self._prop_note_cache.get(region)
+            if cached and now - cached[1] < _AI_NOTE_COOLDOWN_S:
+                # Same region opened, closed and reopened shortly after — the
+                # propagation mode (tropo/sporadic-E) hasn't likely changed,
+                # so reuse the verdict instead of spending another AI call.
+                note = cached[0]
+                self._log_both(f"[prop] {region}: reusing cached AI note "
+                               f"(cooldown, "
+                               f"{int((_AI_NOTE_COOLDOWN_S - (now - cached[1])) / 60)}m left)")
+            elif ai_ok:
                 try:
                     note = await self._assess_prop(region, ls, ai_cfg)
                 except Exception as e:
-                    print(f"[prop] AI assessment failed: {e}", file=sys.stderr)
+                    self._log_both(f"[prop] AI assessment failed: {e}")
+            if note:
+                self._prop_note_cache[region] = (note, now)
             max_km = max(l["km"] for l in ls)
-            print(f"[prop] OPENING {region}: {len(ls)} links from "
-                  f"{len(senders)} senders, max {max_km} km", file=sys.stderr)
+            self._log_both(f"[prop] OPENING {region}: {len(ls)} links from "
+                          f"{len(senders)} senders, max {max_km} km")
             try:
                 await asyncio.get_event_loop().run_in_executor(
                     None, station_db_module.record_prop_event,
@@ -565,7 +615,7 @@ class AgentManager:
                     {"ts": int(now), "region": region, "note": note,
                      "links": ls})
             except Exception as e:
-                print(f"[prop] history write failed: {e}", file=sys.stderr)
+                self._log_both(f"[prop] history write failed: {e}")
             # Notification is scoped to a region of interest, independent of
             # detection: the map/timeline always show every worldwide
             # opening (already recorded above), but a US↔Western-Europe
@@ -587,16 +637,21 @@ class AgentManager:
                         self._format_prop_msg(region, ls, note),
                         channel, config)
                 except Exception as e:
-                    print(f"[prop] notification error: {e}", file=sys.stderr)
+                    self._log_both(f"[prop] notification error: {e}")
             elif channel:
-                print(f"[prop] {region} outside prop_notify_grids — "
-                      "recorded, not notified", file=sys.stderr)
+                self._log_both(f"[prop] {region} outside prop_notify_grids — "
+                               "recorded, not notified")
 
         # Episode over: region quiet again — allow future re-alerts
         for region in list(self._prop_active):
             if region not in groups:
                 del self._prop_active[region]
-                print(f"[prop] cleared: {region}", file=sys.stderr)
+                self._log_both(f"[prop] cleared: {region}")
+
+        # Prune cooled-down cache entries regardless of alert state
+        for region in list(self._prop_note_cache):
+            if now - self._prop_note_cache[region][1] >= _AI_NOTE_COOLDOWN_S:
+                del self._prop_note_cache[region]
 
     async def _assess_prop(self, region: str, ls: list,
                            ai_cfg: dict) -> str:
@@ -1268,6 +1323,15 @@ async def info(request: web.Request) -> web.Response:
         cfg = mgr.get_config()
     except (Exception, SystemExit):
         cfg = {}
+    ext_cfg = cfg.get("extensions", {})
+    ai_cfg = ext_cfg.get("ai_gateway", {})
+    mon_cfg = cfg.get("monitor", {})
+    sai_cfg = cfg.get("station_ai", {})
+    # Same "enabled AND configured" gate used by the silence/propagation/
+    # station-AI loops — this is the one number that answers "is AI actually
+    # able to be called right now", independent of any single feature toggle.
+    ai_ok = bool(ai_cfg.get("enabled")
+                and (ai_cfg.get("provider") or ai_cfg.get("base_url")))
     data = {
         "version": cfg_module.VERSION,
         "running": mgr.running,
@@ -1276,6 +1340,26 @@ async def info(request: web.Request) -> web.Response:
         "callsign": cfg.get("callsign", ""),
         "public_title": cfg.get("public_title", ""),
         "public_subtitle": cfg.get("public_subtitle", ""),
+        # Which modules are actually doing something right now — none of
+        # this is sensitive (no keys/paths), so it's exposed on the public
+        # app too. Kept separate from the "Running" action bar, which the
+        # public page hides entirely (it carries Start/Stop/Save commands).
+        "active": {
+            "ai": ai_ok,
+            "station_ai": bool(sai_cfg.get("enabled")) and ai_ok,
+            "silence_ai": ai_ok,
+            "prop_ai": ai_ok,
+            "repeater_monitor": bool(mon_cfg.get("enabled")
+                                      and cfg.get("repeater_db_path", "").strip()),
+            "full_feed": bool(cfg.get("full_feed")),
+            "extension_server": bool(cfg.get("extension_server", {}).get("enabled")),
+            "telegram": bool(ext_cfg.get("telegram", {}).get("enabled")),
+            "whatsapp": bool(ext_cfg.get("whatsapp", {}).get("enabled")),
+            "twitter": bool(ext_cfg.get("twitter", {}).get("enabled")),
+            "bluesky": bool(ext_cfg.get("bluesky", {}).get("enabled")),
+            "smtp": bool(ext_cfg.get("smtp", {}).get("enabled")),
+            "imap": bool(ext_cfg.get("imap", {}).get("enabled")),
+        },
     }
     if not request.app.get("public"):
         # The config file path is operator information — admin app only
