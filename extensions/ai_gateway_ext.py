@@ -182,6 +182,14 @@ class AIGateway(Extension):
                     base_url=base_url,
                     http_client=http_client,
                 )
+                extra_body = {}
+                if provider == "deepseek":
+                    # deepseek-v4-flash defaults to Thinking Mode on -- the
+                    # legacy "deepseek-chat" alias was this same model with
+                    # thinking off. Without this, the model can spend the
+                    # whole max_tokens budget on reasoning_content and never
+                    # reach an actual reply in content.
+                    extra_body["thinking"] = {"type": "disabled"}
                 resp = client.chat.completions.create(
                     model=model,
                     max_tokens=max_tokens,
@@ -189,6 +197,7 @@ class AIGateway(Extension):
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": question},
                     ],
+                    extra_body=extra_body,
                 )
                 return resp.choices[0].message.content.strip()
 

@@ -999,6 +999,15 @@ class AgentManager:
                 "max_tokens": 120,
                 "temperature": 0,
             }
+            if provider == "deepseek":
+                # deepseek-v4-flash defaults to Thinking Mode on -- the
+                # legacy "deepseek-chat"/"deepseek-reasoner" aliases were
+                # actually this same model with thinking off/on respectively.
+                # Without this, the model spends the whole max_tokens budget
+                # on reasoning_content and never reaches the actual JSON
+                # answer in content, which then fails to parse -- silently,
+                # since an empty/invalid response isn't an exception.
+                payload["thinking"] = {"type": "disabled"}
             url = base_url.rstrip("/") + "/chat/completions"
 
             headers = {"Content-Type": "application/json"}
