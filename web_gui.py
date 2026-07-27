@@ -605,6 +605,13 @@ class AgentManager:
                     self._log_both(f"[prop] AI assessment failed: {e}")
             if note:
                 self._prop_note_cache[region] = (note, now)
+                # Attach the note back onto the same dict objects living in
+                # station_db's _prop_links deque, so /api/prop (live) shows
+                # it too -- otherwise the AI call that generated it (real
+                # tokens spent) only ever reached the Telegram/email
+                # notification, never the map that prompted the question.
+                for l in ls:
+                    l["note"] = note
             max_km = max(l["km"] for l in ls)
             self._log_both(f"[prop] OPENING {region}: {len(ls)} links from "
                           f"{len(senders)} senders, max {max_km} km")

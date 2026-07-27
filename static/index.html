@@ -1398,12 +1398,22 @@ function renderProp(links,hist){
     if(!hist&&now-l.ts>PROP_SHOW_S)continue;
     const k=l.call+'|'+l.gate+'|'+l.ts;
     seen[k]=1;
-    if(propLines[k])continue;              // immutable once drawn
     const col=propColor(l.km);
-    const coords=[[l.s_lat,l.s_lon],[l.g_lat,l.g_lon]];
     const popupHtml='<b style="color:'+col+'">'+esc(l.call)+' ⇄ '+esc(l.gate)+'</b><br>'
         +l.km+' km · '+fmtAgoLong(Math.max(0,Math.floor(now-l.ts)))+'<br>'
+        +(l.note?'<span class="alert-ai">'+esc(l.note)+'</span><br>':'')
         +'<span style="opacity:.7">'+t('prop_link')+'</span>';
+    if(propLines[k]){
+      // Position/color are immutable once drawn, but the AI note can land
+      // after the initial draw (an opening event needs a 2nd sender before
+      // it's even assessed) -- refresh just the popup content in place.
+      if(propLines[k].note!==(l.note||'')){
+        propLines[k].hit.setPopupContent(popupHtml);
+        propLines[k].note=l.note||'';
+      }
+      continue;
+    }
+    const coords=[[l.s_lat,l.s_lon],[l.g_lat,l.g_lon]];
     // A thin dashed line is hard to point at precisely, so an invisible
     // wide line underneath does the actual hit-testing (click AND hover)
     // while the visible line on top stays visually unobtrusive.
@@ -1412,7 +1422,7 @@ function renderProp(links,hist){
       .on('mouseover',function(){this.openPopup()})
       .on('mouseout',function(){this.closePopup()});
     const vis=L.polyline(coords,{color:col,weight:3,opacity:.8,dashArray:'6 6',interactive:false}).addTo(map);
-    propLines[k]={hit:hit,vis:vis,remove:function(){map.removeLayer(hit);map.removeLayer(vis)}};
+    propLines[k]={hit:hit,vis:vis,note:l.note||'',remove:function(){map.removeLayer(hit);map.removeLayer(vis)}};
   }
   for(const k in propLines){
     if(!seen[k]){propLines[k].remove();delete propLines[k]}

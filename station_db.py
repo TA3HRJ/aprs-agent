@@ -152,7 +152,14 @@ def load_prop_history(path: str, ts: int,
                 "SELECT note, links FROM prop_history"
                 " WHERE ts BETWEEN ? AND ?", (ts - window_s, ts + window_s)):
             try:
-                links.extend(json.loads(raw or "[]"))
+                event_links = json.loads(raw or "[]")
+                if note:
+                    # The note is stored once per event (region+time), not
+                    # per link -- copy it onto each link dict so the map
+                    # popup can show it same as the live view does.
+                    for l in event_links:
+                        l["note"] = note
+                links.extend(event_links)
             except Exception:
                 pass
         return links
