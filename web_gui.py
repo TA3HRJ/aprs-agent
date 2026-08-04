@@ -367,6 +367,19 @@ class AgentManager:
         if sys.stderr is not sys.__stderr__:
             print(msg, file=sys.__stderr__)
 
+    @staticmethod
+    def _deepseek_peak_hour() -> bool:
+        """True during DeepSeek's announced peak-pricing windows (UTC
+        01:00-04:00 and 06:00-10:00), where every billing item costs 2x.
+        DeepSeek-specific -- callers must also check the active provider is
+        "deepseek", since no other provider has this pricing shape. The
+        effective date is "subject to official notice" per DeepSeek, so
+        this is dormant (never true in practice) until it actually starts,
+        at zero cost to check.
+        """
+        h = time.gmtime().tm_hour
+        return 1 <= h < 4 or 6 <= h < 10
+
     async def _agent_main(self) -> None:
         config = cfg_module.load_config(self.config_path)
 
@@ -479,8 +492,16 @@ class AgentManager:
         ai_ok = bool(ai_cfg.get("enabled")
                     and (ai_cfg.get("provider") or ai_cfg.get("base_url")))
 
+        deepseek = ai_cfg.get("provider") == "deepseek"
+
         await asyncio.sleep(900)   # let cadence baselines settle first
         while True:
+            # DeepSeek-only, and dormant until their peak-pricing actually
+            # starts (see _deepseek_peak_hour) -- re-checked every scan since
+            # the clock keeps moving, unlike ai_ok above which only changes
+            # on a restart.
+            peak = deepseek and self._deepseek_peak_hour()
+            effective_ai_ok = ai_ok and not peak
             try:
                 cells = self._station_db.silence_cells()
             except Exception:
@@ -503,11 +524,14 @@ class AgentManager:
                     self._log_both(f"[silence] {cell}: reusing cached AI "
                                    f"note (cooldown, "
                                    f"{int((_AI_NOTE_COOLDOWN_S - (now_ts - cached[1])) / 60)}m left)")
-                elif ai_ok:
+                elif effective_ai_ok:
                     try:
                         note = await self._assess_silence(c, ai_cfg)
                     except Exception as e:
                         self._log_both(f"[silence] AI assessment failed: {e}")
+                elif peak and ai_ok:
+                    self._log_both(f"[silence] {cell}: skipping AI assessment "
+                                   f"(DeepSeek peak-pricing window)")
                 if note:
                     self._silence_ai_notes[cell] = note
                     self._silence_note_cache[cell] = (note, now_ts)
@@ -554,14 +578,16 @@ class AgentManager:
 
             # ── Propagation openings (same 5-min cadence) ──
             try:
-                await self._prop_watch(channel, ai_ok, ai_cfg, config)
+                await self._prop_watch(channel, effective_ai_ok, ai_cfg, config,
+                                       peak_skipped=peak and ai_ok)
             except Exception as e:
                 self._log_both(f"[prop] watch error: {e}")
 
             await asyncio.sleep(300)
 
     async def _prop_watch(self, channel: str, ai_ok: bool,
-                          ai_cfg: dict, config: dict) -> None:
+                          ai_cfg: dict, config: dict,
+                          peak_skipped: bool = False) -> None:
         """Group recent anomalous RF links into opening events.
 
         One long link is never an event — a single misconfigured GPS can
@@ -603,6 +629,9 @@ class AgentManager:
                     note = await self._assess_prop(region, ls, ai_cfg)
                 except Exception as e:
                     self._log_both(f"[prop] AI assessment failed: {e}")
+            elif peak_skipped:
+                self._log_both(f"[prop] {region}: skipping AI assessment "
+                               f"(DeepSeek peak-pricing window)")
             if note:
                 self._prop_note_cache[region] = (note, now)
                 # Attach the note back onto the same dict objects living in
@@ -895,8 +924,17 @@ class AgentManager:
 
         # Initial delay: let the agent accumulate stations first
         await asyncio.sleep(600)
+        deepseek = ai_cfg.get("provider") == "deepseek"
 
         while True:
+            if deepseek and self._deepseek_peak_hour():
+                # A day-long interval is too coarse to just skip this cycle
+                # (would push the next run a full day out) -- wait out the
+                # peak window instead, then run as normal.
+                self._log_both("[station-ai] DeepSeek peak-pricing window — "
+                               "deferring batch until it ends")
+                while deepseek and self._deepseek_peak_hour():
+                    await asyncio.sleep(1200)
             batch = self._station_db.get_unanalyzed(max_batch)
             if batch:
                 print(f"[station-ai] Analysing {len(batch)} station(s)…", file=sys.stderr)
