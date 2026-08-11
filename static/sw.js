@@ -6,7 +6,15 @@
  *
  * Developed by TA3HRJ & TA3PKS
  */
-const CACHE = "aprs-agent-v4";
+// Bumping this name is what evicts every client's old entries: activate()
+// deletes each cache whose key differs. Bump it whenever a stale shell could
+// strand someone.
+const CACHE = "aprs-agent-v5";
+// A server that accepts the connection but never answers (which is exactly
+// how the v3.1.2 event-loop livelock presented) leaves fetch() hanging with
+// no timeout of its own, so the page spins forever instead of falling back
+// to a perfectly good cached shell.
+const SHELL_TIMEOUT_MS = 6000;
 const ICONS = ["/icon-192.png", "/icon-512.png", "/manifest.json", "/favicon.ico"];
 
 self.addEventListener("install", (e) => {
@@ -34,21 +42,34 @@ self.addEventListener("fetch", (e) => {
   if (url.pathname.startsWith("/api") || url.pathname.startsWith("/webhook") || url.pathname === "/ws") return;
 
   if (e.request.mode === "navigate" || url.pathname === "/") {
+    const net = fetch(e.request).then((r) => {
+      // Only cache a genuinely-loaded shell. Caching a 401 (Basic Auth not
+      // yet satisfied — happens on cold launches of the iOS Home-Screen
+      // standalone app) would trap every future offline fallback on that
+      // error page, with no browser chrome available in standalone mode to
+      // force a reload out of it.
+      //
+      // r.ok is NOT enough: an expired admin session answers 302 and the
+      // browser follows it to the login page, which arrives as a perfectly
+      // ok 200. Cached as the shell, that login page becomes what every
+      // later offline fallback serves — the same trap by a different door,
+      // which is why redirected responses are refused here.
+      if (r.ok && !r.redirected) {
+        const copy = r.clone();
+        caches.open(CACHE).then((c) => c.put("/", copy));
+      }
+      return r;
+    });
     e.respondWith(
-      fetch(e.request)
-        .then((r) => {
-          // Only cache a genuinely-loaded shell. Caching a 401 (Basic Auth
-          // not yet satisfied — happens on cold launches of the iOS
-          // Home-Screen standalone app) would trap every future offline
-          // fallback on that error page, with no browser chrome available
-          // in standalone mode to force a reload out of it.
-          if (r.ok) {
-            const copy = r.clone();
-            caches.open(CACHE).then((c) => c.put("/", copy));
-          }
-          return r;
-        })
-        .catch(() => caches.match("/"))
+      Promise.race([
+        net,
+        new Promise((_, rej) => setTimeout(() => rej(new Error("slow")), SHELL_TIMEOUT_MS)),
+      ]).catch(() =>
+        // Prefer a cached shell over waiting on a stalled server, but if
+        // nothing is cached keep waiting on the request already in flight
+        // rather than failing outright.
+        caches.match("/").then((hit) => hit || net)
+      )
     );
     return;
   }
