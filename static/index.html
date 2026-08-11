@@ -187,7 +187,13 @@ body.public .stat-bar .cell.diag{display:none!important}
    shrinks (also while scrubbing history), which moves the map's top edge —
    a top-anchored bar would drag the play button around under the cursor. */
 .map-timeline{position:absolute;left:8px;right:8px;bottom:8px;z-index:1000;display:flex;gap:10px;align-items:center;background:rgba(30,30,30,.88);padding:6px 12px;border-radius:6px}
-.map-timeline input[type=range]{flex:1;min-width:0;accent-color:#62a0ea;height:16px}
+/* The slider spans whatever history is stored — 1 day on a fresh server,
+   14 days on an old one — so it needs a scale, or a given pixel means
+   nothing. tl-wrap carries day gridlines behind the track. */
+.tl-wrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.tl-wrap input[type=range]{width:100%;min-width:0;accent-color:#62a0ea;height:16px;margin:0}
+.tl-ticks{height:4px;border-radius:2px;background:#3a3a3a;background-image:none}
+.tl-ends{display:flex;justify-content:space-between;font-size:9px;color:#999;font-family:'Consolas',monospace;line-height:1}
 .tl-btn{background:#3a3a3a;border:1px solid #555;color:#e8e8e8;border-radius:4px;width:26px;height:22px;font-size:11px;cursor:pointer;line-height:1}
 .tl-btn:hover{background:#4a4a4a}
 .tl-label{font-size:11px;color:#ccc;min-width:110px;text-align:right;font-family:'Consolas',monospace;white-space:nowrap;flex-shrink:0}
@@ -623,8 +629,12 @@ body.public .sb-toggle{display:none!important}
     </div>
     <div class="map-timeline" id="map-timeline" hidden>
       <button class="tl-btn" id="tl-play" onclick="tlPlay()">▶</button>
-      <input type="range" id="tl-slider" min="0" max="0" step="600" value="0"
-             oninput="tlScrub(parseInt(this.value))">
+      <div class="tl-wrap">
+        <input type="range" id="tl-slider" min="0" max="0" step="600" value="0"
+               oninput="tlScrubLive(parseInt(this.value))">
+        <div class="tl-ticks" id="tl-ticks"></div>
+        <div class="tl-ends"><span id="tl-start"></span><span id="tl-end"></span></div>
+      </div>
       <span class="tl-label" id="tl-label" data-i="tl_live">Live</span>
     </div>
     <div class="map-hint" id="map-hint" hidden data-i="map_offline">Map library could not be loaded — an internet connection is required for map tiles.</div>
@@ -892,6 +902,7 @@ function applyLang(){
   $('btn-lang').textContent=lbl;
   const pl=$('pub-lang');if(pl)pl.textContent=lbl;
   applyPubHdr();updCaption();renderModStatus();
+  if(typeof tlDrawScale==='function')tlDrawScale();   // "Live" end label
 }
 // Which modules are actually doing something right now (from /api/info's
 // "active" dict) — a compact, read-only badge row shown on both admin and
@@ -1300,7 +1311,31 @@ async function tlRefreshRange(){
     const s=$('tl-slider');
     s.min=tlRange.min;s.max=tlRange.max+600;   // extra step = "live" position
     if(tlLive)s.value=s.max;
+    tlDrawScale();
   }catch(e){}
+}
+// The slider covers whatever history is stored — about a day on a fresh
+// server, up to 14 on an established one — so without a scale the same
+// travel means a wildly different amount of time. Day gridlines plus the
+// oldest date make the span readable at a glance.
+function tlDrawScale(){
+  const ticks=$('tl-ticks'),startEl=$('tl-start'),endEl=$('tl-end');
+  if(!ticks||!tlRange)return;
+  const min=tlRange.min,max=tlRange.max+600,span=max-min;
+  const p2=n=>String(n).padStart(2,'0');
+  const fmtDay=ts=>{const d=new Date(ts*1000);return p2(d.getDate())+'.'+p2(d.getMonth()+1)};
+  if(startEl)startEl.textContent=span>0?fmtDay(min):'';
+  if(endEl)endEl.textContent=t('tl_live');
+  if(span<=0){ticks.style.backgroundImage='none';return}
+  const stops=[];
+  const d=new Date(min*1000);d.setHours(24,0,0,0);   // first local midnight
+  for(let tms=d.getTime();tms/1000<max;tms+=86400000){
+    const p=(tms/1000-min)/span*100;
+    stops.push('transparent '+p+'%','#8a8a8a '+p+'%',
+               '#8a8a8a '+(p+0.5)+'%','transparent '+(p+0.5)+'%');
+  }
+  ticks.style.backgroundImage=stops.length
+    ? 'linear-gradient(to right,'+stops.join(',')+')' : 'none';
 }
 function tlSetLabel(ts){
   const l=$('tl-label');
@@ -1308,6 +1343,19 @@ function tlSetLabel(ts){
   else{const d=new Date(ts*1000);const p2=n=>String(n).padStart(2,'0');
     l.textContent=p2(d.getDate())+'.'+p2(d.getMonth()+1)+' '+p2(d.getHours())+':'+p2(d.getMinutes())+' ('+t('tz_local')+')';
     l.classList.add('hist')}
+}
+// Called on every drag pixel. The label is updated straight from the slider
+// value — no network — so it tracks your finger exactly; the actual snapshot
+// load waits until the drag settles. Previously the label only moved once
+// the fetch came back, so it followed the network rather than the pointer
+// and landing on a chosen time was near impossible. It also fired two
+// requests per pixel of travel; now it fires two per settle.
+let tlDebounce=null;
+function tlScrubLive(v){
+  const s=$('tl-slider');
+  tlSetLabel(v>=parseInt(s.max)-1?null:v);
+  if(tlDebounce)clearTimeout(tlDebounce);
+  tlDebounce=setTimeout(function(){tlDebounce=null;tlScrub(v)},200);
 }
 async function tlScrub(v){
   const s=$('tl-slider');
@@ -1337,7 +1385,7 @@ function tlPlay(){
   tlTimer=setInterval(()=>{
     let v=parseInt(s.value)+600;
     if(v>=parseInt(s.max)){clearInterval(tlTimer);tlTimer=null;$('tl-play').textContent='▶';v=parseInt(s.max)}
-    s.value=v;tlScrub(v);
+    s.value=v;tlSetLabel(v>=parseInt(s.max)-1?null:v);tlScrub(v);
   },500);
 }
 // ── Silence overlay: Maidenhead cells where stations fell silent together ──
