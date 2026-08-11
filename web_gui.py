@@ -324,6 +324,18 @@ class AgentManager:
                         self._sta_db_path, "prop_episodes", "{}")))
             except Exception:
                 pass
+        # Missing stations are restored WITHOUT the checkpoint grace window
+        # the episodes above use. A station that never came back is a
+        # multi-day concern, and the whole point of tracking it is that it
+        # survives — including a restart, which is exactly when its cell may
+        # no longer be alerting and so would never re-flag it. Stale entries
+        # are self-correcting: the first scan drops anyone heard since.
+        try:
+            self._missing.update(json.loads(
+                station_db_module.load_meta(
+                    self._sta_db_path, "missing_stations", "{}")))
+        except Exception:
+            pass
         # AI-note cooldown cache: cell/region -> (note, generated_ts). A cell
         # that recovers and re-alerts minutes later doesn't need a fresh AI
         # read — the previous verdict is reused within _AI_NOTE_COOLDOWN_S,
@@ -444,6 +456,9 @@ class AgentManager:
                 json.dumps(self._prop_active))
             station_db_module.save_meta(
                 self._sta_db_path, "episodes_checkpoint_ts", str(time.time()))
+            station_db_module.save_meta(
+                self._sta_db_path, "missing_stations",
+                json.dumps(self._missing))
         except Exception as e:
             print(f"[station-db] uptime save failed: {e}", file=sys.__stderr__)
 
