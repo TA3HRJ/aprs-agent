@@ -790,7 +790,7 @@ const S={en:{
   sil_q_before:"{t} before",sil_q_after:"{t} after",
   sil_dl:"Raw data",sil_cp:"Copy as AI prompt",
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
-  sil_cp_fallback:"Clipboard unavailable — saved as a file instead.",
+  sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
   sil_prompt:"Below is machine-collected evidence about a possible APRS radio "
     +"network silence in Maidenhead grid cell {c}, exported from an APRS-Agent "
@@ -886,7 +886,7 @@ const S={en:{
   sil_q_before:"{t} önce",sil_q_after:"{t} sonra",
   sil_dl:"Ham veri",sil_cp:"AI istemi olarak kopyala",
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
-  sil_cp_fallback:"Pano kullanılamadı — dosya olarak kaydedildi.",
+  sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
   sil_prompt:"Aşağıda, bir APRS-Agent izleme istasyonundan alınmış, {c} "
     +"Maidenhead karesindeki olası bir APRS telsiz ağı sessizliğine ait makine "
@@ -1485,25 +1485,46 @@ function silToast(msg){
   d.className='sil-toast';d.textContent=msg;document.body.appendChild(d);
   setTimeout(()=>d.remove(),2200);
 }
-async function silEvidence(cell,asPrompt){
-  let d;
-  try{d=await api('GET','/api/silence/evidence?cell='+encodeURIComponent(cell))}
-  catch(e){silToast(t('sil_ev_err'));return}
-  if(d.error){silToast(d.error);return}
-  const stamp=new Date((d.generated_at||0)*1000).toISOString().slice(0,16).replace(/[:T]/g,'-');
-  const js=JSON.stringify(d,null,2);
-  const base='aprs-silence-'+cell+'-'+stamp;
-  if(!asPrompt){silSave(js,'application/json',base+'.json');return}
-  const text=t('sil_prompt').replace('{c}',cell)+'\n\n'+js;
-  try{
-    await navigator.clipboard.writeText(text);
-    silToast(t('sil_copied'));
-  }catch(e){
-    // The clipboard API needs a secure context; a plain-http visitor still
-    // gets the same text, as a file.
-    silSave(text,'text/plain',base+'.txt');
-    silToast(t('sil_cp_fallback'));
+function silBundle(cell,asPrompt){
+  return api('GET','/api/silence/evidence?cell='+encodeURIComponent(cell)).then(function(d){
+    if(d.error)throw new Error(d.error);
+    const js=JSON.stringify(d,null,2);
+    return {d:d,js:js,
+            name:'aprs-silence-'+cell+'-'
+                 +new Date((d.generated_at||0)*1000).toISOString().slice(0,16).replace(/[:T]/g,'-'),
+            text:asPrompt?(t('sil_prompt').replace('{c}',cell)+'\n\n'+js):js};
+  });
+}
+// A failed clipboard write leaves the PREVIOUS cell's bundle sitting in the
+// clipboard, and pasting that reads as valid data for the wrong grid rather
+// than as a failure. So a copy either succeeds or says plainly that it did
+// not — it never falls through quietly.
+function silCopyFallback(o){
+  return navigator.clipboard.writeText(o.text).then(function(){silToast(t('sil_copied'))})
+    .catch(function(){silSave(o.text,'text/plain',o.name+'.txt');silToast(t('sil_cp_fallback'))});
+}
+function silEvidence(cell,asPrompt){
+  const fail=function(e){silToast((e&&e.message)||t('sil_ev_err'))};
+  if(!asPrompt){
+    silBundle(cell,false)
+      .then(function(o){silSave(o.js,'application/json',o.name+'.json')}).catch(fail);
+    return;
   }
+  const pending=silBundle(cell,true);
+  // The write must be ISSUED inside the click gesture. Safari (iOS in
+  // particular) rejects writeText() once an await has broken the gesture
+  // chain — and because a rejected write is a no-op, the clipboard keeps
+  // whatever it held, so the next paste silently produces another cell's
+  // evidence. ClipboardItem takes a *promise* for exactly this case: the
+  // write is registered now and the fetch resolves it afterwards.
+  if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
+    navigator.clipboard.write([new ClipboardItem({'text/plain':
+        pending.then(function(o){return new Blob([o.text],{type:'text/plain'})})})])
+      .then(function(){silToast(t('sil_copied'))})
+      .catch(function(){pending.then(silCopyFallback).catch(fail)});
+    return;
+  }
+  pending.then(silCopyFallback).catch(fail);
 }
 // Active silence events, listed above the panel so a visitor sees them
 // without having to find and click a red square on the map.
