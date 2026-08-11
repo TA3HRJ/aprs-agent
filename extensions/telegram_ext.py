@@ -68,6 +68,7 @@ class Telegram(Extension):
         self._queue: Optional[asyncio.Queue] = None
         self._msg_counter = 0
         self._last_update_id = 0
+        self._poll_task: Optional[asyncio.Task] = None
 
         self.log(
             f"initialized | token={_mask(config['bot_token'])} "
@@ -94,8 +95,19 @@ class Telegram(Extension):
 
     def set_own_writer(self, q: asyncio.Queue) -> None:
         self._queue = q
-        if self._config.get("poll_enabled"):
-            asyncio.create_task(self._poll_loop())
+        # Called again on every APRS-IS reconnect (routine over a
+        # long-running process), not just once at startup. The poll loop
+        # itself doesn't depend on the APRS-IS connection at all -- it only
+        # talks to Telegram -- so a still-running loop from a previous
+        # connection is still perfectly good; spawning another one here
+        # unconditionally silently piled up duplicate long-polling loops
+        # every reconnect. Over 25 days of uptime that grew to ~16
+        # concurrent pollers, which exhausted the shared executor thread
+        # pool (every other run_in_executor call, including AI requests,
+        # queued behind them) and froze the whole API.
+        if self._config.get("poll_enabled") and (
+                self._poll_task is None or self._poll_task.done()):
+            self._poll_task = asyncio.create_task(self._poll_loop())
 
     async def _send_tg(self, text: str) -> None:
         cfg = self._config

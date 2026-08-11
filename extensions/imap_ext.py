@@ -85,6 +85,7 @@ class ImapReceiver(Extension):
         self._validate()
         self._queue: Optional[asyncio.Queue] = None
         self._msg_counter = 0
+        self._poll_task: Optional[asyncio.Task] = None
 
         server = config.get("imap_server", "")
         self.log(
@@ -114,7 +115,12 @@ class ImapReceiver(Extension):
 
     def set_own_writer(self, q: asyncio.Queue) -> None:
         self._queue = q
-        asyncio.create_task(self._poll_loop())
+        # Called again on every APRS-IS reconnect, not just once at startup
+        # -- guard against spawning a duplicate poll loop on top of one
+        # already running (see the identical fix + full explanation in
+        # telegram_ext.py's set_own_writer).
+        if self._poll_task is None or self._poll_task.done():
+            self._poll_task = asyncio.create_task(self._poll_loop())
 
     async def handle(self, line: str) -> Optional[bytes]:
         return None
