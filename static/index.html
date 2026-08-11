@@ -159,7 +159,11 @@ body.public .stat-bar .cell.diag{display:none!important}
 /* One-line "what is this tab" strip */
 .tab-caption{padding:6px 14px;background:rgba(28,113,216,.12);border-bottom:1px solid var(--border2);font-size:11px;color:#a9c8e0}
 /* Which modules are actually active — read-only, same on admin & public */
-.mod-status{display:flex;flex-wrap:wrap;gap:3px 10px;padding:5px 14px;border-bottom:1px solid var(--border2);font-size:10px}
+/* One line, always: wrapping turned a phone with six modules enabled into
+   three stacked rows of badges eating the map. Overflow scrolls instead. */
+.mod-status{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:3px 10px;padding:5px 14px;border-bottom:1px solid var(--border2);font-size:10px}
+.mod-status::-webkit-scrollbar{display:none}
+.mod-status .mb{flex-shrink:0}
 .mod-status .mb{display:flex;align-items:center;gap:4px;color:var(--dim)}
 .mod-status .mb .dot{width:6px;height:6px;border-radius:50%;background:#5a5a5a;flex-shrink:0}
 .mod-status .mb.on{color:var(--fg2)}
@@ -296,16 +300,23 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
 /* Phone layout: settings behind a ⚙ overlay, alerts collapsed to one line,
    stat bar wraps 4+4, compact timeline, no legend */
 .sb-toggle,.sb-close{display:none}
-.alert-sum{display:none;padding:7px 14px;background:rgba(224,27,36,.12);border-bottom:1px solid var(--border2);font-size:12px;color:#f88;cursor:pointer;user-select:none}
+/* Collapsible panel summaries. These used to be a phone-only trick, but the
+   panels cost the same screen on a laptop — two of them open together left
+   the map with a strip of what it should have. One line each by default at
+   every width now, click to expand, choice remembered. */
+.panel-sum{display:none;padding:7px 14px;border-bottom:1px solid var(--border2);font-size:12px;cursor:pointer;user-select:none}
+.panel-sum:not([hidden]){display:block}
+.alert-sum{background:rgba(224,27,36,.12);color:#f88}
+.miss-sum{background:rgba(245,194,17,.12);color:#f5c211}
+.alert-panel,.miss-panel{display:none}
+body.al-open .alert-panel:not([hidden]){display:block}
+body.ms-open .miss-panel:not([hidden]){display:block}
 body.public .sb-toggle{display:none!important}
 @media(max-width:700px){
   .sidebar{display:none}
   body.sb-open .sidebar{display:block;position:fixed;inset:0;z-index:4000;width:100%;max-width:none;max-height:none;overflow-y:auto;background:var(--sidebar)}
   .sb-toggle{display:block}
   .sb-close{display:inline-block;margin-left:auto}
-  .alert-sum:not([hidden]){display:block}
-  .alert-panel{display:none}
-  body.al-open .alert-panel:not([hidden]){display:block}
   .stat-bar{flex-wrap:wrap}
   .stat-bar .cell{flex:1 1 22%!important;min-width:0}
   .stat-bar .cell .v{font-size:14px}
@@ -539,11 +550,12 @@ body.public .sb-toggle{display:none!important}
   <div class="tab-caption" id="tab-caption" hidden></div>
   <!-- Active silence events (both views). On phones the row list collapses
        to this one-line summary; tapping it expands the full list. -->
-  <div class="alert-sum" id="alert-sum" hidden onclick="alSumToggle()"></div>
+  <div class="panel-sum alert-sum" id="alert-sum" hidden onclick="alSumToggle()"></div>
   <div class="alert-panel" id="alert-panel" hidden></div>
   <!-- Stations that never came back after an alert. Kept separate from the
        alert panel above on purpose: a cell stops alerting once enough of its
        stations recover, but the ones still missing are what matter most. -->
+  <div class="panel-sum miss-sum" id="miss-sum" hidden onclick="msSumToggle()"></div>
   <div class="miss-panel" id="miss-panel" hidden></div>
   <div class="log-view" id="log"></div>
 
@@ -763,7 +775,8 @@ const S={en:{
   map_offline:"Map library could not be loaded — an internet connection is required for map tiles.",
   sil_outage:"Regional silence (possible outage)",sil_igate:"IGate failure",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
-  al_sum:"{n} active silence alerts",
+  al_sum:"{n} active silence alerts",al_sum_one:"1 active silence alert",
+  miss_sum:"{n} stations still off the air",miss_sum_one:"1 station still off the air",
   miss_title:"Still off the air ({n})",
   miss_hint:"— no APRS signal since the time shown. Not a confirmed emergency.",
   miss_since:"no signal for",
@@ -845,7 +858,8 @@ const S={en:{
   map_offline:"Harita kütüphanesi yüklenemedi — harita karoları için internet bağlantısı gerekir.",
   sil_outage:"Bölgesel sessizlik (olası kesinti)",sil_igate:"IGate arızası",
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
-  al_sum:"{n} aktif sessizlik uyarısı",
+  al_sum:"{n} aktif sessizlik uyarısı",al_sum_one:"1 aktif sessizlik uyarısı",
+  miss_sum:"{n} istasyon hâlâ yayında değil",miss_sum_one:"1 istasyon hâlâ yayında değil",
   miss_title:"Hâlâ yayında değil ({n})",
   miss_hint:"— gösterilen saatten beri APRS sinyali yok. Teyit edilmiş bir acil durum değildir.",
   miss_since:"sinyal yok:",
@@ -1405,17 +1419,38 @@ function silPopup(c){
 }
 // Active silence events, listed above the panel so a visitor sees them
 // without having to find and click a red square on the map.
-function alSumToggle(){
-  document.body.classList.toggle('al-open');
-  const s=$('alert-sum');
-  if(s.textContent)s.textContent=s.textContent.slice(0,-1)+(document.body.classList.contains('al-open')?'▴':'▾');
+// Expanding a panel is a deliberate choice, so it survives a reload — an
+// operator watching an incident should not have to reopen it every time the
+// page comes back.
+function sumToggle(cls,sumId,key){
+  const on=document.body.classList.toggle(cls);
+  try{localStorage.setItem(key,on?'1':'0')}catch(e){}
+  const s=$(sumId);
+  if(s&&s.textContent)s.textContent=s.textContent.slice(0,-1)+(on?'▴':'▾');
+}
+function alSumToggle(){sumToggle('al-open','alert-sum','aprs.al')}
+function msSumToggle(){sumToggle('ms-open','miss-sum','aprs.ms')}
+function restorePanelState(){
+  try{
+    if(localStorage.getItem('aprs.al')==='1')document.body.classList.add('al-open');
+    if(localStorage.getItem('aprs.ms')==='1')document.body.classList.add('ms-open');
+  }catch(e){}
 }
 // Triage list: backend sorts by wall-clock time since the station was last
 // actually heard, longest first — that is the number a responder acts on.
 function renderMissing(list){
-  const p=$('miss-panel');
+  const p=$('miss-panel'),s=$('miss-sum');
   if(!p)return;
-  if(!list||!list.length){p.hidden=true;p.innerHTML='';return}
+  if(!list||!list.length){
+    p.hidden=true;p.innerHTML='';
+    if(s){s.hidden=true;s.textContent=''}
+    return;
+  }
+  if(s){
+    s.textContent='🟡 '+t(list.length===1?'miss_sum_one':'miss_sum').replace('{n}',list.length)
+      +(document.body.classList.contains('ms-open')?' ▴':' ▾');
+    s.hidden=false;
+  }
   const now=Date.now()/1000;
   let h='<div class="miss-head">'+t('miss_title').replace('{n}',list.length)
        +' <span class="miss-hint">'+t('miss_hint')+'</span></div>';
@@ -1437,7 +1472,7 @@ function renderAlerts(cells){
   const p=$('alert-panel');
   const s=$('alert-sum');
   if(!on.length){p.hidden=true;p.innerHTML='';s.hidden=true;return}
-  s.textContent='🔴 '+t('al_sum').replace('{n}',on.length)+(document.body.classList.contains('al-open')?' ▴':' ▾');
+  s.textContent='🔴 '+t(on.length===1?'al_sum_one':'al_sum').replace('{n}',on.length)+(document.body.classList.contains('al-open')?' ▴':' ▾');
   s.hidden=false;
   p.innerHTML='';
   for(const c of on){
@@ -1663,7 +1698,7 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch
     }
   }catch(e){}
   if(!window.PUBLIC){try{const cfg=await api('GET','/api/config');loadCfg(cfg)}catch(e){addLog('[web] Failed to load config\n')}}
-  connectWS();applyLang();
+  restorePanelState();connectWS();applyLang();
   pollSilence();setInterval(pollSilence,15000);
 })();
 </script>
