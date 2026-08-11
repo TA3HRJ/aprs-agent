@@ -1,5 +1,8 @@
 # APRS-Agent
 
+[![Release](https://img.shields.io/github/v/release/TA3HRJ/aprs-agent)](https://github.com/TA3HRJ/aprs-agent/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 An APRS-IS server agent with a graphical interface and extensible plugin system, written in Python.
 
 Connects to the global [APRS-IS](http://www.aprs2.net/) network and provides
@@ -19,6 +22,10 @@ and no admin endpoints exposed.
 > **Desktop GUI is feature-frozen as of v2.8.0.** It still works and is still
 > shipped, but new development happens in the **Web GUI**.
 > See [Desktop GUI — feature freeze](#desktop-gui--feature-freeze).
+
+This document describes the current release (see the badge above). For what
+changed between versions, see the
+[Releases](https://github.com/TA3HRJ/aprs-agent/releases) page.
 
 ---
 
@@ -151,7 +158,8 @@ First run creates a default `aprsconfig.toml` — enter your callsign and you're
 |------|-----------|---------|
 | 14580 | OUT | APRS-IS server (filtered) |
 | 10152 | OUT | APRS-IS full-feed (optional) |
-| 8080 | IN | Web GUI (aiohttp) |
+| 8080 | IN | Web GUI — admin (aiohttp) |
+| 8082 | IN | Public View — read-only page (if `public_port` is set) |
 | 65080 | IN | Extension Server (if enabled) |
 | 443 | OUT | Bluesky / AI API / WhatsApp / Telegram |
 | 587 | OUT | SMTP email |
@@ -225,6 +233,22 @@ repeater_db_path = "C:/path/to/repeaters.json"
 Once set, every station whose base callsign matches a DB record is automatically enriched —
 city, district, frequency, CTCSS tone, band, and mode are filled in without requiring a live packet.
 
+### Public View (read-only page)
+
+Serves a second, read-only web page on its own port: Live Log / Stations / Map only —
+no settings, no Start/Stop, no API keys, and the log stream filtered to packet lines.
+Admin endpoints are not registered on this port at all, so it is safe to forward to
+the internet while the admin port on 8080 stays local. Web GUI only.
+
+```toml
+public_port     = 8082    # 0 = disabled
+public_title    = ""      # header title    — empty = "APRS-Agent · CALLSIGN"
+public_subtitle = ""      # one-line description — empty = language-aware default
+```
+
+> ⚠️ Forward **only** this port. The admin port has no built-in authentication —
+> keep it on `127.0.0.1` or behind a reverse proxy with auth.
+
 ### Repeater Monitor
 
 Watches DB-matched repeaters and sends a notification when one goes offline or comes back online.
@@ -241,7 +265,14 @@ silence_grids       = []             # Maidenhead fields silence detection is sc
 silence_digest_mins = 0              # batch silence alerts into one combined message
                                      # every N minutes (0 = send each alert immediately;
                                      # recommended for worldwide monitoring)
+prop_notify_grids   = []             # Maidenhead fields a band-opening NOTIFICATION is
+                                     # limited to — matches if EITHER end of a link falls
+                                     # in them (empty = notify on every opening worldwide)
 ```
+
+> `prop_notify_grids` scopes only the Telegram/email message — the map and the
+> timeline always show every opening worldwide. Leaving it empty while running the
+> full world feed will notify on openings anywhere on the planet.
 
 Notification example:
 ```
@@ -582,6 +613,7 @@ aprs-agent/
 ├── aprs_agent.spec              # PyInstaller build spec (CLI + GUI + Web)
 ├── aprs-symbols-24-0.png        # APRS symbol sprites — primary table
 ├── aprs-symbols-24-1.png        # APRS symbol sprites — alternate table
+├── aprs-symbols-24-2.png        # APRS symbol sprites — overlay characters
 ├── HELP.html                    # User guide (bilingual EN/TR)
 ├── requirements.txt             # Python dependencies
 └── LICENSE                      # MIT License
