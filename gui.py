@@ -2394,7 +2394,11 @@ class APRSAgentGUI:
     def _load_config_to_form(self) -> None:
         try:
             cfg = cfg_module.load_config(self._cfg_path_var.get())
-        except SystemExit:
+        except cfg_module.ConfigError:
+            # Show the form with defaults rather than an empty window; the
+            # operator can then point at a different file. Saving is blocked
+            # separately (see _save_config) so this can't overwrite the
+            # unparseable file with defaults.
             import copy
             cfg = copy.deepcopy(cfg_module.DEFAULTS)
 
@@ -2714,7 +2718,8 @@ class APRSAgentGUI:
             self._cfg_path_var.set(path)
             self._load_config_to_form()
 
-    def _save_config(self) -> None:
+    def _save_config(self) -> bool:
+        """Write the config. Returns False (and reports) if nothing was saved."""
         try:
             path = self._cfg_path_var.get()
             # Merge onto the full on-disk config rather than writing the
@@ -2726,13 +2731,20 @@ class APRSAgentGUI:
             # seen once this session with a raw tomli_w.dump().
             try:
                 base_cfg = cfg_module.load_config(path)
-            except Exception:
-                base_cfg = {}
+            except cfg_module.ConfigError as e:
+                # Refuse to write. Merging onto an empty base would drop
+                # every setting this GUI has no field for — the exact data
+                # loss the merge exists to prevent — and the operator would
+                # never know, since the file "saved successfully".
+                messagebox.showerror("Error", self._t("save_err").format(e))
+                return False
             cfg = cfg_module._deep_merge(base_cfg, self._form_to_config())
             cfg_module.sync_config_to_file(cfg, path)
             self._log(self._t("save_ok"), "green")
+            return True
         except Exception as e:
             messagebox.showerror("Error", self._t("save_err").format(e))
+            return False
 
     def _start_agent(self) -> None:
         if self._runner.running:
@@ -2741,15 +2753,21 @@ class APRSAgentGUI:
         if not cs or cs == "N0CALL":
             messagebox.showwarning("", self._t("no_callsign"))
             return
-        self._save_config()
+        if not self._save_config():
+            return          # config unreadable — already reported, don't start
         # Re-read from disk (not _form_to_config() again) so the running
         # agent gets fields this GUI has no form for too — per-provider AI
         # keys above all, or AI Gateway calls silently fail with no key even
         # though one is configured (just not in this GUI's flat field).
         try:
             cfg = cfg_module.load_config(self._cfg_path_var.get())
-        except Exception:
-            cfg = self._form_to_config()
+        except cfg_module.ConfigError as e:
+            # Falling back to the form dict would start the agent
+            # half-configured (no per-provider api_keys, no public port…),
+            # which fails later in ways that are much harder to trace back
+            # to a config typo.
+            messagebox.showerror("Error", self._t("save_err").format(e))
+            return
         # Station records persist across restarts (SQLite) — no reset here.
         db_path = self._v_repeater_db.get().strip()
         if db_path:

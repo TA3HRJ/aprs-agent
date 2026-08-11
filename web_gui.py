@@ -381,7 +381,15 @@ class AgentManager:
         return 1 <= h < 4 or 6 <= h < 10
 
     async def _agent_main(self) -> None:
-        config = cfg_module.load_config(self.config_path)
+        try:
+            config = cfg_module.load_config(self.config_path)
+        except cfg_module.ConfigError as e:
+            # Runs on the agent thread: raising here would kill it silently,
+            # leaving the UI showing "Running" with nothing behind it.
+            self._log_both(f"[config] {e}")
+            self._log_both("[config] Agent not started — fix the config file "
+                           "and press Start again.")
+            return
 
         ExtensionRegistry.clear()
 
@@ -1742,12 +1750,12 @@ async def on_startup(app: web.Application) -> None:
     mgr: AgentManager = app["manager"]
     app["log_task"] = asyncio.create_task(mgr.broadcast_logs())
     app["persist_task"] = asyncio.create_task(_persist_loop(mgr))
-    # Optional read-only public server on a separate port.
-    # load_config() calls sys.exit on a broken file — catch SystemExit too so
-    # a config problem can't silently kill the whole web app at startup.
+    # Optional read-only public server on a separate port. A broken config
+    # raises ConfigError; the admin app must still come up so the operator
+    # can see the error and fix the file.
     try:
         pport = int(mgr.get_config().get("public_port", 0) or 0)
-    except (Exception, SystemExit):
+    except Exception:
         pport = 0
     if pport:
         prunner = web.AppRunner(_build_public_app(mgr))

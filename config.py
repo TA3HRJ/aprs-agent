@@ -20,7 +20,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.0.8"
+VERSION = "3.0.9"
 
 # tomllib is built-in from Python 3.11 onwards.
 # For older Python versions, install the 'tomli' package.
@@ -203,6 +203,18 @@ DEFAULTS: dict[str, Any] = {
 }
 
 
+class ConfigError(Exception):
+    """A config file exists but could not be parsed.
+
+    Raised instead of calling sys.exit() so that callers which are not a
+    short-lived CLI -- the Desktop GUI's Save/Start buttons, the Web GUI's
+    request handlers -- can report the problem and carry on. SystemExit
+    derives from BaseException, so an ordinary `except Exception` around
+    load_config() would NOT have caught it: a single typo in the TOML took
+    the whole Desktop GUI down with no message.
+    """
+
+
 def resolve_ai_api_key(ai_cfg: dict[str, Any], provider: str) -> str:
     """The AI Gateway API key for `provider`, from the per-provider
     api_keys dict — falling back to the legacy flat api_key field for
@@ -273,8 +285,8 @@ def load_config(config_path: str) -> dict[str, Any]:
         with open(path, "rb") as f:
             user_config = tomllib.load(f)
     except Exception as e:
-        print(f"ERROR: Failed to parse config file '{config_path}': {e}", file=sys.stderr)
-        sys.exit(1)
+        raise ConfigError(
+            f"Failed to parse config file '{config_path}': {e}") from e
 
     # Merge user config over defaults so missing keys get default values
     return _deep_merge(DEFAULTS, user_config)

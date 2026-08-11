@@ -150,7 +150,13 @@ async def main() -> None:
         cfg_module.write_default_config(args.config)
         return
 
-    config = cfg_module.load_config(args.config)
+    try:
+        config = cfg_module.load_config(args.config)
+    except cfg_module.ConfigError as e:
+        # load_config() used to sys.exit(1) itself; for the CLI that is still
+        # the right response, so keep it here where it belongs.
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
 
     if args.print_config:
         cfg_module.print_config(config)
