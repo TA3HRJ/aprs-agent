@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import gzip
 import json
+import math
 import queue
 import re
 import sys
@@ -237,6 +238,30 @@ def _cell_quakes(cell: str, since_ts: "float | None") -> list:
     lat = (b[0][0] + b[1][0]) / 2.0
     lon = (b[0][1] + b[1][1]) / 2.0
     return _quakes_near(lat, lon, since_ts)
+
+
+def _quake_evidence(c: dict) -> list:
+    """Quake candidates carrying the two fields the map popup never showed:
+    how long before the silence each one happened, and its hypocentral
+    (slant) distance, which accounts for depth.
+
+    Both are already computable from what we store; neither reaches the
+    operator. The time offset in particular is what separates "10 minutes
+    before" from "20 hours before" — the difference between causation and
+    coincidence.
+    """
+    out = []
+    since = c.get("since")
+    for q in _cell_quakes(c["cell"], since):
+        e = dict(q)
+        if since:
+            # Positive = the quake happened before the silence began.
+            e["offset_s"] = int(since - q["ts"])
+        depth = q.get("depth_km")
+        if depth is not None:
+            e["hypocentral_km"] = int(round(math.hypot(q["dist_km"], depth)))
+        out.append(e)
+    return out
 
 
 def _fmt_quake(q: dict) -> str:
@@ -1788,6 +1813,98 @@ async def get_silence(request: web.Request) -> web.Response:
     return web.json_response({"cells": cells})
 
 
+@routes.get("/api/silence/evidence")
+async def get_silence_evidence(request: web.Request) -> web.Response:
+    """Everything behind one silence cell's map popup, as a portable bundle.
+
+    The popup carries a one-line note from whatever cheap model can afford to
+    run automatically over every alerting cell, while the detail that produced
+    it exists nowhere but this server. That caps the quality of any reading of
+    this data at what the server can pay for, at scale, unattended.
+
+    Exporting the evidence lifts that cap: whoever cares about a given cell can
+    re-run the analysis on their own model, on demand, at their cost — which is
+    exactly what was done by hand for the Colombia M7.4 case. The bundle is
+    self-describing (schema, provenance, detection parameters, generation time)
+    so it stays judgeable once it has travelled away from here.
+    """
+    mgr: AgentManager = request.app["manager"]
+    cell = (request.query.get("cell") or "").strip().upper()
+    if not cell:
+        return web.json_response({"error": "cell parameter required"},
+                                 status=400)
+    try:
+        cells = mgr._station_db.silence_cells()
+    except Exception:
+        cells = []
+    c = next((x for x in cells if x["cell"] == cell), None)
+    if c is None:
+        return web.json_response({"error": f"no current silence data for {cell}"},
+                                 status=404)
+
+    episode_start = mgr._silence_active.get(cell)
+    if c["alert"] and episode_start:
+        c["since"] = int(episode_start)
+
+    try:
+        state = mgr._station_db.silence_state(c["silent_calls"])
+    except Exception:
+        state = {}
+    now = int(time.time())
+    stations = []
+    for call in c["silent_calls"]:
+        st = state.get(call)
+        if not st:
+            stations.append({"call": call, "detail": "no longer tracked"})
+            continue
+        stations.append({**st, "silent_for_s": max(0, now - st["last_seen"])})
+
+    try:
+        cfg = mgr.get_config()
+    except (Exception, SystemExit):
+        cfg = {}
+    ai_cfg = cfg.get("extensions", {}).get("ai_gateway", {})
+    note = mgr._silence_ai_notes.get(cell, "")
+
+    return web.json_response({
+        "schema": "aprs-agent.silence-evidence/1",
+        "generated_at": now,
+        "generated_by": {
+            "app": "APRS-Agent", "version": cfg_module.VERSION,
+            "station": cfg.get("callsign", ""),
+        },
+        "cell": c,
+        "stations": stations,
+        "quakes": _quake_evidence(c),
+        "assessment": {
+            "note": note,
+            "automated": True,
+            "provider": ai_cfg.get("provider", "") if note else "",
+            "model": ai_cfg.get("model", "") if note else "",
+        },
+        # What selected this cell in the first place. Without it an outside
+        # reader cannot tell a 3-of-3 cell (one igate, one power strip) from
+        # a 40-of-60 one, and would weigh them the same.
+        "detection": {
+            "min_silent": 3, "min_ratio": 0.5,
+            "station_silent_rule": "gap > 3x the station's own smoothed "
+                                   "beacon interval, minimum 15 minutes",
+            "quake_radius_km": _QUAKE_RADIUS_KM,
+            "quake_window_s": _QUAKE_WINDOW_S,
+        },
+        "caveats": [
+            "Point-in-time snapshot: the cell may have recovered since "
+            "generated_at.",
+            "A quake within the search radius is a candidate, not a cause. "
+            "Weigh offset_s: a long gap between quake and silence is "
+            "coincidence, not causation.",
+            "No APRS signal is a weak welfare signal, not a confirmed "
+            "emergency. Stations go quiet for ordinary reasons.",
+            "The assessment note is machine-generated and unreviewed.",
+        ],
+    })
+
+
 @routes.get("/api/missing")
 async def get_missing(request: web.Request) -> web.Response:
     """Stations still off the air after being caught in a silence alert.
@@ -1924,6 +2041,11 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/api/stations", get_stations),
         web.get("/api/stations/{callsign}", get_station),
         web.get("/api/silence", get_silence),
+        # The evidence behind a popup, for re-analysis elsewhere. Built from
+        # the same facts /api/silence and /api/missing already serve, plus the
+        # detection parameters and the provider/model name behind the shown
+        # note — no keys, no paths, no config.
+        web.get("/api/silence/evidence", get_silence_evidence),
         # Same facts /api/silence already exposes (callsigns, positions,
         # silence times), just organised for triage — nothing new is revealed.
         web.get("/api/missing", get_missing),

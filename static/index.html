@@ -187,6 +187,12 @@ body.public .stat-bar .cell.diag{display:none!important}
 .miss-dur{color:#f88;font-variant-numeric:tabular-nums}
 .miss-meta{color:var(--dim)}
 .sil-quake{color:#f5c211;font-size:11px}
+/* Evidence actions sit at the foot of the popup, under a rule: they are about
+   the popup's data, not more of it. */
+.sil-ev{margin-top:6px;padding-top:5px;border-top:1px solid #454545;display:flex;gap:10px;font-size:11px}
+.sil-ev a{color:#99c1f1;cursor:pointer;text-decoration:none}
+.sil-ev a:hover{text-decoration:underline}
+.sil-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:6000;background:#2a2a2a;color:#e3e3e3;border:1px solid #555;border-radius:6px;padding:8px 14px;font-size:12px;box-shadow:0 3px 12px rgba(0,0,0,.5)}
 /* Anchored to the map's BOTTOM edge: the alert panel above the map grows and
    shrinks (also while scrubbing history), which moves the map's top edge —
    a top-anchored bar would drag the play button around under the cursor. */
@@ -200,10 +206,16 @@ body.public .stat-bar .cell.diag{display:none!important}
 .tl-ends{display:flex;justify-content:space-between;font-size:9px;color:#999;font-family:'Consolas',monospace;line-height:1}
 .tl-btn{background:#3a3a3a;border:1px solid #555;color:#e8e8e8;border-radius:4px;width:26px;height:22px;font-size:11px;cursor:pointer;line-height:1}
 .tl-btn:hover{background:#4a4a4a}
-.tl-label{font-size:11px;color:#ccc;min-width:110px;text-align:right;font-family:'Consolas',monospace;white-space:nowrap;flex-shrink:0}
+/* Above the track, on its own line, deliberately NOT beside it: the text
+   swings between "Live" and a full timestamp, and as a flex sibling of the
+   track that swing was subtracted from the track's own width — the control
+   resized under the finger mid-drag, moving the point being aimed at. On its
+   own line the track's width no longer depends on what the label says. */
+.tl-label{font-size:11px;color:#ccc;text-align:center;font-family:'Consolas',monospace;white-space:nowrap;line-height:1.2;height:13px}
 .tl-label.hist{color:#f5c211}
-/* Lift the attribution above the bottom-anchored timeline bar */
-.leaflet-bottom.leaflet-right{margin-bottom:42px}
+/* Lift the attribution above the bottom-anchored timeline bar (which carries
+   the label row above the track, so it is one line taller than the control) */
+.leaflet-bottom.leaflet-right{margin-bottom:56px}
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#2a2a2a;color:#e8e8e8}
 /* Scrollable (maxHeight-capped) popups: Leaflet's default light borders */
 .leaflet-popup-scrolled{border-top:1px solid #454545;border-bottom:1px solid #454545}
@@ -322,7 +334,7 @@ body.public .sb-toggle{display:none!important}
   .stat-bar .cell .v{font-size:14px}
   .stat-bar .cell .l{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .map-timeline{gap:6px;padding:4px 8px}
-  .tl-label{min-width:0;font-size:10px}
+  .tl-label{font-size:10px;height:12px}
   .map-legend{display:none}
   .tab-btn{padding:10px 12px;font-size:12px;white-space:nowrap;min-height:44px}
   /* Sekmeler + ⚙ tek satırda kalır; log sayacı/Clear/Auto Scroll (yalnızca
@@ -642,12 +654,12 @@ body.public .sb-toggle{display:none!important}
     <div class="map-timeline" id="map-timeline" hidden>
       <button class="tl-btn" id="tl-play" onclick="tlPlay()">▶</button>
       <div class="tl-wrap">
+        <span class="tl-label" id="tl-label" data-i="tl_live">Live</span>
         <input type="range" id="tl-slider" min="0" max="0" step="600" value="0"
                oninput="tlScrubLive(parseInt(this.value))">
         <div class="tl-ticks" id="tl-ticks"></div>
         <div class="tl-ends"><span id="tl-start"></span><span id="tl-end"></span></div>
       </div>
-      <span class="tl-label" id="tl-label" data-i="tl_live">Live</span>
     </div>
     <div class="map-hint" id="map-hint" hidden data-i="map_offline">Map library could not be loaded — an internet connection is required for map tiles.</div>
   </div>
@@ -775,6 +787,19 @@ const S={en:{
   map_offline:"Map library could not be loaded — an internet connection is required for map tiles.",
   sil_outage:"Regional silence (possible outage)",sil_igate:"IGate failure",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
+  sil_q_before:"{t} before",sil_q_after:"{t} after",
+  sil_dl:"Raw data",sil_cp:"Copy as AI prompt",
+  sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
+  sil_cp_fallback:"Clipboard unavailable — saved as a file instead.",
+  sil_ev_err:"Could not fetch the evidence for this cell.",
+  sil_prompt:"Below is machine-collected evidence about a possible APRS radio "
+    +"network silence in Maidenhead grid cell {c}, exported from an APRS-Agent "
+    +"monitoring station. Assess the most likely cause and say how confident "
+    +"you are.\n\nRead the \"detection\" block before weighing the cluster: it "
+    +"says what selected these stations. Earthquake entries are candidates, "
+    +"not established causes — check offset_s (seconds between the quake and "
+    +"the start of the silence) before linking one to the outage. No APRS "
+    +"signal is a weak welfare signal, not a confirmed emergency.",
   al_sum:"{n} active silence alerts",al_sum_one:"1 active silence alert",
   miss_sum:"{n} stations still off the air",miss_sum_one:"1 station still off the air",
   miss_title:"Still off the air ({n})",
@@ -858,6 +883,20 @@ const S={en:{
   map_offline:"Harita kütüphanesi yüklenemedi — harita karoları için internet bağlantısı gerekir.",
   sil_outage:"Bölgesel sessizlik (olası kesinti)",sil_igate:"IGate arızası",
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
+  sil_q_before:"{t} önce",sil_q_after:"{t} sonra",
+  sil_dl:"Ham veri",sil_cp:"AI istemi olarak kopyala",
+  sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
+  sil_cp_fallback:"Pano kullanılamadı — dosya olarak kaydedildi.",
+  sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
+  sil_prompt:"Aşağıda, bir APRS-Agent izleme istasyonundan alınmış, {c} "
+    +"Maidenhead karesindeki olası bir APRS telsiz ağı sessizliğine ait makine "
+    +"toplaması veriler var. En olası nedeni değerlendir ve ne kadar emin "
+    +"olduğunu belirt.\n\nKümeyi tartmadan önce \"detection\" bloğunu oku: bu "
+    +"istasyonları neyin seçtiğini oradan görürsün. Deprem kayıtları aday "
+    +"nedenlerdir, kanıtlanmış neden değil — birini kesintiyle "
+    +"ilişkilendirmeden önce offset_s alanına bak (deprem ile sessizliğin "
+    +"başlangıcı arasındaki saniye farkı). APRS sinyalinin olmaması zayıf bir "
+    +"iyilik-hali işaretidir, teyit edilmiş bir acil durum değildir.",
   al_sum:"{n} aktif sessizlik uyarısı",al_sum_one:"1 aktif sessizlik uyarısı",
   miss_sum:"{n} istasyon hâlâ yayında değil",miss_sum_one:"1 istasyon hâlâ yayında değil",
   miss_title:"Hâlâ yayında değil ({n})",
@@ -1411,11 +1450,60 @@ function silPopup(c){
   if(c.since)h+=t('sil_since')+' '+fmtAgoLong(Math.max(0,Math.floor(Date.now()/1000-c.since)))+'<br>';
   h+='<span style="opacity:.7;font-size:11px">'+c.silent_calls.join(', ')+'</span>';
   if(c.quakes)for(const q of c.quakes){
-    h+='<br><span class="sil-quake">🌍 M'+q.mag+' · '+q.dist_km+' km'
+    // The time offset is the field that decides whether a quake is a cause or
+    // a coincidence, and it was the one field missing here: an operator saw
+    // "M4.5 · 187 km" beside an outage and linked them, when the quake had
+    // happened 20 hours earlier. Detection casts a deliberately wide net and
+    // leaves the judging to a reader — who cannot judge without this.
+    let when='';
+    if(c.since&&q.ts){
+      const d=Math.round(c.since-q.ts);
+      when=' · '+t(d>=0?'sil_q_before':'sil_q_after').replace('{t}',fmtAgoLong(Math.abs(d)));
+    }
+    h+='<br><span class="sil-quake">🌍 M'+q.mag+' · '+q.dist_km+' km'+when
       +(q.place?' · '+esc(q.place):'')+'</span>';
   }
   if(c.ai_note)h+='<br><span style="color:#8ff0a4;font-size:11px">AI: '+c.ai_note+'</span>';
+  h+='<div class="sil-ev"><a onclick="silEvidence(\''+c.cell+'\',0)">⬇ '+t('sil_dl')
+    +'</a><a onclick="silEvidence(\''+c.cell+'\',1)">📋 '+t('sil_cp')+'</a></div>';
   return h;
+}
+// ── Evidence export ────────────────────────────────────────────────────────
+// The note above comes from whatever model is cheap enough to run unattended
+// over every alerting cell, and the detail behind it exists only on the
+// server — so that one line is also the ceiling on how well anyone can read
+// this cell. Handing over the raw bundle removes the ceiling: a visitor
+// re-runs the analysis on their own model, at their cost, when they care
+// enough about a particular cell to bother.
+function silSave(text,type,name){
+  const u=URL.createObjectURL(new Blob([text],{type:type})),a=document.createElement('a');
+  a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+function silToast(msg){
+  const d=document.createElement('div');
+  d.className='sil-toast';d.textContent=msg;document.body.appendChild(d);
+  setTimeout(()=>d.remove(),2200);
+}
+async function silEvidence(cell,asPrompt){
+  let d;
+  try{d=await api('GET','/api/silence/evidence?cell='+encodeURIComponent(cell))}
+  catch(e){silToast(t('sil_ev_err'));return}
+  if(d.error){silToast(d.error);return}
+  const stamp=new Date((d.generated_at||0)*1000).toISOString().slice(0,16).replace(/[:T]/g,'-');
+  const js=JSON.stringify(d,null,2);
+  const base='aprs-silence-'+cell+'-'+stamp;
+  if(!asPrompt){silSave(js,'application/json',base+'.json');return}
+  const text=t('sil_prompt').replace('{c}',cell)+'\n\n'+js;
+  try{
+    await navigator.clipboard.writeText(text);
+    silToast(t('sil_copied'));
+  }catch(e){
+    // The clipboard API needs a secure context; a plain-http visitor still
+    // gets the same text, as a file.
+    silSave(text,'text/plain',base+'.txt');
+    silToast(t('sil_cp_fallback'));
+  }
 }
 // Active silence events, listed above the panel so a visitor sees them
 // without having to find and click a red square on the map.
