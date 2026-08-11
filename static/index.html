@@ -173,6 +173,16 @@ body.public .stat-bar .cell.diag{display:none!important}
 .alert-cell.ig{color:#f5c211}
 .alert-txt{color:var(--fg2)}
 .alert-ai{color:#8ff0a4}
+/* Stations still off the air after an alert — triage order, longest first */
+.miss-panel{max-height:132px;overflow-y:auto;border-bottom:1px solid var(--border2);background:rgba(245,194,17,.07)}
+.miss-head{padding:5px 14px 3px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#f5c211}
+.miss-hint{text-transform:none;letter-spacing:0;color:var(--dim);font-weight:400}
+.miss-row{display:flex;gap:8px;align-items:baseline;padding:5px 14px;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px}
+.miss-row:last-child{border-bottom:none}
+.miss-call{font-weight:600;color:#f5c211;font-family:'Consolas',monospace}
+.miss-dur{color:#f88;font-variant-numeric:tabular-nums}
+.miss-meta{color:var(--dim)}
+.sil-quake{color:#f5c211;font-size:11px}
 /* Anchored to the map's BOTTOM edge: the alert panel above the map grows and
    shrinks (also while scrubbing history), which moves the map's top edge —
    a top-anchored bar would drag the play button around under the cursor. */
@@ -525,6 +535,10 @@ body.public .sb-toggle{display:none!important}
        to this one-line summary; tapping it expands the full list. -->
   <div class="alert-sum" id="alert-sum" hidden onclick="alSumToggle()"></div>
   <div class="alert-panel" id="alert-panel" hidden></div>
+  <!-- Stations that never came back after an alert. Kept separate from the
+       alert panel above on purpose: a cell stops alerting once enough of its
+       stations recover, but the ones still missing are what matter most. -->
+  <div class="miss-panel" id="miss-panel" hidden></div>
   <div class="log-view" id="log"></div>
 
   <!-- STATIONS PANEL -->
@@ -740,6 +754,9 @@ const S={en:{
   sil_outage:"Regional silence (possible outage)",sil_igate:"IGate failure",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
   al_sum:"{n} active silence alerts",
+  miss_title:"Still off the air ({n})",
+  miss_hint:"— no APRS signal since the time shown. Not a confirmed emergency.",
+  miss_since:"no signal for",
   leg_prop1:"Opening < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
   prop_link:"Realised RF link — possible band opening",
   tl_live:"Live",tz_local:"local",
@@ -819,6 +836,9 @@ const S={en:{
   sil_outage:"Bölgesel sessizlik (olası kesinti)",sil_igate:"IGate arızası",
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
   al_sum:"{n} aktif sessizlik uyarısı",
+  miss_title:"Hâlâ yayında değil ({n})",
+  miss_hint:"— gösterilen saatten beri APRS sinyali yok. Teyit edilmiş bir acil durum değildir.",
+  miss_since:"sinyal yok:",
   leg_prop1:"Açılma < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
   prop_link:"Gerçekleşmiş RF linki — olası bant açılması",
   tl_live:"Canlı",tz_local:"yerel",
@@ -865,6 +885,9 @@ function applyLang(){
       if(S[lang]&&S[lang][k])opt.textContent=S[lang][k];
     }
   });
+  // Tell the browser which language it is casing, so CSS text-transform
+  // uppercase follows Turkish rules: i→İ, not i→I ("DEĞIL" vs "DEĞİL").
+  document.documentElement.lang=lang;
   const lbl=lang==='en'?'TR':'EN';
   $('btn-lang').textContent=lbl;
   const pl=$('pub-lang');if(pl)pl.textContent=lbl;
@@ -1091,6 +1114,7 @@ async function fetchStations(){
 async function pollSilence(){
   if(!tlLive)return;          // timeline is showing a past snapshot
   try{const s=await api('GET','/api/silence');renderSilence(s.cells||[])}catch(e){}
+  try{const m=await api('GET','/api/missing');renderMissing(m.missing||[])}catch(e){}
 }
 function fmtAgoLong(s){if(s===null||s===undefined)return'—';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';const h=Math.floor(s/3600);return h+'h '+String(Math.floor(s%3600/60)).padStart(2,'0')+'m'}
 function fmtFreq(f){if(!f&&f!==0)return'';return parseFloat(f).toFixed(4)}
@@ -1324,6 +1348,10 @@ function silPopup(c){
   h+=t('sil_stats').replace('{s}',c.silent).replace('{b}',c.baseline)+' ('+Math.round(c.ratio*100)+'%)<br>';
   if(c.since)h+=t('sil_since')+' '+fmtAgoLong(Math.max(0,Math.floor(Date.now()/1000-c.since)))+'<br>';
   h+='<span style="opacity:.7;font-size:11px">'+c.silent_calls.join(', ')+'</span>';
+  if(c.quakes)for(const q of c.quakes){
+    h+='<br><span class="sil-quake">🌍 M'+q.mag+' · '+q.dist_km+' km'
+      +(q.place?' · '+esc(q.place):'')+'</span>';
+  }
   if(c.ai_note)h+='<br><span style="color:#8ff0a4;font-size:11px">AI: '+c.ai_note+'</span>';
   return h;
 }
@@ -1333,6 +1361,28 @@ function alSumToggle(){
   document.body.classList.toggle('al-open');
   const s=$('alert-sum');
   if(s.textContent)s.textContent=s.textContent.slice(0,-1)+(document.body.classList.contains('al-open')?'▴':'▾');
+}
+// Triage list: backend sorts by wall-clock time since the station was last
+// actually heard, longest first — that is the number a responder acts on.
+function renderMissing(list){
+  const p=$('miss-panel');
+  if(!p)return;
+  if(!list||!list.length){p.hidden=true;p.innerHTML='';return}
+  const now=Date.now()/1000;
+  let h='<div class="miss-head">'+t('miss_title').replace('{n}',list.length)
+       +' <span class="miss-hint">'+t('miss_hint')+'</span></div>';
+  for(const m of list){
+    h+='<div class="miss-row">'
+      +'<span class="miss-call">'+esc(m.call)+'</span>'
+      +'<span class="miss-dur">'+t('miss_since')+' '
+        +fmtAgoLong(Math.max(0,Math.floor(now-m.last_seen)))+'</span>'
+      +'<span class="miss-meta">'+esc(m.cell||'')
+        +(m.type?' · '+esc(m.type):'')
+        +' · '+fmtClock(m.last_seen)+' ('+t('tz_local')+')</span>'
+      +'</div>';
+  }
+  p.innerHTML=h;
+  p.hidden=false;
 }
 function renderAlerts(cells){
   const on=cells.filter(c=>c.alert);

@@ -140,6 +140,91 @@ _MAX_STATIONS = 200     # last-heard chip table (most recent N callsigns)
 _STATS_INTERVAL = 2.0   # seconds between stats pushes to browsers
 _AI_NOTE_COOLDOWN_S = 3 * 3600   # reuse a silence/prop AI note this long
 
+# ── Earthquake correlation (USGS, free, no API key, refreshed every minute)
+# A regional silence cluster and a nearby earthquake look identical to the
+# detector — both are "many stations stopped at once". Pulling the quake in
+# turns the AI's verdict from "shared infrastructure or power issue" into
+# something an operator can act on, and costs one cached HTTP GET.
+_QUAKE_URL = ("https://earthquake.usgs.gov/earthquakes/feed/v1.0/"
+              "summary/4.5_day.geojson")
+_QUAKE_TTL = 600.0          # scans run every 5 min; don't hammer USGS
+_QUAKE_RADIUS_KM = 500.0    # generous: report it, let the AI weigh it
+_QUAKE_WINDOW_S = 24 * 3600
+_quake_cache: "tuple[float, list]" = (0.0, [])
+
+
+def _fetch_quakes() -> list:
+    """Recent M4.5+ quakes worldwide. Never raises: correlation is extra
+    context, never a precondition for alerting — if USGS is unreachable the
+    silence alert must still go out exactly as before."""
+    global _quake_cache
+    ts, data = _quake_cache
+    now = time.time()
+    if now - ts < _QUAKE_TTL:
+        return data
+    try:
+        import urllib.request, json as _json
+        req = urllib.request.Request(
+            _QUAKE_URL,
+            headers={"User-Agent": f"APRS-Agent/{cfg_module.VERSION}"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = _json.loads(resp.read())
+        out = []
+        for f in raw.get("features", []):
+            p = f.get("properties") or {}
+            g = (f.get("geometry") or {}).get("coordinates") or []
+            if len(g) < 2 or p.get("mag") is None:
+                continue
+            out.append({
+                "mag": round(float(p["mag"]), 1),
+                "place": (p.get("place") or "").strip(),
+                "ts": float(p.get("time") or 0) / 1000.0,
+                "depth_km": (round(float(g[2])) if len(g) > 2
+                             and g[2] is not None else None),
+                "lat": float(g[1]), "lon": float(g[0]),
+            })
+        _quake_cache = (now, out)
+        return out
+    except Exception:
+        # Keep whatever we had and back off for a full TTL rather than
+        # retrying on every cell of every scan.
+        _quake_cache = (now, data)
+        return data
+
+
+def _quakes_near(lat: float, lon: float, since_ts: float) -> list:
+    """Quakes close enough, and recent enough, to be a candidate cause for a
+    silence that began at since_ts. Ordered strongest-and-nearest first."""
+    out = []
+    for q in _fetch_quakes():
+        if not (since_ts - _QUAKE_WINDOW_S <= q["ts"] <= since_ts + 600):
+            continue
+        try:
+            d = StationDB._haversine_km(lat, lon, q["lat"], q["lon"])
+        except Exception:
+            continue
+        if d <= _QUAKE_RADIUS_KM:
+            out.append(dict(q, dist_km=int(round(d))))
+    out.sort(key=lambda q: (-q["mag"], q["dist_km"]))
+    return out[:3]
+
+
+def _cell_quakes(cell: str, since_ts: "float | None") -> list:
+    """Quake candidates for a Maidenhead cell, measured from its centre."""
+    b = station_db_module._cell_bounds(cell)
+    if not b or not since_ts:
+        return []
+    lat = (b[0][0] + b[1][0]) / 2.0
+    lon = (b[0][1] + b[1][1]) / 2.0
+    return _quakes_near(lat, lon, since_ts)
+
+
+def _fmt_quake(q: dict) -> str:
+    """One-line human summary, e.g. 'M7.4 120 km away, 40m before, 103 km deep'."""
+    depth = f", {q['depth_km']} km deep" if q.get("depth_km") is not None else ""
+    where = f" ({q['place']})" if q.get("place") else ""
+    return f"M{q['mag']} {q['dist_km']} km away{depth}{where}"
+
 
 class AgentManager:
 
@@ -198,6 +283,15 @@ class AgentManager:
         # Silence watch (Phase 4): active alert episodes + AI assessments
         self._silence_active: dict[str, float] = {}
         self._silence_ai_notes: dict[str, str] = {}
+        # Stations that crossed their silence threshold while their cell was
+        # alerting and have not been heard since. Deliberately NOT cleared
+        # when the cell's alert clears: in the Colombia M7.4 case the cell
+        # fell below the alert ratio as soon as 5 of 7 stations recovered,
+        # which dropped the whole cell from the alert list — including the
+        # two stations that never came back, i.e. the only two worth looking
+        # at. Entries leave this dict when the station is heard again.
+        # callsign -> {"cell": str, "flagged": float}
+        self._missing: dict[str, dict] = {}
         # Digest mode: alerts queued here between flushes (list of (ts, cell
         # dict, ai note)); lost on restart, same as the episode state above.
         self._silence_pending: list = []
@@ -520,6 +614,9 @@ class AgentManager:
                 if cell in self._silence_active:
                     continue                     # already alerted this episode
                 self._silence_active[cell] = time.time()
+                for _call in c.get("silent_calls", []):
+                    self._missing.setdefault(
+                        _call, {"cell": cell, "flagged": time.time()})
                 note = ""
                 now_ts = time.time()
                 cached = self._silence_note_cache.get(cell)
@@ -563,6 +660,19 @@ class AgentManager:
                     del self._silence_active[cell]
                     self._silence_ai_notes.pop(cell, None)
                     self._log_both(f"[silence] cleared: {cell}")
+
+            # A station leaves the missing list only by being heard again —
+            # independent of whether its cell is still alerting.
+            if self._missing:
+                try:
+                    state = self._station_db.silence_state(list(self._missing))
+                except Exception:
+                    state = {}
+                for call in list(self._missing):
+                    st = state.get(call)
+                    if st is None or not st["silent"]:
+                        del self._missing[call]
+                        self._log_both(f"[silence] back on the air: {call}")
 
             # Prune cooled-down cache entries regardless of alert state, so
             # the dict doesn't grow forever with cells that never re-alert.
@@ -778,6 +888,25 @@ class AgentManager:
                     + "\n".join(act_lines) + "\n")
         return out
 
+    @staticmethod
+    def _quake_context(c: dict) -> str:
+        """Earthquake candidates as a prompt fragment. Deliberately phrased
+        as evidence, not a conclusion: a quake nearby does not prove it
+        caused the silence, and the model should still be able to answer
+        'event_expired' or 'igate_failure' when the rest of the picture
+        says so."""
+        qs = _cell_quakes(c["cell"], c.get("since"))
+        if not qs:
+            return ""
+        lines = []
+        for q in qs:
+            before = int((c["since"] - q["ts"]) / 60) if c.get("since") else 0
+            when = (f"{before} minutes before the silence began"
+                    if before >= 0 else f"{-before} minutes after")
+            lines.append(f"  - {_fmt_quake(q)}, {when}")
+        return ("Recent seismic activity near this cell (USGS):\n"
+                + "\n".join(lines) + "\n")
+
     async def _assess_silence(self, c: dict, ai_cfg: dict) -> str:
         """Ask the AI Gateway to interpret a silence cluster. Returns a short
         note like "[power_outage/high] …summary…" or "" on failure."""
@@ -801,6 +930,7 @@ class AgentManager:
             f"Silent stations: {', '.join(c['silent_calls'][:10])}\n"
             f"{mins}"
             f"{self._cell_context(c)}\n"
+            f"{self._quake_context(c)}"
             "Consider that some APRS 'stations' are event advisory objects "
             "(incidents, fire warnings, markers) published by services — "
             "those expire by design when the event closes, which is not an "
@@ -851,6 +981,8 @@ class AgentManager:
                f"{c['silent']} of {c['baseline']} stations silent "
                f"({int(c['ratio'] * 100)}%)\n{cause}\n"
                f"Stations: {', '.join(c['silent_calls'][:8])}")
+        for q in _cell_quakes(c["cell"], c.get("since")):
+            msg += f"\n🌍 {_fmt_quake(q)}"
         if note:
             msg += f"\nAI: {note}"
         return msg
@@ -1602,7 +1734,39 @@ async def get_silence(request: web.Request) -> web.Response:
         episode_start = mgr._silence_active.get(c["cell"])
         if c["alert"] and episode_start:
             c["since"] = int(episode_start)
+        # Only alerting cells: _cell_quakes is cheap (one shared cached feed)
+        # but the payload is not, on a worldwide feed.
+        c["quakes"] = _cell_quakes(c["cell"], c.get("since")) if c["alert"] else []
     return web.json_response({"cells": cells})
+
+
+@routes.get("/api/missing")
+async def get_missing(request: web.Request) -> web.Response:
+    """Stations still off the air after being caught in a silence alert.
+
+    Triage order is by wall-clock time since the station was actually last
+    heard, longest first. The cadence-relative measure (how far past its own
+    threshold it is) is the better *detection* signal and is what flags a
+    station in the first place — but it makes a confusing triage list: a
+    station beaconing hourly is not counted silent for three hours, so it
+    can sort below one heard more recently. "Last heard 16 hours ago" is
+    the number a human responder acts on, and the one that went into the
+    Colombia report.
+    """
+    mgr: AgentManager = request.app["manager"]
+    try:
+        state = mgr._station_db.silence_state(list(mgr._missing))
+    except Exception:
+        state = {}
+    out = []
+    for call, meta in mgr._missing.items():
+        st = state.get(call)
+        if not st or not st["silent"]:
+            continue
+        out.append({**st, "cell": meta.get("cell", ""),
+                    "flagged": int(meta.get("flagged", 0))})
+    out.sort(key=lambda s: s["last_seen"])
+    return web.json_response({"missing": out})
 
 
 @routes.get("/api/prop")
@@ -1712,6 +1876,9 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/api/stations", get_stations),
         web.get("/api/stations/{callsign}", get_station),
         web.get("/api/silence", get_silence),
+        # Same facts /api/silence already exposes (callsigns, positions,
+        # silence times), just organised for triage — nothing new is revealed.
+        web.get("/api/missing", get_missing),
         web.get("/api/silence/range", get_silence_range),
         web.get("/api/silence/history", get_silence_history),
         web.get("/api/prop", get_prop),

@@ -1074,3 +1074,37 @@ class StationDB:
             })
         out.sort(key=lambda x: (-int(x["alert"]), -x["ratio"]))
         return out
+
+    def silence_state(self, callsigns) -> dict[str, dict[str, Any]]:
+        """Current silence detail for a named set of stations.
+
+        silence_cells() already works out every station's silence threshold
+        and the moment it crossed it, then discards all of it when the
+        per-station data is aggregated into a cell — so the one question an
+        operator actually has during an incident ("which of these never came
+        back, and since when?") could not be answered from anywhere in the
+        app. This exposes it on demand for specific callsigns, rather than
+        widening the /api/silence payload with per-station detail for every
+        cell in a worldwide feed.
+        """
+        now = time.time()
+        out: dict[str, dict[str, Any]] = {}
+        for call in callsigns:
+            r = self._stations.get(call)
+            if r is None:
+                continue
+            threshold = (max(3.0 * r.ema_interval_s, 900.0)
+                         if r.ema_interval_s else 900.0)
+            out[call] = {
+                "call": call,
+                "silent": (now - r.last_seen) > threshold,
+                # When it crossed its own threshold, not when it was last
+                # heard: that is the point it became noteworthy.
+                "since": int(r.last_seen + threshold),
+                "last_seen": int(r.last_seen),
+                "type": r.station_type,
+                "lat": r.lat,
+                "lon": r.lon,
+                "locator": r.locator,
+            }
+        return out
