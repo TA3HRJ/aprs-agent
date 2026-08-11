@@ -14,13 +14,80 @@ from __future__ import annotations
 
 
 import copy
+import re
 import sys
 from pathlib import Path
 from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.2"
+VERSION = "3.2.3"
+
+# ── Secret handling for the HTTP API ────────────────────────────────────────
+# print_config()'s masking below is for human eyes: it keeps the first and last
+# few characters so an operator can tell one key from another, and it cannot be
+# reversed. The API needs the opposite properties — reveal nothing at all, and
+# survive a round trip, because the Web GUI reads the config into a form and
+# posts the whole thing back on Save. So a masked field comes back as this
+# exact sentinel and is restored from the file rather than overwriting the key
+# with asterisks.
+#
+# ASCII on purpose. This was first written with U+2022 bullets, and a client
+# that mangled the encoding turned the sentinel into something that no longer
+# compared equal — so unmask_secrets() treated it as a new value and wrote the
+# mangled text over a real bot token. A credential must not depend on every
+# client preserving non-ASCII byte for byte.
+SECRET_MASK = "*" * 8
+
+# Anchored on the whole field name on purpose. A loose search for "key" would
+# also swallow logger.keyword_filter, and a masked filter list would be shown
+# to the operator as if it were a credential.
+_SECRET_NAME = re.compile(
+    r"^(api_keys?|api_secret|app_secret|app_password"
+    r"|access_token(_key|_secret)?|bot_token|verify_token"
+    r"|[a-z0-9_]*password|[a-z0-9_]*passcode|[a-z0-9_]*_token"
+    r"|token|secret)$",
+    re.IGNORECASE,
+)
+
+
+def mask_secrets(config: dict[str, Any]) -> dict[str, Any]:
+    """Config with every credential replaced by SECRET_MASK.
+
+    Values under a secret-named parent (extensions.ai_gateway.api_keys, whose
+    own keys are provider names) are masked too. Empty stays empty, so the GUI
+    still shows an unset field as unset.
+    """
+    def walk(node: Any, secret: bool) -> Any:
+        if isinstance(node, dict):
+            return {k: walk(v, secret or bool(_SECRET_NAME.match(str(k))))
+                    for k, v in node.items()}
+        if isinstance(node, list):
+            return [walk(v, secret) for v in node]
+        if secret and isinstance(node, str) and node:
+            return SECRET_MASK
+        return node
+
+    return walk(copy.deepcopy(config), False)
+
+
+def unmask_secrets(incoming: dict[str, Any],
+                   current: dict[str, Any]) -> dict[str, Any]:
+    """Restore untouched credentials from the on-disk config.
+
+    Any field that still carries the sentinel was never edited, so the stored
+    value is put back. Without this, one Save from a masked form would wipe
+    every key the operator did not retype.
+    """
+    def walk(new: Any, old: Any) -> Any:
+        if isinstance(new, dict):
+            return {k: walk(v, old.get(k) if isinstance(old, dict) else None)
+                    for k, v in new.items()}
+        if isinstance(new, str) and new == SECRET_MASK:
+            return old if isinstance(old, str) else ""
+        return new
+
+    return walk(copy.deepcopy(incoming), current)
 
 # tomllib is built-in from Python 3.11 onwards.
 # For older Python versions, install the 'tomli' package.
@@ -282,8 +349,14 @@ def load_config(config_path: str) -> dict[str, Any]:
         return copy.deepcopy(DEFAULTS)
 
     try:
-        with open(path, "rb") as f:
-            user_config = tomllib.load(f)
+        raw = path.read_bytes()
+        # Notepad on Windows writes a UTF-8 BOM, and a bare tomllib.load()
+        # rejects it as "Invalid statement (at line 1, column 1)" — which
+        # points the operator at their first setting rather than at an
+        # invisible three-byte prefix they cannot see in the editor.
+        if raw.startswith(b"\xef\xbb\xbf"):
+            raw = raw[3:]
+        user_config = tomllib.loads(raw.decode("utf-8"))
     except Exception as e:
         raise ConfigError(
             f"Failed to parse config file '{config_path}': {e}") from e

@@ -1644,9 +1644,15 @@ async def info(request: web.Request) -> web.Response:
 
 @routes.get("/api/config")
 async def get_config(request: web.Request) -> web.Response:
+    """The config with every credential masked.
+
+    This endpoint used to hand out bot tokens, mail passwords and every AI key
+    in clear text to anything that could reach the admin port — which made any
+    foothold in the admin origin, however small, an immediate credential
+    harvest. The masked fields round-trip: see save_config below.
+    """
     mgr: AgentManager = request.app["manager"]
-    cfg = mgr.get_config()
-    return web.json_response(cfg)
+    return web.json_response(cfg_module.mask_secrets(mgr.get_config()))
 
 
 @routes.post("/api/config")
@@ -1654,6 +1660,9 @@ async def save_config(request: web.Request) -> web.Response:
     mgr: AgentManager = request.app["manager"]
     try:
         data = await request.json()
+        # Fields the operator did not retype come back as the mask; restore
+        # them from the file instead of writing asterisks over real keys.
+        data = cfg_module.unmask_secrets(data, mgr.get_config())
         mgr.save_config(data)
         return web.json_response({"ok": True})
     except Exception as e:
@@ -1723,11 +1732,13 @@ async def public_websocket_handler(request: web.Request) -> web.WebSocketRespons
 async def wa_webhook_verify(request: web.Request) -> web.Response:
     mgr: AgentManager = request.app["manager"]
     cfg = mgr.get_config()
+    import hmac as _hmac
     verify_token = cfg.get("extensions", {}).get("whatsapp", {}).get("verify_token", "")
     mode = request.query.get("hub.mode", "")
     token = request.query.get("hub.verify_token", "")
     challenge = request.query.get("hub.challenge", "")
-    if mode == "subscribe" and token == verify_token and verify_token:
+    if (mode == "subscribe" and verify_token
+            and _hmac.compare_digest(token, verify_token)):
         return web.Response(text=challenge)
     raise web.HTTPForbidden()
 
@@ -1736,20 +1747,24 @@ async def wa_webhook_verify(request: web.Request) -> web.Response:
 async def wa_webhook_incoming(request: web.Request) -> web.Response:
     mgr: AgentManager = request.app["manager"]
     cfg = mgr.get_config()
+    import hashlib, hmac as _hmac
     app_secret = cfg.get("extensions", {}).get("whatsapp", {}).get("app_secret", "")
-    if app_secret:
-        import hashlib, hmac as _hmac
-        raw_body = await request.read()
-        sig_header = request.headers.get("X-Hub-Signature-256", "")
-        expected = "sha256=" + _hmac.new(
-            app_secret.encode(), raw_body, hashlib.sha256
-        ).hexdigest()
-        if not _hmac.compare_digest(expected, sig_header):
-            print("[whatsapp-webhook] invalid signature", file=sys.stderr)
-            raise web.HTTPForbidden()
-        data = json.loads(raw_body)
-    else:
-        data = await request.json()
+    # An unset app_secret used to mean "accept anything", so whoever could
+    # reach this URL could have a message transmitted under the operator's
+    # callsign — on their licence. An unverifiable webhook is refused instead.
+    if not app_secret:
+        print("[whatsapp-webhook] refused: app_secret is not configured",
+              file=sys.stderr)
+        raise web.HTTPForbidden()
+    raw_body = await request.read()
+    sig_header = request.headers.get("X-Hub-Signature-256", "")
+    expected = "sha256=" + _hmac.new(
+        app_secret.encode(), raw_body, hashlib.sha256
+    ).hexdigest()
+    if not _hmac.compare_digest(expected, sig_header):
+        print("[whatsapp-webhook] invalid signature", file=sys.stderr)
+        raise web.HTTPForbidden()
+    data = json.loads(raw_body)
     try:
         from extensions import ExtensionRegistry
         for ext in ExtensionRegistry._extensions:
@@ -2028,6 +2043,42 @@ async def symbols(request: web.Request) -> web.Response:
 
 # ── App lifecycle ───────────────────────────────────────────────────────────
 
+@web.middleware
+async def _same_origin_only(request: web.Request, handler):
+    """Refuse cross-site state changes.
+
+    The admin panel is protected by a session cookie, and a cookie is attached
+    by the browser no matter which site caused the request — so any page the
+    operator happens to visit could POST to /api/config or /api/stop. aiohttp
+    reads the body as JSON without consulting Content-Type, so such a request
+    does not even need a preflight to be accepted.
+
+    Browsers default to SameSite=Lax, which already blocks most of this, but
+    that is the browser's policy and not ours. When a request carries an Origin
+    that is not ours, it is refused here.
+
+    Server-to-server callers (the WhatsApp webhook) send no Origin at all and
+    are unaffected; they authenticate by HMAC instead.
+    """
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        origin = request.headers.get("Origin")
+        if origin:
+            from urllib.parse import urlsplit
+            src = urlsplit(origin).netloc.lower()
+            # ProxyPreserveHost is the norm, but fall back to the forwarded
+            # host so a proxy that rewrites Host cannot lock the operator out
+            # of their own admin panel.
+            allowed = {h.lower() for h in (
+                request.headers.get("Host", ""),
+                request.headers.get("X-Forwarded-Host", ""),
+            ) if h}
+            if src and src not in allowed:
+                print(f"[web] cross-origin {request.method} {request.path} "
+                      f"from {origin} refused", file=sys.stderr)
+                raise web.HTTPForbidden(text="cross-origin request refused")
+    return await handler(request)
+
+
 def _build_public_app(mgr: "AgentManager") -> web.Application:
     """Read-only public app: monitoring page + whitelisted GET endpoints.
 
@@ -2173,7 +2224,7 @@ def main() -> None:
 
     mgr = AgentManager(args.config)
 
-    app = web.Application()
+    app = web.Application(middlewares=[_same_origin_only])
     app["manager"] = mgr
     app.add_routes(routes)
     app.on_startup.append(on_startup)

@@ -1448,7 +1448,8 @@ function silPopup(c){
   let h='<b>'+c.cell+'</b> — '+causeTxt+'<br>';
   h+=t('sil_stats').replace('{s}',c.silent).replace('{b}',c.baseline)+' ('+Math.round(c.ratio*100)+'%)<br>';
   if(c.since)h+=t('sil_since')+' '+fmtAgoLong(Math.max(0,Math.floor(Date.now()/1000-c.since)))+'<br>';
-  h+='<span style="opacity:.7;font-size:11px">'+c.silent_calls.join(', ')+'</span>';
+  // Object packets put an arbitrary transmitted name where a callsign goes.
+  h+='<span style="opacity:.7;font-size:11px">'+esc(c.silent_calls.join(', '))+'</span>';
   if(c.quakes)for(const q of c.quakes){
     // The time offset is the field that decides whether a quake is a cause or
     // a coincidence, and it was the one field missing here: an operator saw
@@ -1463,7 +1464,7 @@ function silPopup(c){
     h+='<br><span class="sil-quake">🌍 M'+q.mag+' · '+q.dist_km+' km'+when
       +(q.place?' · '+esc(q.place):'')+'</span>';
   }
-  if(c.ai_note)h+='<br><span style="color:#8ff0a4;font-size:11px">AI: '+c.ai_note+'</span>';
+  if(c.ai_note)h+='<br><span style="color:#8ff0a4;font-size:11px">AI: '+esc(c.ai_note)+'</span>';
   h+='<div class="sil-ev"><a onclick="silEvidence(\''+c.cell+'\',0)">⬇ '+t('sil_dl')
     +'</a><a onclick="silEvidence(\''+c.cell+'\',1)">📋 '+t('sil_cp')+'</a></div>';
   return h;
@@ -1694,11 +1695,15 @@ function renderStations(){
     const cityLoc=[r.city,r.district].filter(Boolean).join(', ');
     const loc=cityLoc||(r.locator||'')|| (r.lat&&r.lon?(r.lat.toFixed(2)+'°/'+r.lon.toFixed(2)+'°'):'');
     const dc=dotClass(r);
+    // Everything below the symbol comes off the air: callsigns and object
+    // names are chosen by whoever is transmitting, city/organisation are
+    // derived from beacon text, and on a worldwide feed that is the open
+    // internet. It goes through esc() without exception.
     tr.innerHTML=
-      '<td class="s-call">'+aprsSym(r)+' '+r.callsign+'</td>'+
-      '<td>'+r.type+'</td>'+
-      '<td class="s-loc" title="'+loc+'">'+loc+'</td>'+
-      '<td class="s-org">'+(r.ai_org||'')+'</td>'+
+      '<td class="s-call">'+aprsSym(r)+' '+esc(r.callsign)+'</td>'+
+      '<td>'+esc(r.type)+'</td>'+
+      '<td class="s-loc" title="'+esc(loc)+'">'+esc(loc)+'</td>'+
+      '<td class="s-org">'+esc(r.ai_org||'')+'</td>'+
       '<td class="s-freq">'+(fmtFreq(r.freq_mhz)||'')+'</td>'+
       '<td><span class="s-dot '+dc+'"></span></td>'+
       '<td class="s-ago">'+fmtAgoLong(r.last_seen_ago_s)+'</td>';
@@ -1710,10 +1715,12 @@ async function showDetail(r){
   // The list endpoint is slim (table/map fields only) — fetch the full
   // record for the detail panel; fall back to the slim row on error.
   try{const full=await api('GET','/api/stations/'+encodeURIComponent(r.callsign));if(full&&full.callsign)r=full}catch(e){}
-  $('sd-title').innerHTML=aprsSym(r)+' '+r.callsign;
+  $('sd-title').innerHTML=aprsSym(r)+' '+esc(r.callsign);
   const srcLabel=r.has_db&&r.packet_count>0?t('sd_both'):r.has_db?t('sd_db_only'):t('sd_aprs_live');
   let html='';
-  const row=(l,v)=>v?'<div class="row"><span class="lbl">'+l+'</span><span class="val">'+v+'</span></div>':'';
+  // Escapes by default: every value here is packet-derived or AI-derived, and
+  // the one place that genuinely needs markup builds it explicitly below.
+  const row=(l,v)=>v?'<div class="row"><span class="lbl">'+l+'</span><span class="val">'+esc(v)+'</span></div>':'';
   html+=row(t('sta_h_type'),r.type+(r.mode?' · '+r.mode:'')+(r.band?' · '+r.band:''));
   const locParts2=[r.location,r.district,r.city,r.ta_region].filter(Boolean);
   html+=row(t('sta_h_loc'),locParts2.join(', '));
@@ -1722,7 +1729,15 @@ async function showDetail(r){
   if(r.freq_mhz)html+=row(t('sta_h_freq'),fmtFreq(r.freq_mhz)+' MHz'+(r.offset_mhz?' ('+( r.offset_mhz>0?'+':'')+r.offset_mhz.toFixed(3)+' MHz)':''));
   if(r.tone_hz)html+=row('CTCSS',r.tone_hz+' Hz');
   if(r.echolink)html+=row('EchoLink',r.echolink);
-  if(r.url)html+=row('URL','<a href="'+r.url+'" target="_blank" style="color:var(--accent2)">'+r.url+'</a>');
+  // A URL out of a beacon comment is an attacker-chosen string in an href.
+  // Only http(s) is allowed through as a link; anything else (javascript:,
+  // data:) is shown as plain text so it can still be read, but not clicked
+  // into execution. rel=noopener keeps the opened page off window.opener.
+  if(r.url)html+=(/^https?:\/\//i.test(r.url)
+    ? '<div class="row"><span class="lbl">URL</span><span class="val">'
+      +'<a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer" '
+      +'style="color:var(--accent2)">'+esc(r.url)+'</a></span></div>'
+    : row('URL',r.url));
   if(r.wx_temp_c!==null&&r.wx_temp_c!==undefined)html+=row('Temp',r.wx_temp_c+'°C'+(r.wx_humidity?' / '+r.wx_humidity+'% RH':''));
   if(r.wx_pressure_mb)html+=row('Pressure',r.wx_pressure_mb+' mb');
   html+='<hr>';
@@ -1732,11 +1747,11 @@ async function showDetail(r){
   if(r.ai_org||r.ai_description){
     html+='<hr>';
     if(r.ai_org)html+=row('Organization',r.ai_org);
-    if(r.ai_description)html+='<div class="row"><span class="lbl">AI Note</span><span class="val" style="color:var(--dim);font-size:12px;word-break:break-word">'+r.ai_description+'</span></div>';
+    if(r.ai_description)html+='<div class="row"><span class="lbl">AI Note</span><span class="val" style="color:var(--dim);font-size:12px;word-break:break-word">'+esc(r.ai_description)+'</span></div>';
   }else if(r.ai_analyzed){
     html+='<hr><div class="row"><span class="lbl" style="font-size:11px;color:var(--dim)">AI</span><span class="val" style="font-size:11px;color:var(--dim)">No org/description found in beacon text</span></div>';
   }
-  if(r.comment)html+='<hr><div class="row"><span class="lbl">Comment</span><span class="val" style="color:var(--dim);font-size:11px;word-break:break-all;white-space:pre-wrap">'+r.comment+'</span></div>';
+  if(r.comment)html+='<hr><div class="row"><span class="lbl">Comment</span><span class="val" style="color:var(--dim);font-size:11px;word-break:break-all;white-space:pre-wrap">'+esc(r.comment)+'</span></div>';
   $('sd-body').innerHTML=html;
   const dc=dotClass(r);
   const statusText=dc==='on'?t('sta_online'):dc==='off'?t('sta_offline'):t('sta_db_only');
