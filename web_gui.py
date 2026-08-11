@@ -153,10 +153,27 @@ _QUAKE_WINDOW_S = 24 * 3600
 _quake_cache: "tuple[float, list]" = (0.0, [])
 
 
+_slim_lock: "asyncio.Lock | None" = None
+
+
+def _get_slim_lock() -> "asyncio.Lock":
+    """Created lazily so it binds to the running loop, and shared by the
+    admin and public apps (same process, same loop)."""
+    global _slim_lock
+    if _slim_lock is None:
+        _slim_lock = asyncio.Lock()
+    return _slim_lock
+
+
 def _fetch_quakes() -> list:
     """Recent M4.5+ quakes worldwide. Never raises: correlation is extra
     context, never a precondition for alerting — if USGS is unreachable the
-    silence alert must still go out exactly as before."""
+    silence alert must still go out exactly as before.
+
+    BLOCKING — call only via run_in_executor (the silence watch loop warms
+    the cache once per scan). Inline on the event loop it would freeze every
+    other request for the whole HTTP timeout.
+    """
     global _quake_cache
     ts, data = _quake_cache
     now = time.time()
@@ -196,7 +213,10 @@ def _quakes_near(lat: float, lon: float, since_ts: float) -> list:
     """Quakes close enough, and recent enough, to be a candidate cause for a
     silence that began at since_ts. Ordered strongest-and-nearest first."""
     out = []
-    for q in _fetch_quakes():
+    # Cache only — never fetches. Warmed off-loop by the silence watch loop;
+    # until it has been warmed this returns nothing, which is the correct
+    # degradation (no quake context) rather than a stalled request.
+    for q in _quake_cache[1]:
         if not (since_ts - _QUAKE_WINDOW_S <= q["ts"] <= since_ts + 600):
             continue
         try:
@@ -619,6 +639,13 @@ class AgentManager:
             # on a restart.
             peak = deepseek and self._deepseek_peak_hour()
             effective_ai_ok = ai_ok and not peak
+            # Warm the quake cache off the event loop; _quakes_near() only
+            # ever reads it, so no request handler can block on USGS.
+            try:
+                await asyncio.get_event_loop().run_in_executor(
+                    None, _fetch_quakes)
+            except Exception:
+                pass
             try:
                 cells = self._station_db.silence_cells()
             except Exception:
@@ -1718,7 +1745,13 @@ async def get_stations(request: web.Request) -> web.Response:
         except (ValueError, TypeError):
             bbox = None
     db = mgr._station_db
-    db._slim_all()  # ensure the cache token reflects the current window
+    # Rebuilding the slim list walks the whole registry, which on a
+    # worldwide feed is seconds of pure CPU — never on the event loop, or
+    # every other request (and the WebSocket log) stalls behind it. The lock
+    # keeps concurrent pollers from each starting their own rebuild: the
+    # first does the work, the rest wait and then find the fresh cache.
+    async with _get_slim_lock():
+        await asyncio.get_event_loop().run_in_executor(None, db._slim_all)
     # Identical bbox/limit within the same ~2s cache window produce
     # byte-identical JSON — repeat pollers (several browser tabs open on
     # the same view, a visitor's map re-render) can skip the re-send.

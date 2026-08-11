@@ -481,6 +481,9 @@ class StationDB:
         # list-comprehension work on top of the shared result.
         self._slim_cache: Optional[list[dict[str, Any]]] = None
         self._slim_cache_ts: float = 0.0
+        # How long the last _slim_all() rebuild took; drives the adaptive
+        # cache window so the rebuild can never cost more than it saves.
+        self._slim_build_s: float = 0.0
         # ── RF propagation link engine (phase 1) ──
         # Per-gate running stats of realised RF link distances (km):
         # gate → [count, ema_mean, ema_var]. In-memory only; baselines
@@ -703,12 +706,23 @@ class StationDB:
 
     def _slim_all(self) -> list[dict[str, Any]]:
         """The shared, cached base for get_slim(): every station, slim
-        fields only, most recently heard first. Rebuilt at most once per
-        _SLIM_CACHE_TTL regardless of how many callers ask."""
+        fields only, most recently heard first.
+
+        The cache window ADAPTS to how long the rebuild actually takes. A
+        fixed 2 s window livelocked a worldwide feed once the registry grew
+        past ~70k stations: the rebuild itself took longer than the window,
+        so every request found the cache already stale and rebuilt again,
+        and the event loop never got a turn — packets kept flowing but the
+        whole HTTP API stopped answering. Holding the result for a multiple
+        of the build cost keeps that from recurring at any registry size,
+        instead of needing this constant re-tuned as the feed grows.
+        """
         now = time.time()
+        window = max(self._SLIM_CACHE_TTL, self._slim_build_s * 4.0)
         if (self._slim_cache is not None
-                and now - self._slim_cache_ts < self._SLIM_CACHE_TTL):
+                and now - self._slim_cache_ts < window):
             return self._slim_cache
+        t0 = time.time()
         recs = sorted(list(self._stations.values()),
                       key=lambda r: r.last_seen or 0, reverse=True)
         out = []
@@ -716,7 +730,8 @@ class StationDB:
             d = r.to_dict()
             out.append({k: d[k] for k in self._SLIM_FIELDS})
         self._slim_cache = out
-        self._slim_cache_ts = now
+        self._slim_cache_ts = time.time()
+        self._slim_build_s = self._slim_cache_ts - t0
         return out
 
     def get_slim(
