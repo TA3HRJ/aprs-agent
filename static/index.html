@@ -1779,6 +1779,43 @@ async function reloadCfg(){try{const p=$('hdr-cfg').value.trim();if(p)await api(
 // ── PWA ──
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
 
+// ── Version watch ──────────────────────────────────────────────────────────
+// An open tab never re-requests the shell, so it goes on running the JS it
+// first loaded no matter how often the server is redeployed — and the service
+// worker cannot fix that, because the browser only re-checks it on
+// navigation. Bumping the cache name only ever helped fresh loads. So the
+// page has to notice for itself, by comparing the build it was served with
+// against the version the server reports now.
+//
+// Deliberately NOT api(): that helper force-navigates to the login page when
+// it sees a 302, which would drag an idle tab to a login screen the moment a
+// 7-day admin session expired. Here an unauthenticated or unparseable answer
+// simply means "no version info this round".
+const VER_CHECK_MS=300000;
+async function checkVersion(){
+  if(!window.BUILD)return;
+  let v;
+  try{
+    const r=await fetch('/api/info',{cache:'no-store'});
+    if(!r.ok||r.redirected)return;
+    v=(await r.json()).version;
+  }catch(e){return}
+  if(!v||v===window.BUILD)return;
+  // Never loop. If we already reloaded for this exact version and still came
+  // back on the old build, something upstream is handing out a stale page and
+  // reloading again would only spin.
+  try{
+    if(sessionStorage.getItem('aprs.reloadedFor')===v)return;
+    sessionStorage.setItem('aprs.reloadedFor',v);
+  }catch(e){}
+  if(navigator.serviceWorker&&navigator.serviceWorker.getRegistration){
+    try{const reg=await navigator.serviceWorker.getRegistration();if(reg)await reg.update()}catch(e){}
+  }
+  location.reload();
+}
+setInterval(checkVersion,VER_CHECK_MS);
+document.addEventListener('visibilitychange',function(){if(!document.hidden)checkVersion()});
+
 // ── Init ──
 (async function(){
   if(window.PUBLIC){

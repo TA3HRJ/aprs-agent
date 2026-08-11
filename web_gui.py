@@ -64,22 +64,32 @@ _GZ_CACHE: dict = {}
 
 
 def _gzipped_index(public: bool = False) -> tuple[bytes, bytes, str]:
-    """Return (raw_html, gzipped_html, etag). The public variant injects a
-    window.PUBLIC flag so the page renders in read-only view mode."""
+    """Return (raw_html, gzipped_html, etag).
+
+    Injects the running version as window.BUILD, which is how an already-open
+    page notices it is running an old build: a tab never re-requests the shell
+    on its own, so without this it keeps executing whatever JavaScript it
+    loaded, however many times the server is redeployed. The public variant
+    additionally gets window.PUBLIC so the page renders in read-only mode.
+    """
     path = _STATIC_DIR / "index.html"
     st = path.stat()
-    key = (st.st_mtime_ns, st.st_size)
+    # The version belongs in the key and the ETag as well: a release that
+    # bumps VERSION without touching index.html would otherwise keep serving
+    # a page that reports the previous build, and the page would either never
+    # notice the update or never stop noticing it.
+    key = (st.st_mtime_ns, st.st_size, cfg_module.VERSION)
     ck = "index-pub" if public else "index"
     cached = _GZ_CACHE.get(ck)
     if not cached or cached[0] != key:
         raw = path.read_bytes()
+        inject = b'<script>window.BUILD="' + cfg_module.VERSION.encode() + b'"'
         if public:
-            raw = raw.replace(
-                b"</head>",
-                b"<script>window.PUBLIC=true</script></head>", 1)
+            inject += b";window.PUBLIC=true"
+        raw = raw.replace(b"</head>", inject + b"</script></head>", 1)
         body = gzip.compress(raw, 9)
         suffix = "-p" if public else ""
-        etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}{suffix}"'
+        etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}-{cfg_module.VERSION}{suffix}"'
         cached = (key, raw, body, etag)
         _GZ_CACHE[ck] = cached
     return cached[1], cached[2], cached[3]
