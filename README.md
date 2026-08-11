@@ -5,6 +5,14 @@ An APRS-IS server agent with a graphical interface and extensible plugin system,
 Connects to the global [APRS-IS](http://www.aprs2.net/) network and provides
 several automation features useful for amateur radio operators.
 
+### 🔴 Live demo — [ta3hrj.duckdns.org](https://ta3hrj.duckdns.org/)
+
+A real instance in **World Mode**, carrying the full worldwide APRS-IS feed:
+the live log, every station heard, the Silence Map with its AI assessments,
+and RF propagation openings as they happen. This is the read-only **Public
+View** — the same page the software serves on `public_port`, with no settings
+and no admin endpoints exposed.
+
 > **Note:** Using this software requires a valid amateur radio license.
 > The APRS-IS network is for licensed amateur radio operators only.
 
@@ -24,6 +32,8 @@ several automation features useful for amateur radio operators.
 | 📡 | **RF Propagation Tracking** | Every qAR/qAO-gated packet is one realised RF link whose length is known exactly (sender's in-packet position to the igate's position). Per-gate baselines separate "this mountain-top gate always hears far" from "the band just opened"; abnormally long links draw as dashed great-circle lines on the map, colour-tiered by distance. Two or more distinct senders in the same Maidenhead field within 30 minutes become a **band-opening event** — notified via Telegram/email with an optional AI read (tropo / sporadic-E / aurora) and replayable from the map timeline. Internet-origin, digipeated, object, balloon (>3000 m) and >5000 km (GPS garbage) packets are excluded |
 | 💾 | **Persistence** | Station records, beacon-cadence history and the station's lifelong uptime survive restarts (SQLite `aprs_stations.db` next to the config, shared by both GUIs) |
 | 💬 | **Messages Tab** | Every APRS message the agent hears or sends, in one panel — time, direction, from, to, text, and the bridge it belongs to (AI / Telegram / WhatsApp / Email / …). Outgoing messages are captured from the send loop, since APRS-IS never echoes our own traffic. Rolling buffer of the last 400 messages, pushed live over WebSocket; ack/telemetry chatter filtered out. Admin only — not exposed on the public view |
+| 🚨 | **Still-missing stations** | When a silence alert clears because most of its cell recovered, the stations that never came back stop being counted — and those are the ones that matter. They are tracked individually instead, listed longest-silent first, and leave the list only by being heard again. Survives a restart. Wording is deliberately plain: no APRS signal is a weak welfare signal, not a confirmed emergency |
+| 🌍 | **Earthquake correlation** | A regional silence cluster and a nearby earthquake look identical to the detector. Recent M4.5+ quakes (USGS, free, no API key) within 500 km and 24 h of a silence are attached to the alert — feeding the AI assessment, the Telegram/email notification and the map popup, so "shared infrastructure or power issue" becomes "M7.4, 165 km away, 10 minutes before the silence began" |
 | 👁️ | **Public View** | Optional read-only monitoring page on a separate port (`public_port`): Live Log / Stations / Map only — no settings, no start/stop, no API keys, log stream filtered to packet lines. Safe to expose to the internet while the admin port stays local |
 | 📊 | **Stations Tab** | Live table of all heard stations — type, location, organization, frequency, online/offline status; Object packets parsed; location falls back to Maidenhead locator or coordinates |
 | 🗄️ | **Turkey Repeaters DB** | Enriches station records with city, district, frequency, tone, band, mode from a local JSON database |
@@ -450,6 +460,8 @@ python web_gui.py --host 0.0.0.0 -p 8080  # listen on all interfaces (remote acc
 - **Scales to the worldwide feed** — above 2000 plotted stations the map switches to grid clustering (numbered badges, click to zoom) with viewport-only markers at high zoom, fetching every station of the visible area from the server; the stations API serves a slim capped list (~1.3 MB instead of 40+ MB) and the detail panel fetches the full record per station; below that threshold a regional setup looks exactly as before
 - **Phone layout** — on screens ≤ 700 px the settings sidebar folds behind a ⚙ overlay, the silence-alert list collapses to a one-line tappable summary, and the stat bar wraps into two rows; safe-area aware for notched iPhones
 - **Module status indicator** — a compact badge row under the tab bar shows which features are actually active right now (AI Gateway, Station AI, Repeater Monitor, World Feed, and each messaging extension), on both the admin and public views
+- **Collapsible panels** — alert and missing-station lists are one clickable line each by default at every screen size, so they never crowd out the map; expand on click and your choice is remembered across reloads
+- **Aimable timeline** — the map's history slider shows day gridlines and the oldest stored date, and its clock tracks the drag itself rather than waiting on the network, so you can land on a time instead of guessing at it
 - **AI-call cooling-off** — a silence or propagation cell that clears and re-alerts within 3 hours reuses its previous AI assessment instead of spending a fresh API call, so a flapping region doesn't multiply AI usage
 
 ---
