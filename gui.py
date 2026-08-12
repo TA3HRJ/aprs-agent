@@ -52,7 +52,19 @@ from station_db import StationDB
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
-_VERSION = cfg_module.VERSION  # single source of truth in config.py
+# The Desktop GUI carries its own version, and it is the one shown to the user.
+#
+# It used to display cfg_module.VERSION, the shared application version — which
+# climbs with Web GUI development this build does not have. A frozen Desktop
+# build reporting the same number as a Web release promises the map, the
+# messages panel and everything else added since, none of which are here. The
+# number a user sees has to describe the product in front of them.
+#
+# Feature level is frozen at 2.8.0; this counter moves only for fixes to the
+# Desktop build itself. _CORE_VERSION records which shared codebase it was
+# built from, for bug reports.
+_VERSION = "2.8.3"
+_CORE_VERSION = cfg_module.VERSION
 _DEFAULT_CFG = Path(__file__).parent / "aprsconfig.toml"
 
 
@@ -957,7 +969,7 @@ class _AboutDialog:
 
         ttk.Label(
             outer,
-            text=f"v{_VERSION}",
+            text=f"Desktop v{_VERSION}  ·  core {_CORE_VERSION}",
             font=("TkDefaultFont", 10),
             foreground="#666666",
         ).pack()
