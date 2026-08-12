@@ -11,9 +11,11 @@ Supported providers: Puter (free), Groq, OpenRouter, or any
 OpenAI-compatible endpoint.
 
 Developed by TA3HRJ & TA3PKS
-Inspired by aprs-ai-gateway by TA3EKM (Arda Yalin Ozkan)
+Bidirectional design follows aprs-ai-gateway by TA3EKM (Arda Yalin Ozkan),
+which is what made an APRS station able to answer rather than only report.
   https://github.com/ArdaYalinOzkan/aprs-ai-gateway
   Original licensed under CC BY-NC 4.0
+Reaches the air through the own-writer channel from TA3PKS's extension design.
 """
 from __future__ import annotations
 

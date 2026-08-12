@@ -2,13 +2,28 @@ MIT License
 
 Copyright (c) 2024–2026 TA3HRJ (Erhan)
 
-Based on the Rust work of TA3PKS (Burak)
+Three contributions this project is built on.
+
+  TA3PKS (Burak) — the original Rust implementation, and with it the
+  extension system the project still runs on: the Extension interface,
+  the registry, the extension server, and the own-writer channel that
+  lets an extension transmit without having been spoken to first. The
+  first logger, fixed-beacon, Twitter and email extensions are that work
+  too. The Python port kept the design unchanged, and every extension
+  written since — including the AI Gateway — plugs into it.
   https://github.com/ta3pks/aprs-agent
 
-Bidirectional AI Gateway (original concept): TA3EKM (Arda Yalın Özkan)
+  TA3EKM (Arda Yalın Özkan) — the bidirectional AI Gateway. A station
+  that could answer, and not merely report, is what turned this project
+  from a one-way logger into a two-way service; it is the hinge the
+  architecture turns on, and every extension added afterwards follows
+  that pattern.
   https://github.com/ArdaYalinOzkan/aprs-ai-gateway
 
-Python port, GUI, Web GUI, and all subsequent development: TA3HRJ (Erhan)
+  TA3HRJ (Erhan) — the original concept, the Python port, and the work
+  since: the desktop and web interfaces, station intelligence, the
+  silence map and its incident response, RF propagation tracking, and
+  the Telegram, WhatsApp, Bluesky and IMAP extensions.
   https://github.com/TA3HRJ/aprs-agent
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
