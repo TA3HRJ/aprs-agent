@@ -98,6 +98,14 @@ below the 20-sample threshold?** With 2476 gates, most cannot have 20 samples,
 so the absolute-floor branch may be producing the bulk of the output. F-02 is
 the same gap seen from the reader's side.
 
+**Blocked on one missing field.** Gate baselines live in memory only, and
+nothing is written down when a link is flagged, so the question cannot be
+answered from what is stored today — only the histogram, the totals and the
+recorded openings survive. The preparation is to record the gate's `samples`
+and `established` on each anomalous link at the moment it is flagged. That
+changes no behaviour; it only makes the count possible. Then wait a few days
+and the answer falls out on its own.
+
 ### F-2026-08-12-04 — silence thresholds have never been calibrated either
 **Source:** security audit, 2026-08-12 · **Verdict:** open work, data now ready
 
