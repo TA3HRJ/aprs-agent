@@ -1523,7 +1523,10 @@ function silToast(msg){
 // the failure handling — is identical and only has to be right once.
 function evBundle(url,base,promptKey,promptArg,asPrompt,wrap){
   return api('GET',url).then(function(d){
-    if(d.error)throw new Error(d.error);
+    // Flagged so the toast can tell an explanation from an accident: the
+    // server's "no stored snapshot for that time" is worth showing, a JSON
+    // parse error is noise that tells the operator nothing.
+    if(d.error){const err=new Error(d.error);err.fromServer=true;throw err}
     if(wrap)d=wrap(d);
     const js=JSON.stringify(d,null,2);
     const when=(d.generated_at||Math.floor(Date.now()/1000))*1000;
@@ -1586,13 +1589,21 @@ function silCopyFallback(o){
 // Takes a function that produces the bundle, so silence cells, propagation
 // links and station records all travel the same path out of the page.
 function evExport(make,asPrompt){
-  const fail=function(e){silToast((e&&e.message)||t('sil_ev_err'))};
+  const fail=function(e){silToast((e&&e.fromServer&&e.message)||t('sil_ev_err'))};
   if(!asPrompt){
     make(false).then(function(o){silSave(o.js,'application/json',o.name+'.json')})
       .catch(fail);
     return;
   }
   const pending=make(true);
+  // A bundle that never arrived must say so, exactly once, whatever the
+  // clipboard reports. Chrome RESOLVES clipboard.write even when the promise
+  // inside ClipboardItem rejects, so the write succeeding is not evidence
+  // that anything was copied — reading it as success announced "copied" after
+  // a 404, with the clipboard untouched. That is the v3.2.1 failure wearing a
+  // different hat: a failed copy passing as a successful one.
+  let failed=false;
+  const guarded=pending.catch(function(e){failed=true;fail(e);throw e});
   // The write must be ISSUED inside the click gesture. Safari (iOS in
   // particular) rejects writeText() once an await has broken the gesture
   // chain — and because a rejected write is a no-op, the clipboard keeps
@@ -1600,13 +1611,24 @@ function evExport(make,asPrompt){
   // evidence. ClipboardItem takes a *promise* for exactly this case: the
   // write is registered now and the fetch resolves it afterwards.
   if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
-    navigator.clipboard.write([new ClipboardItem({'text/plain':
-        pending.then(function(o){return new Blob([o.text],{type:'text/plain'})})})])
-      .then(function(){silToast(t('sil_copied'))})
-      .catch(function(){pending.then(silCopyFallback).catch(fail)});
-    return;
+    const blob=guarded.then(function(o){return new Blob([o.text],{type:'text/plain'})});
+    // The clipboard keeps its own reference to this promise; the extra catch
+    // only marks the rejection handled, so a failed fetch reports itself
+    // through the toast above instead of also landing in the console as an
+    // unhandled rejection that would bury a real one later.
+    blob.catch(function(){});
+    try{
+      navigator.clipboard.write([new ClipboardItem({'text/plain':blob})])
+        // Only claim success once the data itself resolved.
+        .then(function(){return guarded})
+        .then(function(){silToast(t('sil_copied'))})
+        .catch(function(){
+          if(!failed)guarded.then(silCopyFallback).catch(function(){});
+        });
+      return;
+    }catch(e){/* some builds throw here instead of rejecting; fall through */}
   }
-  pending.then(silCopyFallback).catch(fail);
+  guarded.then(silCopyFallback).catch(function(){});
 }
 function silEvidence(cell,asPrompt){
   evExport(function(p){return silBundle(cell,p)},asPrompt);
