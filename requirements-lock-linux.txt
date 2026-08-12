@@ -1,0 +1,74 @@
+# Production dependency lock (Linux / VPS).
+#
+# requirements.txt says what the application needs, in ranges. That is right
+# for someone installing from source, and wrong for a server: the deploy script
+# runs `pip install -r requirements.txt` on every update, so every upstream
+# release reached production unreviewed — the running set had drifted to
+# versions nobody had chosen. Nothing was broken by it, but that was luck
+# rather than control.
+#
+# Used as a CONSTRAINTS file, not a requirements file:
+#
+#     pip install -r requirements.txt -c requirements-lock-linux.txt
+#
+# Constraints cap versions without forcing anything to be installed, so adding
+# a dependency to requirements.txt still works; it simply arrives unpinned
+# until this file is regenerated.
+#
+# Captured from the VPS on 2026-08-12 with `pip check` clean and the service
+# healthy — a known-good set, not a wish list.
+#
+# To take upstream updates deliberately: drop the pin you want to move, deploy,
+# confirm the service is healthy, then regenerate with
+#     pip freeze | sort
+# The operator's own tools (py-spy) are left out; this file describes the
+# application's dependencies.
+
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.1
+aiosignal==1.4.0
+aiosmtplib==5.1.2
+annotated-types==0.7.0
+anyio==4.14.2
+aprslib==0.7.2
+async-timeout==5.0.1
+atproto==0.0.69
+attrs==26.1.0
+certifi==2026.6.17
+cffi==2.1.0
+charset-normalizer==3.4.9
+click==8.4.2
+cryptography==46.0.7
+distro==1.9.0
+dnspython==2.8.0
+exceptiongroup==1.3.1
+frozenlist==1.8.0
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.18
+jiter==0.16.0
+libipld==3.4.1
+multidict==6.7.1
+oauthlib==3.3.1
+openai==2.45.0
+pillow==12.3.0
+propcache==0.5.2
+pycparser==3.0
+pydantic==2.13.4
+pydantic_core==2.46.4
+pystray==0.19.5
+python-xlib==0.33
+requests==2.34.2
+requests-oauthlib==2.0.0
+six==1.17.0
+sniffio==1.3.1
+tomli==2.4.1
+tomli_w==1.2.0
+tqdm==4.68.4
+tweepy==4.17.0
+typing-inspection==0.4.2
+typing_extensions==4.16.0
+urllib3==2.7.0
+websockets==15.0.1
+yarl==1.24.2

@@ -9,16 +9,21 @@
 #     C:\Python313-32\python.exe -m pip install -r requirements-build-win32.txt
 #     C:\Python313-32\python.exe -m PyInstaller aprs_agent.spec --noconfirm
 #
-# Two ceilings worth knowing before bumping anything here:
+# The cryptography ceiling, stated correctly:
 #
-#   cryptography is held below 46 by atproto (every published atproto release
-#   requires cryptography<46), not by the 32-bit target — the same cap applies
-#   on 64-bit. 45.0.7 is the newest release that satisfies it.
+#   atproto 0.0.69 requires cryptography >=41.0.7,<47. An earlier note in this
+#   file claimed the cap was <46 and applied on every architecture — that was
+#   wrong. It came from reading a pip backtracking log: because cryptography
+#   48 has no 32-bit Windows wheel, pip searched older atproto releases and
+#   printed *their* constraints, which are the <46 lines. The current release
+#   allows 46.x.
 #
-#   cryptography stopped publishing 32-bit Windows wheels after 48.0.0, so if
-#   atproto ever lifts its cap, 48.0.0 is the last version installable here
-#   without a Rust toolchain. Beyond that, 32-bit Windows means dropping
-#   Bluesky or moving the build to 64-bit.
+#   What actually limits this build is the 32-bit wheel: within atproto's <47
+#   range, the newest cryptography with a win32 wheel is 46.0.3, so this file
+#   could move 45.0.7 -> 46.0.3. Above that, cryptography publishes win32
+#   wheels only up to 48.0.0, and none after — so if atproto ever raises its
+#   cap past 48, 32-bit Windows means dropping Bluesky or moving to 64-bit.
+#   (The Linux/VPS side runs 46.0.7, which needs no win32 wheel.)
 
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.3
