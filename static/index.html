@@ -800,6 +800,21 @@ const S={en:{
     +"not established causes — check offset_s (seconds between the quake and "
     +"the start of the silence) before linking one to the outage. No APRS "
     +"signal is a weak welfare signal, not a confirmed emergency.",
+  prop_prompt:"Below is machine-collected evidence about one unusually long "
+    +"APRS radio link ({c}), exported from an APRS-Agent monitoring station. "
+    +"Assess whether this indicates a genuine propagation opening and say how "
+    +"confident you are.\n\nA distance alone means nothing: read gate_baseline "
+    +"first, because the same distance is routine for a mountain-top receiver "
+    +"and remarkable for a rooftop one. Then check whether an \"opening\" "
+    +"object is present — a single long link is never an opening, since one "
+    +"misconfigured GPS can fake any distance. Positions are self-reported and "
+    +"unverified.",
+  sta_prompt:"Below is one station's record from an APRS-Agent monitoring "
+    +"station ({c}). Assess what this station appears to be and what it is "
+    +"doing.\n\nRead the caveats first. In particular, 'type' and the icon come "
+    +"from the APRS symbol its operator chose, not from what the equipment "
+    +"actually is, and the position, comment and weather values are whatever "
+    +"the station transmitted about itself.",
   al_sum:"{n} active silence alerts",al_sum_one:"1 active silence alert",
   miss_sum:"{n} stations still off the air",miss_sum_one:"1 station still off the air",
   miss_title:"Still off the air ({n})",
@@ -897,6 +912,22 @@ const S={en:{
     +"ilişkilendirmeden önce offset_s alanına bak (deprem ile sessizliğin "
     +"başlangıcı arasındaki saniye farkı). APRS sinyalinin olmaması zayıf bir "
     +"iyilik-hali işaretidir, teyit edilmiş bir acil durum değildir.",
+  prop_prompt:"Aşağıda, bir APRS-Agent izleme istasyonundan alınmış, olağandışı "
+    +"uzunlukta tek bir APRS telsiz bağlantısına ({c}) ait makine toplaması "
+    +"veriler var. Bunun gerçek bir propagasyon açılmasına işaret edip "
+    +"etmediğini değerlendir ve ne kadar emin olduğunu belirt.\n\nMesafe tek "
+    +"başına bir şey ifade etmez: önce gate_baseline'a bak, çünkü aynı mesafe "
+    +"dağ tepesindeki bir alıcı için sıradan, çatıdaki biri için dikkat "
+    +"çekicidir. Sonra bir \"opening\" nesnesi var mı diye kontrol et — tek bir "
+    +"uzun bağlantı asla açılma sayılmaz, zira hatalı ayarlanmış tek bir GPS "
+    +"her mesafeyi uydurabilir. Konumlar istasyonların kendi bildirimidir ve "
+    +"doğrulanmamıştır.",
+  sta_prompt:"Aşağıda bir APRS-Agent izleme istasyonundan alınmış tek bir "
+    +"istasyon kaydı ({c}) var. Bu istasyonun ne olduğunu ve ne yaptığını "
+    +"değerlendir.\n\nÖnce caveats bölümünü oku. Özellikle 'type' alanı ve ikon, "
+    +"cihazın gerçekte ne olduğundan değil, operatörünün seçtiği APRS "
+    +"sembolünden türetilir; konum, yorum ve hava değerleri de istasyonun "
+    +"kendisi hakkında yaydığı bilgilerdir.",
   al_sum:"{n} aktif sessizlik uyarısı",al_sum_one:"1 aktif sessizlik uyarısı",
   miss_sum:"{n} istasyon hâlâ yayında değil",miss_sum_one:"1 istasyon hâlâ yayında değil",
   miss_title:"Hâlâ yayında değil ({n})",
@@ -1486,15 +1517,63 @@ function silToast(msg){
   d.className='sil-toast';d.textContent=msg;document.body.appendChild(d);
   setTimeout(()=>d.remove(),2200);
 }
-function silBundle(cell,asPrompt){
-  return api('GET','/api/silence/evidence?cell='+encodeURIComponent(cell)).then(function(d){
+// One exporter for every popup on the page. Each caller supplies where the
+// bundle comes from, how the file should be named and which framing sentence
+// belongs in front of the JSON; everything after that — the clipboard rules,
+// the failure handling — is identical and only has to be right once.
+function evBundle(url,base,promptKey,promptArg,asPrompt,wrap){
+  return api('GET',url).then(function(d){
     if(d.error)throw new Error(d.error);
+    if(wrap)d=wrap(d);
     const js=JSON.stringify(d,null,2);
+    const when=(d.generated_at||Math.floor(Date.now()/1000))*1000;
     return {d:d,js:js,
-            name:'aprs-silence-'+cell+'-'
-                 +new Date((d.generated_at||0)*1000).toISOString().slice(0,16).replace(/[:T]/g,'-'),
-            text:asPrompt?(t('sil_prompt').replace('{c}',cell)+'\n\n'+js):js};
+            name:base+'-'+new Date(when).toISOString().slice(0,16).replace(/[:T]/g,'-'),
+            text:asPrompt?(t(promptKey).replace('{c}',promptArg)+'\n\n'+js):js};
   });
+}
+function silBundle(cell,asPrompt){
+  // Scrubbed to a past moment: export the snapshot on screen, not the live
+  // cell, or the file describes a different event than the one being read.
+  const ts=(typeof tlLive!=='undefined'&&!tlLive&&$('tl-slider'))
+    ? '&ts='+parseInt($('tl-slider').value) : '';
+  return evBundle('/api/silence/evidence?cell='+encodeURIComponent(cell)+ts,
+                  'aprs-silence-'+cell,'sil_prompt',cell,asPrompt);
+}
+function propBundle(call,gate,ts,asPrompt){
+  return evBundle('/api/prop/evidence?call='+encodeURIComponent(call)
+                  +'&gate='+encodeURIComponent(gate)+'&ts='+(ts||0),
+                  'aprs-prop-'+call+'-'+gate,'prop_prompt',call+' → '+gate,
+                  asPrompt);
+}
+function staBundle(callsign,asPrompt){
+  // The station endpoint returns a bare record — useful, but not
+  // self-describing, and an undated record with no provenance is exactly the
+  // kind of file that gets over-trusted once it has travelled. The envelope
+  // is added here and says plainly that the page assembled it.
+  return evBundle('/api/stations/'+encodeURIComponent(callsign),
+                  'aprs-station-'+callsign,'sta_prompt',callsign,asPrompt,
+    function(rec){
+      return {
+        schema:'aprs-agent.station-record/1',
+        generated_at:Math.floor(Date.now()/1000),
+        assembled_by:{app:'APRS-Agent',build:window.BUILD||'unknown',
+                      source:'/api/stations/'+callsign,
+                      note:'envelope added by the web page, not the server'},
+        station:rec,
+        caveats:[
+          "'type', the icon and the symbol come from the APRS symbol the "+
+          "operator chose, not from what the equipment is — a D-Star gateway "+
+          "beaconing a weather symbol reads here as a weather station.",
+          "Position, comment and weather values are transmitted by the "+
+          "station itself and are not verified by anything.",
+          "ai_org and ai_description are machine-extracted from beacon text "+
+          "and unreviewed.",
+          "first_seen is when THIS agent first heard the station, not when "+
+          "the station went on the air."
+        ]
+      };
+    });
 }
 // A failed clipboard write leaves the PREVIOUS cell's bundle sitting in the
 // clipboard, and pasting that reads as valid data for the wrong grid rather
@@ -1504,14 +1583,16 @@ function silCopyFallback(o){
   return navigator.clipboard.writeText(o.text).then(function(){silToast(t('sil_copied'))})
     .catch(function(){silSave(o.text,'text/plain',o.name+'.txt');silToast(t('sil_cp_fallback'))});
 }
-function silEvidence(cell,asPrompt){
+// Takes a function that produces the bundle, so silence cells, propagation
+// links and station records all travel the same path out of the page.
+function evExport(make,asPrompt){
   const fail=function(e){silToast((e&&e.message)||t('sil_ev_err'))};
   if(!asPrompt){
-    silBundle(cell,false)
-      .then(function(o){silSave(o.js,'application/json',o.name+'.json')}).catch(fail);
+    make(false).then(function(o){silSave(o.js,'application/json',o.name+'.json')})
+      .catch(fail);
     return;
   }
-  const pending=silBundle(cell,true);
+  const pending=make(true);
   // The write must be ISSUED inside the click gesture. Safari (iOS in
   // particular) rejects writeText() once an await has broken the gesture
   // chain — and because a rejected write is a no-op, the clipboard keeps
@@ -1526,6 +1607,15 @@ function silEvidence(cell,asPrompt){
     return;
   }
   pending.then(silCopyFallback).catch(fail);
+}
+function silEvidence(cell,asPrompt){
+  evExport(function(p){return silBundle(cell,p)},asPrompt);
+}
+function propEvidence(call,gate,ts,asPrompt){
+  evExport(function(p){return propBundle(call,gate,ts,p)},asPrompt);
+}
+function staEvidence(callsign,asPrompt){
+  evExport(function(p){return staBundle(callsign,p)},asPrompt);
 }
 // Active silence events, listed above the panel so a visitor sees them
 // without having to find and click a red square on the map.
@@ -1642,10 +1732,15 @@ function renderProp(links,hist){
     const k=l.call+'|'+l.gate+'|'+l.ts;
     seen[k]=1;
     const col=propColor(l.km);
+    const args="'"+l.call.replace(/'/g,'')+"','"+l.gate.replace(/'/g,'')+"',"+(l.ts|0);
     const popupHtml='<b style="color:'+col+'">'+esc(l.call)+' ⇄ '+esc(l.gate)+'</b><br>'
         +l.km+' km · '+fmtAgoLong(Math.max(0,Math.floor(now-l.ts)))+'<br>'
         +(l.note?'<span class="alert-ai">'+esc(l.note)+'</span><br>':'')
-        +'<span style="opacity:.7">'+t('prop_link')+'</span>';
+        +'<span style="opacity:.7">'+t('prop_link')+'</span>'
+        // The distance alone says nothing without the gate's own baseline and
+        // the opening it belongs to, and neither is on the map.
+        +'<div class="sil-ev"><a onclick="propEvidence('+args+',0)">⬇ '+t('sil_dl')
+        +'</a><a onclick="propEvidence('+args+',1)">📋 '+t('sil_cp')+'</a></div>';
     if(propLines[k]){
       // Position/color are immutable once drawn, but the AI note can land
       // after the initial draw (an opening event needs a 2nd sender before
@@ -1752,6 +1847,11 @@ async function showDetail(r){
     html+='<hr><div class="row"><span class="lbl" style="font-size:11px;color:var(--dim)">AI</span><span class="val" style="font-size:11px;color:var(--dim)">No org/description found in beacon text</span></div>';
   }
   if(r.comment)html+='<hr><div class="row"><span class="lbl">Comment</span><span class="val" style="color:var(--dim);font-size:11px;word-break:break-all;white-space:pre-wrap">'+esc(r.comment)+'</span></div>';
+  // Same export as the map popups: a station record is evidence too, and the
+  // caveat that its "type" is a symbol the operator chose travels with it.
+  const sc=String(r.callsign).replace(/'/g,'');
+  html+='<div class="sil-ev"><a onclick="staEvidence(\''+sc+'\',0)">⬇ '+t('sil_dl')
+       +'</a><a onclick="staEvidence(\''+sc+'\',1)">📋 '+t('sil_cp')+'</a></div>';
   $('sd-body').innerHTML=html;
   const dc=dotClass(r);
   const statusText=dc==='on'?t('sta_online'):dc==='off'?t('sta_offline'):t('sta_db_only');

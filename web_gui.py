@@ -1859,22 +1859,45 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
         return web.json_response({"error": "cell parameter required"},
                                  status=400)
     try:
-        cells = mgr._station_db.silence_cells()
-    except Exception:
-        cells = []
-    c = next((x for x in cells if x["cell"] == cell), None)
-    if c is None:
-        return web.json_response({"error": f"no current silence data for {cell}"},
-                                 status=404)
+        want_ts = int(request.query.get("ts", "0"))
+    except ValueError:
+        want_ts = 0
 
-    episode_start = mgr._silence_active.get(cell)
-    if c["alert"] and episode_start:
-        c["since"] = int(episode_start)
-
-    try:
-        state = mgr._station_db.silence_state(c["silent_calls"])
-    except Exception:
-        state = {}
+    loop = asyncio.get_event_loop()
+    snapshot_ts = None
+    if want_ts:
+        # Scrubbed to a past moment on the timeline: the cell being looked at
+        # is the one in that snapshot, not the one alerting now. Exporting the
+        # live cell here would hand over a different event than the one on
+        # screen — and refusing outright (the old behaviour) left the reader
+        # with no evidence for exactly the moment they were investigating.
+        snap = await loop.run_in_executor(
+            None, station_db_module.load_silence_history,
+            mgr._sta_db_path, want_ts)
+        snapshot_ts = snap.get("ts")
+        c = next((x for x in (snap.get("cells") or [])
+                  if x["cell"] == cell), None)
+        if c is None:
+            return web.json_response(
+                {"error": f"no stored snapshot for {cell} near that time"},
+                status=404)
+        state = {}          # per-station detail is live-only; see "live_state"
+    else:
+        try:
+            cells = mgr._station_db.silence_cells()
+        except Exception:
+            cells = []
+        c = next((x for x in cells if x["cell"] == cell), None)
+        if c is None:
+            return web.json_response(
+                {"error": f"no current silence data for {cell}"}, status=404)
+        episode_start = mgr._silence_active.get(cell)
+        if c["alert"] and episode_start:
+            c["since"] = int(episode_start)
+        try:
+            state = mgr._station_db.silence_state(c["silent_calls"])
+        except Exception:
+            state = {}
     # The cell's past. A single frame cannot answer "is this the last station
     # still down after the others came back", which is the first thing anyone
     # asks — and a reader who cannot answer it from the file will invent an
@@ -1893,7 +1916,14 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
     for call in c["silent_calls"]:
         st = state.get(call)
         if not st:
-            stations.append({"call": call, "detail": "no longer tracked"})
+            stations.append({
+                "call": call,
+                "detail": ("historical snapshot — per-station timing is not "
+                           "stored, only the callsign that was silent"
+                           if snapshot_ts else "no longer tracked"),
+                "silent_in_past_snapshots": seen_silent.get(call, 0),
+                "on_still_missing_list": call in mgr._missing,
+            })
             continue
         stations.append({
             **st,
@@ -1916,6 +1946,10 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
     return web.json_response({
         "schema": "aprs-agent.silence-evidence/1",
         "generated_at": now,
+        # Present when the timeline was scrubbed: this bundle describes the
+        # stored snapshot at that moment, not the live cell.
+        "snapshot_ts": snapshot_ts,
+        "is_historical": bool(snapshot_ts),
         "generated_by": {
             "app": "APRS-Agent", "version": cfg_module.VERSION,
             "station": cfg.get("callsign", ""),
@@ -2002,6 +2036,102 @@ async def get_prop(request: web.Request) -> web.Response:
         data = {"links": [], "total_links": 0, "anomalous": 0,
                 "gates": 0, "hist": []}
     return web.json_response(data)
+
+
+@routes.get("/api/prop/evidence")
+async def get_prop_evidence(request: web.Request) -> web.Response:
+    """Everything behind one propagation link's popup, as a portable bundle.
+
+    The popup shows a distance. On its own that number means nothing: 400 km
+    is an ordinary day for a mountain-top gate and a genuine opening for a
+    rooftop one. What makes it a finding is the gate's own baseline and the
+    fact that a second, unrelated sender did the same thing in the same field
+    — and neither of those is on the map. So both travel with the link.
+    """
+    mgr: AgentManager = request.app["manager"]
+    call = (request.query.get("call") or "").strip().upper()
+    gate = (request.query.get("gate") or "").strip().upper()
+    if not call or not gate:
+        return web.json_response(
+            {"error": "call and gate parameters required"}, status=400)
+    try:
+        want_ts = int(request.query.get("ts", "0"))
+    except ValueError:
+        want_ts = 0
+
+    db = mgr._station_db
+    link = None
+    for l in reversed(list(db._prop_links)):
+        if l.get("call") == call and l.get("gate") == gate:
+            if not want_ts or abs(l.get("ts", 0) - want_ts) <= 300:
+                link = dict(l)
+                break
+
+    loop = asyncio.get_event_loop()
+    event = await loop.run_in_executor(
+        None, station_db_module.find_prop_event,
+        mgr._sta_db_path, call, gate, want_ts or int(time.time()))
+
+    if link is None and event:
+        # Scrubbed to a past opening: the link is no longer in the live ring
+        # buffer, but the stored event still carries it.
+        link = next((dict(l) for l in event["links"]
+                     if l.get("call") == call and l.get("gate") == gate), None)
+    if link is None:
+        return web.json_response(
+            {"error": f"no propagation link found for {call} via {gate}"},
+            status=404)
+
+    try:
+        summary = db.prop_summary(max_links=0)
+    except Exception:
+        summary = {}
+    try:
+        cfg = mgr.get_config()
+    except (Exception, SystemExit):
+        cfg = {}
+    ai_cfg = cfg.get("extensions", {}).get("ai_gateway", {})
+    note = (event or {}).get("note", "") or link.get("note", "")
+
+    return web.json_response({
+        "schema": "aprs-agent.propagation-evidence/1",
+        "generated_at": int(time.time()),
+        "generated_by": {
+            "app": "APRS-Agent", "version": cfg_module.VERSION,
+            "station": cfg.get("callsign", ""),
+        },
+        "link": link,
+        # The number the distance was judged against.
+        "gate_baseline": db.gate_baseline(gate),
+        # The opening this link belongs to, if it was part of one. Absent
+        # means the link was anomalous on its own but never met the
+        # two-distinct-senders rule — which is not an opening.
+        "opening": event,
+        "detection": db.prop_detection_params(),
+        "calibration": {
+            "links_measured": summary.get("total_links", 0),
+            "anomalous": summary.get("anomalous", 0),
+            "gates_with_baselines": summary.get("gates", 0),
+            "distance_histogram": summary.get("hist", []),
+        },
+        "assessment": {
+            "note": note, "automated": True,
+            "provider": ai_cfg.get("provider", "") if note else "",
+            "model": ai_cfg.get("model", "") if note else "",
+        },
+        "caveats": [
+            "One long link is not an opening. The opening rule needs two or "
+            "more distinct senders in the same field within 30 minutes, "
+            "because a single misconfigured GPS can fake any distance.",
+            "Distance is computed from positions the stations transmitted "
+            "themselves. A wrong position produces a wrong distance, and the "
+            "station will not know it.",
+            "The gate baseline is a smoothed average that the link itself "
+            "then updates, so a permanently unusual gate slowly becomes its "
+            "own normal and stops being flagged.",
+            "The assessment note is machine-generated and unreviewed.",
+        ],
+    })
 
 
 @routes.get("/api/prop/history")
@@ -2146,6 +2276,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/api/silence/range", get_silence_range),
         web.get("/api/silence/history", get_silence_history),
         web.get("/api/prop", get_prop),
+        web.get("/api/prop/evidence", get_prop_evidence),
         web.get("/api/prop/history", get_prop_history),
     ])
     return papp

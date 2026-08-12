@@ -208,6 +208,44 @@ def record_prop_event(path: str, event: dict[str, Any]) -> None:
         con.close()
 
 
+def find_prop_event(path: str, call: str, gate: str, ts: int,
+                    window_s: int = 3600) -> Optional[dict[str, Any]]:
+    """The stored opening event that contains this link, if any.
+
+    A single link is the smallest thing on the map, but the finding is the
+    opening: two or more distinct senders in one field. Handing over the link
+    without the event it belongs to invites the reader to treat one packet as
+    the whole story.
+    """
+    if not Path(path).exists():
+        return None
+    con = sqlite3.connect(path)
+    try:
+        for ev_ts, region, note, raw in con.execute(
+                "SELECT ts, region, note, links FROM prop_history "
+                "WHERE ts BETWEEN ? AND ?", (ts - window_s, ts + window_s)):
+            try:
+                links = json.loads(raw or "[]")
+            except Exception:
+                continue
+            if not any(l.get("call") == call and l.get("gate") == gate
+                       for l in links):
+                continue
+            senders = sorted({str(l.get("call", "")).split("-")[0]
+                              for l in links})
+            return {
+                "ts": int(ev_ts), "region": region, "note": note or "",
+                "links": links, "link_count": len(links),
+                "distinct_senders": senders,
+                "max_km": max((l.get("km", 0) for l in links), default=0),
+            }
+        return None
+    except sqlite3.Error:
+        return None
+    finally:
+        con.close()
+
+
 def load_prop_history(path: str, ts: int,
                       window_s: int = 1800) -> list[dict[str, Any]]:
     """Links of every propagation event within ±window_s of ts (for the map
@@ -739,6 +777,58 @@ class StationDB:
             "s_lat": round(lat, 4), "s_lon": round(lon, 4),
             "g_lat": round(g.lat, 4), "g_lon": round(g.lon, 4),
         })
+
+    def gate_baseline(self, gate: str) -> dict[str, Any]:
+        """What this gate normally hears — the number the anomaly was judged
+        against. A link is only interesting relative to its own gate: 400 km
+        is routine for a mountain-top igate and remarkable for a rooftop one,
+        and without the baseline a reader cannot tell which they are holding.
+        """
+        st = self._gate_stats.get(gate)
+        if st is None:
+            # Baselines live in memory only, so a restart empties them. That
+            # is not the same as "this gate is new", and a reader told only
+            # "samples: 0" would reasonably conclude the wrong one — most of
+            # all on a historical link, where the gate may be long gone.
+            return {"gate": gate, "samples": 0, "established": False,
+                    "note": "no baseline in this process — gate statistics "
+                            "are in-memory and reset on restart, so this "
+                            "means 'not measured since the agent last "
+                            "started', not 'a new gate'"}
+        count, mean, var = st
+        sigma = math.sqrt(max(var, 0.0))
+        established = count >= self.PROP_MIN_SAMPLES
+        return {
+            "gate": gate,
+            "samples": int(count),
+            "established": established,
+            "mean_km": round(mean, 1),
+            "sigma_km": round(sigma, 1),
+            # The threshold this link had to beat. Absolute floor only while
+            # the gate is still new, since a handful of samples is not a normal.
+            "threshold_km": (round(max(3 * mean, mean + 4 * sigma), 1)
+                             if established else self.PROP_MIN_KM),
+        }
+
+    def prop_detection_params(self) -> dict[str, Any]:
+        """The rule that selected an anomalous link, for an outside reader."""
+        return {
+            "min_km": self.PROP_MIN_KM,
+            "max_km": self.PROP_MAX_KM,
+            "max_altitude_m": self.PROP_MAX_ALT_M,
+            "gate_min_samples": self.PROP_MIN_SAMPLES,
+            "rule": ("distance > min_km AND (the gate has fewer than "
+                     "gate_min_samples measured links, or distance exceeds "
+                     "max(3*mean, mean + 4*sigma) of that gate's own "
+                     "smoothed distance baseline)"),
+            "opening_rule": ("2 or more DISTINCT senders in the same "
+                             "Maidenhead field within 30 minutes; one long "
+                             "link alone is never an opening, because a "
+                             "single misconfigured GPS can fake any distance"),
+            "excluded": ("internet-origin and digipeated packets, objects, "
+                         "balloons above max_altitude_m, and links beyond "
+                         "max_km (GPS garbage)"),
+        }
 
     def prop_summary(self, max_links: int = 200) -> dict[str, Any]:
         """Current propagation picture: recent anomalous links + calibration
