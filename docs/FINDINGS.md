@@ -104,6 +104,75 @@ the gate has no usable baseline, so the absolute floor decided alone.
 meaningful yet and that the absolute floor made the decision. Handing over
 numbers with only a quiet flag beside them is an invitation to misread.
 
+### F-2026-08-13-15 — the copy button fails because the event loop is blocked, not because of the clipboard
+**Source:** operator, propagation and silence popups on the live map · **Verdict:** our fault
+**Open. This is the next thing to fix, and it affects the whole API, not the button.**
+
+The button appeared to do nothing and show nothing. Both halves were wrong
+diagnoses of mine; the Apache access log settled it.
+
+**The requests arrive and succeed:**
+
+```
+23:39:13  GET /api/silence/evidence?cell=OM73   200  5256 bytes
+23:39:57  GET /api/silence/evidence?cell=OM73   200  5257 bytes
+23:40:26  seven identical requests in one second, all 200
+```
+
+Seven clicks in a second is an operator pressing a button that is not
+answering. The data reached the browser every time.
+
+**But the endpoint is intermittently very slow.** Three consecutive calls
+through Apache:
+
+```
+attempt 1: HTTP 000, timed out at 40 s
+attempt 2: HTTP 200, 6.2 s
+attempt 3: HTTP 200, 0.6 s
+```
+
+**Why.** `silence_cells()` costs **0.3–0.9 s** on the live registry — measured
+at 165,730 stations producing 2,146 cells — and it is called **synchronously on
+the event loop** in three places:
+
+| line | caller |
+|---|---|
+| 685 | the monitor loop |
+| 1823 | `/api/silence` — the map's regular poll |
+| 1887 | `/api/silence/evidence` — the export |
+
+So every map poll stops the loop for about half a second. Add `/api/stations`
+at 1.3 MB (four times in one second in the same log) and `/api/prop`, and the
+loop saturates. Individual requests then take seconds, or hang.
+
+**This is v3.1.2 repeating.** That release fixed `/api/stations` with a cache
+and an executor and left `silence_cells()` synchronous; v3.2.0 then copied the
+synchronous call into the evidence endpoint.
+
+**And that is what breaks the clipboard.** Chrome closes the user-activation
+window if the promise handed to `clipboard.write` resolves too late. A fetch
+that takes six seconds loses it, the `writeText` fallback loses it for the same
+reason, and all that survives is a failure message at the very bottom of the
+page — measured at 400+ px below the popup, dark on dark, for 2.2 seconds. The
+operator reported "no warning" twice and was right in every way that matters.
+
+**Fix, in order:**
+
+1. **Move `silence_cells()` off the event loop and behind a short shared
+   cache.** The map poll and the export compute the identical thing seconds
+   apart. Same treatment `/api/stations` got in v3.1.2, adaptive window
+   included. This is the actual defect and it degrades the map, the station
+   list and everything else that shares the loop.
+2. **Fetch the bundle when the popup opens**, so the click writes data already
+   in hand and depends on no network at all.
+3. **Move the feedback into the button** — "Copying…" then "Copied ✓" or the
+   failure, where the eye already is. No message at the other end of the page
+   can be relied on.
+
+**Method note:** three rounds of this were diagnosed from the client side, and
+all three were wrong. The access log answered it in one read. When a browser
+symptom resists explanation, ask the server what it saw.
+
 ### F-2026-08-13-14 — a caveat that is read and then reasoned past is not strong enough
 **Source:** three models on silence cell OM73 (Henan) · **Verdict:** our fault, cheap
 
