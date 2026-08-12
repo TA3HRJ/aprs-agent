@@ -104,6 +104,110 @@ the gate has no usable baseline, so the absolute floor decided alone.
 meaningful yet and that the absolute floor made the decision. Handing over
 numbers with only a quiet flag beside them is an invitation to misread.
 
+### F-2026-08-13-13 — the decisive fact is missing from the bundle, and the classifier reads its absence as an outage
+**Source:** ChatGPT, silence cell KO84 (Tula/Kaluga) · **Verdict:** our fault
+**This is the one to fix first.**
+
+Eight stations, up to 100 km apart, last heard within **nine seconds** of each
+other. Both external readers inferred "a shared dependency" from that timing.
+They were right, and the server knew the answer exactly:
+
+```
+CALL        LAST GATE     LAST SEEN
+R3P-1       R3XBI         20:40:11
+R3P-2       R3XBI         20:40:11
+R3XBI-11    R3XBI         20:40:03
+R3XBI-12    R3XBI         20:40:04
+R3XBI-13    R3XBI         20:40:05
+R3XBI-9     R3XBI         20:40:02
+RC3XI-1     R3XBI         20:40:06
+RK3X-1      R3XBI         20:40:07
+
+distinct gates among the eight: {'R3XBI': 8}
+gate R3XBI: NOT TRACKED in the registry
+```
+
+All eight arrive through one igate. And the same operator's `R3XBI-10` was
+**still on the air** 444 seconds earlier through a different gate
+(`T2CSNGRAD`). One path died; the region did not. A single row of data
+falsifies the power-outage reading, and it is not in the bundle.
+
+**Then the classifier makes it worse.** The igate discriminator asks:
+
+```python
+if gate_active(only_gate) is False:
+    cause = "igate"
+```
+
+`gate_active()` returns `None` when the gate is not in the registry, and
+`None is False` is false — so "I cannot confirm the gate is down" falls through
+to `cause: "outage"`, the more alarming of the two. An untracked igate is not
+an edge case: most igates never beacon their own position, so the common case
+lands in the wrong bucket.
+
+Four layers each made it worse than the last:
+
+1. the bundle omits the gate attribution — the fact that settles it
+2. the classifier cannot prove the gate failed, so it says `outage`
+3. the AI note promotes that to *"regional power or infrastructure outage"* at
+   **high** confidence
+4. that note is what goes out over Telegram and email as an alert
+
+And the cell has looked like this for about two weeks (F-11), so the operator
+may have been alerted repeatedly to a regional power failure that is one
+igate's internet connection.
+
+**Earns:**
+- put `gate_of` in the bundle — which stations came through which gate, and
+  whether each gate is tracked and when it was last heard;
+- give the untracked case its own cause instead of `outage`. All silent
+  stations sharing one gate is strong evidence of a shared-path failure
+  whether or not that gate can be seen; "one shared gate, not trackable" is
+  both more accurate and less alarming than "regional outage".
+
+### F-2026-08-13-11 — the AI note is written without the cell's history
+**Source:** ChatGPT, KO84 · **Verdict:** our fault
+
+The note read *"[power_outage/high] Multiple igates and stations in the same
+grid cell went silent simultaneously, suggesting a regional power or
+infrastructure outage."* The same bundle's `cell_history` shows the same eight
+callsigns in 13 of 13 snapshots spanning roughly two weeks.
+
+`_assess_silence()` builds its prompt from the current frame only — cell,
+counts, ratio, cause, silent callsigns, minutes since, cell context and quake
+context. No history. So a chronic condition is diagnosed as a fresh event every
+time it is assessed, and at **high** confidence.
+
+Note the contrast with F-01: there, "simultaneously" was wrong because the
+onsets were spread over 11 hours. Here the word is *right* — nine seconds — and
+the conclusion is still wrong, because the missing axis is the other end of
+time. Both fixes are the same shape: let the note see what it is asserting
+about.
+
+**Also:** the note contradicts the file it travels in. The caveats say *"No
+APRS signal is a weak welfare signal, not a confirmed emergency"*, while the
+note asserts a regional power outage at high confidence. A reader has to
+decide which of our own two voices to believe.
+
+**Earns:** pass the history summary into the assessment prompt, and require the
+note to describe what it measured rather than name a cause it cannot see. The
+distinction ChatGPT drew is the one to adopt: *the stations are unreachable* is
+observed; *the power is out* is a hypothesis.
+
+### F-2026-08-13-12 — a blind pass leaves a fingerprint
+**Source:** running the two-pass method · **Verdict:** our fault, cheap
+
+The method says to blank `assessment.note` before the first pass. Blanking only
+the note leaves `"provider": "deepseek"` beside it, which still tells the
+reader an assessment existed, was withheld, and whose it was. My instruction
+was incomplete, and following it produced a bundle that looked — to me, for
+several minutes — like a bug in our own code.
+
+**Earns:** a `?blind=1` parameter that omits the whole `assessment` block
+server-side, and a "copy blind" option beside the existing copy action, so the
+pass never depends on hand-editing JSON. Until then: blank the entire block,
+not just the note.
+
 ### F-2026-08-12-09 — `opening: null` says "not part of an opening" when it means "I did not look far enough back"
 **Source:** ChatGPT, propagation link EA3GKP-10 → CQ0PSI-3 · **Verdict:** our fault
 
