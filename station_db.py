@@ -67,6 +67,75 @@ def silence_history_range(path: str) -> Optional[dict[str, int]]:
         con.close()
 
 
+def cell_silence_history(path: str, cell: str,
+                         limit: int = 12) -> dict[str, Any]:
+    """Past alerting snapshots for one cell, summarised.
+
+    Without this, an exported evidence bundle is a single frame: it can say
+    "one of seven stations is quiet" but not whether that station is the last
+    one still down after the other six came back. That is the first question
+    an operator asks, and a reader with no way to answer it will guess — so
+    the answer is served here instead.
+
+    Note the history is deliberately sparse: only cells with at least one
+    silent station are snapshotted, so a gap means "nothing was silent", not
+    "not recorded".
+    """
+    out: dict[str, Any] = {"snapshots": 0, "alerting_snapshots": 0,
+                           "peak": None, "recent": [], "per_station": {}}
+    if not Path(path).exists():
+        return out
+    con = sqlite3.connect(path)
+    try:
+        row = con.execute(
+            "SELECT COUNT(*), COALESCE(SUM(alert),0), MIN(ts), MAX(ts) "
+            "FROM silence_history WHERE cell = ?", (cell,)).fetchone()
+        if not row or not row[0]:
+            return out
+        out["snapshots"] = int(row[0])
+        out["alerting_snapshots"] = int(row[1])
+        out["first_ts"], out["last_ts"] = int(row[2]), int(row[3])
+
+        peak = con.execute(
+            "SELECT ts, silent, baseline, ratio FROM silence_history "
+            "WHERE cell = ? ORDER BY silent DESC, ts DESC LIMIT 1",
+            (cell,)).fetchone()
+        if peak:
+            out["peak"] = {"ts": int(peak[0]), "silent": peak[1],
+                           "baseline": peak[2], "ratio": peak[3]}
+
+        for ts_, silent, baseline, ratio, alert, calls in con.execute(
+                "SELECT ts, silent, baseline, ratio, alert, silent_calls "
+                "FROM silence_history WHERE cell = ? "
+                "ORDER BY ts DESC LIMIT ?", (cell, limit)):
+            try:
+                parsed = json.loads(calls or "[]")
+            except Exception:
+                parsed = []
+            out["recent"].append({
+                "ts": int(ts_), "silent": silent, "baseline": baseline,
+                "ratio": ratio, "alert": bool(alert), "silent_calls": parsed,
+            })
+
+        # How often each station was named silent across the whole history —
+        # this separates "never came back" from "goes quiet regularly".
+        counts: dict[str, int] = {}
+        for (calls,) in con.execute(
+                "SELECT silent_calls FROM silence_history WHERE cell = ?",
+                (cell,)):
+            try:
+                for c in json.loads(calls or "[]"):
+                    counts[c] = counts.get(c, 0) + 1
+            except Exception:
+                continue
+        out["per_station"] = counts
+        return out
+    except sqlite3.Error:
+        return out
+    finally:
+        con.close()
+
+
 def load_silence_history(path: str, ts: int) -> dict[str, Any]:
     """Return the snapshot nearest to (at or before) the requested time.
 

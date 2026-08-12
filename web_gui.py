@@ -1875,14 +1875,36 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
         state = mgr._station_db.silence_state(c["silent_calls"])
     except Exception:
         state = {}
+    # The cell's past. A single frame cannot answer "is this the last station
+    # still down after the others came back", which is the first thing anyone
+    # asks — and a reader who cannot answer it from the file will invent an
+    # answer instead. Off the event loop: it scans this cell's whole history.
+    loop = asyncio.get_event_loop()
+    try:
+        history = await loop.run_in_executor(
+            None, station_db_module.cell_silence_history,
+            mgr._sta_db_path, cell)
+    except Exception:
+        history = {}
+
     now = int(time.time())
+    seen_silent = history.get("per_station", {}) if history else {}
     stations = []
     for call in c["silent_calls"]:
         st = state.get(call)
         if not st:
             stations.append({"call": call, "detail": "no longer tracked"})
             continue
-        stations.append({**st, "silent_for_s": max(0, now - st["last_seen"])})
+        stations.append({
+            **st,
+            "silent_for_s": max(0, now - st["last_seen"]),
+            # Counted across stored snapshots: distinguishes a station that
+            # never came back from one that goes quiet regularly.
+            "silent_in_past_snapshots": seen_silent.get(call, 0),
+            # On the still-missing list = caught in an alert and never heard
+            # since. Absent = it did come back, whatever it is doing now.
+            "on_still_missing_list": call in mgr._missing,
+        })
 
     try:
         cfg = mgr.get_config()
@@ -1900,6 +1922,10 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
         },
         "cell": c,
         "stations": stations,
+        # Sparse by design: only cells with at least one silent station are
+        # snapshotted, so a gap means "nothing was silent here", not "not
+        # recorded". Stated in the caveats too.
+        "cell_history": history,
         "quakes": _quake_evidence(c),
         "assessment": {
             "note": note,
@@ -1919,7 +1945,14 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
         },
         "caveats": [
             "Point-in-time snapshot: the cell may have recovered since "
-            "generated_at.",
+            "generated_at. Use cell_history for what came before it, and do "
+            "not infer a past outage the history does not show.",
+            "cell_history is sparse by design: only cells with at least one "
+            "silent station are snapshotted, so a gap means nothing was "
+            "silent, not that nothing was recorded.",
+            "station 'type' is derived from the APRS symbol the operator "
+            "chose, not from what the equipment is. A D-Star gateway "
+            "beaconing a weather symbol reads as a weather station here.",
             "A quake within the search radius is a candidate, not a cause. "
             "Weigh offset_s: a long gap between quake and silence is "
             "coincidence, not causation.",
