@@ -149,6 +149,38 @@ operator picked, not from the equipment.
 
 **Fix:** stated in the caveats of both the silence and station bundles.
 
+### F-2026-08-12-08 — a test that stubs the function under test proves nothing
+**Source:** operator, propagation popup on the live map · **Verdict:** our fault
+**Closed:** v3.2.9
+
+"Copy as AI prompt" put nothing on the clipboard and showed no warning. The
+endpoint was healthy — the same link returned 200 with a full bundle.
+
+Chrome resolves `navigator.clipboard.write` even when the promise inside
+`ClipboardItem` rejects. That resolution was being read as proof the copy had
+happened, so a failed fetch produced *"Evidence copied"* with the clipboard
+untouched — inviting a paste of whatever was there before. The same shape as
+F-2026-08-12 v3.2.1: a failed copy passing as a successful one, arriving
+through a different door.
+
+The reason it survived a test pass is the part worth keeping. The v3.2.7 test
+did this:
+
+```js
+window.propEvidence = function(c,g,t,p){ called = {...} };
+links[1].click();
+```
+
+It stubbed the very function it was testing. It proved the button was wired to
+*something* and nothing whatsoever about what the button does. Only the success
+path was ever exercised end to end; the four failure branches had never run.
+
+**Rule:** never stub the unit under test. Stub its boundaries — fetch, the
+clipboard — and let the real code run. Enumerate the failure branches
+explicitly: server error, network failure, permission refusal, synchronous
+throw, success. All five are checked now, across the three exports that share
+the exporter.
+
 ### F-2026-08-12-07 — a pip resolver error lists the constraints of versions it rejected
 **Source:** building the 32-bit Windows release · **Verdict:** my own error, published
 **Closed:** corrected in the v3.2.4 release notes, `requirements-build-win32.txt` and here
