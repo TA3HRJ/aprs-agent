@@ -37,7 +37,26 @@ Two refinements learned the hard way:
   model reaches its own conclusion before seeing ours. Then show it the note
   and see whether it moves. If it moves toward a note that was wrong, the note
   is anchoring readers rather than informing them, and you have just measured
-  the damage.
+  the damage. On a silence bundle `cell.cause` is a second, quieter conclusion
+  — blank that too for a strict blind pass. Keep `detection`: parameters are
+  not conclusions.
+
+### What a good reading looks like
+
+The third test (ChatGPT, F-09) invented nothing, did the threshold arithmetic
+by hand, noticed that a σ of 285 km against a mean of 66 km makes a baseline
+incoherent rather than merely unestablished, and put its confidence on a
+*negative* claim — 97% that this was **not** demonstrably an opening.
+
+Compare the second test, which put 73% on a *positive* claim and manufactured
+the support for it. The difference is not intelligence, it is which direction
+the confidence points when the evidence is thin. A reading that gets more
+certain as the data gets thinner is the signature to watch for, in any model
+and in any of us.
+
+Note also that a clean reading still produced two findings. It did not find a
+mistake; it found the questions the file could not answer, which is the more
+useful failure.
 
 ---
 
@@ -84,6 +103,69 @@ the gate has no usable baseline, so the absolute floor decided alone.
 **Earns:** when `established` is false, say plainly that mean and sigma are not
 meaningful yet and that the absolute floor made the decision. Handing over
 numbers with only a quiet flag beside them is an invitation to misread.
+
+### F-2026-08-12-09 — `opening: null` says "not part of an opening" when it means "I did not look far enough back"
+**Source:** ChatGPT, propagation link EA3GKP-10 → CQ0PSI-3 · **Verdict:** our fault
+
+The reading was clean — no invention, correct arithmetic, and it refused to
+call an opening on one sender. Its closing line asked for exactly the thing
+that would change its mind: *another independent sender in the same field
+within 30 minutes*.
+
+That data existed and the bundle did not carry it.
+
+- An IM opening **was** recorded at 20:25 with senders `EA3GKP` and `ED8YAC` —
+  the same sender as the exported link.
+- A stored event containing that exact `EA3GKP-10 → CQ0PSI-3` link exists at
+  ts 1786562388. The exported link is ts 1786569244, **1.9 hours later**.
+  `find_prop_event` searches ±1 hour, missed it, and reported `opening: null`.
+- At the time of export, field IM held **9 anomalous links from 5 distinct
+  senders** in the preceding 30 minutes. The opening was still running.
+
+The cause is structural: one event row is written per episode, because
+`_prop_active` suppresses re-alerting — but links keep arriving for hours
+afterwards. Every link after the first hour of an episode reports "no opening".
+
+And the field is ambiguous even when it works. `opening: null` currently means
+"no recorded event containing this exact link within ±1 h", which a reader
+takes as "this was not part of an opening". Those are different claims.
+
+**Earns, as one change to the propagation bundle:**
+
+1. **Live field context**, present whether or not a stored event matched: the
+   other anomalous links in the same Maidenhead field within the opening
+   window, and the count of distinct senders. For this link that would have
+   read "9 links, 5 senders" and inverted the reader's conclusion.
+2. **Repeat observations of the same sender→gate pair.** Measured on the live
+   feed: 5 of 46 pairs appear more than once, at *identical* distances, spread
+   over 5–9 minutes. Two packets making the same path is direct evidence
+   against a one-off GPS fault — the exact doubt the caveats raise and then
+   leave unanswered.
+3. **Three states instead of one**: a recorded event exists / the rule is met
+   right now but no event was written / genuinely a single sender.
+
+Belongs in the same batch as F-03: both need the same part of the propagation
+data, and neither should be rushed.
+
+### F-2026-08-12-10 — the export prompt asks one question where there are three
+**Source:** ChatGPT, same link · **Verdict:** our fault, cheap
+
+The prompt shipped in `prop_prompt` asks whether the link "indicates a genuine
+propagation opening and how confident you are" — one verdict. ChatGPT split it
+on its own into three, and the three answers differed:
+
+| question | its answer |
+|---|---|
+| is the link anomalous for this gate? | strong |
+| is it an opening? | insufficient |
+| was the RF path physically real? | uncertain — positions are unverified |
+
+Collapsing those into one number loses the part an operator can act on. The
+same applies to the silence prompt: *is this cluster real* and *is the cause
+what the note says* are separate questions.
+
+**Earns:** ask for the three separately in the prompt text. No code beyond the
+i18n strings.
 
 ### F-2026-08-12-03 — propagation thresholds have never been calibrated
 **Source:** carried from the 2026-07 backlog · **Verdict:** open work, data now ready
