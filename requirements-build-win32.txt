@@ -1,0 +1,77 @@
+# Exact build environment for the Windows (32-bit) executables.
+#
+# requirements.txt states what the application needs; this file states what a
+# release was actually built against, so a build can be reproduced later
+# instead of drifting with whatever PyPI serves that day.
+#
+# Interpreter: CPython 3.13.9, 32-bit (python.org "Windows installer (32-bit)")
+#   Recreate with:
+#     C:\Python313-32\python.exe -m pip install -r requirements-build-win32.txt
+#     C:\Python313-32\python.exe -m PyInstaller aprs_agent.spec --noconfirm
+#
+# Two ceilings worth knowing before bumping anything here:
+#
+#   cryptography is held below 46 by atproto (every published atproto release
+#   requires cryptography<46), not by the 32-bit target — the same cap applies
+#   on 64-bit. 45.0.7 is the newest release that satisfies it.
+#
+#   cryptography stopped publishing 32-bit Windows wheels after 48.0.0, so if
+#   atproto ever lifts its cap, 48.0.0 is the last version installable here
+#   without a Rust toolchain. Beyond that, 32-bit Windows means dropping
+#   Bluesky or moving the build to 64-bit.
+
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.3
+aiosignal==1.4.0
+aiosmtplib==5.1.2
+altgraph==0.17.5
+annotated-types==0.8.0
+anyio==4.14.2
+aprslib==0.7.2
+atproto==0.0.69
+attrs==26.1.0
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.4.9
+click==8.4.2
+colorama==0.4.6
+cryptography==45.0.7
+distro==1.9.0
+dnspython==2.8.0
+frozenlist==1.8.0
+h11==0.16.0
+httpcore==1.0.9
+httpcore2==2.10.0
+httpx==0.28.1
+httpx2==2.10.0
+idna==3.18
+jiter==0.16.0
+libipld==3.4.1
+multidict==6.7.1
+oauthlib==3.3.1
+openai==3.0.0
+packaging==26.3
+pefile==2024.8.26
+pillow==12.3.0
+propcache==0.5.2
+pycparser==3.0
+pydantic==2.13.4
+pydantic_core==2.46.4
+pyinstaller==6.22.0
+pyinstaller-hooks-contrib==2026.6
+pystray==0.19.5
+pywin32-ctypes==0.2.3
+requests==2.34.2
+requests-oauthlib==2.0.0
+setuptools==84.0.0
+six==1.17.0
+sniffio==1.3.1
+tomli_w==1.2.0
+tqdm==4.70.0
+truststore==0.10.4
+tweepy==4.17.0
+typing-inspection==0.4.3
+typing_extensions==4.16.0
+urllib3==2.7.0
+websockets==15.0.1
+yarl==1.24.5

@@ -23,8 +23,11 @@ env/
 .env/
 
 # ── PyInstaller build output
-build/
-dist/
+# Wildcards on purpose: a build into dist313/ (a second interpreter, kept
+# beside the existing one) slipped past bare "dist/" and put 274 MB of
+# binaries into a commit.
+build*/
+dist*/
 *.spec
 !aprs_agent.spec
 
