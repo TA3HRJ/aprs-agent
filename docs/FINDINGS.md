@@ -104,6 +104,53 @@ the gate has no usable baseline, so the absolute floor decided alone.
 meaningful yet and that the absolute floor made the decision. Handing over
 numbers with only a quiet flag beside them is an invitation to misread.
 
+### F-2026-08-13-14 — a caveat that is read and then reasoned past is not strong enough
+**Source:** three models on silence cell OM73 (Henan) · **Verdict:** our fault, cheap
+
+Same bundle, three readings. ChatGPT (~95%) and Gemini (85–90%) both opened
+with `cell_history` — **567 of 567 snapshots alerting** across roughly two
+weeks, with `BH6AJW-8` alone silent in 511 of them — and correctly called it
+chronic non-visibility. DeepSeek (82%) said severe weather, and never mentioned
+`cell_history` at all. A storm does not last a fortnight.
+
+Two things it got wrong, and they are different in kind.
+
+**The one to fix.** Four of the five silent stations carry the `rain-shower`
+symbol. DeepSeek quoted our caveat that the type comes from the operator's
+symbol choice, and then reasoned past it: *"it is still a meaningful signal —
+these operators have deliberately set their equipment to report rain, strongly
+implying that precipitation is actively occurring."*
+
+It does not. The symbol is a **static configuration**, chosen once when the
+station was set up. It does not change with the weather, and a rain-cloud icon
+says nothing about whether it is raining now. Our caveat says where the field
+comes from but never says the field is *fixed*, and that gap is exactly the
+one a reader walks through.
+
+**Earns:** say it outright — *"the symbol is a fixed setting chosen when the
+station was configured; it does not change with conditions and reports nothing
+about the current weather."* A caveat has to close the inference, not just name
+the source.
+
+**The one to leave alone.** It also built a west-to-east storm track from the
+onset times. Checked against the data, that trend is *partly real* — four of
+five fit, one steps westward — and one duration was misread (BD6ITP-11 is 6.6 h
+silent, not the 4.1 h quoted). But the pattern being real does not matter here,
+because the fourteen-day history makes any single-event explanation impossible.
+The failure is not seeing a pattern; it is not looking at the field that made
+the pattern irrelevant.
+
+**Also earns, separately:** the reader should not have to scan 567 rows to
+learn that this cell always looks like this. In this bundle `peak` equals the
+*current* state — 5 of 8, ratio 0.62 — and every snapshot is alerting. One
+field placing the current ratio inside the cell's own distribution would say
+"this is unremarkable for this cell" in a single number.
+
+**Worth recording as validation:** `cell_history` was added in v3.2.5 for
+exactly this. The two readers who used it were right; the one who skipped it
+was wrong. The field is doing its job for readers who read it, which is all a
+field can do.
+
 ### F-2026-08-13-13 — the decisive fact is missing from the bundle, and the classifier reads its absence as an outage
 **Source:** ChatGPT, silence cell KO84 (Tula/Kaluga) · **Verdict:** our fault
 **This is the one to fix first.**
