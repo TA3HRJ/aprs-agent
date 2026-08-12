@@ -1720,6 +1720,18 @@ function renderSilence(cells){
 let propLines={};
 const PROP_SHOW_S=3600;
 function propColor(km){return km<600?'#2ec27e':km<1200?'#62a0ea':'#dc8add'}
+// Hover opens these popups because a 3px dashed line is almost impossible to
+// click precisely. That was fine while the popup only carried text; now it
+// holds the export buttons, and the cursor has to leave the line to reach
+// them. One shared timer keeps the popup alive across that gap.
+let propCloseTimer=null;
+function propHold(){clearTimeout(propCloseTimer);propCloseTimer=null}
+function propScheduleClose(entry){
+  clearTimeout(propCloseTimer);
+  propCloseTimer=setTimeout(function(){
+    if(!entry.pinned)entry.hit.closePopup();
+  },400);
+}
 function renderProp(links,hist){
   if(!map)return;
   // While the timeline shows a past snapshot, only HISTORICAL links (from
@@ -1755,12 +1767,43 @@ function renderProp(links,hist){
     // A thin dashed line is hard to point at precisely, so an invisible
     // wide line underneath does the actual hit-testing (click AND hover)
     // while the visible line on top stays visually unobtrusive.
-    const hit=L.polyline(coords,{color:col,weight:16,opacity:0}).addTo(map)
-      .bindPopup(popupHtml)
-      .on('mouseover',function(){this.openPopup()})
-      .on('mouseout',function(){this.closePopup()});
+    const hit=L.polyline(coords,{color:col,weight:16,opacity:0}).addTo(map);
     const vis=L.polyline(coords,{color:col,weight:3,opacity:.8,dashArray:'6 6',interactive:false}).addTo(map);
-    propLines[k]={hit:hit,vis:vis,note:l.note||'',remove:function(){map.removeLayer(hit);map.removeLayer(vis)}};
+    const entry={hit:hit,vis:vis,note:l.note||'',pinned:false,
+                 remove:function(){map.removeLayer(hit);map.removeLayer(vis)}};
+    hit.bindPopup(popupHtml)
+      .on('mouseover',function(){propHold();this.openPopup()})
+      // Not closed on the spot. The popup now contains buttons, and reaching
+      // them means leaving the line — an immediate close made them
+      // unreachable: the popup vanished the moment the cursor set off towards
+      // it. The delay bridges that gap, and hovering the popup itself cancels
+      // the close entirely.
+      .on('mouseout',function(){propScheduleClose(entry)})
+      // A click pins it, so a slow or interrupted move never loses the popup,
+      // and a tap on a touch screen (where there is no hover at all) behaves
+      // the same way. Clicking the map or another line still closes it.
+      //
+      // Deferred by a tick on purpose: Leaflet's own click handler TOGGLES a
+      // bound popup, so pinning inline was undone a moment later — it closed
+      // the popup this had just opened, and popupclose cleared the pin. This
+      // runs after that toggle, whatever the toggle decided to do.
+      .on('click',function(){
+        const self=this;
+        setTimeout(function(){entry.pinned=true;self.openPopup()},0);
+      })
+      .on('popupopen',function(e){
+        // Native listeners on purpose: Leaflet's DomEvent maps mouseenter to
+        // mouseover plus a relatedTarget test, which is indirection this does
+        // not need and which cannot be exercised in a test.
+        const el=e.popup.getElement();
+        if(el&&!el._propBound){
+          el._propBound=1;
+          el.addEventListener('mouseenter',propHold);
+          el.addEventListener('mouseleave',function(){propScheduleClose(entry)});
+        }
+      })
+      .on('popupclose',function(){entry.pinned=false});
+    propLines[k]=entry;
   }
   for(const k in propLines){
     if(!seen[k]){propLines[k].remove();delete propLines[k]}
