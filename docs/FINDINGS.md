@@ -187,6 +187,55 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-13-17 — an alert should mean a change; ours means a state
+**Source:** ChatGPT, Gemini and DeepSeek independently, silence cell OM72 · **Verdict:** our fault
+**This outranks the rest of package B. It is F-04 arriving with its answer attached.**
+
+Three unrelated models, given the same bundle under the new three-question
+prompt, reached the same verdict without being led there. ChatGPT put it most
+sharply:
+
+> the strongest signal in the dataset is actually a persistent
+> detector-selection bias toward chronically quiet stations
+
+OM72 has **494 stored snapshots and all 494 are alerting**. The cell has been
+in alert state for its entire recorded history. The same calls recur —
+BH6ALJ-6 in 429 of them, BH6AJG-15 in 423, BG3OTT-11 in 421 — with onsets
+scattered across tens of hours and no shared gate.
+
+Our `alert` flag answers "does this cell currently satisfy min_silent and
+min_ratio". It does not answer "has anything changed", and those are different
+questions. A cell whose normal condition satisfies the rule alerts forever, and
+the operator is notified about a state rather than an event. The `context`
+block added in v3.2.12 lets a reader *notice* this — all three quoted it — but
+noticing is not the same as the detector being right.
+
+This is the third watch scenario written into [NEXT.md](NEXT.md), and it
+arrived within a day: not "shared_gate climbing" but "cells still alerting
+forever, and the alert itself is the artefact".
+
+**Earns, and this needs the user's judgement before any code:** an alert should
+require a *change* — a cell entering the state, or worsening materially — not
+merely being in it. Options, in rough order of intrusiveness:
+
+1. Keep detection exactly as it is, and suppress *notification* for a cell that
+   has been alerting continuously for N snapshots. Cheapest, reversible, and
+   changes nothing about what the map shows.
+2. Mark chronic cells in the payload (`chronic: true` plus how long) so the
+   map, the alert list and the note can all say "ongoing, not new".
+3. Change what `alert` means. Most correct, most disruptive — it touches the
+   map, the history table's meaning and every stored snapshot's comparability.
+
+Option 1 or 2 first. Option 3 is a detection change and would need its own
+evidence, which is the mistake this project has already paid for once.
+
+**Also recorded: the v3.2.13 text changes worked.** All three models answered
+the three questions separately and gave *decreasing* confidence as the question
+narrowed — the shape the split was meant to produce. And none repeated the
+rain-shower inference; DeepSeek, which made exactly that mistake two days
+earlier, did not mention weather at all. A caveat that closes the inference
+behaves differently from one that names the source.
+
 ### F-2026-08-13-16 — the gate baseline in the bundle is not the one the decision was made against
 **Source:** ChatGPT, propagation link IW4EGP-2 → IV3HQC-10 · **Verdict:** our fault
 **Fix this with F-03: they need the same field.**
