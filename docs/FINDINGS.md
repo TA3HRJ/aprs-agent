@@ -179,6 +179,40 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-13-16 — the gate baseline in the bundle is not the one the decision was made against
+**Source:** ChatGPT, propagation link IW4EGP-2 → IV3HQC-10 · **Verdict:** our fault
+**Fix this with F-03: they need the same field.**
+
+```
+gate_baseline : samples 28, established true, mean 727.3, sigma 679.6,
+                threshold 3445.8 km
+link          : 870.5 km
+```
+
+The reader's verdict: *"the link is not even anomalous relative to this gate's
+own baseline"* — and it is right. 870 km is nowhere near a 3446 km threshold.
+
+So why was it flagged? Because the numbers shown are the baseline **after** the
+link, and after the twenty-seven others that followed it. The decision used the
+pre-update baseline — the code says so explicitly, and folds the outlier in
+only afterwards so it cannot mask itself — but that value is never stored, so
+the bundle reports today's.
+
+The result is evidence that contradicts itself. A careful reader concludes the
+link should not have been flagged, and is correct about the numbers in front of
+them while being wrong about what happened. Our own caveat describes the drift
+and the numbers are still presented as though they were the grounds.
+
+**Earns:** record the gate's `samples`, `mean`, `sigma` and threshold **as they
+stood at flag time**, on the link, and show both in the bundle — judged
+against, and as it stands now. The gap between them is itself the interesting
+part: it is the caveat made visible instead of merely asserted.
+
+**Note the overlap.** F-03 is blocked on exactly this field: the calibration
+question is how many anomalies came from gates with no usable baseline, which
+cannot be counted without the sample count at flag time. One change closes
+both, and neither is urgent enough to rush.
+
 ### F-2026-08-13-14 — a caveat that is read and then reasoned past is not strong enough
 **Source:** three models on silence cell OM73 (Henan) · **Verdict:** our fault, cheap
 
