@@ -106,7 +106,13 @@ numbers with only a quiet flag beside them is an invitation to misread.
 
 ### F-2026-08-13-15 — the copy button fails because the event loop is blocked, not because of the clipboard
 **Source:** operator, propagation and silence popups on the live map · **Verdict:** our fault
-**Open. This is the next thing to fix, and it affects the whole API, not the button.**
+**Closed: v3.2.10.** `silence_cells()` now runs in an executor behind a shared
+cache whose window scales with the measured build, and the bundle is fetched
+when the popup opens so the click never waits on the network. Measured on the
+live server afterwards: ten calls through Apache, worst 1.3 s, most about
+0.15 s, **none over two seconds**; `/api/silence` went from stalling the loop
+for roughly half a second to 0.10–0.13 s. Items 1 and 2 below are done; item 3,
+feedback inside the button, is not.
 
 The button appeared to do nothing and show nothing. Both halves were wrong
 diagnoses of mine; the Apache access log settled it.
