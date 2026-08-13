@@ -250,13 +250,39 @@ from "clicked twice" to "the interface is unusable".
 **And worse than first written: closing the tab did not clear it. Restarting
 Chrome did.**
 
-That places the wedge above the page. The only component of ours that outlives
-a tab is the **service worker**: registered per origin, still running after the
-last client goes, and in the path of every shell request — so a stuck one makes
-even a *new* tab fail to load, and only killing the browser clears it. That
-matches the report exactly. It cannot be confirmed from the server side; what
-would settle it is `chrome://serviceworker-internals` or the DevTools network
-panel at the moment it happens.
+That places the wedge above the page. My first guess was the **service worker**
+— per origin, outlives the tab, in the path of every shell request.
+
+**That guess was wrong, and the operator disproved it during an actual
+freeze.** `chrome://serviceworker-internals`, captured mid-wedge, for both
+registrations:
+
+```
+Installation Status : ACTIVATED
+Running Status      : STOPPED
+Renderer process ID : 0
+```
+
+`STOPPED` is the normal idle state. A worker holding something would be
+`RUNNING` with a live renderer process. The service worker is not the culprit.
+
+**Better hypothesis, and it fits every observation:** Chrome keeps one HTTP/2
+session per origin and holds it open for reuse across tabs. Requests that are
+never settled *and never aborted* occupy concurrent streams on that session.
+Fill them and every new request to that origin queues client-side — including a
+page load, including from a fresh tab — while other sites remain fine because
+the pool is per origin. Only restarting the browser tears the session down.
+
+It also explains the thing that puzzled me: during the freeze the server was
+measurably healthy and the access log quiet, because the requests **were never
+being sent**. That is directly checkable next time at no cost: if the Apache
+log shows nothing from the operator's address while the page is frozen, the
+queueing is client-side and this is confirmed.
+
+**This changes the fix.** A sequence token that ignores a stale result is not
+enough — ignoring a response leaves its stream open. The request has to be
+genuinely cancelled with an `AbortController`, so the stream is released. The
+in-flight guard prevents the pile-up; the abort clears what is already there.
 
 The consequence stands regardless of which component holds the lock: **a
 monitoring page whose recovery step is "restart your browser" is not
