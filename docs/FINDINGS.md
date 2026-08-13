@@ -187,6 +187,47 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-13-21 — one outlier blinds a gate: `mean + 4σ` defeats itself
+**Source:** external reading, propagation link EA5URX-7 → EA5CKO-10 · **Verdict:** our fault
+
+```
+gate_baseline : mean 274.6 km,  sigma 839.2 km,  threshold 3631.5 km
+link          : 3369.6 km
+```
+
+σ is **three times the mean**, and the threshold that falls out of
+`max(3*mean, mean + 4*sigma)` is 274.6 + 3356.8 = 3631.4 km. So for this gate
+nothing under 3,631 km can ever be flagged — not even a link at twelve times
+its own mean. The reader put it exactly right: *practically extraordinary, yes;
+anomalous by this rule, no.*
+
+The mechanism is worse than the caveat we already ship. That caveat says a
+permanently unusual gate "slowly becomes its own normal and stops being
+flagged". This is not slow. With EMA variance at alpha 0.05, a single large
+outlier lifts σ far enough to push the threshold up by thousands of kilometres
+**immediately**, and every genuine opening the gate sees afterwards falls under
+it. The rule that is supposed to find outliers is disarmed by the first one it
+meets.
+
+That the link is in the bundle at all means it was flagged on some other basis
+— the absolute floor while the gate was still unestablished, or a baseline
+that has since moved. Which one is unanswerable today, and that is **F-16**:
+the numbers shown are not the numbers that decided. The two findings should be
+fixed together, because F-16's recorded-at-flag-time values are also what would
+let anyone measure how often this blinding happens.
+
+**Earns:** a distance baseline needs a statistic that one outlier cannot
+capture. Options worth measuring before choosing — median with MAD instead of
+mean with σ, a cap on how far σ may exceed the mean, or working in log
+distance, where the spread of RF path lengths is better behaved. All are
+detection changes and none should be picked without the data F-16 unlocks.
+
+**Also, a second instance of F-18.** `EA5URX-7` carries a Spanish prefix while
+reporting a mid-Atlantic position, gated to eastern Spain. The reader gave the
+physical path 55% — appropriately low, since 3,369 km of terrestrial VHF is
+not a thing. A stale or wrong position explains it far more comfortably, and a
+prefix-versus-position field would have said so outright.
+
 ### F-2026-08-13-20 — the detector counts callsigns, not sites
 **Source:** ChatGPT, Gemini and DeepSeek independently, silence cell LN04 · **Verdict:** our fault
 
