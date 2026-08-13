@@ -192,6 +192,11 @@ body.public .stat-bar .cell.diag{display:none!important}
 .sil-ev{margin-top:6px;padding-top:5px;border-top:1px solid #454545;display:flex;gap:10px;font-size:11px}
 .sil-ev a{color:#99c1f1;cursor:pointer;text-decoration:none}
 .sil-ev a:hover{text-decoration:underline}
+/* A link that has started work must not look like one that has not. The
+   repeated clicking behind F-19 came from a link that sat there unchanged for
+   six seconds while it was already fetching. */
+.sil-ev a.ev-busy{opacity:.5;cursor:progress;text-decoration:none}
+.sil-ev a.ev-busy::after{content:" …"}
 .sil-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:6000;background:#2a2a2a;color:#e3e3e3;border:1px solid #555;border-radius:6px;padding:8px 14px;font-size:12px;box-shadow:0 3px 12px rgba(0,0,0,.5)}
 /* Anchored to the map's BOTTOM edge: the alert panel above the map grows and
    shrinks (also while scrubbing history), which moves the map's top edge —
@@ -794,6 +799,9 @@ const S={en:{
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
+  sil_ev_busy:"Still fetching the previous evidence — one request at a time.",
+  sil_ev_slow:"The server did not answer in time. The request was dropped so "
+    +"the rest of the page keeps working — try again.",
   sil_prompt:"Below is machine-collected evidence about a possible APRS radio "
     +"network silence in Maidenhead grid cell {c}, exported from an APRS-Agent "
     +"monitoring station. Answer three questions separately, because their answers differ: "
@@ -910,6 +918,9 @@ const S={en:{
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
   sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
+  sil_ev_busy:"Önceki veri hâlâ alınıyor — aynı anda tek istek.",
+  sil_ev_slow:"Sunucu zamanında yanıt vermedi. Sayfanın geri kalanı çalışmaya "
+    +"devam etsin diye istek iptal edildi — tekrar deneyin.",
   sil_prompt:"Aşağıda, bir APRS-Agent izleme istasyonundan alınmış, {c} "
     +"Maidenhead karesindeki olası bir APRS telsiz ağı sessizliğine ait makine "
     +"toplaması veriler var. Üç soruyu ayrı ayrı yanıtla, çünkü cevapları farklıdır: "
@@ -1515,8 +1526,8 @@ function silPopup(c){
       +(q.place?' · '+esc(q.place):'')+'</span>';
   }
   if(c.ai_note)h+='<br><span style="color:#8ff0a4;font-size:11px">AI: '+esc(c.ai_note)+'</span>';
-  h+='<div class="sil-ev"><a onclick="silEvidence(\''+c.cell+'\',0)">⬇ '+t('sil_dl')
-    +'</a><a onclick="silEvidence(\''+c.cell+'\',1)">📋 '+t('sil_cp')+'</a></div>';
+  h+='<div class="sil-ev"><a onclick="silEvidence(\''+c.cell+'\',0,this)">⬇ '+t('sil_dl')
+    +'</a><a onclick="silEvidence(\''+c.cell+'\',1,this)">📋 '+t('sil_cp')+'</a></div>';
   return h;
 }
 // ── Evidence export ────────────────────────────────────────────────────────
@@ -1632,16 +1643,71 @@ function evTake(url){
     evPrefetch={url:null,promise:null};   // single use: a second copy refetches
     return p;
   }
-  return api('GET',url);
+  // The signal comes from the module-level busy record rather than through a
+  // parameter of its own: the in-flight guard below allows exactly one export
+  // at a time, so "the current export's signal" is unambiguous by construction.
+  return api('GET',url,undefined,evBusy&&evBusy.ctl?evBusy.ctl.signal:undefined);
 }
-function evExport(make,asPrompt){
-  const fail=function(e){silToast((e&&e.fromServer&&e.message)||t('sil_ev_err'))};
-  if(!asPrompt){
-    make(false).then(function(o){silSave(o.js,'application/json',o.name+'.json')})
-      .catch(fail);
+// ── One evidence request at a time ─────────────────────────────────────────
+// Every click used to open its own fetch. On a slow endpoint — and this one
+// has been measured at six seconds — a handful of impatient clicks put a
+// handful of requests on the same HTTP/2 connection and exhausted the origin's
+// concurrent streams. Everything else the page asks that origin for, its own
+// polling included, then waits behind them; the tab appears dead for the two
+// or three minutes they take to drain. Closing the tab did not recover it.
+// Restarting the browser did. That is not an acceptable recovery step for a
+// monitoring page, so the page must not be able to reach that state at all.
+//
+// Three things are needed and no fewer: refuse the second request, be able to
+// abandon the first, and — the part that actually stops the clicking — show
+// the person that their click did something.
+let evBusy=null;                 // {ctl,el} while an export is in flight
+let evBusyToldAt=0;
+const EV_TIMEOUT_MS=20000;
+function evStart(el){
+  const ctl=('AbortController' in window)?new AbortController():null;
+  evBusy={ctl:ctl,el:el||null};
+  if(el){el.classList.add('ev-busy');el.setAttribute('aria-busy','true')}
+}
+function evEnd(){
+  if(evBusy&&evBusy.el){
+    evBusy.el.classList.remove('ev-busy');
+    evBusy.el.removeAttribute('aria-busy');
+  }
+  evBusy=null;
+}
+// An abandoned request is worse than a failed one: it keeps its stream open
+// and counts against the limit for as long as the server holds it. So a
+// request that overruns is aborted outright, and says so — fromServer marks
+// the message as an explanation worth showing rather than noise.
+function evDeadline(p){
+  const ctl=evBusy&&evBusy.ctl;
+  let timer;
+  return Promise.race([p,new Promise(function(_,rej){
+    timer=setTimeout(function(){
+      if(ctl){try{ctl.abort()}catch(e){}}
+      const err=new Error(t('sil_ev_slow'));err.fromServer=true;rej(err);
+    },EV_TIMEOUT_MS);
+  })]).then(function(v){clearTimeout(timer);return v},
+            function(e){clearTimeout(timer);throw e});
+}
+function evExport(make,asPrompt,el){
+  if(evBusy){
+    // Saying nothing is what produced the repeated clicking in the first
+    // place. Rate-limited so six fast clicks leave one toast, not six.
+    const now=Date.now();
+    if(now-evBusyToldAt>1500){evBusyToldAt=now;silToast(t('sil_ev_busy'))}
     return;
   }
-  const pending=make(true);
+  evStart(el);
+  const fail=function(e){silToast((e&&e.fromServer&&e.message)||t('sil_ev_err'))};
+  if(!asPrompt){
+    evDeadline(make(false))
+      .then(function(o){silSave(o.js,'application/json',o.name+'.json')})
+      .catch(fail).then(evEnd);
+    return;
+  }
+  const pending=evDeadline(make(true));
   // A bundle that never arrived must say so, exactly once, whatever the
   // clipboard reports. Chrome RESOLVES clipboard.write even when the promise
   // inside ClipboardItem rejects, so the write succeeding is not evidence
@@ -1650,6 +1716,10 @@ function evExport(make,asPrompt){
   // different hat: a failed copy passing as a successful one.
   let failed=false;
   const guarded=pending.catch(function(e){failed=true;fail(e);throw e});
+  // Released the moment the network work settles. The clipboard write that
+  // follows costs no connection, so holding the guard across it would only
+  // block a legitimate second export for no reason.
+  guarded.then(evEnd,evEnd);
   // The write must be ISSUED inside the click gesture. Safari (iOS in
   // particular) rejects writeText() once an await has broken the gesture
   // chain — and because a rejected write is a no-op, the clipboard keeps
@@ -1676,14 +1746,17 @@ function evExport(make,asPrompt){
   }
   guarded.then(silCopyFallback).catch(function(){});
 }
-function silEvidence(cell,asPrompt){
-  evExport(function(p){return silBundle(cell,p)},asPrompt);
+// `el` is the link that was clicked, passed as `this` from the popup markup —
+// it is what wears the working state, and it is the only part of the F-19 fix
+// the person clicking actually sees.
+function silEvidence(cell,asPrompt,el){
+  evExport(function(p){return silBundle(cell,p)},asPrompt,el);
 }
-function propEvidence(call,gate,ts,asPrompt){
-  evExport(function(p){return propBundle(call,gate,ts,p)},asPrompt);
+function propEvidence(call,gate,ts,asPrompt,el){
+  evExport(function(p){return propBundle(call,gate,ts,p)},asPrompt,el);
 }
-function staEvidence(callsign,asPrompt){
-  evExport(function(p){return staBundle(callsign,p)},asPrompt);
+function staEvidence(callsign,asPrompt,el){
+  evExport(function(p){return staBundle(callsign,p)},asPrompt,el);
 }
 // Active silence events, listed above the panel so a visitor sees them
 // without having to find and click a red square on the map.
@@ -1823,8 +1896,8 @@ function renderProp(links,hist){
         +'<span style="opacity:.7">'+t('prop_link')+'</span>'
         // The distance alone says nothing without the gate's own baseline and
         // the opening it belongs to, and neither is on the map.
-        +'<div class="sil-ev"><a onclick="propEvidence('+args+',0)">⬇ '+t('sil_dl')
-        +'</a><a onclick="propEvidence('+args+',1)">📋 '+t('sil_cp')+'</a></div>';
+        +'<div class="sil-ev"><a onclick="propEvidence('+args+',0,this)">⬇ '+t('sil_dl')
+        +'</a><a onclick="propEvidence('+args+',1,this)">📋 '+t('sil_cp')+'</a></div>';
     if(propLines[k]){
       // Position/color are immutable once drawn, but the AI note can land
       // after the initial draw (an opening event needs a 2nd sender before
@@ -1968,8 +2041,8 @@ async function showDetail(r){
   // Same export as the map popups: a station record is evidence too, and the
   // caveat that its "type" is a symbol the operator chose travels with it.
   const sc=String(r.callsign).replace(/'/g,'');
-  html+='<div class="sil-ev"><a onclick="staEvidence(\''+sc+'\',0)">⬇ '+t('sil_dl')
-       +'</a><a onclick="staEvidence(\''+sc+'\',1)">📋 '+t('sil_cp')+'</a></div>';
+  html+='<div class="sil-ev"><a onclick="staEvidence(\''+sc+'\',0,this)">⬇ '+t('sil_dl')
+       +'</a><a onclick="staEvidence(\''+sc+'\',1,this)">📋 '+t('sil_cp')+'</a></div>';
   $('sd-body').innerHTML=html;
   const dc=dotClass(r);
   const statusText=dc==='on'?t('sta_online'):dc==='off'?t('sta_offline'):t('sta_db_only');
@@ -1992,9 +2065,10 @@ function connectWS(){const p=location.protocol==='https:'?'wss:':'ws:';ws=new We
 // login returns cleanly. Without this a poll would keep parsing login HTML
 // as JSON and the app would look frozen instead of asking you to sign in.
 let authBounced=false;
-async function api(m,p,b){
+async function api(m,p,b,signal){
   const o={method:m,headers:{}};
   if(b!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}
+  if(signal)o.signal=signal;                 // caller can abandon a slow request
   const res=await fetch(p,o);
   if(res.status===401||(res.redirected&&/\/login\.html/.test(res.url))){
     if(!authBounced){authBounced=true;location.href='/login.html'}

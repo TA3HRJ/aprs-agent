@@ -9,7 +9,7 @@
 // Bumping this name is what evicts every client's old entries: activate()
 // deletes each cache whose key differs. Bump it whenever a stale shell could
 // strand someone.
-const CACHE = "aprs-agent-v15";
+const CACHE = "aprs-agent-v16";
 // A server that accepts the connection but never answers (which is exactly
 // how the v3.1.2 event-loop livelock presented) leaves fetch() hanging with
 // no timeout of its own, so the page spins forever instead of falling back
@@ -42,7 +42,13 @@ self.addEventListener("fetch", (e) => {
   if (url.pathname.startsWith("/api") || url.pathname.startsWith("/webhook") || url.pathname === "/ws") return;
 
   if (e.request.mode === "navigate" || url.pathname === "/") {
-    const net = fetch(e.request).then((r) => {
+    // Losing the race below used to leave this fetch running forever. An
+    // un-aborted request keeps its stream on the origin's HTTP/2 session, and
+    // enough of those make every request to the origin queue client-side —
+    // the freeze recorded as F-19. Racing a timeout is not enough on its own;
+    // the loser has to actually be cancelled.
+    const ctl = ("AbortController" in self) ? new AbortController() : null;
+    const net = fetch(e.request, ctl ? { signal: ctl.signal } : undefined).then((r) => {
       // Only cache a genuinely-loaded shell. Caching a 401 (Basic Auth not
       // yet satisfied — happens on cold launches of the iOS Home-Screen
       // standalone app) would trap every future offline fallback on that
@@ -68,7 +74,13 @@ self.addEventListener("fetch", (e) => {
         // Prefer a cached shell over waiting on a stalled server, but if
         // nothing is cached keep waiting on the request already in flight
         // rather than failing outright.
-        caches.match("/").then((hit) => hit || net)
+        caches.match("/").then((hit) => {
+          // Only abort once the cached shell is in hand: with nothing cached
+          // this request is still the only way to answer, so cancelling it
+          // would turn a slow load into a failed one.
+          if (hit && ctl) { try { ctl.abort(); } catch (_) {} }
+          return hit || net;
+        })
       )
     );
     return;

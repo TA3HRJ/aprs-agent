@@ -592,6 +592,39 @@ The prefetch helps the common case and does nothing for this one, because the
 single prefetch slot is consumed by the first click and every later click
 issues its own request.
 
+**Closed: v3.2.14.** Three parts, and none of them is optional:
+
+- **An in-flight guard.** One evidence export at a time, page-wide. A second
+  click does not start a second request — it says so instead, rate-limited so
+  six fast clicks produce one toast rather than six.
+- **A real abort.** `AbortController` on the export, with a 20 s deadline that
+  cancels rather than merely ignores. Ignoring a response leaves its stream
+  open, which is the whole mechanism of this finding.
+- **Visible state on the clicked link.** This is the part that actually stops
+  the clicking, and the reason the other two were needed: the link sat
+  unchanged for six seconds while it was already working, so clicking again was
+  the only reasonable thing for the operator to do.
+
+The service-worker question this entry raised was real and is fixed in the same
+release: the navigate handler's 6 s race left the losing `fetch` running, so
+the shell request kept a stream too. It is now aborted — but only once the
+cached shell is in hand, since with nothing cached that request is still the
+only way to answer.
+
+**Tested against the earlier mistake of stubbing the unit under test.** Only
+the boundaries were replaced (`fetch`, the file save, the toast); `evExport`
+itself ran. Verified: a second and third click while busy issue no request and
+raise exactly one toast; the busy class, `aria-busy` and the `progress` cursor
+appear and are cleared; the guard is reusable immediately afterwards; and a
+request that never answers is abandoned at 20 s, releasing the guard and
+reporting the timeout in the operator's own language rather than a generic
+error. The 20 s case was allowed to run in real time rather than shortened,
+because the timer firing is the part that releases the stream.
+
+**One thing this does not do:** it prevents the page from *creating* the
+condition, it does not repair a session already saturated by something else.
+That is the right scope — the pile-up was ours to cause and ours to stop.
+
 **Earns, one change closing two things:**
 
 - an in-flight guard per action, so a second click while one is running does
