@@ -224,6 +224,20 @@ cells shrink below `min_silent` once co-located callsigns collapse to one? That
 number decides whether this is a tidy-up or the main story behind F-17. Run it
 before writing anything.
 
+**A second observation from a later reading of the same cell**, and it may be a
+finding of its own. `R6YBU-D` and `R6YBU-Y` are absent in **305 of 305**
+snapshots — not merely often, but *every single time a snapshot was taken*.
+Yet they qualify for the baseline, which requires at least five packets and a
+sighting inside the last 24 hours.
+
+A station that has never once been present at snapshot time is not a sensor;
+it is noise with standing. Either it beacons so rarely that its smoothed
+interval misrepresents it, or it beacons in bursts that the sampling always
+misses. Either way, counting it in `baseline` inflates the denominator and
+counting it in `silent` inflates the numerator, at the same time. Worth
+measuring alongside the co-location question: how many baseline members have
+never appeared as present in any stored snapshot?
+
 **Also recorded: v3.2.12 is working in production.** The gate attribution let
 all three models reach a specific, correct answer — a single site's igate down
 for 19.5 hours — where the same shape of cell previously read as a regional
@@ -282,8 +296,12 @@ again. The lockout is temporary — which lowers the alarm without changing the
 verdict, because a monitoring page that locks the operator out for minutes at a
 time is still not acceptable.
 
-Worth noting how long the next one lasts: a drain measured in a minute or two
-points at ordinary request timeouts and confirms the picture.
+**Confirmed: the freeze lasted two to three minutes** — the time the operator
+spent opening `serviceworker-internals` and reporting it — and the page was
+working again on return. That is the drain of ordinary request timeouts, and it
+completes the picture: nothing is permanently stuck, a batch of un-aborted
+requests saturates the origin's connection and the browser recovers once they
+expire. Diagnosis closed; the fix stands as the guard plus `AbortController`.
 
 It also explains the thing that puzzled me: during the freeze the server was
 measurably healthy and the access log quiet, because the requests **were never
