@@ -302,6 +302,39 @@ numerator and denominator come from the same filtered set will always be 1.0,
 and no amount of testing the arithmetic will show it — only asking what the
 denominator actually counted.
 
+**And then the corrected number dissolved F-26's own premise.** Measured
+properly on the live VPS:
+
+| persistence | cells (of 41 meeting the threshold) |
+|---|---|
+| below 0.40 | 29 |
+| 0.40 – 0.74 | 10 |
+| 0.95 – 1.00 | 2 — and both are younger than 24 h |
+
+EN03, the cell three outside models called a chronic artefact on the strength
+of "860 of 860 snapshots alerting", has alerted in **857 of 1787 runs — 48 %**.
+It is intermittent, not permanent. Nothing currently qualifies as chronic, so
+`alert` is back to 41 and the redefinition changes nothing in practice today.
+
+**The readings were misled by our own export, and so was I.** "Alerting in
+every stored snapshot" was true of every cell in the file and therefore said
+nothing about any of them; all three models built their central claim on it,
+at 94–99 % confidence, and I built a release on it. That is the export
+actively misinforming a reader, which this project's own ordering puts above
+everything else — and it reached the outside world before it reached us.
+
+**Not retuning today.** The 0.9 threshold now has a real distribution behind
+it and could plausibly move to 0.5, which would demote two or three cells. But
+adjusting a rule on the same day its measurement was first believed is the
+mistake already recorded against the quake radius, and one snapshot of one
+evening is not a calibration. The numbers are the input to F-04; that is where
+this belongs.
+
+**What stands regardless:** the split between what is stored and what is
+reported, `threshold_met` beside `alert`, the map drawing on the measurement
+rather than the judgement, and a persistence figure that now means what its
+name says. The mechanism is right even though its first premise was not.
+
 ### F-2026-08-13-25 — a shared gate that is alive still means the stations are not independent
 **Source:** same three readings · **Verdict:** our fault
 

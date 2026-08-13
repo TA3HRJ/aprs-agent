@@ -28,16 +28,34 @@ version of the same point.
 **F-15c is closed by F-19** — the copy feedback the operator missed twice now
 lives on the button.
 
-### What to watch, now that two definitions changed
+### Measured on the VPS the same evening — and it changed the answer
 
-- **How many cells go chronic.** If nearly every alerting cell is demoted, the
-  detector is finding almost nothing new and F-04 has its answer. If almost
-  none are, the 90 % threshold is too strict to matter.
-- **Whether the notification volume falls.** That is where the noise and the
-  AI token spend actually were, and it is one number.
+v3.2.15 reported `persistence: 1.00` for all 39 threshold-met cells. That was
+a bug (**fixed in v3.2.16**): only alerting snapshots are stored, so the ratio
+compared a cell's rows against its own rows. Corrected, the live distribution
+is:
+
+| persistence | cells (of 41) |
+|---|---|
+| below 0.40 | 29 |
+| 0.40 – 0.74 | 10 |
+| 0.95 – 1.00 | 2, both younger than 24 h |
+
+**Nothing is chronic today**, so `alert` is back to 41. EN03 — the cell three
+outside models called an artefact on "860 of 860 snapshots" — alerts in **48 %
+of runs**. The premise F-26 was built on came from our own export.
+
+**This is now F-04's input, not a reason to retune.** Moving the threshold to
+0.5 would demote two or three cells, and it may well be right, but one
+evening's snapshot is not a calibration and this project has already been
+burned once by adjusting a rule the day it was questioned.
+
+Still worth watching:
+
+- **Whether any cell reaches 0.9 with more than a day of history.** None has
+  yet; the two at 1.00 are simply too young to judge.
 - **Anything that alerts because it passed its own peak.** That case is the
-  reason plain suppression was rejected, and the first one to appear is worth
-  reading closely.
+  reason plain suppression was rejected, and the first one is worth reading.
 
 ---
 
