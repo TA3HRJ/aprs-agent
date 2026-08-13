@@ -256,6 +256,30 @@ four radios, and if so the ratio's denominator is wrong at the source.
 many distinct gates the silent set actually represents. Four stations at two
 sites behind one gate is a different sentence from four stations going quiet.
 
+### Provenance note for F-22 … F-24 — the readings were selected, not sampled
+The four propagation readings behind F-22, F-23 and F-24 were **chosen by the
+user**: every link they could find originating around GLENT, British Columbia,
+put side by side so the correlation between them would be visible. There are
+no others from that set.
+
+This must be read two ways.
+
+**It weakens nothing in the counts.** `samples: 6` and the anomaly figures come
+from the gate's own counters; which links a human chose to export does not
+change them. F-23 and F-24 stand.
+
+**It is the stronger half.** Selecting by receiving area is exactly what F-22
+proposes the code should do — group by the receiving gate instead of by the
+midpoint's Maidenhead field. The user performed that grouping by hand, and it
+immediately surfaced what four separate popups could not: one gate, several
+unrelated distant senders, `opening: null` on every one. F-22 is therefore not
+an untested proposal. It is a method that has been run once, manually, and
+worked.
+
+What must NOT be done with this set is treat the four readings as four
+independent confirmations. They are one correlated observation of one area,
+which is precisely why it was informative.
+
 ### F-2026-08-13-24 — `mean_km` and `sigma_km` are not a mean and a σ, and every reader has computed with them
 **Source:** four propagation readings (VE7EPT-5 ×2, WA7GMX-8, KC7YRA-9) · **Verdict:** our fault
 
