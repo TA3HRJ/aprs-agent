@@ -647,6 +647,7 @@ body.public .sb-toggle{display:none!important}
     <div class="map-legend">
       <span><i style="background:#e01b24"></i><em data-i="sil_outage">Regional silence (possible outage)</em></span>
       <span><i style="background:#f5c211"></i><em data-i="sil_igate">IGate failure</em></span>
+      <span><i style="background:#f5c211"></i><em data-i="sil_shared_gate">One shared gate — its own state unknown</em></span>
       <span><i style="background:#2ec27e"></i><em data-i="leg_prop1">Opening &lt; 600 km</em></span>
       <span><i style="background:#62a0ea"></i><em data-i="leg_prop2">600–1200 km</em></span>
       <span><i style="background:#dc8add"></i><em data-i="leg_prop3">&gt; 1200 km</em></span>
@@ -786,6 +787,7 @@ const S={en:{
   tab_log:"Live Log",tab_sta:"Stations",tab_map:"Map",
   map_offline:"Map library could not be loaded — an internet connection is required for map tiles.",
   sil_outage:"Regional silence (possible outage)",sil_igate:"IGate failure",
+  sil_shared_gate:"One shared gate — its own state unknown",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
   sil_q_before:"{t} before",sil_q_after:"{t} after",
   sil_dl:"Raw data",sil_cp:"Copy as AI prompt",
@@ -897,6 +899,7 @@ const S={en:{
   tab_log:"Canlı Log",tab_sta:"İstasyonlar",tab_map:"Harita",
   map_offline:"Harita kütüphanesi yüklenemedi — harita karoları için internet bağlantısı gerekir.",
   sil_outage:"Bölgesel sessizlik (olası kesinti)",sil_igate:"IGate arızası",
+  sil_shared_gate:"Tek ortak gate — kendi durumu bilinmiyor",
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
   sil_q_before:"{t} önce",sil_q_after:"{t} sonra",
   sil_dl:"Ham veri",sil_cp:"AI istemi olarak kopyala",
@@ -1474,8 +1477,16 @@ function tlPlay(){
 }
 // ── Silence overlay: Maidenhead cells where stations fell silent together ──
 let silRects={};
+// Three causes now, not two. "One shared gate" is the case where every silent
+// station arrived through a gate this agent cannot see — which used to be
+// reported as a regional outage because its silence could not be proven.
+function silCauseText(cause){
+  if(cause==='igate')return t('sil_igate');
+  if(cause==='shared_gate')return t('sil_shared_gate');
+  return t('sil_outage');
+}
 function silPopup(c){
-  const causeTxt=c.cause==='igate'?t('sil_igate'):t('sil_outage');
+  const causeTxt=silCauseText(c.cause);
   let h='<b>'+c.cell+'</b> — '+causeTxt+'<br>';
   h+=t('sil_stats').replace('{s}',c.silent).replace('{b}',c.baseline)+' ('+Math.round(c.ratio*100)+'%)<br>';
   if(c.since)h+=t('sil_since')+' '+fmtAgoLong(Math.max(0,Math.floor(Date.now()/1000-c.since)))+'<br>';
@@ -1725,12 +1736,12 @@ function renderAlerts(cells){
   s.hidden=false;
   p.innerHTML='';
   for(const c of on){
-    const igate=c.cause==='igate';
+    const igate=c.cause==='igate'||c.cause==='shared_gate';
     const d=document.createElement('div');
     d.className='alert-row';
     let h='<span class="alert-cell'+(igate?' ig':'')+'">'+esc(c.cell)+'</span>'+
       '<span class="alert-txt">'+t('sil_stats').replace('{s}',c.silent).replace('{b}',c.baseline)+
-      ' &middot; '+t(igate?'sil_igate':'sil_outage')+'</span>';
+      ' &middot; '+silCauseText(c.cause)+'</span>';
     if(c.ai_note)h+='<span class="alert-ai">'+esc(c.ai_note)+'</span>';
     d.innerHTML=h;
     p.appendChild(d);
@@ -1744,7 +1755,7 @@ function renderSilence(cells){
   for(const c of cells){
     if(!c.alert||!c.bounds)continue;
     seen[c.cell]=1;
-    const color=c.cause==='igate'?'#f5c211':'#e01b24';
+    const color=(c.cause==='igate'||c.cause==='shared_gate')?'#f5c211':'#e01b24';
     const opts={color:color,weight:1,fillColor:color,fillOpacity:0.10+0.30*Math.min(c.ratio,1)};
     let rc=silRects[c.cell];
     if(rc){rc.setStyle(opts);rc.setPopupContent(silPopup(c))}

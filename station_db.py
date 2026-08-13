@@ -1223,6 +1223,7 @@ class StationDB:
             ratio = c["silent"] / c["baseline"] if c["baseline"] else 0.0
             alert = c["silent"] >= min_silent and ratio >= min_ratio
             cause = "outage"
+            shared_gate = ""
             if alert:
                 # Gates used by the silent stations — excluding silent
                 # stations that are themselves someone's gate (an igate that
@@ -1232,8 +1233,21 @@ class StationDB:
                              if call not in raw_gates}
                 if len(eff_gates) == 1:
                     only_gate = next(iter(eff_gates))
-                    if gate_active(only_gate) is False:
+                    shared_gate = only_gate
+                    state = gate_active(only_gate)
+                    if state is False:
                         cause = "igate"
+                    elif state is None:
+                        # The gate is not in the registry, so we cannot show
+                        # that it went quiet — and "cannot show" used to fall
+                        # through to "outage", the more alarming branch. Most
+                        # igates never beacon their own position, so that is
+                        # the common case, not an edge one: a whole cell was
+                        # reported as a regional power failure when every
+                        # silent station in it arrived through one gate we
+                        # simply cannot see. Sharing a single gate is itself
+                        # strong evidence of a shared path failing.
+                        cause = "shared_gate"
             b = _cell_bounds(c["cell"])
             out.append({
                 "cell": c["cell"],
@@ -1242,6 +1256,12 @@ class StationDB:
                 "ratio": round(ratio, 2),
                 "alert": alert,
                 "cause": cause if alert else "",
+                # Which gate each silent station last arrived through. This is
+                # the fact that settles most cells, and it used to be visible
+                # only to the classifier — readers had to infer it from
+                # timing, or invent something else.
+                "gate_of": dict(c["gate_of"]),
+                "shared_gate": shared_gate if alert else "",
                 "silent_calls": sorted(c["silent_calls"])[:20],
                 "since": int(c["first_silent"]) if c["first_silent"] else None,
                 "bounds": b,

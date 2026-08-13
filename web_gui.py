@@ -295,6 +295,67 @@ def _cell_quakes(cell: str, since_ts: "float | None") -> list:
     return _quakes_near(lat, lon, since_ts)
 
 
+def _gate_evidence(mgr: "AgentManager", c: dict) -> dict:
+    """Which gate each silent station came through, and whether we can see it.
+
+    Eight stations up to 100 km apart all falling quiet inside nine seconds is
+    not a region losing power; it is one path going away. The registry knew
+    which path, and the bundle did not carry it, so readers inferred a "shared
+    dependency" from timing when they could have been told.
+    """
+    gate_of = c.get("gate_of") or {}
+    out: dict = {"gate_of": gate_of, "distinct_gates": len(set(gate_of.values())),
+                 "shared_gate": c.get("shared_gate") or "", "detail": {}}
+    now = time.time()
+    for g in sorted(set(gate_of.values())):
+        if not g:
+            continue
+        r = mgr._station_db._stations.get(g)
+        if r is None or not r.packet_count:
+            out["detail"][g] = {
+                "tracked": False,
+                "note": "this gate is not in the registry — it never beacons "
+                        "its own position, or sits outside the feed. Its "
+                        "silence cannot be confirmed either way",
+            }
+        else:
+            out["detail"][g] = {
+                "tracked": True,
+                "last_seen": int(r.last_seen),
+                "silent_for_s": max(0, int(now - r.last_seen)),
+                # The same 30-minute rule the cause branch uses.
+                "considered_silent": (now - r.last_seen) >= 1800,
+            }
+    return out
+
+
+def _cell_context_stats(c: dict, history: dict) -> dict:
+    """Where the current state sits in this cell's own history.
+
+    A cell that has been at this ratio in every stored snapshot is telling a
+    different story from one that has just reached it, and the difference took
+    reading hundreds of rows to see.
+    """
+    recent = (history or {}).get("recent") or []
+    snaps = (history or {}).get("snapshots") or 0
+    alerting = (history or {}).get("alerting_snapshots") or 0
+    ratio = c.get("ratio") or 0.0
+    at_or_above = sum(1 for r in recent if (r.get("ratio") or 0) >= ratio)
+    return {
+        "snapshots": snaps,
+        "alerting_snapshots": alerting,
+        "always_alerting": bool(snaps) and alerting == snaps,
+        "recent_sampled": len(recent),
+        "recent_at_or_above_current_ratio": at_or_above,
+        "reading": (
+            "this cell has been alerting in every stored snapshot — the "
+            "current state is its normal, not a change"
+            if snaps and alerting == snaps else
+            "this cell is not always alerting; the current state is a change "
+            "from at least some of its history"),
+    }
+
+
 def _quake_evidence(c: dict) -> list:
     """Quake candidates carrying the two fields the map popup never showed:
     how long before the silence each one happened, and its hypocentral
@@ -1028,6 +1089,72 @@ class AgentManager:
         return ("Recent seismic activity near this cell (USGS):\n"
                 + "\n".join(lines) + "\n")
 
+    def _onset_context(self, c: dict) -> str:
+        """How far apart the stations actually fell silent.
+
+        The note used to assert that stations "went silent simultaneously"
+        without ever checking. Sometimes that was true to nine seconds, and
+        sometimes the onsets were spread over eleven hours — the opposite
+        signature — and the sentence read the same either way. A downstream
+        reader then repeated the word while printing the numbers that
+        contradicted it. So the spread is measured and stated, and the model is
+        told what it means.
+        """
+        try:
+            state = self._station_db.silence_state(c.get("silent_calls") or [])
+        except Exception:
+            return ""
+        onsets = sorted(s["since"] for s in state.values() if s.get("since"))
+        if len(onsets) < 2:
+            return ""
+        spread = int(onsets[-1] - onsets[0])
+        if spread < 120:
+            human, reading = f"{spread} seconds", (
+                "essentially simultaneous — consistent with one shared path "
+                "or supply failing at once")
+        elif spread < 1800:
+            human, reading = f"{spread // 60} minutes", (
+                "close together — a shared cause is plausible, though not "
+                "the instant drop a single feed failure produces")
+        else:
+            human = (f"{spread // 3600} hours {(spread % 3600) // 60} minutes"
+                     if spread >= 3600 else f"{spread // 60} minutes")
+            reading = ("far apart — these stations did NOT go down together, "
+                       "which argues against one power or infrastructure "
+                       "event and towards independent or gradual causes")
+        return (f"Onsets span {human} between the first and last station: "
+                f"{reading}.\n")
+
+    def _history_context(self, c: dict) -> str:
+        """What this cell has looked like before now.
+
+        Without it the note diagnosed a fortnight-old condition as a fresh
+        event, at high confidence, and sent that to the operator's phone.
+        """
+        try:
+            h = station_db_module.cell_silence_history(
+                self._sta_db_path, c["cell"], limit=1)
+        except Exception:
+            return ""
+        snaps = h.get("snapshots") or 0
+        if not snaps:
+            return ("No earlier snapshots stored for this cell: as far as the "
+                    "record goes, this is new.\n")
+        alerting = h.get("alerting_snapshots") or 0
+        seen = (h.get("per_station") or {})
+        repeat = [k for k in (c.get("silent_calls") or [])
+                  if seen.get(k, 0) >= max(3, snaps // 2)]
+        line = (f"This cell has {snaps} stored snapshots, {alerting} of them "
+                f"alerting.\n")
+        if snaps and alerting == snaps:
+            line += ("It has been alerting in EVERY stored snapshot, so this "
+                     "state is its normal rather than a change.\n")
+        if repeat:
+            line += (f"These stations are silent in at least half of those "
+                     f"snapshots and are chronically absent rather than newly "
+                     f"lost: {', '.join(repeat[:8])}.\n")
+        return line
+
     async def _assess_silence(self, c: dict, ai_cfg: dict) -> str:
         """Ask the AI Gateway to interpret a silence cluster. Returns a short
         note like "[power_outage/high] …summary…" or "" on failure."""
@@ -1039,17 +1166,26 @@ class AgentManager:
         mins = ""
         if c.get("since"):
             mins = f"Silence began ~{max(0, int(time.time() - c['since']) // 60)} minutes ago.\n"
-        pre = ("all silent stations shared one igate which is itself silent"
-               if c["cause"] == "igate" else
-               "multiple igates involved — infrastructure/power outage possible")
+        if c["cause"] == "igate":
+            pre = "all silent stations shared one igate which is itself silent"
+        elif c["cause"] == "shared_gate":
+            pre = (f"all silent stations arrived through one gate "
+                   f"({c.get('shared_gate') or 'unknown'}) that this agent "
+                   f"cannot see — it never beacons, so its own silence cannot "
+                   f"be confirmed. One shared path failing explains this "
+                   f"better than a regional outage")
+        else:
+            pre = "multiple igates involved — infrastructure/power outage possible"
         prompt = (
             "APRS network silence event.\n"
             f"Maidenhead grid cell: {c['cell']}\n"
-            f"{c['silent']} of {c['baseline']} recently-active stations fell "
-            f"silent together (ratio {c['ratio']}).\n"
+            f"{c['silent']} of {c['baseline']} recently-active stations are "
+            f"silent (ratio {c['ratio']}).\n"
             f"Preliminary signal: {pre}.\n"
             f"Silent stations: {', '.join(c['silent_calls'][:10])}\n"
             f"{mins}"
+            f"{self._onset_context(c)}"
+            f"{self._history_context(c)}"
             f"{self._cell_context(c)}\n"
             f"{self._quake_context(c)}"
             "Consider that some APRS 'stations' are event advisory objects "
@@ -1095,9 +1231,17 @@ class AgentManager:
 
     @staticmethod
     def _format_silence_msg(c: dict, note: str) -> str:
-        icon = "🟡" if c["cause"] == "igate" else "🔴"
-        cause = ("IGate failure" if c["cause"] == "igate"
-                 else "Regional silence — possible outage")
+        # A shared gate is a yellow event, not a red one: it says one path
+        # went away, which is a smaller claim than a region losing power and
+        # is what the evidence usually supports.
+        if c["cause"] == "igate":
+            icon, cause = "🟡", "IGate failure"
+        elif c["cause"] == "shared_gate":
+            icon = "🟡"
+            cause = (f"One shared gate ({c.get('shared_gate') or '?'}) — "
+                     f"not visible to this agent, so its own state is unknown")
+        else:
+            icon, cause = "🔴", "Regional silence — possible outage"
         msg = (f"{icon} SILENCE ALERT — {c['cell']}\n"
                f"{c['silent']} of {c['baseline']} stations silent "
                f"({int(c['ratio'] * 100)}%)\n{cause}\n"
@@ -1118,11 +1262,14 @@ class AgentManager:
                 f"{digest_mins} min")
         lines = []
         for ts, c, note in pending:
-            icon = "🟡" if c["cause"] == "igate" else "🔴"
+            shared = c["cause"] in ("igate", "shared_gate")
+            icon = "🟡" if shared else "🔴"
             hhmm = time.strftime("%H:%M", time.localtime(ts))
+            tag = (" (igate)" if c["cause"] == "igate"
+                   else " (one shared gate)" if c["cause"] == "shared_gate"
+                   else "")
             line = (f"{icon} {hhmm} {c['cell']} — {c['silent']}/"
-                    f"{c['baseline']} silent"
-                    + (" (igate)" if c["cause"] == "igate" else ""))
+                    f"{c['baseline']} silent{tag}")
             if note:
                 line += f"\n   AI: {note}"
             lines.append(line)
@@ -1998,6 +2145,13 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
         # snapshotted, so a gap means "nothing was silent here", not "not
         # recorded". Stated in the caveats too.
         "cell_history": history,
+        # Where the current state sits in this cell's own past, so "is this
+        # unusual for here" does not require reading every snapshot row.
+        "context": _cell_context_stats(c, history),
+        # Which gate each silent station arrived through, and what we know
+        # about those gates. When one gate carries all of them, that single
+        # line decides the cell — and until now it was not in the file.
+        "gates": _gate_evidence(mgr, c),
         "quakes": _quake_evidence(c),
         "assessment": {
             "note": note,
