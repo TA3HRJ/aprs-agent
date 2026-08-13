@@ -175,6 +175,7 @@ body.public .stat-bar .cell.diag{display:none!important}
 .alert-row:last-child{border-bottom:none}
 .alert-cell{font-weight:600;color:#f66;font-family:'Consolas',monospace}
 .alert-cell.ig{color:#f5c211}
+.alert-cell.sg{color:#ff7800}
 .alert-txt{color:var(--fg2)}
 .alert-ai{color:#8ff0a4}
 /* Stations still off the air after an alert — triage order, longest first */
@@ -653,7 +654,8 @@ body.public .sb-toggle{display:none!important}
     <div class="map-legend">
       <span><i style="background:#e01b24"></i><em data-i="sil_outage">Regional silence (possible outage)</em></span>
       <span><i style="background:#f5c211"></i><em data-i="sil_igate">IGate failure</em></span>
-      <span><i style="background:#f5c211"></i><em data-i="sil_shared_gate">One shared gate — its own state unknown</em></span>
+      <span><i style="background:#ff7800"></i><em data-i="sil_shared_gate">One shared gate — its own state unknown</em></span>
+      <span><i style="background:#77767b"></i><em data-i="leg_chronic">Long-standing, not a new event</em></span>
       <span><i style="background:#2ec27e"></i><em data-i="leg_prop1">Opening &lt; 600 km</em></span>
       <span><i style="background:#62a0ea"></i><em data-i="leg_prop2">600–1200 km</em></span>
       <span><i style="background:#dc8add"></i><em data-i="leg_prop3">&gt; 1200 km</em></span>
@@ -800,6 +802,7 @@ const S={en:{
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
+  leg_chronic:"Long-standing, not a new event",
   sil_chronic:"Chronic: alerting in {a} of its {n} recorded snapshots — this "
     +"is the cell's long-standing state, not a new event.",
   sil_ev_busy:"Still fetching the previous evidence — one request at a time.",
@@ -921,6 +924,7 @@ const S={en:{
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
   sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
+  leg_chronic:"Süregelen, yeni bir olay değil",
   sil_chronic:"Kronik: kayıtlı {n} anlık görüntünün {a} tanesinde alarm veriyor "
     +"— bu hücrenin yeni bir olayı değil, süregelen hâli.",
   sil_ev_busy:"Önceki veri hâlâ alınıyor — aynı anda tek istek.",
@@ -1828,10 +1832,11 @@ function renderAlerts(cells){
   s.hidden=false;
   p.innerHTML='';
   for(const c of on){
-    const igate=c.cause==='igate'||c.cause==='shared_gate';
+    // Same split as the map: the two gate causes no longer share a colour.
+    const gcls=c.cause==='igate'?' ig':c.cause==='shared_gate'?' sg':'';
     const d=document.createElement('div');
     d.className='alert-row';
-    let h='<span class="alert-cell'+(igate?' ig':'')+'">'+esc(c.cell)+'</span>'+
+    let h='<span class="alert-cell'+gcls+'">'+esc(c.cell)+'</span>'+
       '<span class="alert-txt">'+t('sil_stats').replace('{s}',c.silent).replace('{b}',c.baseline)+
       ' &middot; '+silCauseText(c.cause)+'</span>';
     if(c.ai_note)h+='<span class="alert-ai">'+esc(c.ai_note)+'</span>';
@@ -1852,8 +1857,15 @@ function renderSilence(cells){
     // demoted instead: grey, and fainter.
     if(!c.threshold_met||!c.bounds)continue;
     seen[c.cell]=1;
+    // igate and shared_gate were the same yellow, which undid the distinction
+    // v3.2.12 was built to make: igate means the gate was SEEN to go quiet,
+    // shared_gate means one gate carries every silent station and we cannot
+    // see it at all. Different evidence, different confidence, so different
+    // colours. Chronic overrides both — "not news" outranks the cause, and
+    // the popup still names it.
     const color=c.chronic?'#77767b'
-               :(c.cause==='igate'||c.cause==='shared_gate')?'#f5c211':'#e01b24';
+               :c.cause==='igate'?'#f5c211'
+               :c.cause==='shared_gate'?'#ff7800':'#e01b24';
     const opts={color:color,weight:1,fillColor:color,
                 fillOpacity:(c.chronic?0.04:0.10)+(c.chronic?0.10:0.30)*Math.min(c.ratio,1)};
     let rc=silRects[c.cell];

@@ -178,6 +178,18 @@ def load_silence_history(path: str, ts: int) -> dict[str, Any]:
             cells.append({
                 "cell": cell, "baseline": baseline, "silent": silent,
                 "ratio": ratio, "alert": bool(alert), "cause": cause,
+                # The stored column IS the raw threshold result — that is the
+                # whole point of keeping it raw — so a replayed snapshot can
+                # answer both questions from the one value. Without this the
+                # map, which draws on threshold_met since v3.2.15, silently
+                # dropped every historical cell and the timeline replayed
+                # empty.
+                "threshold_met": bool(alert),
+                # Not recomputed for a past moment: chronic is a statement
+                # about a cell's whole history, and asserting it as of a
+                # replayed instant would be inventing a number the row does
+                # not contain.
+                "chronic": False,
                 "silent_calls": calls, "since": since,
                 "ai_note": ai_note or "",
                 "bounds": _cell_bounds(cell),

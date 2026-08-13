@@ -204,6 +204,44 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-14-27 — the operator read the map better than the map read itself
+**Source:** operator, live map · **Verdict:** our fault (three of them)
+
+Two observations, and a question that turned out to be the sharpest of the
+three: *"iGate failure and One shared gate are the same colour. And the grey
+areas have no legend entry — you do realise that?"*
+
+**1 — The legend listed two entries with identical swatches.** `igate` and
+`shared_gate` were both `#f5c211`. That undoes exactly the distinction v3.2.12
+existed to make: `igate` means the gate was *seen* to go quiet, `shared_gate`
+means one gate carries every silent station and we cannot see it at all —
+different evidence, different confidence. Worse than not distinguishing them:
+the legend printed two separate lines with the same colour beside each, which
+tells a reader the difference is real and then refuses to show it.
+`shared_gate` is now orange `#ff7800`, on the map and in the alert list.
+
+**2 — I shipped grey without a legend entry.** Chronic cells were drawn in
+`#77767b` in v3.2.15 and nothing on the page said what grey meant. I was not
+aware; the operator was. Added.
+
+**3 — And looking for the legend found a regression I had shipped.** v3.2.15
+changed the map to draw on `threshold_met` instead of `alert`, so chronic
+cells would stay visible. But `load_silence_history()` reconstructs past
+snapshots from the stored rows and emits only `alert` — no `threshold_met`. So
+since v3.2.15 **every historical cell failed the filter and the timeline
+replayed empty.** Fixed by emitting `threshold_met` from the stored column,
+which is the raw threshold result and therefore exactly the right value;
+`chronic` is reported false for a replayed instant rather than invented.
+
+**The lesson is about where the check belongs.** Changing the field a renderer
+filters on is not a local edit — it is a change to a contract, and the other
+producer of those dicts is in a different file and a different language's worth
+of distance away. The live view looked correct, which is why nobody caught it:
+the regression was only in the replay, and the replay is the half nobody
+watches while deploying.
+
+Fixed in v3.2.17.
+
 ### F-2026-08-13-26 — a cell that has alerted in every snapshot it has is not alerting
 **Source:** three silence readings, cells DN57 / EN03 / one more · **Verdict:** our fault
 
