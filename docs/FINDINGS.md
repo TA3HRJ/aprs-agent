@@ -187,6 +187,51 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-13-20 — the detector counts callsigns, not sites
+**Source:** ChatGPT, Gemini and DeepSeek independently, silence cell LN04 · **Verdict:** our fault
+
+All three noticed the same thing, unprompted, and it is a detection defect
+rather than a presentation one:
+
+```
+R6YBU     44.61267, 40.06567
+R6YBU-D   44.61267, 40.06567   gate_of -> R6YBU
+R6YBU-Y   44.61267, 40.06567   gate_of -> R6YBU
+R6HABA-10 (elsewhere in the cell, different untracked gate)
+```
+
+Three of the four "silent stations" are one physical site with three SSIDs.
+ChatGPT: *"those four are not four independent radio sites"*. So "4 of 5
+silent, ratio 0.8" is really **two sites**, and `min_silent = 3` was satisfied
+by a single operator's equipment.
+
+This matters beyond one cell. The threshold exists to stop one igate or one
+power strip raising a regional alarm — and a multi-SSID site walks straight
+through it. In a small cell it also inflates the ratio enough to clear 0.5 on
+its own. **It is very likely a large part of F-17**: cells that alert forever
+because one chronically quiet site is counted three times.
+
+**Earns:** count *sites*, not callsigns. Deduplicate by position — identical or
+near-identical coordinates are one installation — for both `silent` and
+`baseline`, and say in the bundle how many distinct sites the numbers
+represent. Position rather than base callsign, because one operator may
+legitimately run a home igate and a mobile in the same cell, and those are two
+real sensors.
+
+**Not a same-day change.** This alters what the detector counts, so it needs
+its own measurement first, and the measurement is cheap: how many alerting
+cells shrink below `min_silent` once co-located callsigns collapse to one? That
+number decides whether this is a tidy-up or the main story behind F-17. Run it
+before writing anything.
+
+**Also recorded: v3.2.12 is working in production.** The gate attribution let
+all three models reach a specific, correct answer — a single site's igate down
+for 19.5 hours — where the same shape of cell previously read as a regional
+outage. And the note itself now carries the history: *"[igate_failure/high] All
+silent stations share a single silent igate, and their chronic absence across
+all snapshots indicates the igate is persistently down"*. That sentence is F-11
+and F-13 working together in a real notification.
+
 ### F-2026-08-13-19 — repeated clicks stack, and a stale request still fires
 **Source:** operator, propagation popup · **Verdict:** our fault
 **Severity raised the same day: this can wedge the page, not merely annoy.**
