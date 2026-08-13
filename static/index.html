@@ -1522,7 +1522,7 @@ function silToast(msg){
 // belongs in front of the JSON; everything after that — the clipboard rules,
 // the failure handling — is identical and only has to be right once.
 function evBundle(url,base,promptKey,promptArg,asPrompt,wrap){
-  return api('GET',url).then(function(d){
+  return evTake(url).then(function(d){
     // Flagged so the toast can tell an explanation from an accident: the
     // server's "no stored snapshot for that time" is worth showing, a JSON
     // parse error is noise that tells the operator nothing.
@@ -1535,17 +1535,24 @@ function evBundle(url,base,promptKey,promptArg,asPrompt,wrap){
             text:asPrompt?(t(promptKey).replace('{c}',promptArg)+'\n\n'+js):js};
   });
 }
-function silBundle(cell,asPrompt){
+// One place per kind, so the warm-up and the export ask for the same URL —
+// a mismatch would silently defeat the prefetch.
+function silUrl(cell){
   // Scrubbed to a past moment: export the snapshot on screen, not the live
   // cell, or the file describes a different event than the one being read.
   const ts=(typeof tlLive!=='undefined'&&!tlLive&&$('tl-slider'))
     ? '&ts='+parseInt($('tl-slider').value) : '';
-  return evBundle('/api/silence/evidence?cell='+encodeURIComponent(cell)+ts,
-                  'aprs-silence-'+cell,'sil_prompt',cell,asPrompt);
+  return '/api/silence/evidence?cell='+encodeURIComponent(cell)+ts;
+}
+function propUrl(call,gate,ts){
+  return '/api/prop/evidence?call='+encodeURIComponent(call)
+        +'&gate='+encodeURIComponent(gate)+'&ts='+(ts||0);
+}
+function silBundle(cell,asPrompt){
+  return evBundle(silUrl(cell),'aprs-silence-'+cell,'sil_prompt',cell,asPrompt);
 }
 function propBundle(call,gate,ts,asPrompt){
-  return evBundle('/api/prop/evidence?call='+encodeURIComponent(call)
-                  +'&gate='+encodeURIComponent(gate)+'&ts='+(ts||0),
+  return evBundle(propUrl(call,gate,ts),
                   'aprs-prop-'+call+'-'+gate,'prop_prompt',call+' → '+gate,
                   asPrompt);
 }
@@ -1588,6 +1595,26 @@ function silCopyFallback(o){
 }
 // Takes a function that produces the bundle, so silence cells, propagation
 // links and station records all travel the same path out of the page.
+// Fetched when a popup opens, so the click that copies has the bundle already
+// in hand. Chrome closes the clipboard's user-activation window if the promise
+// it was handed resolves too late, and this endpoint has been seen taking six
+// seconds under load — the copy then failed for a reason no amount of clipboard
+// code could fix. Keyed by URL; one entry is enough, popups open one at a time.
+let evPrefetch={url:null,promise:null};
+function evWarm(url){
+  if(evPrefetch.url===url)return;
+  const p=api('GET',url);
+  p.catch(function(){});          // a warm-up failure must not surface on its own
+  evPrefetch={url:url,promise:p};
+}
+function evTake(url){
+  if(evPrefetch.url===url&&evPrefetch.promise){
+    const p=evPrefetch.promise;
+    evPrefetch={url:null,promise:null};   // single use: a second copy refetches
+    return p;
+  }
+  return api('GET',url);
+}
 function evExport(make,asPrompt){
   const fail=function(e){silToast((e&&e.fromServer&&e.message)||t('sil_ev_err'))};
   if(!asPrompt){
@@ -1726,9 +1753,13 @@ function renderSilence(cells){
       // the balloon past the map edge. maxHeight makes Leaflet scroll the
       // content inside the balloon instead; width stays inside the viewport
       // on phones.
+      const cellName=c.cell;
       silRects[c.cell]=L.rectangle(c.bounds,opts).addTo(map)
         .bindPopup(silPopup(c),{maxWidth:Math.min(340,window.innerWidth-48),
-                                maxHeight:Math.min(280,Math.floor(window.innerHeight*0.45))});
+                                maxHeight:Math.min(280,Math.floor(window.innerHeight*0.45))})
+        // Same reason as the propagation popups: fetch on open so the copy
+        // never waits on the network inside the click.
+        .on('popupopen',function(){evWarm(silUrl(cellName))});
     }
   }
   for(const cell in silRects){
@@ -1814,6 +1845,9 @@ function renderProp(links,hist){
         setTimeout(function(){entry.pinned=true;self.openPopup()},0);
       })
       .on('popupopen',function(e){
+        // Start the fetch as the popup appears, so a later click on Copy has
+        // the bundle already in hand.
+        evWarm(propUrl(l.call,l.gate,l.ts));
         // Native listeners on purpose: Leaflet's DomEvent maps mouseenter to
         // mouseover plus a relatedTarget test, which is indirection this does
         // not need and which cannot be exercised in a test.

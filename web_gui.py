@@ -176,6 +176,51 @@ def _get_slim_lock() -> "asyncio.Lock":
     return _slim_lock
 
 
+_cells_lock: "asyncio.Lock | None" = None
+# (built_at, build_seconds, cells)
+_cells_cache: "tuple[float, float, list]" = (0.0, 0.0, [])
+
+
+async def silence_cells_cached(db) -> list:
+    """silence_cells() off the event loop, shared by every caller.
+
+    It walks the whole station registry: measured at 0.3-0.9 s against 165k
+    stations. Run inline it stops everything else for that long, and the map
+    polls it on a timer — which is how the API came to answer some requests in
+    six seconds and hang others past forty. Exactly the shape of the v3.1.2
+    livelock, which fixed /api/stations and left this one behind; v3.2.0 then
+    copied the synchronous call into the evidence endpoint.
+
+    The window scales with the measured build, as it does for the station
+    cache: a rebuild that takes longer than its own TTL can never finish
+    before the next caller starts another one.
+    """
+    global _cells_cache
+    global _cells_lock
+    if _cells_lock is None:
+        _cells_lock = asyncio.Lock()
+
+    built_at, build_s, cells = _cells_cache
+    now = time.time()
+    if cells and now - built_at < max(2.0, build_s * 4):
+        return cells
+
+    async with _cells_lock:
+        # Another caller may have rebuilt it while this one waited.
+        built_at, build_s, cells = _cells_cache
+        now = time.time()
+        if cells and now - built_at < max(2.0, build_s * 4):
+            return cells
+        t0 = time.time()
+        try:
+            fresh = await asyncio.get_event_loop().run_in_executor(
+                None, db.silence_cells)
+        except Exception:
+            return cells or []
+        _cells_cache = (time.time(), time.time() - t0, fresh)
+        return fresh
+
+
 def _fetch_quakes() -> list:
     """Recent M4.5+ quakes worldwide. Never raises: correlation is extra
     context, never a precondition for alerting — if USGS is unreachable the
@@ -681,10 +726,9 @@ class AgentManager:
                     None, _fetch_quakes)
             except Exception:
                 pass
-            try:
-                cells = self._station_db.silence_cells()
-            except Exception:
-                cells = []
+            # Off the loop like everything else: this loop runs beside the
+            # HTTP handlers, so a synchronous scan here stalls them too.
+            cells = await silence_cells_cached(self._station_db)
             alerts = {c["cell"]: c for c in cells if c["alert"]}
 
             for cell, c in alerts.items():
@@ -1819,10 +1863,7 @@ async def get_stations(request: web.Request) -> web.Response:
 async def get_silence(request: web.Request) -> web.Response:
     """Maidenhead cells with recently-silent station clusters (map overlay)."""
     mgr: AgentManager = request.app["manager"]
-    try:
-        cells = mgr._station_db.silence_cells()
-    except Exception:
-        cells = []
+    cells = await silence_cells_cached(mgr._station_db)
     for c in cells:
         c["ai_note"] = mgr._silence_ai_notes.get(c["cell"], "")
         # "since" is the start of the current alert *episode*, not the
@@ -1883,10 +1924,7 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
                 status=404)
         state = {}          # per-station detail is live-only; see "live_state"
     else:
-        try:
-            cells = mgr._station_db.silence_cells()
-        except Exception:
-            cells = []
+        cells = await silence_cells_cached(mgr._station_db)
         c = next((x for x in cells if x["cell"] == cell), None)
         if c is None:
             return web.json_response(
