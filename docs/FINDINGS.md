@@ -204,6 +204,47 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-13-22 — the opening rule groups by midpoint, so it misses the clearest openings
+**Source:** three consecutive readings, gate VE7EPT-5 · **Verdict:** our fault
+
+```
+W7BSB-1   -> VE7EPT-5   1080.5 km   opening: null
+NA7Q-1    -> VE7EPT-5    997.8 km   opening: null
+KC7YRA-9  -> VE7EPT-5   2131.9 km   opening: null
+```
+
+Three distinct senders, one receiver, all three anomalous, none of them an
+opening. The gate's baseline reads `samples: 6, mean 2043.4` identically in all
+three, which rules out the exports being spread over time — these links belong
+to the same window.
+
+Two or more distinct senders is precisely the opening condition. The reason it
+never fires is that `_prop_watch` groups links by the Maidenhead field of each
+link's **midpoint**. Senders at 998, 1080 and 2132 km from one gate, lying in
+whatever directions they lie, have midpoints hundreds of kilometres apart and
+land in different fields. So they are never counted together.
+
+**The rule misses the clearest possible evidence of an opening.** One receiver
+suddenly hearing several distant, unrelated senders is a stronger signal than
+several links whose midpoints happen to coincide — the midpoints are a
+geometric artefact, the shared receiver is a physical fact. The rule was
+written to defend against a single bad GPS faking a distance, and grouping by
+receiver defends against that just as well: one misconfigured sender cannot
+manufacture three different callsigns.
+
+**Earns:** group by receiving gate as well as by midpoint field. An opening
+should be raised when either two distinct senders share a midpoint field, or
+two distinct senders reach the same gate, inside the window. Both are "two
+independent observations of the same condition", which is what the rule is
+actually for.
+
+**Check first, cheaply:** how many gates have had 2+ distinct senders with
+anomalous links inside 30 minutes, and how many of those produced a recorded
+opening? If the first number is much larger than the second, this is confirmed
+and sized in one query. It also explains part of F-09 — some of those
+`opening: null` answers are not lookup failures at all, but openings the rule
+declined to see.
+
 ### F-2026-08-13-21 — one outlier blinds a gate: `mean + 4σ` defeats itself
 **Source:** external reading, propagation link EA5URX-7 → EA5CKO-10 · **Verdict:** our fault
 
