@@ -214,6 +214,31 @@ This is the third watch scenario written into [NEXT.md](NEXT.md), and it
 arrived within a day: not "shared_gate climbing" but "cells still alerting
 forever, and the alert itself is the artefact".
 
+**Replicated, then measured.** A second cell, OL44, produced the same verdict
+from the same three models — 211 of 211 snapshots alerting, four chronically
+quiet stations across three untracked gates, no common onset. Six readings,
+two cells, unanimous. So it was worth sizing:
+
+```
+alerting cells right now                    : 16
+  alerting in EVERY stored snapshot         : 16   (100%)
+  mixed history                             :  0
+  no stored history yet                     :  0
+
+across all 626 cells ever recorded          : 396 always-alerting (63%)
+```
+
+Not one cell alerting at that moment represented a change. The alert stream, as
+it stands, does not report events at all — it reports membership of the set of
+chronically quiet cells, continuously. That is a stronger statement than the
+models made, and it is measured rather than inferred.
+
+It also settles the option choice below. Option 1 would suppress *every*
+current alert, which is itself the finding stated a different way. Option 3 is
+plainly the correct long-term answer, but 63% of all recorded cells are
+permanently alerting, so adopting it silences most of the map — a genuine
+product decision about what this feature is for, not a bug fix.
+
 **Earns, and this needs the user's judgement before any code:** an alert should
 require a *change* — a cell entering the state, or worsening materially — not
 merely being in it. Options, in rough order of intrusiveness:
