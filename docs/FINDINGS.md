@@ -112,6 +112,23 @@ the gate has no usable baseline, so the absolute floor decided alone.
 meaningful yet and that the absolute floor made the decision. Handing over
 numbers with only a quiet flag beside them is an invitation to misread.
 
+**Addendum — `established: true` is misleading too.** A later reading
+(KC7YRA-9, gate at 5 samples, mean 2041.6 km) makes the arithmetic plain: the
+EMA is seeded with the first distance ever seen and moves at alpha 0.05, so
+after five samples the "mean" is still essentially that first packet. Alpha
+0.05 needs roughly 20 samples to travel two thirds of the way to a new level
+and about 60 to settle — while `gate_min_samples` is **20**.
+
+So a gate crosses into `established: true` at exactly the point its mean is
+only two thirds of the way to being a mean. The flag reads as "this baseline
+can be trusted" and the number underneath is still dominated by early
+observations. That is the same defect as the unestablished case wearing a
+reassuring label, and it compounds F-21: an early outlier both inflates σ and
+persists in the mean long after the gate is declared established.
+
+Whatever replaces the statistic should have its convergence and its
+"established" threshold agree with each other.
+
 ### F-2026-08-13-15 — the copy button fails because the event loop is blocked, not because of the clipboard
 **Source:** operator, propagation and silence popups on the live map · **Verdict:** our fault
 **Closed: v3.2.10.** `silence_cells()` now runs in an executor behind a shared
