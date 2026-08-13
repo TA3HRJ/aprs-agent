@@ -2176,9 +2176,12 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
             "cell_history is sparse by design: only cells with at least one "
             "silent station are snapshotted, so a gap means nothing was "
             "silent, not that nothing was recorded.",
-            "station 'type' is derived from the APRS symbol the operator "
-            "chose, not from what the equipment is. A D-Star gateway "
-            "beaconing a weather symbol reads as a weather station here.",
+            "station 'type' comes from the APRS symbol its operator chose. "
+            "That symbol is a FIXED SETTING, picked once when the station was "
+            "configured: it does not change with conditions and reports "
+            "nothing about the weather now. A rain-cloud icon does not mean "
+            "it is raining, and a D-Star gateway beaconing a weather symbol "
+            "reads as a weather station here.",
             "A quake within the search radius is a candidate, not a cause. "
             "Weigh offset_s: a long gap between quake and silence is "
             "coincidence, not causation.",
