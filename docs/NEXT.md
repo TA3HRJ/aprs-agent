@@ -9,6 +9,38 @@ what merely under-informs them.**
 
 ---
 
+## SHIPPED 2026-08-13 — v3.2.14 and v3.2.15
+
+Three findings closed, in the order this file called for: the one that could
+make the page unusable, then the one that misinformed every reader, then the
+one waiting on a decision only the operator could make.
+
+| version | finding | what changed |
+|---|---|---|
+| **v3.2.14** | **F-19** | one evidence request at a time, a real `AbortController` with a 20 s deadline, and a working state on the clicked link. The service worker's navigate race no longer leaves its losing `fetch` running either |
+| **v3.2.15** | **F-24** | below `PROP_MIN_SAMPLES` the gate baseline stops publishing `mean_km` and `sigma_km`. It reports `ema_km`, `ema_alpha` and `first_sample_weight` instead, and states that 77 % of the figure is still the gate's first packet |
+| **v3.2.15** | **F-26** | `alert` now means the silence is *news*: threshold met AND either not chronic or past the cell's own worst. `threshold_met` keeps the old meaning; `silence_history` still stores the raw result |
+
+**F-02 is closed by F-24** — it asked for wording saying mean and sigma are not
+meaningful yet; the fix removed the fields instead, which is the stronger
+version of the same point.
+
+**F-15c is closed by F-19** — the copy feedback the operator missed twice now
+lives on the button.
+
+### What to watch, now that two definitions changed
+
+- **How many cells go chronic.** If nearly every alerting cell is demoted, the
+  detector is finding almost nothing new and F-04 has its answer. If almost
+  none are, the 90 % threshold is too strict to matter.
+- **Whether the notification volume falls.** That is where the noise and the
+  AI token spend actually were, and it is one number.
+- **Anything that alerts because it passed its own peak.** That case is the
+  reason plain suppression was rejected, and the first one to appear is worth
+  reading closely.
+
+---
+
 ## A · The silence alert chain — SHIPPED in v3.2.12
 
 > Done. `shared_gate` is now its own cause, carried through the colour, popup,
@@ -111,11 +143,22 @@ that has been waiting since July.
 |---|---|
 | **F-16** | record the gate's `samples`, `mean`, `sigma` and threshold **as they stood at flag time**, on the link. Show both that and the current baseline |
 | **F-03** | with that field recorded, count how many of the anomalies came from gates below the 20-sample threshold. Then decide whether the absolute-floor branch is producing signal or noise — with numbers, not judgement |
-| **F-02** | when `established` is false, say plainly that mean and sigma are not meaningful yet and that the floor alone decided |
+| ~~**F-02**~~ | ~~say plainly that mean and sigma are not meaningful yet~~ — **closed by F-24 in v3.2.15**, which removed the fields rather than annotating them |
 | **F-09** | replace `opening: null` with three states — a recorded event exists / the rule is met right now but nothing was written / genuinely one sender. Add the live field context (other anomalous links and distinct senders in the same field) and the repeat count for this sender→gate pair |
+| **F-22** | group openings by **receiving gate** as well as by midpoint field. The current rule cannot see the strongest evidence there is — one gate hearing several distant unrelated senders — and the operator has already run this grouping by hand once, which is how the finding was found |
+| **F-23** | carry the gate's anomalous fraction. A gate with four anomalies in six measured links is a candidate for being misplaced, and reads today as four separate discoveries |
 
-**Order inside B:** F-16 first — it is one field, and both F-03 and F-02 lean on
-it. F-09 is independent and can go in the same release or the next.
+**Order inside B:** F-16 first — it is one field, and F-03 leans on it. F-09,
+F-22 and F-23 are independent of it.
+
+**F-22 and F-23 must ship together.** Grouping by receiving gate is right, but
+a misplaced gate would then manufacture apparent openings from everything it
+hears — so the fraction that disqualifies such a gate has to exist before the
+grouping starts trusting gates.
+
+**Cheap check before writing any of F-22:** how many gates saw 2+ distinct
+senders inside the 30-minute window, against how many produced a recorded
+opening? The gap between those two numbers is the size of the finding.
 
 **Files:** `station_db.py` (`_prop_links.append`, `gate_baseline`,
 `find_prop_event`), `web_gui.py` (`get_prop_evidence`).
@@ -138,9 +181,32 @@ That waiting period is the reason to start B soon even though A matters more.
 | **F-14b** | sharpen the symbol caveat: *the symbol is a fixed setting chosen when the station was configured; it does not change with conditions and reports nothing about the current weather.* A caveat has to close the inference, not name the source |
 | **F-10** | split the export prompts into the three questions that actually have different answers — is it anomalous, is it an opening/cluster, is the underlying thing physically real |
 | **F-12** | `?blind=1` to omit the whole `assessment` block server-side, plus a "copy blind" action, so a blind pass never depends on hand-editing JSON |
-| **F-15c** | move the copy feedback into the button itself. The message at the bottom of the page was missed twice, and it was right both times |
+| ~~**F-15c**~~ | ~~move the copy feedback into the button itself~~ — **closed by F-19 in v3.2.14** |
 
 **Risk:** none worth naming. Text, one query parameter, one small piece of UI.
+
+---
+
+## E · Non-independent stations in a silence cell — new, and it feeds D
+
+**F-25.** In EN03 all four silent stations arrived through one gate, and two
+pairs sit roughly a hundred metres apart. The gate was **alive**, so the cause
+fell through to `outage` — the most alarming label available — for four
+observations that cannot fail separately. `shared_gate` only fires when the
+shared gate is silent or untracked; the case where the gate is fine and the
+dependency is still total has no label at all.
+
+The cell counts four stations. It is looking at two sites behind one path.
+
+| change |
+|---|
+| carry, per cell, how many **distinct sites** and how many **distinct gates** the silent set actually represents |
+| decide whether the ratio's denominator should count sites rather than callsigns — this is F-04's question in a sharper form |
+
+**Check first, before any code:** four co-located `…SVR`/`…SVS` pairs arriving
+through a single gateway look like one upstream feed rather than four radios.
+Confirmed while writing F-25 that they are *not* APRS Objects — those are
+already excluded — so what they actually are is worth one query.
 
 ---
 
