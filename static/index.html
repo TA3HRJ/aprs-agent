@@ -133,7 +133,13 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 .map-sym{background:transparent;border:none}
 .clus{background:rgba(28,113,216,.85);border:2px solid #b8d4f5;border-radius:50%;color:#fff;font-weight:600;font-size:11px;text-align:center;box-sizing:border-box;cursor:pointer}
 .map-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888;font-size:13px;z-index:5;pointer-events:none}
-.map-legend{position:absolute;left:8px;bottom:50px;z-index:1000;background:rgba(30,30,30,.85);padding:6px 10px;border-radius:6px;font-size:11px;display:flex;gap:12px;pointer-events:none}
+/* One bottom-anchored column so the legend and the timeline can never cover
+   each other, and the legend drops to the map's edge when the timeline is
+   hidden. Clicks pass through to the map except where a control needs them. */
+.map-overlays{position:absolute;left:8px;right:8px;bottom:8px;z-index:1000;display:flex;flex-direction:column;gap:6px;align-items:flex-start;pointer-events:none}
+/* wraps rather than overflowing: seven entries no longer fit one row on a
+   laptop, and an eighth would not fit on any. */
+.map-legend{background:rgba(30,30,30,.85);padding:6px 10px;border-radius:6px;font-size:11px;display:flex;flex-wrap:wrap;gap:4px 12px;max-width:100%;pointer-events:none}
 .map-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 .map-legend em{font-style:normal;color:#ccc}
 /* Public (read-only) view: window.PUBLIC hides everything admin */
@@ -203,7 +209,7 @@ body.public .stat-bar .cell.diag{display:none!important}
 /* Anchored to the map's BOTTOM edge: the alert panel above the map grows and
    shrinks (also while scrubbing history), which moves the map's top edge —
    a top-anchored bar would drag the play button around under the cursor. */
-.map-timeline{position:absolute;left:8px;right:8px;bottom:8px;z-index:1000;display:flex;gap:10px;align-items:center;background:rgba(30,30,30,.88);padding:6px 12px;border-radius:6px}
+.map-timeline{align-self:stretch;display:flex;gap:10px;align-items:center;background:rgba(30,30,30,.88);padding:6px 12px;border-radius:6px;pointer-events:auto}
 /* The slider spans whatever history is stored — 1 day on a fresh server,
    14 days on an old one — so it needs a scale, or a given pixel means
    nothing. tl-wrap carries day gridlines behind the track. */
@@ -651,6 +657,11 @@ body.public .sb-toggle{display:none!important}
   <!-- MAP PANEL -->
   <div class="map-panel" id="map-view" hidden>
     <div id="map"></div>
+    <!-- Legend and timeline are stacked in one bottom-anchored column. Left to
+         position themselves independently they both sat in the same band above
+         the map's bottom edge, and the timeline — painted later — cut the
+         legend in half. -->
+    <div class="map-overlays">
     <div class="map-legend">
       <span><i style="background:#e01b24"></i><em data-i="sil_outage">Regional silence (possible outage)</em></span>
       <span><i style="background:#f5c211"></i><em data-i="sil_igate">IGate failure</em></span>
@@ -669,6 +680,7 @@ body.public .sb-toggle{display:none!important}
         <div class="tl-ticks" id="tl-ticks"></div>
         <div class="tl-ends"><span id="tl-start"></span><span id="tl-end"></span></div>
       </div>
+    </div>
     </div>
     <div class="map-hint" id="map-hint" hidden data-i="map_offline">Map library could not be loaded — an internet connection is required for map tiles.</div>
   </div>

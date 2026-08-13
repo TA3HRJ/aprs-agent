@@ -293,6 +293,31 @@ watches while deploying.
 
 Fixed in v3.2.17.
 
+**And the fix had a tail, reported from the operator's own screen (v3.2.19).**
+The legend sat at `bottom:50px` while the timeline occupied `bottom:8px` plus
+about 54 px of its own height — the same band. The timeline is painted later,
+so it covered the legend and cut the text in half. Adding a seventh entry did
+not create the collision, it made it impossible to miss.
+
+Both are now stacked in one bottom-anchored flex column, so neither can cover
+the other and the legend drops to the map's edge when the timeline is hidden.
+The legend also wraps instead of overflowing: seven entries no longer fit one
+row on a laptop, and an eighth would not fit anywhere.
+
+Measured at 1140 / 980 / 820 / 640 px: no overlap at any width, no overflow at
+any width, the legend growing to two rows as it narrows, the timeline still
+full width and still clickable, and the legend still transparent to clicks.
+
+**Worth naming:** two absolutely-positioned overlays anchored to the same edge
+have no relationship until one of them changes size, and then the one painted
+later silently wins. A stacking context is the fix; measuring only the element
+being changed is what misses it.
+
+**Still open, and a deliberate trade-off rather than a bug:** the legend is
+`display:none` below the mobile breakpoint. On a phone the map now has red,
+orange, yellow and grey cells with nothing on screen saying what any of them
+mean. That predates this work but the added colours make it matter more.
+
 ### F-2026-08-13-26 — a cell that has alerted in every snapshot it has is not alerting
 **Source:** three silence readings, cells DN57 / EN03 / one more · **Verdict:** our fault
 
