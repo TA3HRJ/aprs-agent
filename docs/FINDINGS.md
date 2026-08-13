@@ -189,6 +189,19 @@ symptom resists explanation, ask the server what it saw.
 
 ### F-2026-08-13-19 — repeated clicks stack, and a stale request still fires
 **Source:** operator, propagation popup · **Verdict:** our fault
+**Severity raised the same day: this can wedge the page, not merely annoy.**
+
+Second report, cell LN04: copies and downloads all failed, and then *the page
+would not even reload*. Checked from the server at that point — service active,
+load 0.62, `/api/info` 23 ms, `/` 4 ms, `/api/silence/evidence?cell=LN04` 575 ms
+and HTTP 200, with the operator's own LN04 requests logged as 200. The server
+was fine; the tab was not.
+
+Stacked clicks leave several unresolved promises handed to
+`navigator.clipboard.write`, and a browser holding those can stop responding to
+the page — including a reload. So this is not cosmetic queueing: it is a path
+from "clicked twice" to "the interface is unusable until the tab is closed".
+It moves to the front of the queue.
 
 Reported: repeated copy attempts on one line, plus one download, and then the
 last attempt copied successfully *and* performed the earlier download at the
