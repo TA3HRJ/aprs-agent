@@ -70,6 +70,38 @@ to justify a change may not be there to confirm it.
 
 ---
 
+## Watching A before starting B
+
+Deliberate pause, not a stall. The `shared_gate` branch is new and its rate is
+itself the evidence for F-04, so it is worth a few days of running before
+anything else moves.
+
+**Baseline at deploy, 2026-08-13, v3.2.12:**
+
+| | |
+|---|---|
+| cells reading `outage` | 46 |
+| cells reading `shared_gate` | 2 (NL79 via `T2HK`, MK65 via `T2KA`) |
+| cells reading `igate` | 0 in that sample |
+
+**What would mean something when we come back:**
+
+- `shared_gate` staying at one or two percent says the branch is catching a
+  narrow real case and the alert text is now honest for it.
+- `shared_gate` climbing towards a large share says most "regional outages"
+  were always one path, and the `outage` label itself is the thing that needs
+  rethinking — which is F-04's question arriving with an answer attached.
+- Both near zero, with cells still alerting as outages through several
+  untracked gates, says the single-gate rule is too strict to matter and the
+  interesting version is "one gate carries the overwhelming majority", not
+  "one gate carries all". That is a detection change and needs its own
+  evidence, not a same-day guess.
+
+Whatever it shows, the numbers come from `/api/silence` and cost nothing to
+collect: the cause distribution is one line.
+
+---
+
 ## B · Propagation evidence — second
 
 The bundle currently contradicts itself, and the fix unblocks the calibration
