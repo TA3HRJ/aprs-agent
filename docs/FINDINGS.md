@@ -734,6 +734,22 @@ takes as "this was not part of an opening". Those are different claims.
 Belongs in the same batch as F-03: both need the same part of the propagation
 data, and neither should be rushed.
 
+**A live instance to check when this is worked.** Two consecutive readings
+covered the same gate, `VE7EPT-5`, reached by **two different senders** —
+`W7BSB-1` at 1080.5 km and `NA7Q-1` at 997.8 km. Both were flagged anomalous;
+both reported `opening: null`. Two distinct senders is exactly what the opening
+rule asks for, so either their link midpoints fell in different Maidenhead
+fields (the rule genuinely unmet, and the bundle should say which field each
+one landed in), or this is F-09 again — an opening that exists and is not being
+found. Worth resolving with a real pair rather than a hypothetical.
+
+**A smaller oddity, noted in passing.** The gate reported `samples: 6` and
+`mean 2043.4` in *both* readings, unchanged, despite a second link having been
+gated between them. Either the two exports were taken close enough together
+that the second link had not yet been folded in, or the baseline is not
+advancing the way the code suggests. Cheap to settle once F-16 records the
+values at flag time, and worth a glance then.
+
 ### F-2026-08-12-10 — the export prompt asks one question where there are three
 **Source:** ChatGPT, same link · **Verdict:** our fault, cheap
 
