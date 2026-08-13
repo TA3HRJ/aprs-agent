@@ -246,14 +246,42 @@ attempt reloads and records `n:1`, an immediate second call is refused, a call
 after the 90 s spacing reloads and records `n:2`, `n:3` stops entirely, and a
 matching version touches nothing.
 
-**Stated honestly: this was not confirmed on the operator's tab.** No tab group
-existed for the session, so the failing page could not be inspected, and the
-diagnosis is reconstruction from the code plus the deploy timeline. The
-evidence that would settle it is one line in that tab's console —
-`sessionStorage.getItem('aprs.reloadFor')` — showing a version the page is not
-actually running. Worth asking for next time before shipping a fix; the fix
-stands on its own merits either way, since a guard that suppresses retries on
-intent is wrong regardless of what stranded this particular tab.
+**The diagnosis was then checked, and it did not hold.** Three things came back
+against it:
+
+- `sessionStorage.getItem('aprs.reloadFor')` → `null`. I had also given the
+  wrong key first: the old code wrote `aprs.reloadedFor`, so that was the one
+  worth reading. It was `null` too.
+- `window.BUILD` is injected correctly — the served page carries
+  `window.BUILD="3.2.18"`, so the "the watch never ran" theory fails as well.
+- The operator's own screenshot settles it: the legend in it contains
+  "Long-standing, not a new event", an entry that only exists from v3.2.17. The
+  tab **had** updated, and the page was live and counting.
+
+So whatever "could not come back to itself" described, it was transient and had
+resolved by the time the screen was captured — plausibly the two-to-three
+minute HTTP/2 drain of F-19, or simply three service restarts inside fifteen
+minutes. It is now unfalsifiable: `sessionStorage` is per tab and survives a
+reload but not a close, and my own first advice was to hard-reload or reopen
+the tab, which destroyed the only evidence that could have settled it.
+
+**Two lessons, and the second is the expensive one.**
+
+*Ask for the evidence before prescribing the cure.* The diagnostic line and the
+fix went out in the same breath; the fix's side effect was to erase the data
+that would have tested it.
+
+*Three theories, none confirmed.* Stranded guard, missing `window.BUILD`, and
+before those a service-worker theory the operator disproved. This is the same
+pattern already recorded on F-19 — client-side reconstruction, confidently
+argued, wrong — and it repeated here despite being written down. What actually
+resolved F-19 was a server-side log; what actually resolved this was a
+screenshot the operator had already sent.
+
+**The fix ships anyway and is kept**, on its own merits: a guard that
+suppresses retries based on intent rather than outcome is wrong regardless of
+what stranded this particular tab. But it is a hardening, not a repair of a
+confirmed fault, and the log should say so.
 
 ### F-2026-08-14-27 — the operator read the map better than the map read itself
 **Source:** operator, live map · **Verdict:** our fault (three of them)
