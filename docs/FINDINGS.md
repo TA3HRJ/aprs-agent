@@ -229,6 +229,47 @@ is still the user's, but it is no longer a decision without data. The ratio
 that decides it is already stored: alerting snapshots over total snapshots, per
 cell, and `cell_silence_history()` already returns it.
 
+**Decided by the user: redefine `alert`.** I had recommended marking `chronic`
+and leaving `alert` alone, and warned that redefining it would retroactively
+change what the 860 stored snapshots mean. The user chose redefinition anyway,
+and the objection turned out to be answerable rather than fatal — it was an
+argument against redefining the *stored* value, not against redefining the
+*reported* one.
+
+**Closed: v3.2.15.** The split is the whole design:
+
+- **`silence_history` still stores the raw threshold result.** The column keeps
+  its original meaning, the 860 snapshots still say what they always said, and
+  persistence stays recomputable. `record_silence_history()` calls
+  `silence_cells()` with no history path precisely so it gets the raw value.
+- **`alert`, as reported, is narrower**: the threshold is met AND either the
+  cell is not chronic or it has gone past its own worst. Chronic is defined as
+  alerting in ≥ 90 % of at least 12 snapshots spanning at least 24 h.
+- **`threshold_met` carries the old meaning** so nothing is hidden, alongside
+  `chronic`, `persistence`, `snapshots`, `alerting_snapshots` and `peak_silent`.
+
+**Past its own worst still alerts.** That is the case plain suppression would
+have hidden, and it is why option 1 was the wrong shape: a chronic cell going
+from 4 silent to 10 is exactly when someone should be told.
+
+**The map draws on `threshold_met`, not on `alert`.** Removing chronic cells
+from the map would have been hiding the measurement rather than judging it, so
+they stay — grey and fainter, with the popup saying "alerting in 860 of its 860
+recorded snapshots". The alert panel, the notifications and the AI notes use
+the narrow `alert`, which is where the noise and the cost actually were.
+
+**Verified** against a synthetic history: a cell alerting in 900 of 900
+snapshots is demoted while keeping its cause and shared-gate attribution; a
+cell with five snapshots still alerts; the same chronic cell alerts again at 10
+silent against a stored peak of 9; and with no history path the output is
+byte-for-byte the old shape, which is what protects the stored column.
+
+Persistence is read with one grouped query cached for a minute — it moves over
+hundreds of snapshots, so rebuilding it per cell scan would be work for a
+number that cannot have changed. If the history cannot be read, nothing is
+chronic: an alert must never be narrowed away by a failure to read the very
+evidence that would justify narrowing it.
+
 ### F-2026-08-13-25 — a shared gate that is alive still means the stations are not independent
 **Source:** same three readings · **Verdict:** our fault
 

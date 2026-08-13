@@ -181,8 +181,14 @@ _cells_lock: "asyncio.Lock | None" = None
 _cells_cache: "tuple[float, float, list]" = (0.0, 0.0, [])
 
 
-async def silence_cells_cached(db) -> list:
+async def silence_cells_cached(db, history_path: str = "") -> list:
     """silence_cells() off the event loop, shared by every caller.
+
+    The history path is what turns on the narrower definition of `alert`: with
+    it the cells carry `chronic` and `persistence` and a cell that has been in
+    this state through its whole recorded history stops being called news.
+    Without it the raw threshold result comes back, which is what
+    record_silence_history() wants to store.
 
     It walks the whole station registry: measured at 0.3-0.9 s against 165k
     stations. Run inline it stops everything else for that long, and the map
@@ -214,7 +220,7 @@ async def silence_cells_cached(db) -> list:
         t0 = time.time()
         try:
             fresh = await asyncio.get_event_loop().run_in_executor(
-                None, db.silence_cells)
+                None, lambda: db.silence_cells(history_path=history_path))
         except Exception:
             return cells or []
         _cells_cache = (time.time(), time.time() - t0, fresh)
@@ -789,7 +795,7 @@ class AgentManager:
                 pass
             # Off the loop like everything else: this loop runs beside the
             # HTTP handlers, so a synchronous scan here stalls them too.
-            cells = await silence_cells_cached(self._station_db)
+            cells = await silence_cells_cached(self._station_db, self._sta_db_path)
             alerts = {c["cell"]: c for c in cells if c["alert"]}
 
             for cell, c in alerts.items():
@@ -2010,7 +2016,7 @@ async def get_stations(request: web.Request) -> web.Response:
 async def get_silence(request: web.Request) -> web.Response:
     """Maidenhead cells with recently-silent station clusters (map overlay)."""
     mgr: AgentManager = request.app["manager"]
-    cells = await silence_cells_cached(mgr._station_db)
+    cells = await silence_cells_cached(mgr._station_db, mgr._sta_db_path)
     for c in cells:
         c["ai_note"] = mgr._silence_ai_notes.get(c["cell"], "")
         # "since" is the start of the current alert *episode*, not the
@@ -2071,7 +2077,7 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
                 status=404)
         state = {}          # per-station detail is live-only; see "live_state"
     else:
-        cells = await silence_cells_cached(mgr._station_db)
+        cells = await silence_cells_cached(mgr._station_db, mgr._sta_db_path)
         c = next((x for x in cells if x["cell"] == cell), None)
         if c is None:
             return web.json_response(
@@ -2513,7 +2519,7 @@ async def on_startup(app: web.Application) -> None:
     # a browser to abandon a clipboard write, which is exactly how the first
     # click after a restart came to fail while every later one worked.
     app["cells_warm_task"] = asyncio.create_task(
-        silence_cells_cached(mgr._station_db))
+        silence_cells_cached(mgr._station_db, mgr._sta_db_path))
     # Optional read-only public server on a separate port. A broken config
     # raises ConfigError; the admin app must still come up so the operator
     # can see the error and fix the file.

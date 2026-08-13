@@ -192,6 +192,7 @@ body.public .stat-bar .cell.diag{display:none!important}
 .sil-ev{margin-top:6px;padding-top:5px;border-top:1px solid #454545;display:flex;gap:10px;font-size:11px}
 .sil-ev a{color:#99c1f1;cursor:pointer;text-decoration:none}
 .sil-ev a:hover{text-decoration:underline}
+.sil-chronic{color:#c0bfbc;font-size:11px}
 /* A link that has started work must not look like one that has not. The
    repeated clicking behind F-19 came from a link that sat there unchanged for
    six seconds while it was already fetching. */
@@ -799,6 +800,8 @@ const S={en:{
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
+  sil_chronic:"Chronic: alerting in {a} of its {n} recorded snapshots — this "
+    +"is the cell's long-standing state, not a new event.",
   sil_ev_busy:"Still fetching the previous evidence — one request at a time.",
   sil_ev_slow:"The server did not answer in time. The request was dropped so "
     +"the rest of the page keeps working — try again.",
@@ -918,6 +921,8 @@ const S={en:{
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
   sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
+  sil_chronic:"Kronik: kayıtlı {n} anlık görüntünün {a} tanesinde alarm veriyor "
+    +"— bu hücrenin yeni bir olayı değil, süregelen hâli.",
   sil_ev_busy:"Önceki veri hâlâ alınıyor — aynı anda tek istek.",
   sil_ev_slow:"Sunucu zamanında yanıt vermedi. Sayfanın geri kalanı çalışmaya "
     +"devam etsin diye istek iptal edildi — tekrar deneyin.",
@@ -1509,6 +1514,12 @@ function silPopup(c){
   let h='<b>'+c.cell+'</b> — '+causeTxt+'<br>';
   h+=t('sil_stats').replace('{s}',c.silent).replace('{b}',c.baseline)+' ('+Math.round(c.ratio*100)+'%)<br>';
   if(c.since)h+=t('sil_since')+' '+fmtAgoLong(Math.max(0,Math.floor(Date.now()/1000-c.since)))+'<br>';
+  // The number that decides whether this cell is an event or a description of
+  // itself. Three cells read by outside models were alerting in every snapshot
+  // they had, and every reading called them an artefact rather than an
+  // incident — a verdict no reader could reach from this popup before.
+  if(c.chronic)h+='<span class="sil-chronic">'+t('sil_chronic')
+    .replace('{a}',c.alerting_snapshots).replace('{n}',c.snapshots)+'</span><br>';
   // Object packets put an arbitrary transmitted name where a callsign goes.
   h+='<span style="opacity:.7;font-size:11px">'+esc(c.silent_calls.join(', '))+'</span>';
   if(c.quakes)for(const q of c.quakes){
@@ -1834,10 +1845,17 @@ function renderSilence(cells){
   if(!map)return;
   const seen={};
   for(const c of cells){
-    if(!c.alert||!c.bounds)continue;
+    // Drawn on threshold_met, not on alert. A chronic cell is no longer
+    // announced as news — that is the point of the narrower alert — but it is
+    // still a cell whose stations are not reporting, and removing it from the
+    // map would be hiding the measurement rather than judging it. It is
+    // demoted instead: grey, and fainter.
+    if(!c.threshold_met||!c.bounds)continue;
     seen[c.cell]=1;
-    const color=(c.cause==='igate'||c.cause==='shared_gate')?'#f5c211':'#e01b24';
-    const opts={color:color,weight:1,fillColor:color,fillOpacity:0.10+0.30*Math.min(c.ratio,1)};
+    const color=c.chronic?'#77767b'
+               :(c.cause==='igate'||c.cause==='shared_gate')?'#f5c211':'#e01b24';
+    const opts={color:color,weight:1,fillColor:color,
+                fillOpacity:(c.chronic?0.04:0.10)+(c.chronic?0.10:0.30)*Math.min(c.ratio,1)};
     let rc=silRects[c.cell];
     if(rc){rc.setStyle(opts);rc.setPopupContent(silPopup(c))}
     else{

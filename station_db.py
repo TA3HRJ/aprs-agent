@@ -1183,12 +1183,61 @@ class StationDB:
     # ------------------------------------------------------------------
     # Silence clustering — Phase 3 of the silence-map roadmap.
 
+    # A cell that has met the threshold in essentially every snapshot it has
+    # is not reporting an event — it is describing itself. Three cells read by
+    # outside models were alerting in 198/198, 314/314 and 860/860 stored
+    # snapshots, and all three readings called them an artefact of station
+    # selection rather than an incident, at 94-99% confidence (F-26).
+    #
+    # So "alert" is narrowed to mean the silence is NEWS: the threshold is met
+    # AND either the cell is not chronic, or it has gone past its own worst.
+    # The threshold result itself is still published as threshold_met, and it
+    # is still what gets WRITTEN to silence_history — the stored column keeps
+    # its original meaning so the 860 snapshots already recorded do not
+    # quietly change what they say, and so this can always be recomputed.
+    _CHRONIC_RATIO = 0.9
+    _CHRONIC_MIN_SNAPSHOTS = 12
+    _CHRONIC_MIN_SPAN_S = 24 * 3600
+    _PERSIST_TTL_S = 60.0
+    _persist_cache: tuple = (0.0, None)
+
+    def _persistence_stats(self, path: str) -> dict[str, tuple]:
+        """Per cell: how much of its stored history was already alerting.
+
+        Cached for a minute — persistence moves over hundreds of snapshots, so
+        recomputing it on every cell rebuild would scan the history table for
+        a number that cannot have changed.
+        """
+        now = time.time()
+        cached_at, stats = self._persist_cache
+        if stats is not None and (now - cached_at) < self._PERSIST_TTL_S:
+            return stats
+        out: dict[str, tuple] = {}
+        try:
+            con = sqlite3.connect(path)
+            try:
+                for cell, n, n_alert, peak, first_ts in con.execute(
+                        "SELECT cell, COUNT(*), SUM(alert), MAX(silent), "
+                        "MIN(ts) FROM silence_history GROUP BY cell"):
+                    out[cell] = (int(n), int(n_alert or 0),
+                                 int(peak or 0), int(first_ts or 0))
+            finally:
+                con.close()
+        except sqlite3.Error:
+            # No history yet, or it cannot be read. Nothing is chronic until
+            # shown to be: an alert must never be narrowed away by a failure
+            # to read the very evidence that would justify narrowing it.
+            out = {}
+        self._persist_cache = (now, out)
+        return out
+
     def silence_cells(
         self,
         min_history: int = 5,
         baseline_window_s: int = 24 * 3600,
         min_silent: int = 3,
         min_ratio: float = 0.5,
+        history_path: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         """Group recently-silent stations into Maidenhead squares (4-char).
 
@@ -1253,13 +1302,18 @@ class StationDB:
                 if c["first_silent"] is None or went < c["first_silent"]:
                     c["first_silent"] = went
 
+        # Only consulted when a history path is supplied. record_silence_history
+        # deliberately does not supply one: what it stores must stay the raw
+        # threshold result.
+        persist = self._persistence_stats(history_path) if history_path else {}
+        now_i = int(now)
         out = []
         for c in cells.values():
             ratio = c["silent"] / c["baseline"] if c["baseline"] else 0.0
-            alert = c["silent"] >= min_silent and ratio >= min_ratio
+            threshold_met = c["silent"] >= min_silent and ratio >= min_ratio
             cause = "outage"
             shared_gate = ""
-            if alert:
+            if threshold_met:
                 # Gates used by the silent stations — excluding silent
                 # stations that are themselves someone's gate (an igate that
                 # died takes its own beacon down with it).
@@ -1283,25 +1337,50 @@ class StationDB:
                         # simply cannot see. Sharing a single gate is itself
                         # strong evidence of a shared path failing.
                         cause = "shared_gate"
+            n, n_alert, peak, first_ts = persist.get(c["cell"], (0, 0, 0, 0))
+            chronic = bool(
+                n >= self._CHRONIC_MIN_SNAPSHOTS
+                and first_ts
+                and (now_i - first_ts) >= self._CHRONIC_MIN_SPAN_S
+                and (n_alert / n) >= self._CHRONIC_RATIO
+            )
+            # Past its own worst is still news, even for a chronic cell —
+            # that is the case option 1 (plain suppression) would have hidden.
+            alert = threshold_met and (not chronic or c["silent"] > peak)
             b = _cell_bounds(c["cell"])
-            out.append({
+            entry = {
                 "cell": c["cell"],
                 "baseline": c["baseline"],
                 "silent": c["silent"],
                 "ratio": round(ratio, 2),
                 "alert": alert,
-                "cause": cause if alert else "",
+                # What alert used to mean, kept so nothing is hidden by the
+                # narrower definition and a reader can see both.
+                "threshold_met": threshold_met,
+                "cause": cause if threshold_met else "",
                 # Which gate each silent station last arrived through. This is
                 # the fact that settles most cells, and it used to be visible
                 # only to the classifier — readers had to infer it from
                 # timing, or invent something else.
                 "gate_of": dict(c["gate_of"]),
-                "shared_gate": shared_gate if alert else "",
+                "shared_gate": shared_gate if threshold_met else "",
                 "silent_calls": sorted(c["silent_calls"])[:20],
                 "since": int(c["first_silent"]) if c["first_silent"] else None,
                 "bounds": b,
-            })
-        out.sort(key=lambda x: (-int(x["alert"]), -x["ratio"]))
+            }
+            if history_path:
+                # Published whether or not the cell is chronic: the ratio is
+                # the reader's means of judging the verdict for themselves.
+                entry["chronic"] = chronic
+                entry["snapshots"] = n
+                entry["alerting_snapshots"] = n_alert
+                entry["persistence"] = round(n_alert / n, 3) if n else None
+                entry["peak_silent"] = peak
+            out.append(entry)
+        # threshold_met keeps its place in the ordering so a chronic cell still
+        # outranks quiet noise — it is demoted, not buried.
+        out.sort(key=lambda x: (-int(x["alert"]), -int(x["threshold_met"]),
+                                -x["ratio"]))
         return out
 
     def silence_state(self, callsigns) -> dict[str, dict[str, Any]]:
