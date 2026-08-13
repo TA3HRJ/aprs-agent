@@ -271,7 +271,19 @@ session per origin and holds it open for reuse across tabs. Requests that are
 never settled *and never aborted* occupy concurrent streams on that session.
 Fill them and every new request to that origin queues client-side — including a
 page load, including from a fresh tab — while other sites remain fine because
-the pool is per origin. Only restarting the browser tears the session down.
+the pool is per origin.
+
+**Corrected again: it also clears on its own.** A later freeze recovered with
+no tab closed and no browser restart. So the earlier "only a browser restart
+fixed it" was the restart coinciding with the drain, or short-cutting it. That
+fits stream exhaustion better than anything permanent: the hung requests
+eventually time out, their streams are released, and the origin becomes usable
+again. The lockout is temporary — which lowers the alarm without changing the
+verdict, because a monitoring page that locks the operator out for minutes at a
+time is still not acceptable.
+
+Worth noting how long the next one lasts: a drain measured in a minute or two
+points at ordinary request timeouts and confirms the picture.
 
 It also explains the thing that puzzled me: during the freeze the server was
 measurably healthy and the access log quiet, because the requests **were never
