@@ -767,6 +767,20 @@ below the 20-sample threshold?** With 2476 gates, most cannot have 20 samples,
 so the absolute-floor branch may be producing the bulk of the output. F-02 is
 the same gap seen from the reader's side.
 
+**A strong hint arrived before the measurement.** Four consecutive propagation
+bundles read by outside models showed gate sample counts of **4, 5, 6 and 12**
+— every one below the threshold of 20, every one `established: false`. In all
+four, what flagged the link was the absolute floor, not the statistical test.
+The models said so themselves each time: *"the anomaly classification comes
+from insufficient baseline data, not from exceeding the gate's normal distance
+distribution."*
+
+Four is not a measurement, but it points hard at the answer being "most of
+them", which would mean the per-gate statistic is decorative in practice and
+`PROP_MIN_KM` is doing the real work. If that holds, the honest options are to
+lower `gate_min_samples` to something a gate can actually reach, or to stop
+pretending the statistical branch is the primary rule.
+
 **Blocked on one missing field.** Gate baselines live in memory only, and
 nothing is written down when a link is flagged, so the question cannot be
 answered from what is stored today — only the histogram, the totals and the
