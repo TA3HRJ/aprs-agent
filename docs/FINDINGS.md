@@ -187,6 +187,58 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-13-19 — repeated clicks stack, and a stale request still fires
+**Source:** operator, propagation popup · **Verdict:** our fault
+
+Reported: repeated copy attempts on one line, plus one download, and then the
+last attempt copied successfully *and* performed the earlier download at the
+same moment.
+
+Nothing is cancelled or superseded. Every click starts work that will complete
+eventually, and each completion performs its side effect regardless of how
+stale it has become — so a slow moment queues them and they all land together.
+The prefetch helps the common case and does nothing for this one, because the
+single prefetch slot is consumed by the first click and every later click
+issues its own request.
+
+**Earns, one change closing two things:**
+
+- an in-flight guard per action, so a second click while one is running does
+  not start another;
+- a sequence token, so only the newest request's completion is honoured and a
+  stale one quietly does nothing;
+- the button reporting its own state — "Copying…" then the outcome — which is
+  **F-15 item 3**, still open, and which makes the guard visible instead of
+  mysterious. A disabled-looking button explains itself; a click that does
+  nothing does not.
+
+### F-2026-08-13-18 — the callsign says one country, the position says another
+**Source:** Gemini (inferred), propagation link HB9UFL-8 → OH7LZB-12 · **Verdict:** a field we could add
+
+Three models read the same link. Two concluded the RF path was "plausible but
+unverifiable"; one went further and noticed something checkable:
+
+> The callsign prefix `HB9` belongs to Switzerland. However, the self-reported
+> sender coordinates (55.73° N, 10.05° E) place `HB9UFL-8` in Denmark.
+
+The gate is in central Finland. A 1,265 km terrestrial VHF path is
+extraordinary; a misconfigured or stale position is ordinary. Every propagation
+bundle carries the caveat that a wrong position produces a wrong distance and
+the station will not know it — and here was a way to actually test it, which we
+did not offer.
+
+**Earns:** derive the country from the callsign prefix (ITU allocations are a
+fixed table) and from the reported position, and state both. When they disagree,
+say so plainly in the bundle.
+
+**Important limit, and it must ship with the field:** a mismatch is not proof of
+error. Amateurs legitimately operate portable and mobile abroad, and that is
+exactly the sort of nuance an outside reader will not supply for itself. The
+field should read as "prefix allocated to Switzerland, position in Denmark —
+consistent with portable operation abroad, or with a stale position", not as an
+accusation. Getting that wording wrong would repeat F-14: a fact stated without
+closing the inference it invites.
+
 ### F-2026-08-13-17 — an alert should mean a change; ours means a state
 **Source:** ChatGPT, Gemini and DeepSeek independently, silence cell OM72 · **Verdict:** our fault
 **This outranks the rest of package B. It is F-04 arriving with its answer attached.**
