@@ -2350,6 +2350,13 @@ async def on_startup(app: web.Application) -> None:
     mgr: AgentManager = app["manager"]
     app["log_task"] = asyncio.create_task(mgr.broadcast_logs())
     app["persist_task"] = asyncio.create_task(_persist_loop(mgr))
+    # Build the silence-cell cache once, in the background, so the first
+    # operator request after a restart is not the one that pays for it. Cold,
+    # that rebuild costs about a second on a large registry — long enough for
+    # a browser to abandon a clipboard write, which is exactly how the first
+    # click after a restart came to fail while every later one worked.
+    app["cells_warm_task"] = asyncio.create_task(
+        silence_cells_cached(mgr._station_db))
     # Optional read-only public server on a separate port. A broken config
     # raises ConfigError; the admin app must still come up so the operator
     # can see the error and fix the file.
