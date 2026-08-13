@@ -315,6 +315,28 @@ which it already is, since the statistical test is skipped entirely below
 Note this pairs with F-16: the baseline is in-memory and resets on restart, so
 "6 samples" also means "6 since the last restart", not "6 ever".
 
+**Closed: v3.2.15.** Below `PROP_MIN_SAMPLES` the bundle no longer contains a
+`mean_km` or a `sigma_km` at all. The figure is still given, because it is the
+only thing known about the gate, but under `ema_km` — a name that cannot be
+mistaken for a statistic — alongside `ema_alpha`, a `first_sample_weight`, and
+a note that says in plain words what it is and what not to do with it:
+
+```json
+"ema_km": 1466.2, "ema_alpha": 0.05, "first_sample_weight": 0.774,
+"note": "... 77% of it is still that first observation — read it as
+         'roughly what this gate first heard', not as this gate's normal,
+         and do not compute how far a link sits above or below it.
+         This link was judged by the 300 km floor alone."
+```
+
+Stating the weight was the useful part. "77 % of this number is one packet"
+ends the question in a way "established: false" plainly did not — all four
+readings saw that flag, said the baseline was immature, and then computed with
+the numbers regardless.
+
+An established gate is unchanged: it keeps `mean_km`, `sigma_km` and the real
+threshold, because there it genuinely has them.
+
 ### F-2026-08-13-23 — a gate that is almost always anomalous is probably misplaced, not remarkable
 **Source:** four consecutive readings, gate VE7EPT-5 · **Verdict:** our fault
 

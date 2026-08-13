@@ -798,16 +798,51 @@ class StationDB:
         count, mean, var = st
         sigma = math.sqrt(max(var, 0.0))
         established = count >= self.PROP_MIN_SAMPLES
+        if not established:
+            # Below PROP_MIN_SAMPLES there is no mean and no standard
+            # deviation to report, and publishing these numbers as "mean_km"
+            # and "sigma_km" invited every reader to compute with them anyway
+            # — four separate outside readings did exactly that, one
+            # concluding from "sigma 0.0" that all six samples must lie at the
+            # identical distance.
+            #
+            # They do not. The EMA is SEEDED with the gate's first measured
+            # distance and learns at _PROP_ALPHA, so a young baseline mostly
+            # describes that one packet; a sigma of zero says the variance has
+            # not moved off its seed, not that the samples agree. So the
+            # figure is still given — it is the only thing known about the
+            # gate — but under a name that cannot be mistaken for a statistic,
+            # with the weight the first packet still carries stated outright.
+            weight = (1.0 - self._PROP_ALPHA) ** max(int(count) - 1, 0)
+            return {
+                "gate": gate,
+                "samples": int(count),
+                "established": False,
+                "ema_km": round(mean, 1),
+                "ema_alpha": self._PROP_ALPHA,
+                "first_sample_weight": round(weight, 3),
+                "threshold_km": self.PROP_MIN_KM,
+                "note": (
+                    "no mean and no standard deviation are offered: this gate "
+                    "has {n} of the {need} measured links one would need. "
+                    "ema_km is an exponential moving average seeded with the "
+                    "gate's FIRST measured distance and updated at "
+                    "ema_alpha, so {pct}% of it is still that first "
+                    "observation — read it as 'roughly what this gate first "
+                    "heard', not as this gate's normal, and do not compute "
+                    "how far a link sits above or below it. This link was "
+                    "judged by the {floor} km floor alone."
+                ).format(n=int(count), need=self.PROP_MIN_SAMPLES,
+                         pct=round(weight * 100), floor=self.PROP_MIN_KM),
+            }
         return {
             "gate": gate,
             "samples": int(count),
-            "established": established,
+            "established": True,
             "mean_km": round(mean, 1),
             "sigma_km": round(sigma, 1),
-            # The threshold this link had to beat. Absolute floor only while
-            # the gate is still new, since a handful of samples is not a normal.
-            "threshold_km": (round(max(3 * mean, mean + 4 * sigma), 1)
-                             if established else self.PROP_MIN_KM),
+            # The threshold this link had to beat.
+            "threshold_km": round(max(3 * mean, mean + 4 * sigma), 1),
         }
 
     def prop_detection_params(self) -> dict[str, Any]:
