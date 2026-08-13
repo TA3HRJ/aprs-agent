@@ -62,7 +62,15 @@ useful failure.
 
 ## Open
 
-### F-2026-08-12-01 — the AI note asserts simultaneity it never checked
+> **F-01, F-11, F-13 and F-14a closed in v3.2.12** — package A of
+> [NEXT.md](NEXT.md). They are left here rather than moved to Closed, because
+> the reasoning across the four is what made the order obvious and it reads
+> better together. Live afterwards: two cells took the new `shared_gate` cause,
+> both gated by T2 backbone servers, which never appear as stations and so can
+> never be confirmed silent. Both would previously have alerted as regional
+> outages.
+
+### F-2026-08-12-01 — the AI note asserts simultaneity it never checked  ✅ v3.2.12
 **Source:** DeepSeek, silence cell JN28 (France) · **Verdict:** our fault
 
 The generated note read *"Multiple igates and a digi went silent
@@ -213,7 +221,7 @@ question is how many anomalies came from gates with no usable baseline, which
 cannot be counted without the sample count at flag time. One change closes
 both, and neither is urgent enough to rush.
 
-### F-2026-08-13-14 — a caveat that is read and then reasoned past is not strong enough
+### F-2026-08-13-14 — a caveat that is read and then reasoned past is not strong enough  (distribution field ✅ v3.2.12; caveat wording still open)
 **Source:** three models on silence cell OM73 (Henan) · **Verdict:** our fault, cheap
 
 Same bundle, three readings. ChatGPT (~95%) and Gemini (85–90%) both opened
@@ -260,7 +268,7 @@ exactly this. The two readers who used it were right; the one who skipped it
 was wrong. The field is doing its job for readers who read it, which is all a
 field can do.
 
-### F-2026-08-13-13 — the decisive fact is missing from the bundle, and the classifier reads its absence as an outage
+### F-2026-08-13-13 — the decisive fact is missing from the bundle, and the classifier reads its absence as an outage  ✅ v3.2.12
 **Source:** ChatGPT, silence cell KO84 (Tula/Kaluga) · **Verdict:** our fault
 **This is the one to fix first.**
 
@@ -321,7 +329,7 @@ igate's internet connection.
   whether or not that gate can be seen; "one shared gate, not trackable" is
   both more accurate and less alarming than "regional outage".
 
-### F-2026-08-13-11 — the AI note is written without the cell's history
+### F-2026-08-13-11 — the AI note is written without the cell's history  ✅ v3.2.12
 **Source:** ChatGPT, KO84 · **Verdict:** our fault
 
 The note read *"[power_outage/high] Multiple igates and stations in the same

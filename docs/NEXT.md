@@ -9,7 +9,26 @@ what merely under-informs them.**
 
 ---
 
-## A · The silence alert chain — first, and not close
+## A · The silence alert chain — SHIPPED in v3.2.12
+
+> Done. `shared_gate` is now its own cause, carried through the colour, popup,
+> alert list, legend, both languages and the notification text; the bundle
+> carries `gate_of` with each gate's tracked state; the assessment prompt
+> receives the cell history and the measured onset spread; and a `context`
+> block places the current ratio in the cell's own past.
+>
+> Live afterwards: 46 cells reading `outage`, 2 reading `shared_gate` — NL79
+> through `T2HK` and MK65 through `T2KA`, both **T2 backbone servers**, which
+> never appear as stations and so could never be confirmed silent. Those two
+> would previously have alerted as regional outages.
+>
+> Detection thresholds untouched. Whether a multi-gate cell should still read
+> as an outage is F-04's question, and answering it by adjusting a rule the
+> same day it was questioned is a mistake this project has already made once.
+
+<details><summary>Original plan (kept for the record)</summary>
+
+### A · The silence alert chain — first, and not close
 
 Four findings, one wrong alert. Today an operator can be told *"regional power
 or infrastructure outage, high confidence"* over Telegram or email when what
@@ -39,6 +58,15 @@ checking both before shipping.
 and say it is untracked; the cause should no longer read `outage`; and the note
 should not claim a fresh regional outage on a cell with 13 of 13 alerting
 snapshots.
+
+</details>
+
+**What the verification actually showed.** KO84 had moved on by the time the
+work landed — ten stations silent through *three* gates, so the single-gate
+rule no longer applied to it and it still reads `outage`. `R3XBI` does now
+report `tracked: false` in its bundle, which was the point. The classifier
+change proved itself on other cells instead. Worth remembering that a case used
+to justify a change may not be there to confirm it.
 
 ---
 
