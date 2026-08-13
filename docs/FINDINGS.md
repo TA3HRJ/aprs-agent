@@ -270,6 +270,38 @@ number that cannot have changed. If the history cannot be read, nothing is
 chronic: an alert must never be narrowed away by a failure to read the very
 evidence that would justify narrowing it.
 
+**Corrected in v3.2.16, and the live deploy is what caught it.** The first run
+on the VPS returned `persistence: 1.00` for all 39 threshold-met cells —
+every single one, to two decimal places. A real measurement does not do that.
+
+`record_silence_history()` stores **only cells that met the threshold** (line
+1146; worldwide, storing every cell with one silent station produced 1000+ rows
+per snapshot). So a cell's stored rows are all alerting rows, and
+`SUM(alert)/COUNT(*)` is 1.0 for every cell **by construction**. It was not
+measuring persistence at all, and the popup was telling the operator
+"alerting in 857 of its 857 recorded snapshots" as though that meant something.
+
+The honest denominator is how many snapshot **runs** happened since the cell
+first appeared. Runs are shared — one pass writes the same `ts` for every cell
+— so the distinct timestamps are the run log, and a cell's position in it is
+one `bisect`. On the synthetic history the difference is the whole finding:
+
+| cell | old | corrected | verdict |
+|---|---|---|---|
+| EN03, alerting in ~every run | 1.00 | **0.996** of 904 runs | chronic, correctly demoted |
+| a cell alerting 20 times in a fortnight | 1.00 | **0.047** of 424 runs | **not** chronic — and the buggy version would have silenced it |
+
+That second row is the damage the bug would have done: an intermittent cell —
+the one thing a monitoring page must never suppress — read as fully persistent
+and demoted. The regression test now covers it explicitly.
+
+**Worth keeping as a rule.** Both the synthetic tests and the code review
+passed this. What exposed it was a number from production that was too clean:
+39 cells agreeing to two decimals is not a result, it is a tell. A ratio whose
+numerator and denominator come from the same filtered set will always be 1.0,
+and no amount of testing the arithmetic will show it — only asking what the
+denominator actually counted.
+
 ### F-2026-08-13-25 — a shared gate that is alive still means the stations are not independent
 **Source:** same three readings · **Verdict:** our fault
 

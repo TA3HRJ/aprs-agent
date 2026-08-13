@@ -8,6 +8,7 @@ Developed by TA3HRJ & TA3PKS
 """
 from __future__ import annotations
 
+import bisect
 import json
 import math
 import sqlite3
@@ -1216,11 +1217,27 @@ class StationDB:
         try:
             con = sqlite3.connect(path)
             try:
-                for cell, n, n_alert, peak, first_ts in con.execute(
-                        "SELECT cell, COUNT(*), SUM(alert), MAX(silent), "
-                        "MIN(ts) FROM silence_history GROUP BY cell"):
-                    out[cell] = (int(n), int(n_alert or 0),
-                                 int(peak or 0), int(first_ts or 0))
+                # record_silence_history stores ONLY cells that met the
+                # threshold — worldwide, storing every cell with one silent
+                # station produced 1000+ rows per snapshot. So a cell's own
+                # rows are all alerting rows, and "alerting rows over its own
+                # rows" is 1.0 for every cell by construction. It is not a
+                # measurement; the first live run returned exactly 1.00 for
+                # all 39 cells, which is what gave it away.
+                #
+                # The honest denominator is how many snapshot RUNS happened
+                # since the cell first appeared. Runs are shared across cells
+                # — one pass writes the same ts for all of them — so the
+                # distinct timestamps are the run log.
+                runs = [int(r[0]) for r in con.execute(
+                    "SELECT DISTINCT ts FROM silence_history ORDER BY ts")]
+                for cell, n, peak, first_ts in con.execute(
+                        "SELECT cell, COUNT(*), MAX(silent), MIN(ts) "
+                        "FROM silence_history GROUP BY cell"):
+                    first_ts = int(first_ts or 0)
+                    since = len(runs) - bisect.bisect_left(runs, first_ts)
+                    out[cell] = (max(since, int(n)), int(n),
+                                 int(peak or 0), first_ts)
             finally:
                 con.close()
         except sqlite3.Error:
