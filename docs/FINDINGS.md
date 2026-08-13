@@ -200,8 +200,29 @@ was fine; the tab was not.
 Stacked clicks leave several unresolved promises handed to
 `navigator.clipboard.write`, and a browser holding those can stop responding to
 the page — including a reload. So this is not cosmetic queueing: it is a path
-from "clicked twice" to "the interface is unusable until the tab is closed".
-It moves to the front of the queue.
+from "clicked twice" to "the interface is unusable".
+
+**And worse than first written: closing the tab did not clear it. Restarting
+Chrome did.**
+
+That places the wedge above the page. The only component of ours that outlives
+a tab is the **service worker**: registered per origin, still running after the
+last client goes, and in the path of every shell request — so a stuck one makes
+even a *new* tab fail to load, and only killing the browser clears it. That
+matches the report exactly. It cannot be confirmed from the server side; what
+would settle it is `chrome://serviceworker-internals` or the DevTools network
+panel at the moment it happens.
+
+The consequence stands regardless of which component holds the lock: **a
+monitoring page whose recovery step is "restart your browser" is not
+acceptable**, and this is now the first thing to fix, ahead of everything.
+
+It also changes the shape of the fix. An in-flight guard in the page is
+necessary but may not be sufficient: the guard must stop the situation
+arising, because there is no cheap recovery once it has. Worth reviewing at the
+same time whether the service worker's navigate handler can be left holding a
+promise that never settles — its fallback races a 6 s timeout and then returns
+`net`, which is exactly a promise that may never settle.
 
 Reported: repeated copy attempts on one line, plus one download, and then the
 last attempt copied successfully *and* performed the earlier download at the
