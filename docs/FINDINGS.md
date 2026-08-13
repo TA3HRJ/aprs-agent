@@ -204,6 +204,139 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-13-26 — a cell that has alerted in every snapshot it has is not alerting
+**Source:** three silence readings, cells DN57 / EN03 / one more · **Verdict:** our fault
+
+Three separate cells, three separate readings, one verdict — and the numbers
+are what make it final:
+
+```
+DN57   198 / 198 snapshots alerting     3 silent / 6 baseline
+EN03   860 / 860 snapshots alerting     4 silent / 5 baseline   (peak 9/9)
+—      314 / 314 snapshots alerting     4 silent / 8 baseline
+```
+
+Every stored snapshot of all three has been in alert. The readings put
+94–99 % on "artefact of station selection, not a new event", and the phrasing
+of one of them is the finding itself: *the alert is essentially describing the
+cell's long-standing monitoring state.*
+
+**This is the evidence F-17 was waiting for, and it settles the measurement
+half of it.** A cell alerting in 100 % of its history is not reporting an
+event; the word `alert` is being spent on a permanent property of the cell.
+The product decision — suppress, mark `chronic: true`, or redefine `alert` —
+is still the user's, but it is no longer a decision without data. The ratio
+that decides it is already stored: alerting snapshots over total snapshots, per
+cell, and `cell_silence_history()` already returns it.
+
+### F-2026-08-13-25 — a shared gate that is alive still means the stations are not independent
+**Source:** same three readings · **Verdict:** our fault
+
+In EN03 all four silent stations use gate `AE5PL-WX`, and two pairs are
+effectively co-located — 43.78/-99.90 with 43.77/-99.88, and 43.69/-99.89 with
+43.68/-99.89. The gate is **healthy**, last heard 720 s ago.
+
+Because the gate is alive, `gate_active()` returns True and the cause falls
+through to **`outage`** — our most alarming label — for what is plainly four
+dependent observations behind one path. F-01's `shared_gate` cause only fires
+when the shared gate is silent or untracked. The case where the gate is fine
+and the dependency is still total has no label at all.
+
+Two distinct things are being counted as independent and neither is:
+- **co-located pairs** a hundred metres apart, which cannot fail separately;
+- **one shared gate**, alive or not.
+
+Checked while writing this: `is_object` **is** already excluded from silence
+detection (station_db.py:1187), so these are not APRS Objects. What they are
+instead is worth one query before any code — four co-located `…SVR`/`…SVS`
+pairs arriving through a single gateway look like one upstream feed rather than
+four radios, and if so the ratio's denominator is wrong at the source.
+
+**Earns:** the bundle should carry, per cell, how many distinct sites and how
+many distinct gates the silent set actually represents. Four stations at two
+sites behind one gate is a different sentence from four stations going quiet.
+
+### F-2026-08-13-24 — `mean_km` and `sigma_km` are not a mean and a σ, and every reader has computed with them
+**Source:** four propagation readings (VE7EPT-5 ×2, WA7GMX-8, KC7YRA-9) · **Verdict:** our fault
+
+`WA7GMX-8` reported `samples: 6, mean 1466.2, sigma 0.0` on a 1466.2 km link.
+The reading concluded, reasonably, that all six samples must be at the identical
+distance. They need not be. From station_db.py:755:
+
+```python
+st = self._gate_stats[gate] = [0.0, dist, 0.0]   # first packet seeds mean, var = 0
+st[1] = (1 - a) * mean + a * dist                # a = 0.05
+```
+
+The first packet **seeds** the mean and sets the variance to zero, and the EMA
+then learns at α = 0.05. After six samples the first one still carries
+0.95⁵ ≈ **77 %** of the weight. So `mean: 1466.2` does not say "this gate
+normally hears 1466 km" — it says "**the first packet it happened to hear was
+about 1466 km**". And `sigma: 0` does not say the samples agree; it says the
+variance has barely moved off its zero seed.
+
+We do ship `established: false`, and every reading noticed it and said the
+baseline was immature. Then all four used the numbers anyway — computing
+"only 34.4 km above the mean", inferring six identical measurements. That is
+not a model failing to read a flag. **We labelled an EMA `mean_km` and
+`sigma_km` and handed it to people whose job is to reason from statistics.**
+
+**Earns, and it is small:** when `established` is false, do not emit `mean_km`
+and `sigma_km` under those names. Emit the seed distance and the sample count,
+say plainly that the figure is the first observation decayed at α = 0.05, and
+let the absolute 300 km floor be the only stated basis for the decision —
+which it already is, since the statistical test is skipped entirely below
+`PROP_MIN_SAMPLES`.
+
+Note this pairs with F-16: the baseline is in-memory and resets on restart, so
+"6 samples" also means "6 since the last restart", not "6 ever".
+
+### F-2026-08-13-23 — a gate that is almost always anomalous is probably misplaced, not remarkable
+**Source:** four consecutive readings, gate VE7EPT-5 · **Verdict:** our fault
+
+The fourth reading of the same gate makes the arithmetic speak. `VE7EPT-5`
+reports `samples: 6` in every one of them — six links ever measured — while
+those four readings are themselves four anomalous links through it:
+
+```
+W7BSB-1   1080.5 km      NA7Q-1     997.8 km
+KC7YRA-9  2131.9 km      KC7YRA-9  2077.8 km
+```
+
+**Four of its six links are anomalies.** That is not how a receiver behaves. A
+real igate hears mostly nearby stations with a long thin tail; one where most
+of what it ever measured cleared 300 km is not a remarkable receiver, it is a
+suspect one.
+
+*(Corrected after F-24: this entry first offered the 2043 km mean as further
+evidence that the gate "always hears far". It is not evidence of that — the
+mean is an EMA seeded on the gate's first packet. The anomaly count carries
+this finding on its own; the mean carries nothing.)*
+
+The simplest explanation is that **the gate's own position is wrong**. A
+misplaced receiver manufactures a long distance for every station it hears,
+systematically and repeatably — which also explains why the same sender
+produces 2131.9 km and 2077.8 km on separate packets: the sender is moving
+normally, the fixed error is at the other end.
+
+Our caveat says positions are self-reported and unverified, but every reading
+so far has taken that to mean the *sender's* position — including the models,
+which reasoned about a sender GPS fault four times running. A wrong gate
+position is worse: it corrupts every link that gate ever produces, and each one
+arrives looking like an independent discovery.
+
+**Earns, and it is cheap because the numbers already exist:** carry the gate's
+anomalous fraction in the bundle — links measured, of which anomalous — and say
+plainly what a high fraction means. A gate at four in six should read as a
+warning about the gate, not as four findings. The same number is worth using
+internally: a gate above some fraction is a candidate for exclusion rather than
+a source of openings.
+
+**Note how this interacts with F-22.** Grouping openings by receiving gate is
+right, but a misplaced gate would then generate apparent openings from every
+sender it hears. The two must ship together: group by gate, and disqualify
+gates whose anomalous fraction says they are the problem.
+
 ### F-2026-08-13-22 — the opening rule groups by midpoint, so it misses the clearest openings
 **Source:** three consecutive readings, gate VE7EPT-5 · **Verdict:** our fault
 
