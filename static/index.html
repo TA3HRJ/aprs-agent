@@ -2138,16 +2138,38 @@ async function checkVersion(){
     v=(await r.json()).version;
   }catch(e){return}
   if(!v||v===window.BUILD)return;
-  // Never loop. If we already reloaded for this exact version and still came
-  // back on the old build, something upstream is handing out a stale page and
-  // reloading again would only spin.
-  try{
-    if(sessionStorage.getItem('aprs.reloadedFor')===v)return;
-    sessionStorage.setItem('aprs.reloadedFor',v);
-  }catch(e){}
+  // Don't loop — but the old guard refused to retry based on INTENT rather
+  // than outcome: it recorded "reloaded for 3.2.17" before knowing whether
+  // that reload arrived anywhere. A reload issued while the service is
+  // restarting loses the service worker's 6 s race and is answered from
+  // cache, so the tab comes back on the OLD build with the guard already
+  // set, and stays stranded there for the rest of the session. Three deploys
+  // inside fifteen minutes made that window easy to land in.
+  //
+  // So: bounded retries, spaced out. Enough to survive a restart, never
+  // enough to spin.
+  let st={v:'',n:0,at:0};
+  try{st=JSON.parse(sessionStorage.getItem('aprs.reloadFor')||'null')||st}catch(e){}
+  if(st.v!==v)st={v:v,n:0,at:0};
+  if(st.n>=3)return;                                   // genuinely stuck upstream
+  if(st.at&&Date.now()-st.at<90000)return;             // let the last one land
+  st.n++;st.at=Date.now();
+  try{sessionStorage.setItem('aprs.reloadFor',JSON.stringify(st))}catch(e){}
   if(navigator.serviceWorker&&navigator.serviceWorker.getRegistration){
     try{const reg=await navigator.serviceWorker.getRegistration();if(reg)await reg.update()}catch(e){}
   }
+  // Drop the cached shell before reloading, so the fallback has no old build
+  // left to answer with. /api/info was reachable a moment ago, so the network
+  // is up; the cost if it goes down inside this window is a slower load
+  // rather than a silently stale one, and the retries above cover it.
+  try{
+    if(window.caches){
+      const ks=await caches.keys();
+      await Promise.all(ks.map(function(k){
+        return caches.open(k).then(function(c){return c.delete('/')}).catch(function(){});
+      }));
+    }
+  }catch(e){}
   location.reload();
 }
 setInterval(checkVersion,VER_CHECK_MS);

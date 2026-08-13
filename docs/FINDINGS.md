@@ -204,6 +204,57 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-14-28 — the reload guard recorded intent, not outcome
+**Source:** operator — "the VPS 3.2.17 in the Chrome window can't come back to
+itself" · **Verdict:** our fault · **Confidence: plausible, not confirmed**
+
+The version watch reloads a tab when the server reports a build newer than the
+one the tab is running, with a guard against looping:
+
+```js
+if(sessionStorage.getItem('aprs.reloadedFor')===v)return;
+sessionStorage.setItem('aprs.reloadedFor',v);   // written BEFORE the reload
+location.reload();
+```
+
+The guard is keyed on the version it was *trying* to reach, and written before
+knowing whether the reload arrived anywhere. So one failed attempt disables the
+mechanism for the rest of the session.
+
+**And there is a way for the attempt to fail that we built ourselves.** The
+service worker answers a navigation from cache when the network loses a 6 s
+race — which is exactly what a service restart looks like. A reload issued
+during a deploy therefore comes back on the **old** build, with the guard
+already set. The tab is then stranded on the old build until it is closed:
+`sessionStorage` survives an ordinary reload, so reloading again cannot help,
+which is precisely what "can't come back to itself" describes.
+
+Three deploys inside fifteen minutes (v3.2.15, v3.2.16, v3.2.17) made that
+window easy to land in, and the check also fires on `visibilitychange`, so
+returning to the tab during a deploy is enough.
+
+**Fixed in v3.2.18:**
+- Bounded retries keyed on outcome: up to three attempts per version, spaced 90
+  s apart. Enough to survive a restart, never enough to spin.
+- The cached shell is deleted immediately before reloading, so the fallback has
+  no old build left to answer with. `/api/info` answered moments earlier, so the
+  network is known up; the cost if it drops inside that window is a slower load
+  rather than a silently stale one, and the retries cover it.
+
+**Verified** on the real function with only the reload counted: the first
+attempt reloads and records `n:1`, an immediate second call is refused, a call
+after the 90 s spacing reloads and records `n:2`, `n:3` stops entirely, and a
+matching version touches nothing.
+
+**Stated honestly: this was not confirmed on the operator's tab.** No tab group
+existed for the session, so the failing page could not be inspected, and the
+diagnosis is reconstruction from the code plus the deploy timeline. The
+evidence that would settle it is one line in that tab's console —
+`sessionStorage.getItem('aprs.reloadFor')` — showing a version the page is not
+actually running. Worth asking for next time before shipping a fix; the fix
+stands on its own merits either way, since a guard that suppresses retries on
+intent is wrong regardless of what stranded this particular tab.
+
 ### F-2026-08-14-27 — the operator read the map better than the map read itself
 **Source:** operator, live map · **Verdict:** our fault (three of them)
 
