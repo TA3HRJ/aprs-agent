@@ -879,6 +879,7 @@ const S={en:{
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
+  ev_render_err:"The evidence arrived but the page could not show it",
   ev_copy:"Copy",
   ev_save:"Save as file",
   ev_hint:"Already selected — Ctrl+C also works",
@@ -1016,6 +1017,7 @@ const S={en:{
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
   sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
+  ev_render_err:"Veri geldi ama sayfa gösteremedi",
   ev_copy:"Kopyala",
   ev_save:"Dosya olarak kaydet",
   ev_hint:"Metin zaten seçili — Ctrl+C de çalışır",
@@ -1860,15 +1862,47 @@ function evTake(url){
 // Three things are needed and no fewer: refuse the second request, be able to
 // abandon the first, and — the part that actually stops the clicking — show
 // the person that their click did something.
-let evBusy=null;                 // {ctl,el} while an export is in flight
+let evBusy=null;                 // {ctl,el,at,step} while an export is in flight
 let evBusyToldAt=0;
 const EV_TIMEOUT_MS=20000;
+// An export that never releases the guard locks every later one out for the
+// rest of the session, and that is exactly what an operator sees as "the copy
+// stopped working". It happened, it was not reproducible from the server —
+// every request succeeded, in milliseconds — and the page could not say which
+// step it had reached. So it says now.
+const evTrace=[];
+// Every export carries the generation it was started in. Once the guard is
+// released — normally, or by the watchdog below — anything still in flight
+// belongs to a previous generation and must not open a box or raise a toast:
+// a late answer to an abandoned click is not a result, and showing it puts
+// another cell's evidence on screen under the current cell's popup.
+let evGen=0;
+function evLog(step,detail){
+  if(evBusy)evBusy.step=step;
+  evTrace.push({t:Date.now(),step:step,detail:detail===undefined?'':String(detail)});
+  if(evTrace.length>40)evTrace.shift();
+}
+// Last resort: a guard older than the deadline it was given cannot still be
+// waiting on anything, so it is cleared rather than left to strand the button.
+// This is a net, not an explanation — it records that it fired, so the cause
+// stays visible instead of being silently papered over.
+function evUnstick(){
+  if(!evBusy)return false;
+  const age=Date.now()-(evBusy.at||0);
+  if(age<EV_TIMEOUT_MS+5000)return false;
+  const was=evBusy.step||'(no step recorded)';
+  evLog('guard-was-stuck',Math.round(age/1000)+'s at '+was);
+  evEnd();
+  return true;
+}
 function evStart(el){
   const ctl=('AbortController' in window)?new AbortController():null;
-  evBusy={ctl:ctl,el:el||null};
+  evBusy={ctl:ctl,el:el||null,at:Date.now(),step:'started',gen:++evGen};
+  evLog('started');
   if(el){el.classList.add('ev-busy');el.setAttribute('aria-busy','true')}
 }
 function evEnd(){
+  if(evBusy)evLog('released',Math.round((Date.now()-(evBusy.at||0)))+'ms');
   if(evBusy&&evBusy.el){
     evBusy.el.classList.remove('ev-busy');
     evBusy.el.removeAttribute('aria-busy');
@@ -1891,11 +1925,19 @@ function evDeadline(p){
             function(e){clearTimeout(timer);throw e});
 }
 function evExport(make,asPrompt,el){
-  if(evBusy){
+  if(evBusy&&!evUnstick()){
     // Saying nothing is what produced the repeated clicking in the first
     // place. Rate-limited so six fast clicks leave one toast, not six.
+    //
+    // And it now names the step and the age, because "still fetching" was
+    // shown for a guard that had been stuck for minutes with nothing in
+    // flight at all — a true sentence that pointed at the wrong thing.
     const now=Date.now();
-    if(now-evBusyToldAt>1500){evBusyToldAt=now;silToast(t('sil_ev_busy'))}
+    if(now-evBusyToldAt>1500){
+      evBusyToldAt=now;
+      silToast(t('sil_ev_busy')+' ('+Math.round((now-(evBusy.at||now))/1000)
+               +'s · '+(evBusy.step||'?')+')');
+    }
     return;
   }
   evStart(el);
@@ -1924,9 +1966,31 @@ function evExport(make,asPrompt,el){
   // So: fetch first, show the text, and let the operator copy when they are
   // ready. Their keypress is its own activation, with the data already in
   // hand. There is no window left to miss.
+  const myGen=evGen;
   evDeadline(make(true))
-    .then(function(o){evBoxOpen(o)})
-    .catch(fail).then(evEnd);
+    .then(function(o){
+      if(myGen!==evGen){evLog('stale-ignored','gen '+myGen);return}
+      evLog('fetched',(o&&o.text?o.text.length:0)+' chars');
+      try{
+        evBoxOpen(o);
+        evLog('box-open');
+      }catch(err){
+        // This is the case that sent a day's debugging at the network: the
+        // bundle had arrived, intact, and the *rendering* threw — while the
+        // toast said "could not fetch the evidence". Report where it actually
+        // broke.
+        evLog('box-threw',(err&&err.name)+': '+(err&&err.message));
+        silToast(t('ev_render_err')+' — '+(err&&err.name)+': '+(err&&err.message));
+        try{err.__reported=true}catch(_){}
+        throw err;
+      }
+    })
+    .catch(function(e){
+      if(myGen!==evGen)return;              // an abandoned click cannot fail
+      if(!(e&&e.__reported))fail(e);
+    })
+    .then(function(){if(myGen===evGen)evEnd()},
+          function(){if(myGen===evGen)evEnd()});
 }
 // ── The evidence box ───────────────────────────────────────────────────────
 let evBoxData=null;
