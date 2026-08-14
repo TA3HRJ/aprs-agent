@@ -2299,6 +2299,9 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
             "configured without the minus sign on its longitude, which places "
             "a US gateway on the far side of the planet. The packet really "
             "does say E, so this is the sender's error and not a decoding "
+            "one, but if this number approaches 'silent' then the cell is not "
+            "describing the region it is drawn on and its cause should not be "
+            "read as a regional one.",
             "cell.silent counts CALLSIGNS, which are not witnesses. "
             "cell.sites is how many distinct operators those callsigns belong "
             "to — three SSIDs of one base callsign are three radios in one "
@@ -2316,9 +2319,6 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
             "through their OWN uplink, which means nothing independent ever "
             "observed them. A cell with independent_gates = 0 has no "
             "corroboration at all, whatever its gate list looks like.",
-            "one, but if this number approaches 'silent' then the cell is not "
-            "describing the region it is drawn on and its cause should not be "
-            "read as a regional one.",
             "No APRS signal is a weak welfare signal, not a confirmed "
             "emergency. Stations go quiet for ordinary reasons.",
             "The assessment note is machine-generated and unreviewed.",
