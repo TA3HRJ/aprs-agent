@@ -9,6 +9,63 @@ what merely under-informs them.**
 
 ---
 
+## PENDING — one coordinated sweep, deliberately deferred
+
+The README currently describes v3.2.4 behaviour while the demo runs v3.2.21.
+That is wrong for the audience that actually visits the site, and it is being
+left wrong **on purpose for one day** rather than edited twice: the operator's
+call, and the right one — the fix belongs in a single sweep, not in a trickle.
+
+**Scope of the sweep**, all of it drafted and accepted already in
+[README-pending.md](README-pending.md):
+
+| | |
+|---|---|
+| README · Silence Map row | what `alert` now means, and the four cell colours |
+| README · evidence row | recurrence, novel stations, persistence |
+| README · phone layout bullet | the Key button |
+| README · line 26 | "describes the current release" is false once the rest lands — three options, option 1 recommended |
+| GitHub Release + badge | only if a Windows build is wanted; the badge promises a download, so a release without one is worse than no release |
+
+**Do not start this piecemeal.** The single reason it is deferred is that the
+pieces are cheaper together, and half of it applied is the same inconsistency
+in a different place.
+
+---
+
+## SHIPPED 2026-08-14 — v3.2.16 … v3.2.21
+
+Six versions, and two of them fixed what the four before them broke. Worth
+recording as the cost of the pace, not just the outcome.
+
+| version | what |
+|---|---|
+| **v3.2.16** | persistence had compared a cell's alerting rows against its own rows — 1.0 for every cell by construction |
+| **v3.2.17** | the timeline was cutting the legend in half; and it exposed a regression where replayed snapshots drew nothing at all |
+| **v3.2.18** | the reload guard suppressed retries on intent rather than outcome (hardening — the fault it was written for was never confirmed) |
+| **v3.2.19** | legend and timeline stacked so neither can cover the other |
+| **v3.2.20** | the AI prompt was telling the model every cell was chronic — the same denominator artefact, third location, and the one that spoke to the operator in prose |
+| **v3.2.21** | **chronic moved from "how often" to "the same faces"** — see F-31 |
+
+### F-04 is now largely answered, without touching a threshold
+
+- **The single-gate rule is correctly rare, not too strict.** 1 of 37 alerting
+  cells has all its silent stations behind one gate; most have three or four.
+  `outage` is doing honest work on multi-gate cells. This closes the watch
+  item recorded at the v3.2.12 baseline.
+- **Persistence was the wrong axis** and never fired. Recurrence — is this the
+  same cast of stations again — cuts 46 % of threshold-meeting cells and gives
+  every survivor a callsign that justifies it.
+- **Still untouched:** `min_silent = 3`, `min_ratio = 0.5`. Nothing measured so
+  far argues for moving them, which is a perfectly good answer to have on
+  record.
+
+**Let the new `alert` sit for a day before anything else moves.** Its
+definition changed this morning; the next measurement is worth more once it
+has run through a full daily cycle.
+
+---
+
 ## SHIPPED 2026-08-13 — v3.2.14 and v3.2.15
 
 Three findings closed, in the order this file called for: the one that could
