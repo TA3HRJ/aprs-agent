@@ -11,8 +11,25 @@ what merely under-informs them.**
 
 ## OPEN RIGHT NOW — 2026-08-14 afternoon
 
-**Deployed: v3.2.24.** The working tree is clean and the release is verified on
-the server.
+**Deployed: v3.2.25.** The working tree is clean and both releases are verified
+on the server.
+
+### ✅ Closed — v3.2.25
+
+- **F-25 — a callsign is not a witness.** Cells carry `sites`,
+  `sites_colocated`, `independent_gates` and `self_gated`; fewer than
+  `min_silent` operators demotes a cell out of `alert`. Eight cells demoted on
+  the live feed, none still alerting. The proximity count is **reported and
+  never applied**, by the operator's decision — a position cannot tell a club
+  site from two neighbours.
+
+### ⏳ The one measurement this leaves open
+
+Six live cells would collapse further under the proximity rule and **one of
+them is currently alerting** (`PN36`, 3 operators → 2 sites). Left alone
+deliberately. After a few days that list is the evidence for two questions:
+whether 200 m is the right radius, and whether the rule should ever decide
+anything rather than only inform. Nothing else about F-25 is waiting on it.
 
 ### ✅ Closed — v3.2.24
 

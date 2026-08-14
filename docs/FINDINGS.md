@@ -960,6 +960,53 @@ name says. The mechanism is right even though its first premise was not.
 
 ### F-2026-08-13-25 — a shared gate that is alive still means the stations are not independent
 **Source:** same three readings · **Verdict:** our fault
+**Closed: v3.2.25**, as a qualifier rather than a denominator — the operator's
+call, and the cheaper half of the right answer.
+
+Cells now carry `sites` (distinct operators), `sites_colocated` (additionally
+merged within 200 m), `independent_gates` and `self_gated`. A cell with fewer
+than `min_silent` operators is demoted from `alert` to `threshold_met`: still
+measured, still drawn, greyed like a chronic cell, with the reason in the
+popup. No "past its own peak" escape hatch, unlike chronic — a cell that has
+never held more than one operator does not become a regional outage by having
+a worse day.
+
+**Not the denominator, and the reason is cost.** Counting the *ratio* by site
+would mean collapsing the baseline too, which means grouping every station in
+the cell rather than the three-to-nine silent ones. The walk is already the
+performance problem (F-36); the silent set is free, the baseline is not.
+
+**The proximity count is reported and never applied.** A position cannot tell
+a club site with two callsigns from two neighbours with separate power, and
+collapsing the second case deletes a real independent witness. So it is
+published for a reader and decides nothing.
+
+**Predicted before deploying, then measured after.** The prediction was: eight
+cells demote, `OL16` and `OM62` among them, and `PN36` **keeps** its alert
+because it has three operators and only the unapplied proximity rule would
+have caught it.
+
+| | |
+|---|---|
+| demoted by `few_sites` | **8** — FG46, HH19, NM58, OI88, OL16, OM51, OM56, OM62 |
+| any demoted cell still alerting | **none** |
+| `PN36` | sites 3, colocated 2, **still alerting** — exactly the withheld case |
+| cells with **no** independent gate at all | 3 — RE43, NM58, HH19 |
+| cells proximity would collapse further | 6, one of them alerting |
+
+Alerting went 11 → 10, not the 9 predicted, because the world moved between
+the two samples: `OL16` and `OM62` dropped out as expected and a new cell,
+`OM67` (14 silent stations, 14 operators), arrived. The rule did exactly what
+was predicted on every cell present in both samples.
+
+**NM58, the case that started this:** `sites` 1, `independent_gates` 0,
+`self_gated` 3, `suspect_position` 3. Four separate reasons on record not to
+call it a regional outage, where a fortnight ago it was one.
+
+**What the next measurement is for.** Six cells would collapse further under
+the proximity rule and one of them is alerting. That list, after a few days,
+is the evidence for whether 200 m is the right radius and whether the rule
+should ever be applied rather than printed.
 
 In EN03 all four silent stations use gate `AE5PL-WX`, and two pairs are
 effectively co-located — 43.78/-99.90 with 43.77/-99.88, and 43.69/-99.89 with
