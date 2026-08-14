@@ -9,10 +9,51 @@ what merely under-informs them.**
 
 ---
 
-## OPEN RIGHT NOW — 2026-08-14 afternoon
+## OPEN RIGHT NOW — end of 2026-08-14
 
-**Deployed: v3.2.25.** The working tree is clean and both releases are verified
-on the server.
+**Deployed: v3.2.31**, and GitHub is level with it: badge, download and demo all
+read 3.2.31.
+
+### ✅ Closed in the evening — v3.2.26 … v3.2.31
+
+Six versions, and the useful part is that **three separately-chased symptoms
+turned out to be one fault** — see the F-38 block in [FINDINGS.md](FINDINGS.md).
+
+| | |
+|---|---|
+| **F-38** | `/api/silence` sent 1.08 MB to draw 32 rectangles; with `/api/stations` trimmed, 2.43 MB → 0.96 MB per poll |
+| **F-39** | the copy was a five-second deadline, not a clipboard fault; the bundle now opens in a selected text box |
+| **F-40** | the service worker served old code and no reload could escape it; the offline cache is gone |
+| **F-41** | T2 backbone servers are not independent gates; 23 of 36 cells reclassified, alerting 20 → 8 |
+| F-37 | a caveat severed by the v3.2.25 edit, plus the check that would have caught it |
+
+### ⏱ Still open, and now the only slowness thread left
+
+`/api/stations` is **939 KB and up to 5 s cold**, and the page asks for the full
+capped list rather than the viewport: 2,739 requests with no query string
+against 4 with a `bbox`. The ETag works — repeat polls inside the cache window
+answer `304` — but the token turns over as the registry updates, so a poll
+spaced further apart always pays full price.
+
+Two candidates, neither measured: have the map ask by `bbox` at the zoom levels
+where it already clusters, and drop `last_seen_ago_s` (83 KB, derivable from
+`last_seen` client-side).
+
+**The 7.85 s rebuild tail from F-36 is still unexplained** and is now less
+urgent, because nothing user-facing races it any more.
+
+### 📋 Waiting on the operator
+
+- **Proximity site-merging (F-25).** Six cells would collapse further under the
+  200 m rule and one of them alerts. Reported, never applied — a position
+  cannot tell a club site from two neighbours. A few days of that list is the
+  evidence for whether the radius is right.
+- **The `recurrence` / `per_station` contradiction** seen in the KM59 bundle:
+  recurrence reported 0 for five stations the same file said had been silent
+  here 3 to 87 times. Unreconciled, and it drives the `alert` definition.
+- **`peak_silent` is circular** when the peak was set by the episode being
+  read — same family as the F-16 denominator bug.
+- **The map loading animation**, still an undecided idea from the morning.
 
 ### ✅ Closed — v3.2.25
 

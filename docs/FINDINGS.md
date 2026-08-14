@@ -212,6 +212,176 @@ symptom resists explanation, ask the server what it saw.
 > speed. The feed had been deaf for twelve minutes, and every layer above it
 > reported that as *nothing is silent anywhere*.
 
+> **F-38 through F-41 are one evening, and F-38 is the spine of it.** Three
+> symptoms had been chased separately for weeks — a copy button that failed, a
+> page that "died" and would not refresh, and an endpoint with an unexplained
+> slow tail. They were the same fault. The operator said so before I measured
+> it: *"the system rarely spikes but I hit the clipboard problem almost every
+> time"*, which is a statement that server load is not the variable. It was
+> right, and I went on measuring load for another hour.
+
+### F-2026-08-14-41 — a backbone server is not a gate
+**Source:** operator, looking at the map: *"is it a coincidence that the red and grey boxes are mostly side by side and land on China?"* · **Verdict:** our fault · **Closed: v3.2.31**
+
+It is not a coincidence, and the test that settles it is cells per station
+rather than cells.
+
+| | stations | share | cells | share | over-represented |
+|---|---|---|---|---|---|
+| **China** | 10,427 | 6.1 % | **27** | **77.1 %** | **12.7×** |
+| United States | 36,472 | 21.3 % | 1 | 2.9 % | 0.1× |
+| everywhere else | 97,458 | 56.8 % | 5 | 14.3 % | 0.3× |
+
+Density would put that last column at 1.0. So the question becomes what those
+cells have in common, and the gate list answers it in one line:
+
+```
+T2HK 39 · T2YANTAI 30 · T2CS 23 · T2FZ 22 · T2NANJING 14 · T2JKTP 6 · T2TAIWAN 5
+```
+
+Every one an APRS-IS core server. Not one local igate among 27 cells.
+
+**A station gated by `T2HK` was never heard by anybody's igate** — it opened its
+own internet connection to the backbone, which is what a phone app or a
+connected tracker does. Its silence is an internet or app dropout. All 27 cells
+read `cause: outage`, a claim about a region's power and radio infrastructure,
+with nothing whatever under it.
+
+**And the detector could not see this, because the rotating pool disguised it.**
+`rotate.aprs2.net` hands out a different T2 server on each reconnect, so four
+internet clients in one grid name four different gates. `independent_gates`
+averaged 4.2 on these cells. Four names, one backbone, zero independent
+observations. `shared_gate` never fired because it looks for *one* gate.
+
+**Fixed:** backbone gates (`T2*`) and self-gated stations are counted apart from
+real ones; a cell with no independent local gate takes cause `backbone`, its own
+colour, and no alert. Live: **23 of 36 cells reclassified, alerting 20 → 8**, and
+every one of the 8 survivors has `independent_gates > 0`.
+
+Two of the reclassified cells (`OL14`, `OL05`) fell out on **self-gating**
+rather than backbone — Chinese Pi-Star hotspots, the same shape as NM58 half a
+world away. The rule written that morning for F-25 caught them without being
+aimed at them.
+
+**This is F-25 one level up.** After "a callsign is not a witness", "a backbone
+server is not a gate". Worth asking what the next level is.
+
+### F-2026-08-14-40 — the service worker served old code, and no reload could escape it
+**Source:** operator — *"F5 again, still 3.2.27, you're wrong again"* · **Verdict:** our fault · **Closed: v3.2.30**
+
+The shell handler raced the network against a six-second timeout and served its
+cached copy when the network lost. Six seconds is not "the server is broken", it
+is "the operator is on a home connection".
+
+Measured through the live site while the operator was stuck:
+
+```
+server answered /            0.012 s
+Apache logged                200  55364 bytes delivered
+Apache also logged           200  0 bytes      <- a zero-byte 200
+page went on running         the previous release
+```
+
+**That `200 0` is the smoking gun**, and it is the worker's own abort: on losing
+the race it calls `ctl.abort()` and answers from cache, which Apache records as
+a 200 that delivered nothing.
+
+**Why every escape failed.** A hard reload does not bypass a service worker.
+Clearing site data does remove it — and then the next page load runs
+`navigator.serviceWorker.register('/sw.js')` and puts it straight back. The
+operator was told to clear and reload repeatedly; no sequence of those two
+actions could ever have won, and that was knowable from the code before it was
+asked of them.
+
+**Fixed by removing the feature.** `sw.js` is now a kill switch — clears its
+caches, unregisters itself, reloads open tabs — and the `register()` call is
+gone from the page. Both halves are required: with the kill switch alone, every
+load would install it, be unhooked by it, reload, and install it again.
+
+An admin page for a live radio feed has nothing useful to show offline. Across
+its whole life the offline shell delivered exactly one thing reliably: stale
+code, twice tested against as if it were the current release.
+
+### F-2026-08-14-39 — the copy was never a clipboard problem, it was a deadline
+**Source:** operator, out of patience: *"how confident are you? most of my week went to this"* · **Verdict:** our fault · **Closed: v3.2.27**
+
+Five releases had treated this as a clipboard problem. Measured on real clicks
+in a Chromium build, one click per row:
+
+| | API called first | activation after | `execCommand` |
+|---|---|---|---|
+| execCommand alone | — | live | **true** |
+| API resolved → exec | resolved | live | **true** |
+| +2 s delay → exec | — | live | **true** |
+| **+6 s delay → exec** | — | **expired** | **false** |
+| **API REJECTED → exec** | rejected | **live** | **true** |
+| API rejected + 6 s | rejected | **expired** | **false** |
+
+The fifth row killed my own hypothesis, which was that the refused API call
+consumed the activation. It does not. **Only elapsed time does**, and the window
+is about five seconds.
+
+Against an endpoint measured between **0.101 s warm and 7.85 s cold**. So every
+copy was a race against a five-second clock, lost *silently* — `execCommand`
+returns `false` and says nothing. The popup prefetch usually won it; the
+prefetch is single-use, so a second copy from the same popup refetched and
+usually lost. "Almost every time" was the operator clicking twice.
+
+**Fixed by taking the clipboard off the critical path.** The bundle is fetched
+first and opens in a box with the text already selected; the copy is the
+operator's own second gesture, with the data in hand. Verified against a bundle
+deliberately delayed to 8 s — the case that previously failed every time:
+activation expired, box open, text loaded and fully selected.
+
+**The lesson is about the shape of the bug, not the API.** A failure that
+depends on how long the network took will look intermittent, will resist every
+client-side fix, and will pass every test run against a warm cache.
+
+### F-2026-08-14-38 — a megabyte to draw thirty-two rectangles
+**Source:** the Apache access log, after three wrong client-side diagnoses · **Verdict:** our fault · **Closed: v3.2.28 and v3.2.29**
+
+The log answered in one read what a day of browser theories had not:
+
+```
+/api/silence   1,128,636 bytes   repeatedly, seconds apart
+/api/stations  1,305,698 bytes   repeatedly
+/api/config        3,266 bytes   queued behind them
+```
+
+`/api/silence` carried **2,135 cells; the page drew 32**. It has always
+discarded the rest on arrival — it draws on `threshold_met && bounds` and lists
+on `alert`, and nothing else in the page reads a cell. **98.5 % of a megabyte,
+thrown away on receipt, on a poll that repeats every few seconds.**
+
+`/api/stations` was a quarter empty keys: `city` and `district` empty on 100 %
+of rows, `self_beacon` false on 100 % (80 KB), `ai_org` empty on 97 %,
+`symbol_overlay` on 62 %, `freq_mhz` absent on 65 %.
+
+| | before | after |
+|---|---|---|
+| `/api/silence` | 1,128,636 | **30,435** (37×) |
+| `/api/stations` | 1,305,109 | **939,134** |
+| per poll cycle | 2.43 MB | **0.96 MB** |
+
+**And this is where the other two findings come from.** Those megabytes shared
+one HTTP/2 connection with everything else: the 3 KB settings request queued
+behind them (F-40's empty settings panel), the shell request lost the service
+worker's six-second race (F-40), and the evidence endpoint's cold path stretched
+past the clipboard's five-second window (F-39). One cause, three symptoms, three
+separate hunts.
+
+**Method note, and it is the same one as F-15.** Three rounds of this were
+diagnosed from the browser and all three were wrong; the access log settled it
+immediately. It is now recorded twice. *When a browser symptom resists
+explanation, read the server log first — not third.*
+
+**Second method note, and the more uncomfortable one.** The operator supplied
+the decisive constraint hours earlier — *the system rarely spikes but the
+clipboard almost always fails* — which rules out load as the variable and
+points at something constant. I measured load, agreed the system was fine, and
+carried on looking at load. A user's observation about their own usage is
+evidence, and it deserves the same weight as a number I produced myself.
+
 ### F-2026-08-14-37 — a caveat cut in half, and nothing was checking
 **Source:** reading an exported KM59 bundle · **Verdict:** our fault · **Closed: v3.2.26**
 
