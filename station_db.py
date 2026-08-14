@@ -102,24 +102,54 @@ def colocated_sites(calls, pos: dict) -> int:
     return len(groups)
 
 
-def gate_independence(gate_of: dict, calls) -> "tuple[int, int]":
-    """(independent gates, self-gated stations) across a silent set.
+# APRS-IS core servers. A station whose q-construct names one of these did not
+# arrive through anybody's igate — it opened its own internet connection to the
+# backbone, which is what a phone app or an internet-connected tracker does.
+#
+# Deliberately narrow: `T2*` is the tier-2 naming convention and is
+# unambiguous. Matching more loosely would start discounting real igates, and a
+# real igate wrongly discounted is a worse error than a backbone server missed.
+_BACKBONE_GATE_RE = re.compile(r"^(T2[A-Z0-9]*|FIRST|SECOND|THIRD|FOURTH|FIFTH)$",
+                               re.IGNORECASE)
 
-    A Pi-Star that reaches APRS-IS through its own `-BS` uplink is not using a
-    gate, it *is* its own gate. Counting that as a distinct path is what made
-    four boxes in one house look like four independently-observed witnesses in
-    NM58, and it is why `shared_gate` could never fire there.
+
+def is_backbone_gate(gate: str) -> bool:
+    """True when the 'gate' is an APRS-IS core server rather than an igate."""
+    return bool(_BACKBONE_GATE_RE.match((gate or "").strip()))
+
+
+def gate_independence(gate_of: dict, calls) -> "tuple[int, int, int]":
+    """(independent gates, self-gated stations, backbone-gated stations).
+
+    Two kinds of gate are not evidence of an independent observation path, and
+    both were being counted as if they were:
+
+    *Self-gated.* A Pi-Star that reaches APRS-IS through its own `-BS` uplink is
+    not using a gate, it *is* its own gate. That is what made four boxes in one
+    house look like four independently-observed witnesses in NM58.
+
+    *Backbone.* A station gated by `T2HK` reached the backbone over its own
+    internet connection. Four such stations name four different T2 servers —
+    because rotate.aprs2.net hands out a different one on each reconnect — and
+    the detector read that as four independent paths. Measured 2026-08-14: China
+    held 6.1% of the registry and produced 77.1% of all silence cells, a 12.7x
+    over-representation, and every gate behind those 27 cells was a T2 server.
+    Not one local igate among them. Their silence is an internet or app
+    dropout; it cannot support a claim about a region's power or radio
+    infrastructure, which is what `outage` had been asserting for all 27.
     """
-    indep, selfed = set(), 0
+    indep, selfed, backbone = set(), 0, 0
     for c in calls:
         gw = gate_of.get(c)
         if not gw:
             continue
         if _call_owner(gw) == _call_owner(c):
             selfed += 1
+        elif is_backbone_gate(gw):
+            backbone += 1
         else:
             indep.add(gw)
-    return len(indep), selfed
+    return len(indep), selfed, backbone
 
 
 def suspect_position(rec) -> bool:
@@ -1606,13 +1636,23 @@ class StationDB:
             cause = "outage"
             shared_gate = ""
             if threshold_met:
+                # Before anything else: was there a local witness at all? If
+                # every silent station either gated itself or dialled the
+                # APRS-IS backbone directly, no igate ever heard any of them
+                # over the air, and `outage` — a claim about a region's power
+                # and radio infrastructure — has nothing under it. On the live
+                # feed this was 27 cells out of 35, every one of them reading
+                # `outage`, and every gate behind them a T2 server.
+                _g, _s, _b = gate_independence(c["gate_of"], c["silent_calls"])
+                if _g == 0 and _b:
+                    cause = "backbone"
                 # Gates used by the silent stations — excluding silent
                 # stations that are themselves someone's gate (an igate that
                 # died takes its own beacon down with it).
                 raw_gates = set(c["gate_of"].values())
                 eff_gates = {g for call, g in c["gate_of"].items()
                              if call not in raw_gates}
-                if len(eff_gates) == 1:
+                if cause != "backbone" and len(eff_gates) == 1:
                     only_gate = next(iter(eff_gates))
                     shared_gate = only_gate
                     state = gate_active(only_gate)
@@ -1659,7 +1699,14 @@ class StationDB:
             # represents, and how much of the path is genuinely independent.
             n_sites = owner_sites(c["silent_calls"])
             n_near = colocated_sites(c["silent_calls"], c["pos"])
-            n_gates, n_selfed = gate_independence(c["gate_of"], c["silent_calls"])
+            n_gates, n_selfed, n_backbone = gate_independence(
+                c["gate_of"], c["silent_calls"])
+            # Nothing local ever observed these stations: every one of them
+            # either gated itself or dialled the APRS-IS backbone directly. A
+            # cell like that can say "these internet clients stopped
+            # reporting"; it cannot say anything about a region.
+            no_local_path = bool(threshold_met and n_gates == 0
+                                 and (n_backbone or n_selfed))
             # A cell whose silent stations belong to fewer than min_silent
             # operators cannot be evidence of a regional event, however many
             # callsigns it holds — one shack losing power produces exactly this
@@ -1672,7 +1719,11 @@ class StationDB:
             few_sites = bool(threshold_met and n_sites < min_silent)
             # Past its own worst is still news, even for a chronic cell —
             # that is the case plain suppression would have hidden.
-            alert = (threshold_met and not few_sites
+            #
+            # no_local_path has no such exemption, for the same reason
+            # few_sites has none: a cell that never had a local witness does
+            # not acquire one by having a worse day.
+            alert = (threshold_met and not few_sites and not no_local_path
                      and (not chronic or c["silent"] > peak))
             b = _cell_bounds(c["cell"])
             entry = {
@@ -1707,9 +1758,14 @@ class StationDB:
                 # Gates that are somebody else's, and stations that reach
                 # APRS-IS through their own uplink and so were never
                 # independently observed at all.
+                # Gates that are somebody else's igate. Backbone servers and a
+                # station's own uplink are counted separately below, because
+                # neither one observed anything independently.
                 "independent_gates": n_gates,
                 "self_gated": n_selfed,
+                "backbone_gated": n_backbone,
                 "few_sites": few_sites,
+                "no_local_path": no_local_path,
                 "since": int(c["first_silent"]) if c["first_silent"] else None,
                 "bounds": b,
             }

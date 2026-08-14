@@ -728,6 +728,7 @@ body.public .sb-toggle{display:none!important}
       <span><i style="background:#e01b24"></i><em data-i="sil_outage">Regional silence (possible outage)</em></span>
       <span><i style="background:#f5c211"></i><em data-i="sil_igate">IGate failure</em></span>
       <span><i style="background:#ff7800"></i><em data-i="sil_shared_gate">One shared gate — its own state unknown</em></span>
+      <span><i style="background:#9141ac"></i><em data-i="sil_backbone">Internet-connected clients — no local witness</em></span>
       <span><i style="background:#77767b"></i><em data-i="leg_chronic">Measured, not announced</em></span>
       <span><i style="background:#2ec27e"></i><em data-i="leg_prop1">Opening &lt; 600 km</em></span>
       <span><i style="background:#62a0ea"></i><em data-i="leg_prop2">600–1200 km</em></span>
@@ -870,6 +871,8 @@ const S={en:{
   map_offline:"Map library could not be loaded — an internet connection is required for map tiles.",
   sil_outage:"Regional silence (possible outage)",sil_igate:"IGate failure",
   sil_shared_gate:"One shared gate — its own state unknown",
+  sil_backbone:"Internet-connected clients — no local witness",
+  sil_no_local:"Not announced: not one of these stations was heard by an igate — every one either gated itself or dialled the APRS-IS backbone directly. Their silence is an internet or app dropout, and says nothing about this region.",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
   sil_q_before:"{t} before",sil_q_after:"{t} after",
   sil_dl:"Raw data",sil_cp:"Copy as AI prompt",
@@ -1005,6 +1008,8 @@ const S={en:{
   map_offline:"Harita kütüphanesi yüklenemedi — harita karoları için internet bağlantısı gerekir.",
   sil_outage:"Bölgesel sessizlik (olası kesinti)",sil_igate:"IGate arızası",
   sil_shared_gate:"Tek ortak gate — kendi durumu bilinmiyor",
+  sil_backbone:"İnternete bağlı istemciler — yerel tanık yok",
+  sil_no_local:"Duyurulmadı: bu istasyonların hiçbirini bir igate duymadı — her biri ya kendini gateledi ya da doğrudan APRS-IS omurgasına bağlandı. Sessizlikleri bir internet ya da uygulama kopmasıdır, bu bölge hakkında bir şey söylemez.",
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",
   sil_q_before:"{t} önce",sil_q_after:"{t} sonra",
   sil_dl:"Ham veri",sil_cp:"AI istemi olarak kopyala",
@@ -1637,6 +1642,7 @@ let silRects={};
 function silCauseText(cause){
   if(cause==='igate')return t('sil_igate');
   if(cause==='shared_gate')return t('sil_shared_gate');
+  if(cause==='backbone')return t('sil_backbone');
   return t('sil_outage');
 }
 function silPopup(c){
@@ -1651,6 +1657,7 @@ function silPopup(c){
   // Why this cell is drawn but not announced. Said before the chronic line
   // because it is the stronger objection: a chronic cell is at least a region,
   // this one is one operator's equipment.
+  if(c.no_local_path)h+='<span class="sil-suspect">'+t('sil_no_local')+'</span><br>';
   if(c.few_sites)h+='<span class="sil-chronic">'
     +t(c.sites===1?'sil_few_sites_one':'sil_few_sites')
       .replace('{n}',c.sites).replace('{s}',c.silent)+'</span><br>';
@@ -1658,7 +1665,7 @@ function silPopup(c){
   // The sharp case, and it is silent otherwise: every silent station reached
   // APRS-IS through its own uplink, so nothing independent ever saw any of
   // them. shared_gate cannot fire here, because there is no shared gate.
-  if(c.threshold_met&&c.independent_gates===0&&c.self_gated)
+  if(c.threshold_met&&!c.no_local_path&&c.independent_gates===0&&c.self_gated)
     h+='<span class="sil-suspect">'+t('sil_self_gated')+'</span><br>';
   // The reason this one is news, named. A cell can average a perfectly
   // habitual recurrence and still contain a station that is almost never
@@ -2095,8 +2102,12 @@ function renderSilence(cells,meta){
     // few_sites joins chronic in the demoted grey, and for the same reason:
     // the measurement stands, the announcement does not. A cell whose silent
     // callsigns are all one operator is one shack, not a region.
-    const dim=c.chronic||c.few_sites;
-    const color=dim?'#77767b'
+    const dim=c.chronic||c.few_sites||c.no_local_path;
+    // backbone keeps a colour of its own even while demoted: "we never had a
+    // local witness" is a different statement from "this is long-standing",
+    // and the operator should be able to tell them apart at a glance.
+    const color=c.cause==='backbone'?'#9141ac'
+               :dim?'#77767b'
                :c.cause==='igate'?'#f5c211'
                :c.cause==='shared_gate'?'#ff7800':'#e01b24';
     const opts={color:color,weight:1,fillColor:color,
