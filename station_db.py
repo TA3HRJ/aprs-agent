@@ -93,9 +93,20 @@ def cell_silence_history(path: str, cell: str,
             "FROM silence_history WHERE cell = ?", (cell,)).fetchone()
         if not row or not row[0]:
             return out
-        out["snapshots"] = int(row[0])
         out["alerting_snapshots"] = int(row[1])
         out["first_ts"], out["last_ts"] = int(row[2]), int(row[3])
+        # Only cells that met the threshold are ever written, so COUNT(*)
+        # counts alerting rows and nothing else — "alerting in every stored
+        # snapshot" was true of every cell by construction, and the AI prompt
+        # built on it told the operator that every cell was chronic. The real
+        # denominator is how many snapshot RUNS happened since this cell first
+        # appeared; runs are shared across cells, so the distinct timestamps
+        # are the run log.
+        runs = con.execute(
+            "SELECT COUNT(DISTINCT ts) FROM silence_history WHERE ts >= ?",
+            (out["first_ts"],)).fetchone()
+        out["snapshots"] = max(int((runs or [0])[0] or 0),
+                               out["alerting_snapshots"])
 
         peak = con.execute(
             "SELECT ts, silent, baseline, ratio FROM silence_history "

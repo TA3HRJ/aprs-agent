@@ -347,18 +347,30 @@ def _cell_context_stats(c: dict, history: dict) -> dict:
     alerting = (history or {}).get("alerting_snapshots") or 0
     ratio = c.get("ratio") or 0.0
     at_or_above = sum(1 for r in recent if (r.get("ratio") or 0) >= ratio)
+    # Both numbers used to come from the cell's own stored rows, and only
+    # alerting cells are stored — so "alerting in every snapshot" was true of
+    # every cell, always. The prompt asserted it, the model repeated it with a
+    # /high confidence tag, and the popup ended up calling a cell a possible
+    # outage and chronically normal in the same breath. snapshots is now the
+    # number of snapshot RUNS since the cell was first seen.
+    pct = int(round(100.0 * alerting / snaps)) if snaps else 0
     return {
         "snapshots": snaps,
         "alerting_snapshots": alerting,
-        "always_alerting": bool(snaps) and alerting == snaps,
+        "alerting_share": round(alerting / snaps, 3) if snaps else None,
+        "always_alerting": bool(snaps) and pct >= 90,
         "recent_sampled": len(recent),
         "recent_at_or_above_current_ratio": at_or_above,
         "reading": (
-            "this cell has been alerting in every stored snapshot — the "
-            "current state is its normal, not a change"
-            if snaps and alerting == snaps else
-            "this cell is not always alerting; the current state is a change "
-            "from at least some of its history"),
+            "this cell has alerted in {a} of the {n} snapshot runs taken "
+            "since it was first seen ({p}%). {v}"
+        ).format(a=alerting, n=snaps, p=pct, v=(
+            "That is essentially all of them: the current state is this "
+            "cell's normal rather than a change."
+            if pct >= 90 else
+            "So it alerts intermittently, and has recovered in between — do "
+            "not describe it as permanently or chronically silent."
+        )) if snaps else "no stored history for this cell yet",
     }
 
 

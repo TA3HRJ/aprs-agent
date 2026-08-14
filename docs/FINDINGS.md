@@ -204,6 +204,124 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-14-30 — the same denominator bug, third location, and this one talked to the operator
+**Source:** operator, OM79 popup · **Verdict:** our fault
+
+Reported: a popup reading **"Regional silence (possible outage)"** in red, with
+the AI note underneath saying
+
+> `[event_expired/high]` The cell has been alerting in **every snapshot**, and
+> the silent stations are chronically absent, indicating this is normal state
+> rather than a new outage.
+
+The page contradicted itself — alarming colour, dismissive prose — and the
+operator asked the right question: why do only cells with an AI note say
+anything about being chronic, and why are they all still red?
+
+**The AI was wrong, not the colour.** OM79 has alerted in **731 of 1761 runs —
+42 %**. It is not chronic under any threshold.
+
+It said so because `_cell_context_stats()` was fed `snapshots` and
+`alerting_snapshots` from `cell_silence_history()`, and both counted the cell's
+own stored rows. Only alerting cells are ever stored, so `alerting == snapshots`
+was **true for every cell, always**, and the prompt asserted as fact:
+
+> "this cell has been alerting in every stored snapshot — the current state is
+> its normal, not a change"
+
+Every cell's prompt carried that line. The model repeated it and stamped it
+`/high`.
+
+This is the third place the same construction artefact appeared — the evidence
+bundle (F-26), the popup's persistence figure (fixed in v3.2.16), and now the
+AI prompt. **This one was the worst of the three**, because it did not present
+a number for a reader to weigh: it presented a conclusion, in prose, with a
+confidence tag, to an operator who cannot see the query behind it.
+
+**Fixed in v3.2.20.** `cell_silence_history()` now reports `snapshots` as the
+number of snapshot **runs** since the cell was first seen, matching what the
+cell list already does, and the prompt states the real ratio and draws the
+right conclusion from it:
+
+```
+this cell has alerted in 400 of the 1000 snapshot runs taken since it was
+first seen (40%). So it alerts intermittently, and has recovered in between
+— do not describe it as permanently or chronically silent.
+```
+
+A genuinely permanent cell still reads as chronic; verified both directions.
+Live notes are not persisted across a restart, so the deploy clears the stale
+ones by itself.
+
+**The lesson is about blast radius, not about the bug.** One wrong denominator
+reached three surfaces, and the order in which they were found was the reverse
+of the order in which they mattered: the JSON field first, the popup second,
+and the sentence a person actually reads last. When a number turns out to be
+meaningless, the question is not "where is it computed" but **"who repeats
+it"** — and a model that has been handed a false premise will state it more
+confidently than the field ever did.
+
+### F-2026-08-14-29 — eight hours of data: `chronic` cannot fire, and the gate rule is right
+**Source:** operator — "check what the alert definitions are worth now the data
+has accumulated" · **Verdict:** measurement, two answers
+
+**One: the chronic mechanism is inert.**
+
+| | |
+|---|---|
+| cells meeting the threshold | 38 |
+| cells reported as `alert` | **38** |
+| cells reported as `chronic` | **0** |
+| alerts caused by passing a cell's own peak | 0 |
+
+Persistence across the 38: 23 below 0.25, 11 at 0.25–0.49, 3 at 0.50–0.74, and
+one at 1.00 with only 21 snapshots — too young to qualify. The highest value on
+a cell with real history is **0.725**, and among the long-lived cells
+**0.625** (RE43: 1114 alerting of 1781 runs, ~12 days).
+
+So nothing approaches the 0.90 cut, and `alert` is currently identical to
+`threshold_met`. The redefinition shipped in v3.2.15 is, on this data, a no-op.
+That is worth stating plainly rather than leaving as a quiet success.
+
+Two readings are now consistent 8 hours apart: cells do not alert permanently,
+they alert **intermittently**, topping out around 60–70 % of runs.
+
+**Two, and this closes a question NEXT.md left open: the single-gate rule is
+not too strict — shared gates are genuinely rare.**
+
+Distinct gates behind each alerting cell's silent stations:
+
+| distinct gates | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| cells | 1 | 5 | 13 | 11 | 3 | 2 | 2 |
+
+Exactly **one** cell has all its silent stations behind a single gate, and it
+is already labelled `shared_gate`. Relaxing the rule to "one gate carries the
+overwhelming majority" would reclassify exactly one more (DM35, 80 %). Most
+alerting cells have their silent stations spread over three or four gates,
+which is not one path failing. **`outage` is doing honest work.**
+
+NEXT.md had framed a near-zero `shared_gate` rate as evidence the rule was too
+strict to matter. It is the opposite: the rate is low because the situation is
+rare, and the branch fires exactly when it should.
+
+**What to do about the 0.90 cut — the operator's call, with numbers now
+attached.** Lowering it to 0.5 would demote three cells of 38 (RE43 0.625,
+DM52 0.567, IM63 0.725). That may well be right: a cell alerting in 63 % of
+1781 runs over twelve days is not reporting news. But two observations of one
+night and one morning is still a thin basis, and the alternative — accepting
+that `chronic` is dormant infrastructure that fires only on genuinely permanent
+cells — costs nothing and misinforms no one.
+
+**A better axis, recorded not built.** What the outside readings actually
+objected to was never "this cell alerts often" — it was **the same callsigns,
+every time**. A cell alerting 63 % of the time with the same three stations is
+describing those three stations' habits, not a region. `silent_calls` is
+already stored per snapshot, so "how many of the currently-silent callsigns
+were also silent in most previous alerts of this cell" is computable today.
+That is probably the measurement F-26 was reaching for, and persistence is a
+proxy that happens not to discriminate. Belongs to F-04.
+
 ### F-2026-08-14-28 — the reload guard recorded intent, not outcome
 **Source:** operator — "the VPS 3.2.17 in the Chrome window can't come back to
 itself" · **Verdict:** our fault · **Confidence: plausible, not confirmed**

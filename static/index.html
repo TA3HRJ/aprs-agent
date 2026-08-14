@@ -140,6 +140,7 @@ body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--b
 /* wraps rather than overflowing: seven entries no longer fit one row on a
    laptop, and an eighth would not fit on any. */
 .map-legend{background:rgba(30,30,30,.85);padding:6px 10px;border-radius:6px;font-size:11px;display:flex;flex-wrap:wrap;gap:4px 12px;max-width:100%;pointer-events:none}
+.legend-toggle{display:none;background:rgba(30,30,30,.85);color:#ccc;border:1px solid #555;border-radius:6px;padding:4px 9px;font-size:11px;font-family:inherit;cursor:pointer;pointer-events:auto}
 .map-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 .map-legend em{font-style:normal;color:#ccc}
 /* Public (read-only) view: window.PUBLIC hides everything admin */
@@ -348,7 +349,12 @@ body.public .sb-toggle{display:none!important}
   .stat-bar .cell .l{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .map-timeline{gap:6px;padding:4px 8px}
   .tl-label{font-size:10px;height:12px}
+  /* Behind a tap instead of gone: seven entries would eat the map, but a
+     colour nobody can decode is worse than one extra tap. */
   .map-legend{display:none}
+  .legend-toggle{display:block}
+  body.leg-open .map-legend{display:flex;flex-direction:column;gap:3px;
+    max-height:40vh;overflow-y:auto;pointer-events:auto}
   .tab-btn{padding:10px 12px;font-size:12px;white-space:nowrap;min-height:44px}
   /* Sekmeler + ⚙ tek satırda kalır; log sayacı/Clear/Auto Scroll (yalnızca
      Live Log sekmesinde görünür) o satıra sığmadığından kendi satırına
@@ -662,6 +668,11 @@ body.public .sb-toggle{display:none!important}
          the map's bottom edge, and the timeline — painted later — cut the
          legend in half. -->
     <div class="map-overlays">
+    <!-- Phone only. The legend was simply hidden below 700px, which left a map
+         of red, orange, yellow and grey cells with nothing on screen saying
+         what any colour meant. -->
+    <button class="legend-toggle" id="leg-btn" onclick="legToggle()"
+            aria-expanded="false"><span data-i="leg_key">Key</span> <span id="leg-arrow">▾</span></button>
     <div class="map-legend">
       <span><i style="background:#e01b24"></i><em data-i="sil_outage">Regional silence (possible outage)</em></span>
       <span><i style="background:#f5c211"></i><em data-i="sil_igate">IGate failure</em></span>
@@ -814,6 +825,7 @@ const S={en:{
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
+  leg_key:"Key",
   leg_chronic:"Long-standing, not a new event",
   sil_chronic:"Chronic: alerting in {a} of its {n} recorded snapshots — this "
     +"is the cell's long-standing state, not a new event.",
@@ -936,6 +948,7 @@ const S={en:{
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
   sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
+  leg_key:"Gösterge",
   leg_chronic:"Süregelen, yeni bir olay değil",
   sil_chronic:"Kronik: kayıtlı {n} anlık görüntünün {a} tanesinde alarm veriyor "
     +"— bu hücrenin yeni bir olayı değil, süregelen hâli.",
@@ -1798,10 +1811,23 @@ function sumToggle(cls,sumId,key){
 }
 function alSumToggle(){sumToggle('al-open','alert-sum','aprs.al')}
 function msSumToggle(){sumToggle('ms-open','miss-sum','aprs.ms')}
+// The label carries data-i so applyLang keeps owning it; only the arrow and
+// the state are this function's business.
+function legToggle(){
+  const on=document.body.classList.toggle('leg-open');
+  const a=$('leg-arrow');if(a)a.textContent=on?'▴':'▾';
+  const b=$('leg-btn');if(b)b.setAttribute('aria-expanded',on?'true':'false');
+  try{localStorage.setItem('aprs.leg',on?'1':'0')}catch(e){}
+}
 function restorePanelState(){
   try{
     if(localStorage.getItem('aprs.al')==='1')document.body.classList.add('al-open');
     if(localStorage.getItem('aprs.ms')==='1')document.body.classList.add('ms-open');
+    if(localStorage.getItem('aprs.leg')==='1'){
+      document.body.classList.add('leg-open');
+      const a=$('leg-arrow');if(a)a.textContent='▴';
+      const b=$('leg-btn');if(b)b.setAttribute('aria-expanded','true');
+    }
   }catch(e){}
 }
 // Triage list: backend sorts by wall-clock time since the station was last
