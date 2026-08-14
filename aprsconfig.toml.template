@@ -371,8 +371,17 @@ extra_sms = 0
 # Enable callsign whitelist
 whitelist_enabled = false
 
-# Only respond to these callsigns (wildcards OK: TA3*)
+# Only respond to these callsigns (wildcards OK: TA3*).
+# With whitelist_enabled = true an EMPTY list means NOBODY, not everybody.
 whitelist = []
+
+# Per-sender rate limit, token bucket. A sender may ask `rate_burst` questions
+# back to back, then one more per `rate_refill_s` seconds, up to the burst
+# again once idle. Deliberately not a flat cooldown: someone meeting the
+# gateway for the first time asks several questions in a row, and freezing
+# them out is the wrong lesson. Set either to 0 to switch the limiter off.
+rate_burst = 4
+rate_refill_s = 180
 
 # One API key per provider, so switching "provider" above recalls that
 # provider's own key automatically instead of overwriting a single field.

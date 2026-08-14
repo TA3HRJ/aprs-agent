@@ -20,6 +20,7 @@ Reaches the air through the own-writer channel from TA3PKS's extension design.
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from typing import Optional
 
@@ -94,12 +95,84 @@ def _split_message(text: str, max_parts: int) -> list[str]:
 
 class AIGateway(Extension):
 
-    def __init__(self, config: dict):
+    # How often the gateway re-reads its own section from the config file.
+    # The whitelist used to be a snapshot taken when the extension loaded, so
+    # shutting the gate meant restarting the agent — no way to stop answering
+    # in a hurry, which is not a state to be in with an AI addressable from
+    # the whole of APRS-IS.
+    _CFG_REFRESH_S = 5.0
+
+    def __init__(self, config: dict, config_path: str = ""):
         self._config = config
+        self._config_path = config_path
+        self._cfg_read_at = 0.0
+        self._cfg_mtime = 0.0
         self._validate()
         self._processed: set[str] = set()
         self._own_writer: Optional[asyncio.Queue] = None
         self._msg_counter = 0
+        # Token bucket per sender: a burst of questions costs nothing, and the
+        # refill only bites on sustained hammering. A flat cooldown would have
+        # punished exactly the people worth having — someone meeting the thing
+        # for the first time asks three or four questions back to back.
+        self._buckets: dict[str, list] = {}   # sender -> [tokens, last_refill]
+
+    def _live_config(self) -> dict:
+        """The gateway's own config section, re-read when the file changes.
+
+        Cheap: a stat at most every _CFG_REFRESH_S, and a parse only when the
+        mtime actually moved. Anything unreadable leaves the last good config
+        in place — a broken edit must not silently open the gate.
+        """
+        if not self._config_path:
+            return self._config
+        now = time.time()
+        if now - self._cfg_read_at < self._CFG_REFRESH_S:
+            return self._config
+        self._cfg_read_at = now
+        try:
+            mtime = os.path.getmtime(self._config_path)
+            if mtime == self._cfg_mtime:
+                return self._config
+            import config as cfg_module
+            fresh = (cfg_module.load_config(self._config_path)
+                     .get("extensions", {}).get("ai_gateway", {}))
+            if fresh:
+                self._cfg_mtime = mtime
+                if fresh.get("whitelist_enabled") != self._config.get("whitelist_enabled")                         or fresh.get("whitelist") != self._config.get("whitelist")                         or fresh.get("enabled") != self._config.get("enabled"):
+                    self.log("config reloaded — whitelist_enabled=%s entries=%d enabled=%s"
+                             % (fresh.get("whitelist_enabled"),
+                                len(fresh.get("whitelist") or []),
+                                fresh.get("enabled")))
+                self._config = fresh
+        except Exception as e:
+            self.warn(f"config reload failed, keeping previous: {e}")
+        return self._config
+
+    def _allow_rate(self, sender: str, cfg: dict) -> bool:
+        """Token bucket. Returns False only when a sender is hammering."""
+        burst = float(cfg.get("rate_burst", 4) or 0)
+        refill_s = float(cfg.get("rate_refill_s", 180) or 0)
+        if burst <= 0 or refill_s <= 0:
+            return True                       # limiter off
+        now = time.time()
+        b = self._buckets.get(sender)
+        if b is None:
+            self._buckets[sender] = [burst - 1.0, now]
+            return True
+        tokens, last = b
+        tokens = min(burst, tokens + (now - last) / refill_s)
+        if tokens < 1.0:
+            b[0], b[1] = tokens, now
+            return False
+        b[0], b[1] = tokens - 1.0, now
+        # Senders idle longer than a full refill are forgotten, so the dict
+        # cannot grow without bound on a worldwide feed.
+        if len(self._buckets) > 2000:
+            cutoff = now - burst * refill_s
+            for k in [k for k, v in self._buckets.items() if v[1] < cutoff]:
+                del self._buckets[k]
+        return True
 
         self._provider = config.get("provider", "puter")
         self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(self._provider, _PROVIDER_URLS["puter"])
@@ -223,7 +296,9 @@ class AIGateway(Extension):
         await self._own_writer.put(pkt.encode("utf-8"))
 
     async def handle(self, line: str) -> Optional[bytes]:
-        cfg = self._config
+        cfg = self._live_config()
+        if not cfg.get("enabled", True):
+            return None
 
         if line.startswith("#"):
             return None
@@ -290,12 +365,24 @@ class AIGateway(Extension):
 
         if cfg.get("whitelist_enabled"):
             whitelist = [w.upper().strip() for w in cfg.get("whitelist", []) if w.strip()]
-            if whitelist and not any(
+            # An empty list with the gate switched ON means NOBODY, not
+            # everybody. It used to mean everybody: the `if whitelist and ...`
+            # guard skipped the check entirely, so clearing the list to reset
+            # it silently opened an AI responder to the whole of APRS-IS while
+            # the interface still showed the whitelist as enabled.
+            if not whitelist:
+                self.warn(f"blocked {sender_full} — whitelist enabled but empty")
+                return None
+            if not any(
                 sender_base.startswith(w[:-1]) if w.endswith("*") else sender_base == w
                 for w in whitelist
             ):
                 self.warn(f"blocked {sender_full} — not in whitelist")
                 return None
+
+        if not self._allow_rate(sender_base, cfg):
+            self.warn(f"rate-limited {sender_full}")
+            return None
 
         self.log(f"RX from {sender_full}: {question}")
 

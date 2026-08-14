@@ -767,7 +767,7 @@ class AgentManager:
             ("bluesky",      Bluesky,      ext_cfg.get("bluesky", {})),
             ("whatsapp",     WhatsApp,     ext_cfg.get("whatsapp", {})),
             ("telegram",     Telegram,     ext_cfg.get("telegram", {})),
-            ("ai_gateway",   AIGateway,    ext_cfg.get("ai_gateway", {})),
+            ("ai_gateway",   AIGateway,    ext_cfg.get("ai_gateway", {})),  # takes config_path too, see below
             ("imap",         ImapReceiver, ext_cfg.get("imap", {})),
             ("logger",       Logger,       ext_cfg.get("logger", {})),
             ("smtp",         SmtpEmailer,  ext_cfg.get("smtp", {})),
@@ -776,7 +776,13 @@ class AgentManager:
         for name, cls, cfg in pairs:
             if cfg.get("enabled"):
                 try:
-                    ExtensionRegistry.register(cls(cfg))
+                    # The AI gateway alone gets the config path: it is the one
+                    # extension addressable by the whole world, so its
+                    # whitelist has to be closeable without a restart.
+                    if cls is AIGateway:
+                        ExtensionRegistry.register(cls(cfg, self.config_path))
+                    else:
+                        ExtensionRegistry.register(cls(cfg))
                 except Exception as e:
                     print(f"[{name}] Init failed: {e}", file=sys.stderr)
 
