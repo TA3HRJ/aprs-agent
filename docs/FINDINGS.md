@@ -204,6 +204,46 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-14-33 — NM58: a cell that exists only because of two counting errors
+**Source:** operator, "the box is near Mongolia and the callsigns are American" · **Verdict:** ours to count, not ours to parse
+
+A grey chronic cell in western China, 4 of 4 silent, holding `KC9SIO-B`,
+`KC9SIO-D`, `KC9SIO-N`, `N3ARY-N`. Verified against live data:
+
+```
+KC9SIO-B  38.76N  90.799E   gateway   gated by KC9SIO-BS
+KC9SIO-D  38.80N  90.799E   gateway   gated by KC9SIO-DS
+KC9SIO-N  38.80N  90.799E   gateway   gated by KC9SIO-NS
+N3ARY-N   38.48N  90.42E    gateway   gated by N3ARY-NS
+```
+
+**Two independent errors stack to produce this cell.**
+
+*One — four entries, two owners.* Three of them are SSIDs of a single base
+callsign, each gated by its own `-S` server: D-Star gateway modules, not four
+radios. Collapsed to owners the cell is **2 of 4**, below `min_silent = 3`, and
+would never appear at all. This is F-25 with a concrete live case, and it is
+ours to fix.
+
+*Two — the longitude sign.* KC9SIO is an Illinois callsign and N3ARY is US
+east-coast; 38.6 N / 90.2 **W** is St. Louis. These gateways beacon **+90.8**
+where they mean **−90.8**, a missing minus in the gateway's configuration,
+which lands them in western China.
+
+**That second one is NOT our bug**, and it was worth checking rather than
+assuming. Both position paths were read: the uncompressed regex captures
+`([EW])` and `_ddmm_to_decimal` negates on `S`/`W`; the compressed decoder uses
+`lon = -180 + b91/190463`, where the sign is intrinsic to the formula. And the
+decisive argument is not the code but the map: a parser that dropped the
+hemisphere would mirror **every** western-hemisphere station, and the worldwide
+distribution is plainly normal.
+
+**This is also F-23 with its mechanism named.** "A gate whose links are mostly
+anomalous is probably misplaced" now has a cause behind it: an operator omits
+the minus, and every distance measured through that gate is wrong by half a
+planet. Worth carrying into the F-22/F-23 package — a gate on the wrong
+continent will manufacture openings from everything it hears.
+
 ### F-2026-08-14-32 — `esc()` is a text-node escaper, and four sinks used it for attributes
 **Source:** found while reading, chasing an unrelated question · **Verdict:** our fault · **Security**
 
