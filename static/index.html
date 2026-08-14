@@ -2346,8 +2346,26 @@ async function refreshModStatus(){try{const info=await api('GET','/api/info');re
 async function reloadCfg(){try{const p=$('hdr-cfg').value.trim();if(p)await api('POST','/api/config-path',{path:p});const c=await api('GET','/api/config');loadCfg(c);addLog('[web] '+t('reload_ok')+'\n')}catch(e){addLog('[web] '+t('save_err')+'\n')}}
 // Status updates arrive via WebSocket "stats" messages every 2s — no polling needed.
 
-// ── PWA ──
-if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+// ── No service worker ──────────────────────────────────────────────────────
+// The registration is gone, and it has to be gone from HERE as well as from
+// sw.js. /sw.js is now a kill switch that unregisters itself and reloads open
+// tabs; if this line still ran, every load would register it, it would unhook
+// itself, reload the tab, and the tab would register it again — a reload loop
+// instead of a fix.
+//
+// Browsers that already have the old worker do not need this line: they
+// re-check /sw.js on their own during navigation, get the kill switch, and
+// clean themselves up once. Nothing is asked of the operator.
+//
+// Why it is gone at all, 2026-08-14: the worker served its cached shell
+// whenever the network lost a six-second race, and on a home connection
+// sharing one HTTP/2 connection with a megabyte of API traffic it lost that
+// race routinely. The result was a browser silently running an old build
+// while the server answered `/` in 0.012 s — two releases were tested against
+// code that was never running, and neither a hard reload nor clearing site
+// data could escape it, because the next page load put the worker straight
+// back. An admin page for a live radio feed has nothing to show offline; the
+// only thing the offline shell reliably delivered was stale code.
 
 // ── Version watch ──────────────────────────────────────────────────────────
 // An open tab never re-requests the shell, so it goes on running the JS it
