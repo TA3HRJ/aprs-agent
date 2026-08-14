@@ -601,9 +601,9 @@ body.public .sb-toggle{display:none!important}
   </div>
   <div class="tab-bar">
     <button class="tab-btn sb-toggle" id="btn-sb" onclick="document.body.classList.add('sb-open')" title="Settings">⚙</button>
-    <button class="tab-btn active" id="tab-log" onclick="switchTab('log')" data-i="tab_log">Live Log</button>
+    <button class="tab-btn" id="tab-log" onclick="switchTab('log')" data-i="tab_log">Live Log</button>
     <button class="tab-btn" id="tab-sta" onclick="switchTab('sta')" data-i="tab_sta">Stations</button>
-    <button class="tab-btn" id="tab-map" onclick="switchTab('map')" data-i="tab_map">Map</button>
+    <button class="tab-btn active" id="tab-map" onclick="switchTab('map')" data-i="tab_map">Map</button>
     <button class="tab-btn" id="tab-msg" onclick="switchTab('msg')" data-i="tab_msg">Messages</button>
     <div class="tab-spacer"></div>
     <div class="log-header" style="background:transparent;border:none">
@@ -642,7 +642,7 @@ body.public .sb-toggle{display:none!important}
        stations recover, but the ones still missing are what matter most. -->
   <div class="panel-sum miss-sum" id="miss-sum" hidden onclick="msSumToggle()"></div>
   <div class="miss-panel" id="miss-panel" hidden></div>
-  <div class="log-view" id="log"></div>
+  <div class="log-view" id="log" hidden></div>
 
   <!-- STATIONS PANEL -->
   <div class="sta-panel" id="sta-view" hidden>
@@ -715,7 +715,7 @@ body.public .sb-toggle{display:none!important}
   </div>
 
   <!-- MAP PANEL -->
-  <div class="map-panel" id="map-view" hidden>
+  <div class="map-panel" id="map-view">
     <div id="map"></div>
     <!-- Legend and timeline are stacked in one bottom-anchored column. Left to
          position themselves independently they both sat in the same band above
@@ -1305,11 +1305,17 @@ function renderHeard(){
 function togHeard(cs){heardFilter=heardFilter===cs?null:cs;document.querySelectorAll('#log .ll').forEach(el=>{el.style.display=!heardFilter||el.textContent.includes(heardFilter)?'':'none'});renderHeard();if(autoScroll)$('log').scrollTop=1e9}
 
 // ── Tab switching ──
-let activeTab='log';
+// The map, not the log. Somebody opening this to watch a region sees the
+// region; a wall of scrolling packet text is what the software is doing, not
+// what it found. The operator's own last choice wins over this default from
+// their second visit onward — the same localStorage habit the alert and legend
+// panels already use.
+let activeTab='map';
 let staData=[];
 let staRefreshTimer=null;
 function switchTab(tab){
   activeTab=tab;
+  try{localStorage.setItem('aprs.tab',tab)}catch(e){}
   $('tab-log').className='tab-btn'+(tab==='log'?' active':'');
   $('tab-sta').className='tab-btn'+(tab==='sta'?' active':'');
   $('tab-map').className='tab-btn'+(tab==='map'?' active':'');
@@ -1395,9 +1401,21 @@ function aprsSym(r){
 }
 // ── Map tab (Leaflet + OpenStreetMap) ──
 let map=null,mapMarkers={},mapFitted=false;
+let mapRetryBound=false;
 function initMap(){
   if(map){setTimeout(()=>map.invalidateSize(),60);renderMap();return}
-  if(typeof L==='undefined'){$('map-hint').hidden=false;return}
+  if(typeof L==='undefined'){
+    // Leaflet is loaded with `defer`, so on the very first paint it can still
+    // be missing — which never mattered while the map was a tab somebody had
+    // to click, and matters now that it is what opens. Show the hint, but try
+    // again the moment the deferred scripts have run.
+    $('map-hint').hidden=false;
+    if(!mapRetryBound){
+      mapRetryBound=true;
+      window.addEventListener('load',function(){if(activeTab==='map')initMap()});
+    }
+    return;
+  }
   $('map-hint').hidden=true;
   map=L.map('map').setView([39.0,35.0],6);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
@@ -2111,6 +2129,17 @@ function legToggle(){
   const b=$('leg-btn');if(b)b.setAttribute('aria-expanded',on?'true':'false');
   try{localStorage.setItem('aprs.leg',on?'1':'0')}catch(e){}
 }
+// Messages is admin-only, so a saved 'msg' must not strand a public visitor on
+// a tab that does not exist for them.
+function restoreTab(){
+  let tab='map';
+  try{
+    const saved=localStorage.getItem('aprs.tab');
+    if(saved&&['log','sta','map','msg'].indexOf(saved)>-1)tab=saved;
+  }catch(e){}
+  if(tab==='msg'&&window.PUBLIC)tab='map';
+  switchTab(tab);
+}
 function restorePanelState(){
   try{
     if(localStorage.getItem('aprs.al')==='1')document.body.classList.add('al-open');
@@ -2575,7 +2604,7 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden)chec
     }
   }catch(e){}
   if(!window.PUBLIC){try{const cfg=await api('GET','/api/config');loadCfg(cfg)}catch(e){addLog('[web] Failed to load config\n')}}
-  restorePanelState();connectWS();applyLang();
+  restorePanelState();restoreTab();connectWS();applyLang();
   pollSilence();setInterval(pollSilence,15000);
 })();
 </script>
