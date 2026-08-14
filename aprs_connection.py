@@ -32,6 +32,20 @@ from extensions import ExtensionRegistry
 # Software version string reported to APRS-IS server (kept in sync via config.VERSION)
 SOFTWARE_VERSION = f"APRS-AGENT {VERSION}"
 
+# How long the receive loop will wait for ANY line before treating the link as
+# dead. An APRS-IS server sends a "# aprsc ..." comment every ~20 s even when
+# no traffic matches the filter, so silence this long is not a quiet feed — it
+# is a connection that stopped delivering without closing.
+#
+# Measured 2026-08-14 (F-34): the feed stopped for 729 s and the process said
+# nothing at all, because readline() had no deadline and a half-dead TCP socket
+# never returns. Twelve minutes of that crossed the 600 s deaf guard in
+# silence_cells(), which then reported "nothing is silent anywhere" — 28 cells
+# cleared, 5 stations wrongly announced back on the air. The feed is the one
+# input everything else depends on and it was the only one with no liveness
+# check on it.
+READ_TIMEOUT_S = 120.0
+
 
 async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
     """
@@ -169,7 +183,18 @@ async def _receive_loop(
 
     while True:
         try:
-            raw = await reader.readline()
+            raw = await asyncio.wait_for(reader.readline(), timeout=READ_TIMEOUT_S)
+        # Must come before the generic handler: on 3.11+ asyncio.TimeoutError is
+        # the builtin TimeoutError, on 3.8-3.10 it is the concurrent.futures one,
+        # and both are Exceptions — caught below they would print an empty
+        # message and hide exactly the case this was written for.
+        except asyncio.TimeoutError:
+            print(
+                f"[aprs-is] no data for {READ_TIMEOUT_S:.0f}s — link is dead, "
+                f"reconnecting ...",
+                file=sys.stderr,
+            )
+            return
         except Exception as e:
             print(f"Read error from APRS-IS: {e}", file=sys.stderr)
             return

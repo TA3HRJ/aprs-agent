@@ -177,8 +177,17 @@ def _get_slim_lock() -> "asyncio.Lock":
 
 
 _cells_lock: "asyncio.Lock | None" = None
-# (built_at, build_seconds, cells)
+# (built_at, build_seconds, cells) — built_at 0.0 means "never built", which is
+# the only thing that makes a caller wait. An empty result is a result.
 _cells_cache: "tuple[float, float, list]" = (0.0, 0.0, [])
+# Floor for the adaptive window. It used to be 2.0 s, which quietly undid the
+# adaptation it sat in front of: the window is computed from the LAST build, so
+# a fast build granted 2.0 s and the next build — measured at up to 2.4 s on
+# 145k stations — had already outlived the window it was given. The walk ran
+# essentially without pause (F-36: ~1 request in 5 rebuilt, cached answers
+# 0.07-0.30 s against rebuilds of 0.6-2.4 s). The map polls every few seconds
+# and does not need cells fresher than this.
+_CELLS_MIN_TTL_S = 10.0
 
 
 async def silence_cells_cached(db, history_path: str = "") -> list:
@@ -206,23 +215,31 @@ async def silence_cells_cached(db, history_path: str = "") -> list:
     if _cells_lock is None:
         _cells_lock = asyncio.Lock()
 
+    # F-35: while the feed is deaf, silence_cells() returns [] as a refusal to
+    # judge, not as a finding. Rebuilding here would overwrite the last true
+    # reading with that refusal, and every consumer downstream would read it as
+    # "nothing is silent anywhere". Hold what we last knew and let the callers
+    # label it — they ask db.deaf_since() for themselves.
+    if db.deaf_since():
+        return _cells_cache[2]
+
     built_at, build_s, cells = _cells_cache
     now = time.time()
-    if cells and now - built_at < max(2.0, build_s * 4):
+    if built_at and now - built_at < max(_CELLS_MIN_TTL_S, build_s * 4):
         return cells
 
     async with _cells_lock:
         # Another caller may have rebuilt it while this one waited.
         built_at, build_s, cells = _cells_cache
         now = time.time()
-        if cells and now - built_at < max(2.0, build_s * 4):
+        if built_at and now - built_at < max(_CELLS_MIN_TTL_S, build_s * 4):
             return cells
         t0 = time.time()
         try:
             fresh = await asyncio.get_event_loop().run_in_executor(
                 None, lambda: db.silence_cells(history_path=history_path))
         except Exception:
-            return cells or []
+            return cells
         _cells_cache = (time.time(), time.time() - t0, fresh)
         return fresh
 
@@ -495,6 +512,9 @@ class AgentManager:
         # dict, ai note)); lost on restart, same as the episode state above.
         self._silence_pending: list = []
         self._silence_last_flush = time.time()
+        # Set while the feed is deaf, so entering and leaving that state each
+        # log once instead of every 5-minute scan (F-35).
+        self._silence_deaf_at: float = 0.0
         # Propagation openings: active episodes per Maidenhead field
         # (region → first-detected ts). Alert once per episode, like silence.
         self._prop_active: dict[str, float] = {}
@@ -828,6 +848,30 @@ class AgentManager:
             # Off the loop like everything else: this loop runs beside the
             # HTTP handlers, so a synchronous scan here stalls them too.
             cells = await silence_cells_cached(self._station_db, self._sta_db_path)
+
+            # F-35: no feed, no judgement — and no announcements either.
+            # Everything below this point either raises an alert or retracts
+            # one, and while we cannot hear, a retraction is a false statement.
+            # On 2026-08-14 twelve minutes of dead feed produced 28 "cleared",
+            # two "[prop] cleared" and five "back on the air" in one second,
+            # none of which had happened. Hold every episode exactly as it was.
+            deaf_since = self._station_db.deaf_since()
+            if deaf_since:
+                if not self._silence_deaf_at:
+                    self._silence_deaf_at = deaf_since
+                    self._log_both(
+                        f"[silence] feed deaf since "
+                        f"{time.strftime('%H:%M:%S', time.localtime(deaf_since))}"
+                        f" — holding {len(self._silence_active)} episode(s), "
+                        f"judging nothing")
+                await asyncio.sleep(300)
+                continue
+            if self._silence_deaf_at:
+                self._log_both(
+                    f"[silence] feed back after "
+                    f"{int(time.time() - self._silence_deaf_at)}s — resuming")
+                self._silence_deaf_at = 0.0
+
             alerts = {c["cell"]: c for c in cells if c["alert"]}
 
             for cell, c in alerts.items():
@@ -2061,7 +2105,15 @@ async def get_silence(request: web.Request) -> web.Response:
         # Only alerting cells: _cell_quakes is cheap (one shared cached feed)
         # but the payload is not, on a worldwide feed.
         c["quakes"] = _cell_quakes(c["cell"], c.get("since")) if c["alert"] else []
-    return web.json_response({"cells": cells})
+    # F-35. An empty `cells` used to be the only thing the map was told, and it
+    # drew the only conclusion available: nothing is silent anywhere. These two
+    # fields let it say the true thing instead — that we cannot hear, since
+    # when, and that whatever cells it is showing are the last ones we could
+    # actually vouch for.
+    deaf_since = mgr._station_db.deaf_since()
+    return web.json_response({"cells": cells,
+                              "deaf": bool(deaf_since),
+                              "deaf_since": int(deaf_since)})
 
 
 @routes.get("/api/silence/evidence")
@@ -2112,6 +2164,19 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
         cells = await silence_cells_cached(mgr._station_db, mgr._sta_db_path)
         c = next((x for x in cells if x["cell"] == cell), None)
         if c is None:
+            # F-35. This 404 is the copy failure the operator kept reporting.
+            # While the feed was deaf the cell list was empty, so every cell on
+            # their screen answered "no current silence data" — a sentence that
+            # blames the cell for a fault in our own input, and one the export
+            # button then showed as the reason the copy failed. Say which it is.
+            deaf_since = mgr._station_db.deaf_since()
+            if deaf_since:
+                return web.json_response(
+                    {"error": f"no APRS-IS feed for "
+                              f"{int(time.time() - deaf_since) // 60} min — "
+                              f"cannot see {cell} right now",
+                     "deaf": True, "deaf_since": int(deaf_since)},
+                    status=503)
             return web.json_response(
                 {"error": f"no current silence data for {cell}"}, status=404)
         episode_start = mgr._silence_active.get(cell)
@@ -2223,6 +2288,15 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
             "A quake within the search radius is a candidate, not a cause. "
             "Weigh offset_s: a long gap between quake and silence is "
             "coincidence, not causation.",
+            "cell.suspect_position counts how many of the silent stations "
+            "beacon a US callsign from an eastern longitude while running "
+            "MMDVM/D-Star/Pi-Star firmware — the well-known case of a hotspot "
+            "configured without the minus sign on its longitude, which places "
+            "a US gateway on the far side of the planet. The packet really "
+            "does say E, so this is the sender's error and not a decoding "
+            "one, but if this number approaches 'silent' then the cell is not "
+            "describing the region it is drawn on and its cause should not be "
+            "read as a regional one.",
             "No APRS signal is a weak welfare signal, not a confirmed "
             "emergency. Stations go quiet for ordinary reasons.",
             "The assessment note is machine-generated and unreviewed.",

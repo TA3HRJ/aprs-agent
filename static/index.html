@@ -178,6 +178,11 @@ body.public .stat-bar .cell.diag{display:none!important}
 .mod-status .mb.warn .dot{background:#f5c211}
 /* Active silence events */
 .alert-panel{max-height:132px;overflow-y:auto;border-bottom:1px solid var(--border2);background:rgba(224,27,36,.07)}
+/* Sits above the alert list and deliberately does not look like it: an alert
+   is something we measured, this is us admitting we cannot measure. Amber, not
+   red — nothing out there is known to be wrong. */
+.deaf-bar{padding:7px 14px;border-bottom:1px solid var(--border2);font-size:12px;
+  background:rgba(245,194,17,.12);color:#f5c211;line-height:1.45}
 .alert-row{display:flex;gap:8px;align-items:baseline;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px}
 .alert-row:last-child{border-bottom:none}
 .alert-cell{font-weight:600;color:#f66;font-family:'Consolas',monospace}
@@ -205,6 +210,9 @@ body.public .stat-bar .cell.diag{display:none!important}
 .cs-ext{color:#62a0ea;margin-left:5px;text-decoration:none;font-size:11px;opacity:.7}
 .cs-ext:hover{opacity:1;text-decoration:underline}
 .sil-novel{color:#ff7b63;font-size:11px}
+/* Amber like the deaf bar and for the same reason: this is a doubt about our
+   own input, not a finding about the world. */
+.sil-suspect{color:#f5c211;font-size:11px}
 /* A link that has started work must not look like one that has not. The
    repeated clicking behind F-19 came from a link that sat there unchanged for
    six seconds while it was already fetching. */
@@ -585,6 +593,9 @@ body.public .sb-toggle{display:none!important}
   <div class="tab-caption" id="tab-caption" hidden></div>
   <!-- Active silence events (both views). On phones the row list collapses
        to this one-line summary; tapping it expands the full list. -->
+  <!-- Shown only while the agent has no APRS-IS feed. Above the alert list
+       because it changes what the alert list means. -->
+  <div class="deaf-bar" id="deaf-bar" hidden></div>
   <div class="panel-sum alert-sum" id="alert-sum" hidden onclick="alSumToggle()"></div>
   <div class="alert-panel" id="alert-panel" hidden></div>
   <!-- Stations that never came back after an alert. Kept separate from the
@@ -829,6 +840,8 @@ const S={en:{
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
+  deaf_bar:"⚠ No APRS-IS feed for {m} min — silence detection is paused. Nothing is being judged right now; any cells shown are the last confirmed reading, not the current one.",
+  sil_suspect:"⚠ {n} of the {s} silent stations report a position their own beacon cannot be trusted about — a US callsign at an eastern longitude, the known hotspot misconfiguration. This cell may not describe the region it is drawn on.",
   leg_key:"Key",
   leg_chronic:"Long-standing, not a new event",
   sil_chronic:"Chronic: every station silent here is one that usually is — "
@@ -955,6 +968,8 @@ const S={en:{
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
   sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
+  deaf_bar:"⚠ {m} dakikadır APRS-IS beslemesi yok — sessizlik tespiti duraklatıldı. Şu anda hiçbir şey yargılanmıyor; görünen hücreler güncel değil, son doğrulanmış okumadır.",
+  sil_suspect:"⚠ Susan {s} istasyondan {n} tanesi, kendi işaretinin güvenilir olmadığı bir konum bildiriyor — doğu boylamında bir ABD çağrı işareti, bilinen hotspot yapılandırma hatası. Bu hücre, çizildiği bölgeyi anlatmıyor olabilir.",
   leg_key:"Gösterge",
   leg_chronic:"Süregelen, yeni bir olay değil",
   sil_chronic:"Kronik: burada susan her istasyon zaten genelde susan biri — "
@@ -1273,7 +1288,7 @@ async function fetchStations(){
 // alert panel is up to date wherever the visitor happens to be looking.
 async function pollSilence(){
   if(!tlLive)return;          // timeline is showing a past snapshot
-  try{const s=await api('GET','/api/silence');renderSilence(s.cells||[])}catch(e){}
+  try{const s=await api('GET','/api/silence');renderSilence(s.cells||[],s)}catch(e){}
   try{const m=await api('GET','/api/missing');renderMissing(m.missing||[])}catch(e){}
 }
 function fmtAgoLong(s){if(s===null||s===undefined)return'—';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';const h=Math.floor(s/3600);return h+'h '+String(Math.floor(s%3600/60)).padStart(2,'0')+'m'}
@@ -1537,7 +1552,7 @@ async function tlScrub(v){
   const s=$('tl-slider');
   if(v>=parseInt(s.max)-1){  // rightmost = back to live
     tlLive=true;tlSetLabel(null);
-    try{const r=await api('GET','/api/silence');renderSilence(r.cells||[])}catch(e){}
+    try{const r=await api('GET','/api/silence');renderSilence(r.cells||[],r)}catch(e){}
     try{const p=await api('GET','/api/prop');renderProp(p.links||[])}catch(e){}
     return;
   }
@@ -1596,6 +1611,13 @@ function silPopup(c){
         :t('sil_novel').replace('{c}',esc(c.novel_stations.join(', '))))
       +'</span><br>';
   }
+  // A cell drawn on stations that are not where they say they are. NM58 read
+  // as a regional outage in western China and was four hotspots in Missouri and
+  // Illinois; the doubt is shown rather than the stations being dropped,
+  // because a count someone is reading should not shrink silently.
+  if(c.suspect_position)h+='<span class="sil-suspect">'
+    +t('sil_suspect').replace('{n}',c.suspect_position).replace('{s}',c.silent)
+    +'</span><br>';
   // Object packets put an arbitrary transmitted name where a callsign goes.
   h+='<span style="opacity:.7;font-size:11px">'+esc(c.silent_calls.join(', '))+'</span>';
   if(c.quakes)for(const q of c.quakes){
@@ -1962,7 +1984,23 @@ function renderAlerts(cells){
   }
   p.hidden=false;
 }
-function renderSilence(cells){
+// F-35. An empty cell list used to be the only thing this page was told, and it
+// drew the only conclusion available: nothing anywhere is silent. When the
+// server says it cannot hear, say that instead — and say it above the alert
+// list, because it changes what the alert list means. `meta` is absent when a
+// past snapshot is being replayed, where live deafness would be a lie of its
+// own; no meta, no bar.
+function renderDeaf(meta){
+  const b=$('deaf-bar');
+  if(!b)return;
+  if(!meta||!meta.deaf){b.hidden=true;b.textContent='';return}
+  const mins=meta.deaf_since
+    ? Math.max(1,Math.round((Date.now()/1000-meta.deaf_since)/60)) : 0;
+  b.textContent=t('deaf_bar').replace('{m}',mins);
+  b.hidden=false;
+}
+function renderSilence(cells,meta){
+  renderDeaf(meta);
   renderAlerts(cells);
   if(!map)return;
   const seen={};

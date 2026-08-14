@@ -204,6 +204,153 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+> **F-34, F-35 and F-36 are one chain, found in one sitting.** The operator
+> reported two symptoms: "copy still doesn't work" and "the American stations
+> in Mongolia are still there". The second was already F-33, and is verified
+> below. The first had nothing to do with the clipboard, and nothing to do with
+> any of the three hypotheses NEXT.md was still carrying about the endpoint's
+> speed. The feed had been deaf for twelve minutes, and every layer above it
+> reported that as *nothing is silent anywhere*.
+
+### F-2026-08-14-36 — the adaptive cache window has a floor, and the floor defeats it
+**Source:** measured on the server while chasing the copy failure · **Verdict:** our fault
+
+`silence_cells_cached()` holds its result for `max(2.0, build_s * 4)`. Its own
+docstring says why the multiplier is there: *"a rebuild that takes longer than
+its own TTL can never finish before the next caller starts another one."* The
+floor puts that case straight back.
+
+The window is set from the **last** build. A fast build grants a 2.0 s window;
+the next build takes longer than that and has already outlived the window it
+was given. Measured live, `/api/silence` once a second for 100 seconds:
+
+| | |
+|---|---|
+| stations carrying a position | 145,135 |
+| cells produced | 2,130 |
+| answered from cache | 0.07–0.30 s |
+| answered by a rebuild | 0.6–2.4 s |
+| share that rebuilt | roughly one request in five |
+
+So the walk over 145 k stations is, in practice, continuous.
+
+**This answers the slowness NEXT.md was still carrying** — 1.7 s once, past 20 s
+once. It was neither the `COUNT(DISTINCT ts)` nor the unindexed `cell` scans;
+requests are queueing behind a rebuild that never stops for long. Third
+hypothesis, and the first one that was measured on the server instead of
+reasoned about in a harness. The `(cell, ts)` index shipped in v3.2.23 remains
+free and remains beside the point.
+
+**Second, smaller, and not biting yet.** An empty result is never cached: the
+guard reads `if cells and now - built_at < …`, and `[]` is falsy, so every
+caller during an empty stretch starts its own rebuild. Harmless today only
+because the sole route to an empty result is the deaf guard below, which
+returns in microseconds. It stops being harmless the moment an empty result
+costs a full walk.
+
+**Fix:** raise the floor — ten seconds is far more than the map needs — and
+cache an empty result like any other.
+
+### F-2026-08-14-35 — the deaf guard is right, and invisible
+**Source:** operator, "copy still doesn't work" · **Verdict:** our fault
+
+`silence_cells()` opens by refusing to judge (`station_db.py:1370`):
+
+```python
+if self.last_ingest_ts and (now - self.last_ingest_ts) > 600:
+    return []
+```
+
+That refusal is correct and should stay. If we have heard nothing for ten
+minutes, everyone looks silent and none of it is true.
+
+But `[]` is the same value as *nothing is silent anywhere in the world*, and
+three consumers read it that way. At 09:17:12 on 2026-08-14, within one second:
+
+| consumer | what it did |
+|---|---|
+| `/api/silence` → map | dropped all 2,130 cells |
+| monitor loop | logged **28** `[silence] cleared` and **2** `[prop] cleared` |
+| monitor loop | logged **5** `[silence] back on the air` — `BD1EOE-7`, `LU1HVK-R`, `BI7ALG-7`, `ARSTRA`, `HELIO` |
+| `/api/silence/evidence?cell=NM58` | **404** `"no current silence data for NM58"` |
+
+Nothing had ended. Nobody came back on the air. The feed came back.
+
+**That 404 is the copy failure the operator reported.** Measured inside the
+window: `/api/silence` answered `{"cells": []}` in 0.005 s; sixty seconds later,
+2,130 cells in 7.09 s. The button did exactly what it was written to do — it
+showed the server's message — and the server's message blamed the cell.
+
+Worth being exact about what is wrong. The guard is not too aggressive, the
+threshold is not too low, and the button is not broken. **The defect is that a
+refusal to answer is encoded as an answer.** Three layers then reported that
+answer to the operator as fact, and two of them phrased it as good news.
+
+**Fix:** deaf is a state, not an empty list. While deaf, nothing is cleared,
+nothing comes back on the air, the map says why it has no cells, and the
+evidence endpoint says we cannot see rather than that the cell does not exist.
+
+**Three mass clears remain unexplained.** Over the same 13 hours there were four
+moments where five or more cells cleared in the same second, and only one had a
+feed gap behind it:
+
+| when | cells cleared | feed gap in the preceding 30 min |
+|---|---|---|
+| 2026-08-13 23:49:55 | 25 | none |
+| 2026-08-14 08:04:22 | 14 | none |
+| 2026-08-14 08:21:17 | 18 | none |
+| 2026-08-14 09:17:12 | 28 | 729 s, ending 5 s earlier |
+
+The service restarted at least three times across that window (PIDs 560568 →
+599811 → 601269 → 603601) and the first three cluster near those restarts — but
+a restart cannot produce this, because `_silence_active` lives in memory and a
+fresh process has nothing to clear. A candidate without an explanation, left
+alone on purpose: two earlier hypotheses about this endpoint cost a release
+each.
+
+### F-2026-08-14-34 — the feed can stop for twelve minutes without a single log line
+**Source:** looking for what made the feed deaf · **Verdict:** our fault
+
+`aprs_connection.py:172` reads the APRS-IS stream with `await reader.readline()`
+and no timeout. A TCP connection that half-dies — the peer stops sending but
+never sends FIN — parks there indefinitely. There is no read watchdog, and
+nothing logs the wait.
+
+Measured across 13 hours of journal and 3,773,541 logged packets, exactly three
+gaps over 90 s:
+
+| gap | when |
+|---|---|
+| 94 s | 2026-08-13 21:31:52 |
+| **729 s** | **2026-08-14 09:05:08 → 09:17:17** |
+| 95 s | 2026-08-14 09:24:05 |
+
+Everything the process said during those twelve minutes:
+
+```
+09:05:18  [telegram] poll error: TimeoutError: The read operation timed out
+09:12:12  [station-ai] DeepSeek peak-pricing window — deferring batch
+09:14:58  [telegram] poll error: TimeoutError: The read operation timed out
+```
+
+Not one line about APRS-IS. The feed is the one input the whole product depends
+on, and it is the only one with no liveness check on it.
+
+Only the 729 s gap crossed the 600 s deaf threshold, which is why this became
+visible at all. The two 95 s gaps passed unnoticed and unlogged, and would have
+gone on doing so.
+
+**Fix:** a read deadline on `readline()`, a log line when it fires, and a
+reconnect after it.
+
+> **Decided 2026-08-14, deferred to the next working window.** F-34, F-35 and
+> F-36 are accepted as written and ship together — separately they are half a
+> fix, and F-35 alone would make a silent stall merely quieter. F-33's second
+> error gets a **`suspect_position` count carried on the cell** rather than a
+> deletion: a station on the wrong continent should be visible as a doubt, not
+> removed from a count the operator is reading. F-25 — counting sites and gates
+> instead of callsigns — stays under consideration.
+
 ### F-2026-08-14-33 — NM58: a cell that exists only because of two counting errors
 **Source:** operator, "the box is near Mongolia and the callsigns are American" · **Verdict:** ours to count, not ours to parse
 
@@ -243,6 +390,37 @@ anomalous is probably misplaced" now has a cause behind it: an operator omits
 the minus, and every distance measured through that gate is wrong by half a
 planet. Worth carrying into the F-22/F-23 package — a gate on the wrong
 continent will manufacture openings from everything it hears.
+
+**Verified against the wire, 2026-08-14.** The entry above reasoned the missing
+minus out of the code and said so. It is now confirmed from the packets, with a
+control. `comment` stores the info field verbatim (`packet_parser.py:744`), so
+the raw beacon reads straight out of the registry:
+
+| record | info field | result |
+|---|---|---|
+| `KC9SIO-B` hotspot | `!3845.58ND09047.94E&RNG0001/A=000010` | 90.799 **E** → NM58, western China |
+| `KC9SIO-1` tracker | `/190018z3845.57N/09047.93W-PHG2051` | 90.799 **W** → EM48os, Missouri |
+
+One operator, one site, the same coordinate to two decimal minutes, opposite
+hemispheres. The parser is decoding exactly what was sent. **Not our bug —
+confirmed now, rather than argued.**
+
+**Scale.** US callsign, eastern longitude, *and* an MMDVM / D-Star / Pi-Star
+signature in the beacon text: **178 stations across 92 grid squares**. Relaxing
+the filter to callsign and hemisphere alone gives 610, but that sweep pulls in
+objects and non-amateur identifiers, so 178 is the number to quote.
+
+**Two details the original entry did not have.**
+
+- The cell holds a *fourth* record, `KC9SIO B` with a space — the same hotspot
+  re-beaconed as an APRS Object by `KC9SIO-GS`. It is already excluded by
+  `is_object`, which is that exclusion doing its job.
+- Every one of them is **self-gated**: `KC9SIO-B` arrives via `KC9SIO-BS`, `-D`
+  via `-DS`, `-N` via `-NS`, `N3ARY-N` via `N3ARY-NS`. The gate is the station's
+  own APRS-IS uplink, so `shared_gate` can never fire here — four beacons
+  sharing one power supply present as four distinct gates. That is the sharpest
+  form of F-25 so far: **a gate count does not measure independence when a
+  station is its own gate.**
 
 ### F-2026-08-14-32 — `esc()` is a text-node escaper, and four sinks used it for attributes
 **Source:** found while reading, chasing an unrelated question · **Verdict:** our fault · **Security**

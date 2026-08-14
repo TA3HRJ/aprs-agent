@@ -11,6 +11,7 @@ from __future__ import annotations
 import bisect
 import json
 import math
+import re
 import sqlite3
 import time
 from collections import deque
@@ -23,6 +24,42 @@ from packet_parser import (
     classify_symbol,
     parse_packet,
 )
+
+# US amateur prefixes: A[A-L], and K/N/W optionally followed by one letter,
+# then a digit. Deliberately narrow — this is used to cast doubt on a station's
+# position, so a false positive is worse than a miss.
+_US_CALL_RE = re.compile(r"^(A[A-L]|[KNW][A-Z]?)[0-9]")
+# The beacon text of a personal hotspot. Required alongside the callsign and
+# hemisphere: on its own, "US callsign at an eastern longitude" also catches
+# objects, non-amateur identifiers and people genuinely operating abroad — 610
+# records live, against 178 with this signature present.
+_HOTSPOT_RE = re.compile(r"MMDVM|D-?STAR|PI-?STAR|DMRGATEWAY", re.I)
+
+
+def suspect_position(rec) -> bool:
+    """True when a station's own beacon puts a US callsign in the east.
+
+    F-33. MMDVM/Pi-Star hotspots whose configured longitude has lost its minus
+    sign transmit `09047.94E` where they mean `09047.94W`, which puts a
+    St. Louis D-Star gateway in western China. The control case is the same
+    operator's tracker, which sends the same coordinate as `09047.93W` and maps
+    correctly — so the packet really does say E and the parser is decoding it
+    correctly. There is nothing to fix in the decode.
+
+    But a silence cell built out of these is counting witnesses that are not
+    where it believes they are, and NM58 — four "stations", two sites, all of
+    them actually in Missouri and Illinois — reached the operator as a regional
+    outage in China. They are flagged rather than dropped: a station on the
+    wrong continent should be a visible doubt, not a silent subtraction from a
+    number someone is reading.
+    """
+    lon = getattr(rec, "lon", None)
+    if lon is None or not (20.0 < lon < 170.0):
+        return False
+    base = rec.callsign.split("-")[0].split(" ")[0]
+    if not _US_CALL_RE.match(base):
+        return False
+    return bool(_HOTSPOT_RE.search(rec.comment or ""))
 
 
 def save_meta(path: str, key: str, value: str) -> None:
@@ -1345,6 +1382,27 @@ class StationDB:
         self._recur_cache = (now, out)
         return out
 
+    # How long without an ingested packet before the agent stops judging
+    # anyone's silence. An APRS-IS server sends a comment line every ~20 s, so
+    # ten minutes of nothing is not a quiet feed, it is a broken one.
+    _DEAF_AFTER_S = 600.0
+
+    def deaf_since(self) -> float:
+        """0.0 while the feed is live; otherwise the last packet's wall-clock.
+
+        F-35. `silence_cells()` refuses to judge while deaf and returns `[]`,
+        which is the same value as "nothing is silent anywhere in the world".
+        Anything that reports to a human has to tell those two apart, so the
+        refusal is published here as a state instead of being inferred from an
+        empty list. On 2026-08-14 it was not: 28 cells were announced cleared,
+        two propagation events closed and five stations called back on the air,
+        in the same second, because the feed had stopped for twelve minutes.
+        """
+        if (self.last_ingest_ts
+                and (time.time() - self.last_ingest_ts) > self._DEAF_AFTER_S):
+            return self.last_ingest_ts
+        return 0.0
+
     def silence_cells(
         self,
         min_history: int = 5,
@@ -1367,7 +1425,12 @@ class StationDB:
         # Deaf guard: if WE have heard nothing for 10 minutes, the problem is
         # our own feed (APRS-IS down, reconnecting) — everyone would look
         # silent, and none of it would be true. No judgement while deaf.
-        if self.last_ingest_ts and (now - self.last_ingest_ts) > 600:
+        #
+        # This still returns [], because there is no honest cell list to give.
+        # What changed in F-35 is that callers no longer have to guess what the
+        # empty list means: deaf_since() says so outright, and every consumer
+        # that speaks to a human checks it first.
+        if self.deaf_since():
             return []
 
         def gate_active(gate: str) -> Optional[bool]:
@@ -1402,6 +1465,7 @@ class StationDB:
             c = cells.setdefault(cell, {
                 "cell": cell, "baseline": 0, "silent": 0,
                 "silent_calls": [], "gate_of": {}, "first_silent": None,
+                "suspect_position": 0,
             })
             c["baseline"] += 1
             threshold = max(3.0 * r.ema_interval_s, 900.0)
@@ -1409,6 +1473,10 @@ class StationDB:
             if gap > threshold:
                 c["silent"] += 1
                 c["silent_calls"].append(r.callsign)
+                # Counted only over the SILENT set: this exists to qualify the
+                # witnesses an alert is built on, not to survey the cell.
+                if suspect_position(r):
+                    c["suspect_position"] += 1
                 if r.last_gate:
                     c["gate_of"][r.callsign] = r.last_gate
                 # When this station crossed its silence threshold
@@ -1500,6 +1568,10 @@ class StationDB:
                 "gate_of": dict(c["gate_of"]),
                 "shared_gate": shared_gate if threshold_met else "",
                 "silent_calls": calls,
+                # How many of the silent stations are somewhere their own
+                # beacon cannot be trusted about (F-33). A cell where this
+                # equals `silent` is not describing the region it is drawn on.
+                "suspect_position": c["suspect_position"],
                 "since": int(c["first_silent"]) if c["first_silent"] else None,
                 "bounds": b,
             }

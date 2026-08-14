@@ -9,7 +9,7 @@
 // Bumping this name is what evicts every client's old entries: activate()
 // deletes each cache whose key differs. Bump it whenever a stale shell could
 // strand someone.
-const CACHE = "aprs-agent-v24";
+const CACHE = "aprs-agent-v25";
 // A server that accepts the connection but never answers (which is exactly
 // how the v3.1.2 event-loop livelock presented) leaves fetch() hanging with
 // no timeout of its own, so the page spins forever instead of falling back

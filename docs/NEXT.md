@@ -61,6 +61,13 @@ release each.
   (`KC9SIO-B/-D/-N`). Counted as three independent witnesses; collapsed to one
   site the cell would fall under `min_silent` and never appear. This is F-25
   with a concrete live example, and the check is one query.
+  — **Verified 2026-08-14**, see the addendum to F-33 in
+  [FINDINGS.md](FINDINGS.md).
+- **A loading animation over the map — operator's idea, 2026-08-14, undecided.**
+  Recorded verbatim, not assessed: hold an animation of the kind seen on other
+  sites until the map has fully loaded, so that it covers both the clipboard
+  error and OpenStreetMap's empty start. Asked as a question — "would that be
+  the right thing to do?" — and awaiting the operator's own decision.
 
 ### Note for whoever runs the next clipboard test
 
