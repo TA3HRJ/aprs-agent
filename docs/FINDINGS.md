@@ -212,6 +212,45 @@ symptom resists explanation, ask the server what it saw.
 > speed. The feed had been deaf for twelve minutes, and every layer above it
 > reported that as *nothing is silent anywhere*.
 
+### F-2026-08-14-37 — a caveat cut in half, and nothing was checking
+**Source:** reading an exported KM59 bundle · **Verdict:** our fault · **Closed: v3.2.26**
+
+The v3.2.25 edit inserted two new caveats in front of a **continuation line** of
+the `suspect_position` caveat instead of in front of a list element. Python
+concatenates adjacent string literals, so it compiled, ran, deployed and shipped
+in the Windows release without a murmur. Every exported bundle then carried:
+
+```
+"...this is the sender's error and not a decoding cell.silent counts
+ CALLSIGNS, which are not witnesses. ..."
+```
+
+and, further down the array, the severed tail as a caveat in its own right:
+
+```
+"one, but if this number approaches 'silent' then the cell is not describing
+ the region it is drawn on..."
+```
+
+So the one caveat explaining when a cell is **not** describing its own region
+lost the clause that said so, and the fragment carrying that clause lost the
+subject it referred to. The bundle is a document sent to strangers, and this
+one had a paragraph cut in half.
+
+**Two things worth keeping from it.**
+
+*It was found by reading the output, not the code.* Three sessions had touched
+this file that day. The defect surfaced the moment a bundle was actually read
+end to end — which is the whole argument for the export-and-read method, now
+demonstrated against our own work rather than a model's.
+
+*Nothing could have caught it.* Adjacent string literals are valid Python, the
+JSON was well-formed, the endpoint returned 200, and every test asked about
+fields rather than prose. So v3.2.26 also adds the missing check: each caveat
+must end in a full stop and must not begin in lower case unless it opens with a
+known field name. That rule fails on the v3.2.25 output and passes on v3.2.26,
+which is the only kind of test worth adding after the fact.
+
 ### F-2026-08-14-36 — the adaptive cache window has a floor, and the floor defeats it
 **Source:** measured on the server while chasing the copy failure · **Verdict:** our fault
 
