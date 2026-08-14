@@ -1186,6 +1186,17 @@ class StationDB:
                 "ratio REAL, alert INTEGER, cause TEXT, silent_calls TEXT,"
                 "since INTEGER, ai_note TEXT, PRIMARY KEY (ts, cell))"
             )
+            # The primary key indexes (ts, cell) — leading column ts — so
+            # anything asking "WHERE cell = ?" cannot use it and scans the
+            # whole table. cell_silence_history() does that FOUR times per
+            # evidence request (totals, peak, recent, and the per-station pass
+            # that JSON-parses every row), which is most of why that endpoint
+            # has been measured anywhere from 1.5 s to over 20 s.
+            #
+            # (cell, ts) rather than (cell) alone: it also serves the ORDER BY
+            # ts and the MIN/MAX(ts) in the same queries.
+            con.execute("CREATE INDEX IF NOT EXISTS idx_silence_cell_ts "
+                        "ON silence_history (cell, ts)")
             # Migrate v2.7.15 tables that predate the ai_note column
             try:
                 con.execute(

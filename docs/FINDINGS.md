@@ -204,6 +204,70 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
+### F-2026-08-14-32 — `esc()` is a text-node escaper, and four sinks used it for attributes
+**Source:** found while reading, chasing an unrelated question · **Verdict:** our fault · **Security**
+
+`esc()` builds a text node and reads back `innerHTML`, so it escapes `& < >`
+and **deliberately leaves quotes alone** — exactly right between tags, and
+wrong inside an attribute, where one `"` closes the value and everything after
+it is parsed as markup. Nothing in the name says which context it is for, so
+call sites used it for both.
+
+| sink | data | reachable by |
+|---|---|---|
+| `title="…"` on a message row | message text, packet-derived, unbounded | admin |
+| `href="…"` on a station URL | URL from a beacon comment | admin + public |
+| `title="…"` on a location cell | city/district | admin |
+| inline `onclick` **and** the text, map popup | **Object name — no escaping at all** | admin + **public** |
+
+**The last one is the sharp one.** `_RE_OBJECT` is `^;([^\*]{9})\*`: an APRS
+Object name is nine characters of anything except `*`, and it **overwrites
+`callsign`**. That value went into a JavaScript string built by concatenation —
+the only place in the file that made code out of packet data. Nine characters
+caps what fits, but the boundary was genuinely crossable, and it is reachable
+from the public view by anyone who can put an object on APRS-IS.
+
+That it was an oversight rather than a judgement is visible two hundred lines
+away, where the same value is defended with
+`String(r.callsign).replace(/'/g,'')`. The v3.2.3 audit closed the text-node
+cases; the attribute cases survived because the helper looked like it covered
+them.
+
+**Fixed in v3.2.23.** A separate `escA()` for attributes, used at the three
+`title`/`href` sites; and the popup no longer generates code at all — the
+callsign travels in a `data-cs` attribute read by a delegated click, which also
+survives Leaflet rebuilding the popup from a string.
+
+**Verified against a real payload**, not a source read. With an object name of
+`a"'<b>cde`: the value round-trips intact through the data attribute, renders
+as text, produces no extra elements, leaves no `onclick` in the markup, runs no
+script, and the detail click still receives the exact original string. The URL
+and message-title sinks were each driven through their real functions with
+`https://x" onmouseover="…` and the matching message text — attribute intact,
+no handler injected, nothing executed. One further `title="'+ti+'"` was checked
+and cleared: `ti` comes only from the i18n dictionary.
+
+**The lesson is the name.** A helper that is correct for one context and
+dangerous in another, with a name that mentions neither, will be misused — and
+the misuse reads as careful code. `esc` / `escA` at least forces the choice to
+be visible at the call site.
+
+**Shipped alongside, and honestly a disappointment: the `(cell, ts)` index.**
+`cell_silence_history()` runs four `WHERE cell = ?` queries per evidence
+request and the primary key is `(ts, cell)`, so none of them could use it.
+Adding the index was meant to explain an endpoint measured at 1.7 s live and
+once over 20 s. Measured on 80 000 synthetic rows: **110.7 ms → 89.7 ms, 1.2×**,
+with the plan confirming a covering index. Real, free, kept — and nowhere near
+enough to account for what was seen live.
+
+So **two hypotheses about that slowness have now been wrong**: first that my own
+`COUNT(DISTINCT ts)` caused it (it can use the primary key, so no), then that
+the unindexed per-cell scans did (1.2×). The cause is still unmeasured. The
+remaining candidates are the registry walk behind `silence_cells_cached`
+(0.3–0.9 s at 165k stations) and what happens on a cache miss when several
+callers arrive at once — which is where the next measurement should start,
+on the server rather than in a synthetic harness.
+
 ### F-2026-08-14-31 — chronic moves from "how often" to "the same faces"
 **Source:** measurement requested by the operator · **Verdict:** improvement
 

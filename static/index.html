@@ -201,6 +201,9 @@ body.public .stat-bar .cell.diag{display:none!important}
 .sil-ev a{color:#99c1f1;cursor:pointer;text-decoration:none}
 .sil-ev a:hover{text-decoration:underline}
 .sil-chronic{color:#c0bfbc;font-size:11px}
+.cs-link{color:#62a0ea;cursor:pointer}
+.cs-ext{color:#62a0ea;margin-left:5px;text-decoration:none;font-size:11px;opacity:.7}
+.cs-ext:hover{opacity:1;text-decoration:underline}
 .sil-novel{color:#ff7b63;font-size:11px}
 /* A link that has started work must not look like one that has not. The
    repeated clicking behind F-19 came from a link that sat there unchanged for
@@ -1309,7 +1312,17 @@ function mapIcon(r){
 }
 function mapPopup(r){
   const loc=[r.city,r.district].filter(Boolean).join(', ')||r.locator||'';
-  let h='<b style="color:#62a0ea;cursor:pointer" onclick="mapDetail(\''+r.callsign+'\')">'+r.callsign+'</b>';
+  // An Object packet overwrites the callsign with the object's NAME, and
+  // _RE_OBJECT accepts nine characters of anything except '*' — quotes and
+  // angle brackets included. That value used to be interpolated straight into
+  // an inline onclick AND into the text: the one place in this file that
+  // built JavaScript out of packet data, while two hundred lines away the
+  // same value was defended with a quote strip. The click is delegated now,
+  // so the value only ever sits in a data attribute.
+  const cs=String(r.callsign==null?'':r.callsign);
+  let h='<b class="cs-link" data-cs="'+escA(cs)+'">'+esc(cs)+'</b>'
+       +'<a class="cs-ext" href="https://aprs.fi/info/a/'+encodeURIComponent(cs)
+       +'" target="_blank" rel="noopener noreferrer" title="aprs.fi">↗</a>';
   if(r.self_beacon)h+=' <span style="color:#f5c211">&#9733; '+t('own_station')+'</span>';
   h+='<br>'+r.type;
   if(loc)h+=' &middot; '+loc;
@@ -1319,6 +1332,16 @@ function mapPopup(r){
   return h;
 }
 function mapDetail(cs){const r=staData.find(x=>x.callsign===cs)||(vpData||[]).find(x=>x.callsign===cs)||{callsign:cs};showDetail(r)}
+// Delegated rather than bound: Leaflet rebuilds popup content from a string,
+// so a listener attached to the element would not survive the next redraw —
+// and a data attribute carries the callsign without any code being generated
+// from it.
+document.addEventListener('click',function(e){
+  const t=e.target;
+  if(!t||!t.closest)return;
+  const b=t.closest('.cs-link');
+  if(b&&b.dataset&&b.dataset.cs)mapDetail(b.dataset.cs);
+});
 // Above CLUSTER_MIN plotted stations the map switches to grid clustering at
 // low zoom and viewport-only markers at high zoom — a worldwide feed brings
 // 40k+ stations and a DOM marker per station freezes the browser.
@@ -1409,6 +1432,13 @@ async function fetchMsgs(){
   try{const r=await api('GET','/api/messages');msgData=r.msgs||[];msgLoaded=true;renderMsgs()}catch(e){}
 }
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML}
+// esc() serialises a TEXT NODE, so it escapes & < > and deliberately leaves
+// quotes alone — correct between tags, and unsafe the moment the result lands
+// inside an attribute, where a single " ends the value and everything after it
+// becomes markup. The name did not say so, so three call sites used it for
+// attributes and one packet-derived value reached an inline onclick with no
+// escaping at all. Anything going into an attribute uses this instead.
+function escA(s){return esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function fmtClock(ts){const d=new Date(ts*1000);return d.toLocaleTimeString(undefined,{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'})}
 function renderMsgs(){
   const fdir=$('msg-fdir').value;
@@ -1436,7 +1466,7 @@ function renderMsgs(){
       '<td style="color:'+(isTx?'var(--dim)':'var(--accent2)')+'">'+esc(m.from)+'</td>'+
       '<td style="color:'+(isTx?'var(--accent2)':'var(--dim)')+'">'+esc(m.to)+'</td>'+
       '<td>'+chan+'</td>'+
-      '<td style="white-space:normal;max-width:none" title="'+esc(m.text)+'">'+bln+esc(m.text)+'</td>';
+      '<td style="white-space:normal;max-width:none" title="'+escA(m.text)+'">'+bln+esc(m.text)+'</td>';
     b.appendChild(tr);
   }
 }
@@ -2105,7 +2135,7 @@ function renderStations(){
     tr.innerHTML=
       '<td class="s-call">'+aprsSym(r)+' '+esc(r.callsign)+'</td>'+
       '<td>'+esc(r.type)+'</td>'+
-      '<td class="s-loc" title="'+esc(loc)+'">'+esc(loc)+'</td>'+
+      '<td class="s-loc" title="'+escA(loc)+'">'+esc(loc)+'</td>'+
       '<td class="s-org">'+esc(r.ai_org||'')+'</td>'+
       '<td class="s-freq">'+(fmtFreq(r.freq_mhz)||'')+'</td>'+
       '<td><span class="s-dot '+dc+'"></span></td>'+
@@ -2138,7 +2168,7 @@ async function showDetail(r){
   // into execution. rel=noopener keeps the opened page off window.opener.
   if(r.url)html+=(/^https?:\/\//i.test(r.url)
     ? '<div class="row"><span class="lbl">URL</span><span class="val">'
-      +'<a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer" '
+      +'<a href="'+escA(r.url)+'" target="_blank" rel="noopener noreferrer" '
       +'style="color:var(--accent2)">'+esc(r.url)+'</a></span></div>'
     : row('URL',r.url));
   if(r.wx_temp_c!==null&&r.wx_temp_c!==undefined)html+=row('Temp',r.wx_temp_c+'°C'+(r.wx_humidity?' / '+r.wx_humidity+'% RH':''));

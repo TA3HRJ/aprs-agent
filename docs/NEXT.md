@@ -9,6 +9,79 @@ what merely under-informs them.**
 
 ---
 
+## OPEN RIGHT NOW — 2026-08-14 morning, mid-session
+
+**Deployed: v3.2.22.** Everything below is either undone or sitting in the
+working tree. Written down because a fresh session would otherwise find
+modified files with no explanation.
+
+### ⚠ Uncommitted and UNTESTED in the working tree
+
+The safety classifier that gates shell and browser calls went down mid-session,
+so these could be written but neither tested nor committed. **Do not tag or
+deploy them until they are tested.** The VPS only deploys tags, so nothing here
+can reach production by accident.
+
+| file | change | state |
+|---|---|---|
+| `station_db.py` | `CREATE INDEX idx_silence_cell_ts ON silence_history (cell, ts)` | written, unmeasured |
+| `static/index.html` | new `escA()` attribute escaper | written; **the four call sites are NOT yet fixed** |
+
+A measurement script for the index is ready at
+`scratchpad/t_index.py` — it builds ~80k synthetic rows and times
+`cell_silence_history` with and without the index.
+
+### 🔒 Security — `esc()` is a text-node escaper used in attribute positions
+
+Found by reading, not yet fixed. `esc()` serialises a text node, so it escapes
+`& < >` and **leaves quotes alone** — correct between tags, unsafe inside an
+attribute, where one `"` ends the value and the rest becomes markup.
+
+| line | sink | data |
+|---|---|---|
+| ~1439 | `title="…"` | message text, packet-derived, unbounded |
+| ~2141 | `href="…"` | URL from a beacon comment; the http(s) test passes `https://x" onmouseover=…` |
+| ~2108 | `title="…"` | location |
+| ~1312 | inline `onclick` **and** text | object name — **no escaping at all** |
+
+The last one is the sharpest: `_RE_OBJECT` is `^;([^\*]{9})\*`, so an APRS
+Object name is **nine characters of anything but `*`**, and it overwrites
+`callsign`. Nine characters caps the payload but the sink is a JavaScript
+string built from packet data, and two hundred lines away the same value is
+defended with `String(r.callsign).replace(/'/g,'')` — so this is an oversight,
+not a decision. The v3.2.3 audit closed the text-node cases; the attribute
+cases survived because the helper's name does not say which context it is for.
+
+**Fix shape:** `escA()` at the three attribute sites, and for the popup stop
+building JS from data at all — a delegated click reading `data-cs`.
+
+### Open questions, no code yet
+
+- **Callsign → aprs.fi.** The callsign is *already* clickable (it opens our
+  own detail modal), so the ask becomes an additional external link rather
+  than a replacement. Why the existing click appeared unresponsive was never
+  established — needs a live look.
+- **"triangle" and earthquakes — awaiting the operator's decision.** The
+  symbol is the sender's choice, and APRS already has a real quake symbol
+  (`\Q`, typed `quake`, rendered 🌍) which this object did not use. Proposed
+  instead: read the magnitude out of the packet's own text, and corroborate
+  against the USGS feed already polled for silence correlation — "matches
+  USGS M4.3 · 12 km · 6 min" is evidence, "it is a triangle" is not.
+- **NM58 — reasoned from code, unverified.** Four silent stations at
+  ~90°E/38°N with US callsigns, three of them SSIDs of one base callsign
+  (`KC9SIO-B/-D/-N`). Counted as three independent witnesses; collapsed to one
+  site the cell would fall under `min_silent` and never appear. This is F-25
+  with a concrete live example, and the check is one query.
+
+### Note for whoever runs the next clipboard test
+
+The in-app browser runs on the operator's own machine and shares their system
+clipboard. A verification click during this session overwrote it with another
+cell's bundle, and the operator understandably read that as a bug. Say so
+first, or do not run clipboard tests there.
+
+---
+
 ## PENDING — one coordinated sweep, deliberately deferred
 
 The README currently describes v3.2.4 behaviour while the demo runs v3.2.21.
