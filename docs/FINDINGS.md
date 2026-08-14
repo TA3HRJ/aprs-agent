@@ -212,6 +212,89 @@ symptom resists explanation, ask the server what it saw.
 > speed. The feed had been deaf for twelve minutes, and every layer above it
 > reported that as *nothing is silent anywhere*.
 
+### F-2026-08-15-43 — I measured the detector and reported my own deploy cadence
+**Source:** six outside readings, then the arithmetic that should have come first · **Verdict:** my error, and a real defect underneath it
+
+Hours after reporting it, this correction matters more than the finding it
+corrects.
+
+**What I claimed.** That the propagation detector's absolute-floor branch is
+78–86 % noise: of 83 flagged links, all came from gates below the 20-sample
+threshold, 86 % would have fallen below an established gate's bar, 78 % did not
+reach twice their own gate's figure.
+
+**The measurements are right. The conclusion drawn from them is not.**
+
+```
+gate sample counts, 3.5 minutes after a restart
+   1 sample : 10 gates
+   2 samples:  8 gates
+   3 samples:  1 gate
+   highest  :  3        required: 20        gates at 20: 0
+```
+
+`_gate_stats` is **memory only** — nothing writes it to disk, nothing reads it
+back. Every restart wipes every gate baseline. **I deployed eight times on
+2026-08-14.** So gates were not young because the feed is young; they were
+young because I kept resetting them, and then I measured the result and blamed
+the detector.
+
+**The real defect is larger than the one I reported.** If baselines never
+survive a restart, and the service restarts on every release and is checked
+hourly by the updater, then `PROP_MIN_SAMPLES = 20` may almost never engage in
+production. The detector would be running permanently in floor-only mode — not
+because the rule is wrong, but because the state it needs cannot accumulate.
+Station records, cadence history and lifetime uptime all persist. Gate
+baselines, the input to every propagation judgement, do not.
+
+**The demonstration, unintentionally exact.** The same link, `EA6CA-3 →
+ED6ZAB-4`, exported an hour apart:
+
+| | samples | ema_km | ratio | would flag if established |
+|---|---|---|---|---|
+| before my deploys | 2 | 55.7 | **11.88×** | **yes** |
+| after | 1 | 661.7 | **1.00×** | no |
+
+Two confident, opposite readings of the same physical link. Both correct about
+the file they were handed. The file changed because I restarted the process,
+and the second baseline was re-seeded by the very link being judged.
+
+**Rule:** before concluding anything from a distribution, check how long the
+process producing it has been running. Uptime is a variable in every in-memory
+statistic, and it was under my own control the whole time.
+
+### F-2026-08-15-42 — five readings, one sentence, seventeen times the evidence
+**Source:** operator, running the export-and-read method five times · **Verdict:** our fault · **Closed: v3.2.33**
+
+Five propagation bundles went to an outside model. All five came back with the
+same sentence at the same confidence: *"detector-anomalous, but a true
+gate-specific anomaly is not established"*, 95 %.
+
+One of those links was **0.69×** its own gate's figure — shorter than what the
+gate normally hears. Another was **11.88×**, among the strongest outliers on
+the feed. A seventeen-fold spread in the underlying evidence moved the verdict
+not at all.
+
+Both numbers were in the file. They were never in the same sentence, and
+`established: false` did the rest: every reader took it as *nothing is known*
+and stopped there. Four of four, then five of five, declined to divide one
+number by the other.
+
+**If a fact requires the reader to do arithmetic, it will not be read.** That
+is the finding, and it is not about models — it is what a bundle is for.
+
+`vs_gate_baseline` now states the relation outright: the ratio, the threshold
+an established gate would face, and whether this link clears it.
+
+**Confirmed by the sixth reading**, same model, same link, new field: the
+verdict flipped to *"No, in the substantive gate-relative sense"*, with the
+model noting the new evidence had materially changed its interpretation. The
+prediction was made before the export and held.
+
+**And F-24's cost, now visible.** Removing `mean_km` and `sigma_km` stopped
+readers over-trusting a young baseline; it started them treating it as no
+evidence at all. Weak evidence is not no evidence, and the caveat says so now.
+
 > **F-38 through F-41 are one evening, and F-38 is the spine of it.** Three
 > symptoms had been chased separately for weeks — a copy button that failed, a
 > page that "died" and would not refresh, and an endpoint with an unexplained

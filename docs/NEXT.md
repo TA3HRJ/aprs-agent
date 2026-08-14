@@ -27,6 +27,28 @@ turned out to be one fault** — see the F-38 block in [FINDINGS.md](FINDINGS.md
 | **F-41** | T2 backbone servers are not independent gates; 23 of 36 cells reclassified, alerting 20 → 8 |
 | F-37 | a caveat severed by the v3.2.25 edit, plus the check that would have caught it |
 
+### 🛑 Stopped here — 2026-08-15, 00:45
+
+Deploying stopped mid-thread, at the operator's word and rightly. Eight releases
+in one day is itself part of what went wrong; see F-43. Nothing below should be
+started without reading that entry first.
+
+**Broken, and not fixed:** the evidence copy still fails. The last screen showed
+the 20-second deadline firing — *"the server did not answer in time"* — on a
+propagation link. That is the F-36 tail, still unexplained, and it is the thing
+actually blocking the operator's work. v3.2.32 added tracing for it; the trace
+has not been read yet.
+
+**The first thing to do, before any detector work:** persist `_gate_stats`.
+Station records, cadence history and lifetime uptime all survive a restart;
+the gate baselines that every propagation judgement depends on do not, and
+without them `PROP_MIN_SAMPLES = 20` may never engage in production at all.
+F-03's numbers cannot be trusted until baselines can accumulate — and my own
+measurement of them is corrected in F-43.
+
+**Do not re-run the F-03 analysis on a freshly restarted process.** That is the
+mistake it took six outside readings to notice.
+
 ### ⏱ Still open, and now the only slowness thread left
 
 `/api/stations` is **939 KB and up to 5 s cold**, and the page asks for the full
