@@ -219,6 +219,28 @@ body.public .stat-bar .cell.diag{display:none!important}
 .sil-ev a.ev-busy{opacity:.5;cursor:progress;text-decoration:none}
 .sil-ev a.ev-busy::after{content:" …"}
 .sil-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:6000;background:#2a2a2a;color:#e3e3e3;border:1px solid #555;border-radius:6px;padding:8px 14px;font-size:12px;box-shadow:0 3px 12px rgba(0,0,0,.5)}
+/* The evidence box. Its whole reason to exist is that the clipboard API needs
+   a "transient user activation" that expires ~5 s after the click, and this
+   endpoint has been measured at 7.85 s — so a copy issued from the popup click
+   raced the browser and lost, silently, whenever the bundle was not already
+   cached. Here the data arrives FIRST and the copy is a second, later gesture
+   of the operator's own. There is no window left to miss. */
+.ev-modal{position:fixed;inset:0;z-index:7000;background:rgba(0,0,0,.6);display:flex;
+  align-items:center;justify-content:center;padding:16px}
+.ev-modal[hidden]{display:none}
+.ev-box{background:#1e1e1e;border:1px solid #555;border-radius:8px;width:min(760px,100%);
+  max-height:min(80vh,720px);display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.6)}
+.ev-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #444;font-size:13px}
+.ev-head b{font-weight:600}
+.ev-head button{margin-left:auto;background:none;border:none;color:#c0bfbc;font-size:18px;cursor:pointer;line-height:1}
+.ev-text{flex:1;min-height:220px;margin:0;padding:12px 14px;background:#141414;color:#d8d8d8;
+  border:none;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;line-height:1.45;resize:none}
+.ev-text:focus{outline:none}
+.ev-foot{display:flex;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid #444;flex-wrap:wrap}
+.ev-foot button{font-size:12px;padding:7px 14px;border-radius:5px;border:1px solid #555;
+  background:#2d2d2d;color:#e3e3e3;cursor:pointer}
+.ev-foot button:hover{background:#3a3a3a}
+.ev-hint{font-size:11px;color:#a0a0a0}
 /* Anchored to the map's BOTTOM edge: the alert panel above the map grows and
    shrinks (also while scrubbing history), which moves the map's top edge —
    a top-anchored bar would drag the play button around under the cursor. */
@@ -593,6 +615,20 @@ body.public .sb-toggle{display:none!important}
   <div class="tab-caption" id="tab-caption" hidden></div>
   <!-- Active silence events (both views). On phones the row list collapses
        to this one-line summary; tapping it expands the full list. -->
+  <!-- Evidence box: the bundle arrives here, already selected, and the copy is
+       the operator's own second gesture. See .ev-modal in the CSS for why. -->
+  <div class="ev-modal" id="ev-modal" hidden onclick="if(event.target===this)evBoxClose()">
+    <div class="ev-box">
+      <div class="ev-head"><b id="ev-name"></b>
+        <button onclick="evBoxClose()" aria-label="close">&times;</button></div>
+      <textarea class="ev-text" id="ev-text" readonly spellcheck="false"></textarea>
+      <div class="ev-foot">
+        <button onclick="evBoxCopy()">📋 <span data-i="ev_copy">Copy</span></button>
+        <button onclick="evBoxSave()">⬇ <span data-i="ev_save">Save as file</span></button>
+        <span class="ev-hint" data-i="ev_hint">Already selected — Ctrl+C also works</span>
+      </div>
+    </div>
+  </div>
   <!-- Shown only while the agent has no APRS-IS feed. Above the alert list
        because it changes what the alert list means. -->
   <div class="deaf-bar" id="deaf-bar" hidden></div>
@@ -840,6 +876,10 @@ const S={en:{
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
+  ev_copy:"Copy",
+  ev_save:"Save as file",
+  ev_hint:"Already selected — Ctrl+C also works",
+  ev_manual:"Could not copy automatically — the text is selected, press Ctrl+C.",
   deaf_bar:"⚠ No APRS-IS feed for {m} min — silence detection is paused. Nothing is being judged right now; any cells shown are the last confirmed reading, not the current one.",
   sil_suspect:"⚠ {n} of the {s} silent stations report a position their own beacon cannot be trusted about — a US callsign at an eastern longitude, the known hotspot misconfiguration. This cell may not describe the region it is drawn on.",
   sil_few_sites_one:"Not announced: all {s} silent callsigns belong to one operator. A single site losing power looks exactly like this, and it is not news about a region.",
@@ -971,6 +1011,10 @@ const S={en:{
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
   sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
+  ev_copy:"Kopyala",
+  ev_save:"Dosya olarak kaydet",
+  ev_hint:"Metin zaten seçili — Ctrl+C de çalışır",
+  ev_manual:"Otomatik kopyalanamadı — metin seçili, Ctrl+C ile alın.",
   deaf_bar:"⚠ {m} dakikadır APRS-IS beslemesi yok — sessizlik tespiti duraklatıldı. Şu anda hiçbir şey yargılanmıyor; görünen hücreler güncel değil, son doğrulanmış okumadır.",
   sil_suspect:"⚠ Susan {s} istasyondan {n} tanesi, kendi işaretinin güvenilir olmadığı bir konum bildiriyor — doğu boylamında bir ABD çağrı işareti, bilinen hotspot yapılandırma hatası. Bu hücre, çizildiği bölgeyi anlatmıyor olabilir.",
   sil_few_sites_one:"Duyurulmadı: susan {s} çağrı işaretinin hepsi tek bir operatöre ait. Tek bir sahanın elektriği gitse tam olarak böyle görünür ve bu, bir bölge hakkında haber değildir.",
@@ -1771,16 +1815,6 @@ function silCopyExec(text){
     return ok;
   }catch(e){return false}
 }
-function silCopyFallback(o){
-  return navigator.clipboard.writeText(o.text).then(function(){silToast(t('sil_copied'))})
-    .catch(function(){
-      // Only after every copy route has failed does a file appear. A download
-      // nobody asked for is a poor consolation prize, and it used to be the
-      // first thing tried after the API said no.
-      if(silCopyExec(o.text)){silToast(t('sil_copied'));return}
-      silSave(o.text,'text/plain',o.name+'.txt');silToast(t('sil_cp_fallback'));
-    });
-}
 // Takes a function that produces the bundle, so silence cells, propagation
 // links and station records all travel the same path out of the page.
 // Fetched when a popup opens, so the click that copies has the bundle already
@@ -1865,45 +1899,68 @@ function evExport(make,asPrompt,el){
       .catch(fail).then(evEnd);
     return;
   }
-  const pending=evDeadline(make(true));
-  // A bundle that never arrived must say so, exactly once, whatever the
-  // clipboard reports. Chrome RESOLVES clipboard.write even when the promise
-  // inside ClipboardItem rejects, so the write succeeding is not evidence
-  // that anything was copied — reading it as success announced "copied" after
-  // a 404, with the clipboard untouched. That is the v3.2.1 failure wearing a
-  // different hat: a failed copy passing as a successful one.
-  let failed=false;
-  const guarded=pending.catch(function(e){failed=true;fail(e);throw e});
-  // Released the moment the network work settles. The clipboard write that
-  // follows costs no connection, so holding the guard across it would only
-  // block a legitimate second export for no reason.
-  guarded.then(evEnd,evEnd);
-  // The write must be ISSUED inside the click gesture. Safari (iOS in
-  // particular) rejects writeText() once an await has broken the gesture
-  // chain — and because a rejected write is a no-op, the clipboard keeps
-  // whatever it held, so the next paste silently produces another cell's
-  // evidence. ClipboardItem takes a *promise* for exactly this case: the
-  // write is registered now and the fetch resolves it afterwards.
-  if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
-    const blob=guarded.then(function(o){return new Blob([o.text],{type:'text/plain'})});
-    // The clipboard keeps its own reference to this promise; the extra catch
-    // only marks the rejection handled, so a failed fetch reports itself
-    // through the toast above instead of also landing in the console as an
-    // unhandled rejection that would bury a real one later.
-    blob.catch(function(){});
-    try{
-      navigator.clipboard.write([new ClipboardItem({'text/plain':blob})])
-        // Only claim success once the data itself resolved.
-        .then(function(){return guarded})
-        .then(function(){silToast(t('sil_copied'))})
-        .catch(function(){
-          if(!failed)guarded.then(silCopyFallback).catch(function(){});
-        });
-      return;
-    }catch(e){/* some builds throw here instead of rejecting; fall through */}
-  }
-  guarded.then(silCopyFallback).catch(function(){});
+  // No clipboard call is made from THIS click, and that is the entire point.
+  //
+  // Measured 2026-08-14, on a real click in a Chromium build: the transient
+  // user activation a click grants lasts about five seconds. execCommand at
+  // +2 s returns true; at +6 s it returns **false, silently**. Whether the
+  // async Clipboard API was called first, and whether that call resolved or
+  // rejected, changes nothing — a rejected write does not consume the
+  // activation. Only elapsed time does.
+  //
+  // And this endpoint has been measured between 0.101 s warm and 7.85 s cold.
+  // So every copy was a race against a five-second clock, lost silently
+  // whenever the bundle was not already cached — which is exactly what a
+  // second copy from the same popup guarantees, since the prefetch is single
+  // use. Five releases treated that as a clipboard problem. It was a deadline.
+  //
+  // So: fetch first, show the text, and let the operator copy when they are
+  // ready. Their keypress is its own activation, with the data already in
+  // hand. There is no window left to miss.
+  evDeadline(make(true))
+    .then(function(o){evBoxOpen(o)})
+    .catch(fail).then(evEnd);
 }
+// ── The evidence box ───────────────────────────────────────────────────────
+let evBoxData=null;
+function evBoxOpen(o){
+  evBoxData=o;
+  $('ev-name').textContent=o.name;
+  const ta=$('ev-text');
+  ta.value=o.text;
+  $('ev-modal').hidden=false;
+  // Selected on open so Ctrl+C works without the operator doing anything
+  // first. focus() must come before select() or the selection is not live.
+  ta.focus();ta.select();
+  try{ta.setSelectionRange(0,o.text.length)}catch(e){}
+}
+function evBoxClose(){$('ev-modal').hidden=true;evBoxData=null}
+function evBoxCopy(){
+  const ta=$('ev-text');
+  ta.focus();ta.select();
+  try{ta.setSelectionRange(0,ta.value.length)}catch(e){}
+  // This click is fresh activation and the data is already local, so the
+  // deprecated rung is the reliable one here — no permission, no promise, no
+  // clock. The async API is tried first only because it is the supported one;
+  // if it is denied, execCommand is right behind it and still inside the
+  // gesture.
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(ta.value)
+      .then(function(){silToast(t('sil_copied'))})
+      .catch(function(){
+        silToast(silCopyExec(ta.value)?t('sil_copied'):t('ev_manual'));
+      });
+    return;
+  }
+  silToast(silCopyExec(ta.value)?t('sil_copied'):t('ev_manual'));
+}
+function evBoxSave(){
+  if(!evBoxData)return;
+  silSave(evBoxData.js||evBoxData.text,'application/json',evBoxData.name+'.json');
+}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&!$('ev-modal').hidden)evBoxClose();
+});
 // `el` is the link that was clicked, passed as `this` from the popup markup —
 // it is what wears the working state, and it is the only part of the F-19 fix
 // the person clicking actually sees.
