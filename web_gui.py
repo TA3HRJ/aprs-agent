@@ -2092,7 +2092,23 @@ async def get_stations(request: web.Request) -> web.Response:
 async def get_silence(request: web.Request) -> web.Response:
     """Maidenhead cells with recently-silent station clusters (map overlay)."""
     mgr: AgentManager = request.app["manager"]
-    cells = await silence_cells_cached(mgr._station_db, mgr._sta_db_path)
+    all_cells = await silence_cells_cached(mgr._station_db, mgr._sta_db_path)
+    # Only what the map can draw. The client has always discarded the rest the
+    # instant it arrived — it draws on `threshold_met && bounds` and lists on
+    # `alert`, and nothing else in the page ever looks at a cell.
+    #
+    # Measured on the live feed 2026-08-14: 2,135 cells, 1,128,636 bytes, of
+    # which 32 were drawn. 98.5% of a megabyte, thrown away on arrival, on a
+    # poll that repeats every few seconds — beside /api/stations at 1.3 MB on
+    # the same HTTP/2 connection. /api/config is 3 KB and was queueing behind
+    # them, which is why the settings panel stayed empty; and `/` lost the
+    # service worker's six-second race, so the browser fell back to its cached
+    # shell and went on running the previous release's JavaScript. The copy
+    # button that "still failed on 3.2.27" was 3.2.26 code, served from a cache
+    # that could not be escaped with a hard reload.
+    #
+    # One filter, 38x smaller.
+    cells = [c for c in all_cells if c.get("threshold_met") and c.get("bounds")]
     for c in cells:
         c["ai_note"] = mgr._silence_ai_notes.get(c["cell"], "")
         # "since" is the start of the current alert *episode*, not the
@@ -2112,6 +2128,10 @@ async def get_silence(request: web.Request) -> web.Response:
     # actually vouch for.
     deaf_since = mgr._station_db.deaf_since()
     return web.json_response({"cells": cells,
+                              # How many were measured, so the filter above is
+                              # visible rather than something a reader has to
+                              # infer from a number that quietly got smaller.
+                              "cells_measured": len(all_cells),
                               "deaf": bool(deaf_since),
                               "deaf_since": int(deaf_since)})
 
