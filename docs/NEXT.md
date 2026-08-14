@@ -15,45 +15,34 @@ what merely under-informs them.**
 working tree. Written down because a fresh session would otherwise find
 modified files with no explanation.
 
-### ⚠ Uncommitted and UNTESTED in the working tree
+### ✅ Closed since this section was written — v3.2.23
 
-The safety classifier that gates shell and browser calls went down mid-session,
-so these could be written but neither tested nor committed. **Do not tag or
-deploy them until they are tested.** The VPS only deploys tags, so nothing here
-can reach production by accident.
+The working tree is clean again; both items below shipped and were verified.
 
-| file | change | state |
-|---|---|---|
-| `station_db.py` | `CREATE INDEX idx_silence_cell_ts ON silence_history (cell, ts)` | written, unmeasured |
-| `static/index.html` | new `escA()` attribute escaper | written; **the four call sites are NOT yet fixed** |
+- **Security: `esc()` used in attribute positions (F-32).** Four sinks, all
+  fixed — three `title`/`href` sites moved to a new `escA()`, and the map popup
+  stopped generating JavaScript from packet data entirely (delegated click on a
+  `data-cs` attribute). Verified with a real `a"'<b>cde` object name and with
+  `onmouseover` payloads driven through the actual functions, not source reads.
+  A fifth `title="'+ti+'"` was checked and cleared — i18n only.
+- **The `(cell, ts)` index.** Shipped, and a disappointment worth recording:
+  **110.7 ms → 89.7 ms, 1.2×** on 80 000 synthetic rows. Kept because it is
+  free and the plan confirms a covering index, but it does **not** explain the
+  slowness it was meant to explain.
 
-A measurement script for the index is ready at
-`scratchpad/t_index.py` — it builds ~80k synthetic rows and times
-`cell_silence_history` with and without the index.
+### ⏱ Still unexplained: the evidence endpoint's slowness
 
-### 🔒 Security — `esc()` is a text-node escaper used in attribute positions
+Measured live at **1.7 s**, and once past **20 s** (the F-19 deadline fired).
+Two hypotheses have now been wrong:
 
-Found by reading, not yet fixed. `esc()` serialises a text node, so it escapes
-`& < >` and **leaves quotes alone** — correct between tags, unsafe inside an
-attribute, where one `"` ends the value and the rest becomes markup.
+1. My own `COUNT(DISTINCT ts)` — it can use the primary key. No.
+2. The four unindexed `WHERE cell = ?` scans — 1.2× when indexed. Not enough.
 
-| line | sink | data |
-|---|---|---|
-| ~1439 | `title="…"` | message text, packet-derived, unbounded |
-| ~2141 | `href="…"` | URL from a beacon comment; the http(s) test passes `https://x" onmouseover=…` |
-| ~2108 | `title="…"` | location |
-| ~1312 | inline `onclick` **and** text | object name — **no escaping at all** |
-
-The last one is the sharpest: `_RE_OBJECT` is `^;([^\*]{9})\*`, so an APRS
-Object name is **nine characters of anything but `*`**, and it overwrites
-`callsign`. Nine characters caps the payload but the sink is a JavaScript
-string built from packet data, and two hundred lines away the same value is
-defended with `String(r.callsign).replace(/'/g,'')` — so this is an oversight,
-not a decision. The v3.2.3 audit closed the text-node cases; the attribute
-cases survived because the helper's name does not say which context it is for.
-
-**Fix shape:** `escA()` at the three attribute sites, and for the popup stop
-building JS from data at all — a delegated click reading `data-cs`.
+**Where to look next, on the server rather than in a harness:** the registry
+walk behind `silence_cells_cached` (0.3–0.9 s at 165k stations) and what
+happens on a cache miss when several callers arrive together. Measure before
+changing anything — this is the third hypothesis and the first two cost a
+release each.
 
 ### Open questions, no code yet
 
