@@ -515,6 +515,8 @@ class AgentManager:
         # Set while the feed is deaf, so entering and leaving that state each
         # log once instead of every 5-minute scan (F-35).
         self._silence_deaf_at: float = 0.0
+        # Gate baselines are checkpointed on a slower cadence than the rest.
+        self._gate_stats_saved_at: float = 0.0
         # Propagation openings: active episodes per Maidenhead field
         # (region → first-detected ts). Alert once per episode, like silence.
         self._prop_active: dict[str, float] = {}
@@ -543,6 +545,19 @@ class AgentManager:
                         self._sta_db_path, "prop_episodes", "{}")))
             except Exception:
                 pass
+        # Gate baselines are restored unconditionally, with no grace window.
+        # An episode is a claim about right now and goes stale; "what this gate
+        # normally hears" is a property of an aerial on a hill. Without this,
+        # no gate ever reached the 20 samples its own threshold requires, and
+        # the propagation detector ran permanently on the absolute floor (F-43).
+        try:
+            n = self._station_db.import_gate_stats(json.loads(
+                station_db_module.load_meta(
+                    self._sta_db_path, "prop_gate_stats", "{}")))
+            if n:
+                print(f"[prop] {n} gate baselines restored", file=sys.stderr)
+        except Exception:
+            pass
         # Missing stations are restored WITHOUT the checkpoint grace window
         # the episodes above use. A station that never came back is a
         # multi-day concern, and the whole point of tracking it is that it
@@ -678,6 +693,16 @@ class AgentManager:
             station_db_module.save_meta(
                 self._sta_db_path, "missing_stations",
                 json.dumps(self._missing))
+            # Not on every 60 s checkpoint: this one grows with the gate
+            # count (2,000+ on the worldwide feed) while the others are a
+            # handful of keys. Five minutes of lost baseline movement is
+            # nothing against a rewrite a minute.
+            now_ck = time.time()
+            if now_ck - self._gate_stats_saved_at >= 300:
+                self._gate_stats_saved_at = now_ck
+                station_db_module.save_meta(
+                    self._sta_db_path, "prop_gate_stats",
+                    json.dumps(self._station_db.export_gate_stats()))
         except Exception as e:
             print(f"[station-db] uptime save failed: {e}", file=sys.__stderr__)
 
@@ -990,6 +1015,17 @@ class AgentManager:
             groups.setdefault(region, []).append(l)
 
         for region, ls in groups.items():
+            # A link flagged only by the 300 km floor, because its gate had no
+            # baseline yet, is a measurement — not evidence of a band opening.
+            # It stays on the map under its own class; it does not put a
+            # notification on somebody's phone. The operator's call, taken with
+            # the numbers in F-43 attached: on a freshly restarted process
+            # EVERY gate is young, so an opening built out of these would be
+            # announcing the restart, not the ionosphere.
+            ls = [l for l in ls
+                  if (l.get("at_flag") or {}).get("established", True)]
+            if not ls:
+                continue
             senders = {l["call"].split("-")[0] for l in ls}
             if len(senders) < 2:
                 continue                    # single sender = no event
@@ -1955,6 +1991,41 @@ async def set_config_path(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": str(e)}, status=400)
 
 
+@routes.post("/api/clientlog")
+async def post_clientlog(request: web.Request) -> web.Response:
+    """The page reporting its own failure, so nobody has to be asked to.
+
+    Two days went into an export button that failed on the operator's machine
+    and nowhere else. Every server-side measurement said the endpoint answered
+    in milliseconds; the page could see which step it had stopped at and had no
+    way to say so. Screenshots and DevTools instructions were the substitute,
+    and they cost the operator far more than they cost me.
+
+    Admin only (this app is behind the panel's auth, the public app never
+    registers this route), same-origin enforced by the middleware, capped, and
+    it writes to the journal — no storage, no identifiers, nothing but the
+    trace the page already keeps in memory.
+    """
+    mgr: AgentManager = request.app["manager"]
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "bad json"}, status=400)
+    what = str(body.get("what", ""))[:40]
+    trace = body.get("trace") or []
+    if not isinstance(trace, list):
+        trace = []
+    lines = []
+    for e in trace[-25:]:
+        if not isinstance(e, dict):
+            continue
+        lines.append("%s%s" % (str(e.get("step", ""))[:24],
+                               ("=" + str(e.get("detail", ""))[:60])
+                               if e.get("detail") else ""))
+    mgr._log_both("[clientlog] %s | %s" % (what, " -> ".join(lines) or "(empty)"))
+    return web.json_response({"ok": True})
+
+
 @routes.post("/api/start")
 async def start_agent(request: web.Request) -> web.Response:
     mgr: AgentManager = request.app["manager"]
@@ -2396,7 +2467,15 @@ def _prop_vs_baseline(link: dict, base: dict, params: dict) -> dict:
     do not reach twice their own gate's average and 7% are shorter than it.
     """
     km = link.get("km")
-    ema = base.get("ema_km", base.get("mean_km"))
+    # Flag-time first (F-16). The current baseline has moved since, sometimes
+    # all the way back to zero via a restart, and reading it produced two
+    # confident opposite verdicts on one physical link an hour apart.
+    at = link.get("at_flag") or {}
+    ema = at.get("ema_km") or base.get("ema_km", base.get("mean_km"))
+    base = dict(base)
+    if at.get("ema_km"):
+        base["samples"] = at.get("samples", base.get("samples", 0))
+        base["established"] = at.get("established", base.get("established"))
     if not km or not ema:
         return {"comparable": False,
                 "note": "no baseline figure for this gate, so the distance "

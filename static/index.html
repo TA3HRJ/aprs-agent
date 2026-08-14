@@ -1886,12 +1886,27 @@ function evLog(step,detail){
 // waiting on anything, so it is cleared rather than left to strand the button.
 // This is a net, not an explanation — it records that it fired, so the cause
 // stays visible instead of being silently papered over.
+// Send the trace home when something actually went wrong. Nobody is asked to
+// open a console, take a screenshot, or try again while watching a spinner —
+// the page reports its own failure and it lands in the server journal.
+// Fire-and-forget: a diagnostic that can itself fail loudly is worse than none.
+let evReportedAt=0;
+function evReport(what){
+  const now=Date.now();
+  if(now-evReportedAt<10000)return;          // one report per 10 s, not a flood
+  evReportedAt=now;
+  try{
+    fetch('/api/clientlog',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({what:what,trace:evTrace.slice(-25)})}).catch(function(){});
+  }catch(e){}
+}
 function evUnstick(){
   if(!evBusy)return false;
   const age=Date.now()-(evBusy.at||0);
   if(age<EV_TIMEOUT_MS+5000)return false;
   const was=evBusy.step||'(no step recorded)';
   evLog('guard-was-stuck',Math.round(age/1000)+'s at '+was);
+  evReport('export-guard-stuck');
   evEnd();
   return true;
 }
@@ -1919,6 +1934,8 @@ function evDeadline(p){
   return Promise.race([p,new Promise(function(_,rej){
     timer=setTimeout(function(){
       if(ctl){try{ctl.abort()}catch(e){}}
+      evLog('deadline-fired',EV_TIMEOUT_MS+'ms');
+      evReport('export-deadline');
       const err=new Error(t('sil_ev_slow'));err.fromServer=true;rej(err);
     },EV_TIMEOUT_MS);
   })]).then(function(v){clearTimeout(timer);return v},
@@ -1980,6 +1997,7 @@ function evExport(make,asPrompt,el){
         // toast said "could not fetch the evidence". Report where it actually
         // broke.
         evLog('box-threw',(err&&err.name)+': '+(err&&err.message));
+        evReport('export-render-threw');
         silToast(t('ev_render_err')+' — '+(err&&err.name)+': '+(err&&err.message));
         try{err.__reported=true}catch(_){}
         throw err;

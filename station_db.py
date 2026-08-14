@@ -770,8 +770,21 @@ class StationDB:
         self._slim_build_s: float = 0.0
         # ── RF propagation link engine (phase 1) ──
         # Per-gate running stats of realised RF link distances (km):
-        # gate → [count, ema_mean, ema_var]. In-memory only; baselines
-        # re-learn within hours of a restart, like the beacon cadences.
+        # gate → [count, ema_mean, ema_var].
+        #
+        # "In-memory only; baselines re-learn within hours of a restart" is
+        # what this comment used to say, and it was the assumption that made
+        # every propagation number meaningless. Measured 2026-08-15: three and
+        # a half minutes after a restart the highest sample count across all
+        # gates was 3, and NO gate had reached the 20 required to establish a
+        # baseline. With eight releases in a day — plus an updater that checks
+        # hourly — they never could. The >=20 branch was effectively dead code
+        # and the detector ran permanently on the 300 km floor alone, which I
+        # then measured and reported as the detector being 86% noise. It was
+        # my deploy cadence. See F-43.
+        #
+        # So they persist now, through the same checkpoint that already saves
+        # station records, cadence history and lifetime uptime.
         self._gate_stats: dict[str, list[float]] = {}
         # Recent anomalous links for /api/prop and (later) the map layer
         self._prop_links: deque = deque(maxlen=500)
@@ -947,13 +960,59 @@ class StationDB:
             if dist < max(3 * mean, mean + 4 * sigma):
                 return
         self._prop_anomalous += 1
+        # The baseline AS IT STOOD when this flag was raised (F-16). Reading it
+        # at export time instead produced two confident, opposite verdicts on
+        # the same physical link an hour apart, because the numbers had moved
+        # underneath — in that case all the way back to zero, via a restart.
+        # `count`/`mean` here are the pre-update values the decision used.
         self._prop_links.append({
             "ts": parsed.get("ts", int(time.time())),
             "call": rec.callsign, "gate": gate,
             "km": round(dist, 1),
+            "at_flag": {
+                "samples": int(count),
+                "ema_km": round(mean, 1) if count else None,
+                "established": bool(count >= self.PROP_MIN_SAMPLES),
+                # What actually decided it. Below PROP_MIN_SAMPLES only the
+                # absolute floor is consulted, and saying so on the link means
+                # a reader never has to infer it from a sample count.
+                "judged_by": ("gate baseline"
+                              if count >= self.PROP_MIN_SAMPLES
+                              else "300 km floor alone"),
+            },
             "s_lat": round(lat, 4), "s_lon": round(lon, 4),
             "g_lat": round(g.lat, 4), "g_lon": round(g.lon, 4),
         })
+
+    # A gate with one or two samples carries a baseline that is still mostly
+    # its own first packet, so losing it to a restart costs nothing worth
+    # writing every minute — and on the live feed most of the 2,000+ gates are
+    # exactly that. The ones worth keeping are the ones on their way to 20.
+    _GATE_STATS_MIN_KEEP = 3
+
+    def export_gate_stats(self) -> dict[str, list]:
+        """Gate baselines worth carrying across a restart."""
+        return {g: [round(v[0], 3), round(v[1], 3), round(v[2], 3)]
+                for g, v in self._gate_stats.items()
+                if v[0] >= self._GATE_STATS_MIN_KEEP}
+
+    def import_gate_stats(self, data: dict) -> int:
+        """Restore baselines saved by a previous run.
+
+        No grace window, unlike the silence episodes: an episode is a claim
+        about right now and goes stale, while "what this gate normally hears"
+        is a property of an aerial on a hill. It is still an average the next
+        link will move, so a gate that has genuinely changed corrects itself.
+        """
+        n = 0
+        for g, v in (data or {}).items():
+            try:
+                if len(v) == 3:
+                    self._gate_stats[str(g)] = [float(v[0]), float(v[1]), float(v[2])]
+                    n += 1
+            except (TypeError, ValueError):
+                continue
+        return n
 
     def gate_baseline(self, gate: str) -> dict[str, Any]:
         """What this gate normally hears — the number the anomaly was judged
