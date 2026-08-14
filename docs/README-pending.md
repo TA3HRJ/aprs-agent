@@ -21,9 +21,23 @@ original text incomplete:
 Block 2 also gained one clause: the bundle now carries how many distinct
 operators and independent gates the silent set represents.
 
-**No GitHub Release was cut, and the badge was not touched.** Option 1 removes
-the reason to — the sentence is now true whatever the badge says, and a release
-without a Windows build would promise a download that does not exist.
+**Then the operator went further: GitHub was levelled with the demo.** A
+release *was* cut — **v3.2.25 with a 58.4 MB 32-bit Windows build** — so the
+badge, the download and the live demo now all read 3.2.25 for the first time
+since v3.2.4.
+
+That is the option-2 outcome the draft had priced as "real work nobody has
+asked for", reached after option 1 had already been applied. The two do not
+conflict: option 1's sentence stays true whether the badge is current or
+behind, which is exactly why it was the right line to write first. It needs no
+edit now, and will need none the next time releases start lagging again —
+which they will, because the deploy path is tag-driven and hourly while a
+Windows build is manual.
+
+**Worth recording against the next time this comes up:** v3.2.4's zip had
+**zero downloads**. The argument for cutting this one was not demand, it was
+that a badge frozen twenty-one versions behind makes a live project look
+abandoned.
 
 ---
 

@@ -113,10 +113,24 @@ decision that releases lag deliberately.
 | README · evidence row | recurrence, novel stations, alerting history, operators and independent gates |
 | README · phone layout bullet | the Key button |
 | README · line 26 | option 1 |
-| GitHub Release + badge | **not touched, on purpose** — option 1 removes the reason, and a release without a Windows build promises a download that does not exist |
+| GitHub Release + badge | **cut after all** — see below |
 
 The record of what changed and why is in
 [README-pending.md](README-pending.md), kept rather than deleted.
+
+### GitHub levelled with the demo — v3.2.25
+
+**Released with a real 32-bit Windows build** (58.4 MB, built and smoke-tested
+locally on the Python 3.8.10 32-bit / PyInstaller 6.19.0 rig). Badge, download
+and demo all read 3.2.25 for the first time since v3.2.4 — twenty-one versions.
+
+The three folder-mode builds were checked before packaging: no database, no
+config and no path leaked into the archive, and the web build was run and
+answered `/api/info` 3.2.25 with the new `deaf` fields present.
+
+**The gap will reopen, by design.** Deploys are tag-driven and hourly; a
+Windows build is manual. Line 26's wording was chosen to stay true in both
+states, so nothing needs editing when it does.
 
 ---
 
