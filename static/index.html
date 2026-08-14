@@ -831,6 +831,8 @@ const S={en:{
   sil_chronic:"Chronic: every station silent here is one that usually is — "
     +"the cell's long-standing state, not a new event.",
   sil_novel:"New here: {c} — normally not among this cell's missing stations.",
+  sil_novel_all:"New here: none of these is normally among this cell's "
+    +"missing stations.",
   sil_ev_busy:"Still fetching the previous evidence — one request at a time.",
   sil_ev_slow:"The server did not answer in time. The request was dropped so "
     +"the rest of the page keeps working — try again.",
@@ -955,6 +957,7 @@ const S={en:{
   sil_chronic:"Kronik: burada susan her istasyon zaten genelde susan biri — "
     +"hücrenin süregelen hâli, yeni bir olay değil.",
   sil_novel:"Burada yeni: {c} — bu hücrede normalde eksik olmayan istasyon(lar).",
+  sil_novel_all:"Burada yeni: bunların hiçbiri bu hücrede normalde eksik olmaz.",
   sil_ev_busy:"Önceki veri hâlâ alınıyor — aynı anda tek istek.",
   sil_ev_slow:"Sunucu zamanında yanıt vermedi. Sayfanın geri kalanı çalışmaya "
     +"devam etsin diye istek iptal edildi — tekrar deneyin.",
@@ -1555,9 +1558,14 @@ function silPopup(c){
   // habitual recurrence and still contain a station that is almost never
   // among the missing — that station is the whole story, and the average
   // hides it.
-  else if(c.novel_stations&&c.novel_stations.length)
-    h+='<span class="sil-novel">'+t('sil_novel')
-      .replace('{c}',esc(c.novel_stations.join(', ')))+'</span><br>';
+  else if(c.novel_stations&&c.novel_stations.length){
+    // When every silent station is a new face, naming them repeats the list
+    // printed directly underneath. Say so instead of saying it twice.
+    const all=c.silent_calls&&c.novel_stations.length>=c.silent_calls.length;
+    h+='<span class="sil-novel">'+(all?t('sil_novel_all')
+        :t('sil_novel').replace('{c}',esc(c.novel_stations.join(', '))))
+      +'</span><br>';
+  }
   // Object packets put an arbitrary transmitted name where a callsign goes.
   h+='<span style="opacity:.7;font-size:11px">'+esc(c.silent_calls.join(', '))+'</span>';
   if(c.quakes)for(const q of c.quakes){
@@ -1668,9 +1676,41 @@ function staBundle(callsign,asPrompt){
 // clipboard, and pasting that reads as valid data for the wrong grid rather
 // than as a failure. So a copy either succeeds or says plainly that it did
 // not — it never falls through quietly.
+// Chrome can refuse the async Clipboard API outright, and does on the live
+// site: permissions.query('clipboard-write') reports "denied", and both
+// write() and writeText() reject with NotAllowedError in under 50 ms whatever
+// the focus, the gesture or the timing. Nothing in the promise plumbing could
+// have fixed that — three rounds of trying to is how long it took to measure
+// it instead of reasoning about it.
+//
+// execCommand('copy') does not consult that permission. It needs only a live
+// user activation, and Chrome's transient activation lasts 5 s — comfortably
+// longer than this endpoint's ~1.5 s round trip. Verified by real click on
+// the same page where the API is denied: 1493 ms fetch, execCommand true,
+// activation still active. Deprecated, and still the only rung that works
+// when the permission is gone.
+function silCopyExec(text){
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=text;
+    ta.setAttribute('readonly','');
+    ta.style.cssText='position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();ta.setSelectionRange(0,text.length);
+    const ok=document.execCommand('copy');
+    ta.remove();
+    return ok;
+  }catch(e){return false}
+}
 function silCopyFallback(o){
   return navigator.clipboard.writeText(o.text).then(function(){silToast(t('sil_copied'))})
-    .catch(function(){silSave(o.text,'text/plain',o.name+'.txt');silToast(t('sil_cp_fallback'))});
+    .catch(function(){
+      // Only after every copy route has failed does a file appear. A download
+      // nobody asked for is a poor consolation prize, and it used to be the
+      // first thing tried after the API said no.
+      if(silCopyExec(o.text)){silToast(t('sil_copied'));return}
+      silSave(o.text,'text/plain',o.name+'.txt');silToast(t('sil_cp_fallback'));
+    });
 }
 // Takes a function that produces the bundle, so silence cells, propagation
 // links and station records all travel the same path out of the page.
