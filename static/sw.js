@@ -9,12 +9,27 @@
 // Bumping this name is what evicts every client's old entries: activate()
 // deletes each cache whose key differs. Bump it whenever a stale shell could
 // strand someone.
-const CACHE = "aprs-agent-v28";
+const CACHE = "aprs-agent-v29";
 // A server that accepts the connection but never answers (which is exactly
 // how the v3.1.2 event-loop livelock presented) leaves fetch() hanging with
 // no timeout of its own, so the page spins forever instead of falling back
 // to a perfectly good cached shell.
-const SHELL_TIMEOUT_MS = 6000;
+//
+// This was 6000, and six seconds is not "the server is broken", it is "the
+// operator is on a home connection". Measured 2026-08-14 through the live
+// admin site: the server answered `/` in 0.012 s and Apache logged the full
+// 55 KB delivered — while the page went on running the PREVIOUS release,
+// because the shell fetch was sharing one HTTP/2 connection with 1.3 MB of
+// /api/stations and lost the six second race at the last mile. The cached
+// shell then answered, so a reload could not escape the old build: clearing
+// site data removed the worker, the next load registered it again, and the
+// cycle repeated. Two releases were tested against code that was never
+// running.
+//
+// A slow network is not a reason to run old code. The fallback now exists
+// for a server that has genuinely stopped answering, and the ceiling is set
+// far above any plausible slow load rather than in the middle of one.
+const SHELL_TIMEOUT_MS = 20000;
 const ICONS = ["/icon-192.png", "/icon-512.png", "/manifest.json", "/favicon.ico"];
 
 self.addEventListener("install", (e) => {

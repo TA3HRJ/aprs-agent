@@ -1069,7 +1069,24 @@ class StationDB:
         out = []
         for r in recs:
             d = r.to_dict()
-            out.append({k: d[k] for k in self._SLIM_FIELDS})
+            # Empty is not information, and at 4000 rows it is not free either.
+            # Measured on the live feed 2026-08-14, in a 1.24 MB response:
+            # city and district empty on 100% of rows (67 KB), self_beacon
+            # false on 100% (80 KB), ai_org empty on 97%, symbol_overlay on
+            # 62%, freq_mhz absent on 65%. A quarter of the payload was keys
+            # carrying nothing, re-sent every poll.
+            #
+            # `online` is deliberately NOT dropped when false: false means
+            # offline and null means unknown, and the map draws those
+            # differently. Absent reads as null, so dropping false would
+            # silently promote every offline station to unknown.
+            row = {}
+            for k in self._SLIM_FIELDS:
+                v = d[k]
+                if v is None or v == "" or (k == "self_beacon" and not v):
+                    continue
+                row[k] = v
+            out.append(row)
         self._slim_cache = out
         self._slim_cache_ts = time.time()
         self._slim_build_s = self._slim_cache_ts - t0
