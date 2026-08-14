@@ -100,27 +100,23 @@ first, or do not run clipboard tests there.
 
 ---
 
-## PENDING — one coordinated sweep, deliberately deferred
+## ✅ DONE — the README sweep, 2026-08-14
 
-The README currently describes v3.2.4 behaviour while the demo runs v3.2.21.
-That is wrong for the audience that actually visits the site, and it is being
-left wrong **on purpose for one day** rather than edited twice: the operator's
-call, and the right one — the fix belongs in a single sweep, not in a trickle.
-
-**Scope of the sweep**, all of it drafted and accepted already in
-[README-pending.md](README-pending.md):
+Applied in one pass, as intended. Line 26 took **option 1**: the README now
+says it describes the live demo and that the badge tracks the Windows build,
+which may be older — true whatever the badge says, and it matches the standing
+decision that releases lag deliberately.
 
 | | |
 |---|---|
-| README · Silence Map row | what `alert` now means, and the four cell colours |
-| README · evidence row | recurrence, novel stations, persistence |
+| README · Silence Map row | what `alert` means, **both** demotion reasons, the colours, the position caveat, and what happens when the feed stops |
+| README · evidence row | recurrence, novel stations, alerting history, operators and independent gates |
 | README · phone layout bullet | the Key button |
-| README · line 26 | "describes the current release" is false once the rest lands — three options, option 1 recommended |
-| GitHub Release + badge | only if a Windows build is wanted; the badge promises a download, so a release without one is worse than no release |
+| README · line 26 | option 1 |
+| GitHub Release + badge | **not touched, on purpose** — option 1 removes the reason, and a release without a Windows build promises a download that does not exist |
 
-**Do not start this piecemeal.** The single reason it is deferred is that the
-pieces are cheaper together, and half of it applied is the same inconsistency
-in a different place.
+The record of what changed and why is in
+[README-pending.md](README-pending.md), kept rather than deleted.
 
 ---
 

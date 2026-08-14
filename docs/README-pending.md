@@ -1,14 +1,33 @@
-# README update — approved in substance, deliberately not applied
+# README update — APPLIED 2026-08-14
 
-**Status (2026-08-14): held.** The operator chose to leave the README wrong for
-another day rather than edit it now, because a coordinated sweep — README,
-GitHub Release, download badge — is coming and doing it twice is the waste.
+**Status: done.** All three blocks below went in, and line 26 took **option 1**.
+Kept as the record of what was decided and why, not as a pending item.
 
-So this file is the scope of that sweep, not a proposal any more. The wording
-below has been read and accepted; only the line-26 question is still open, and
-choosing option 3 there **is** the reason this is held.
+Two things were added to block 1 beyond the wording accepted here, because
+v3.2.24 and v3.2.25 shipped between the draft and the sweep and made the
+original text incomplete:
 
-Three blocks change, and one line needs a decision.
+- **A second demotion reason.** Grey no longer means only "chronic" — a cell
+  whose silent callsigns belong to fewer than `min_silent` operators is also
+  demoted (F-25). The colour line now reads "grey for measured but not
+  announced" rather than "grey for chronic". The threshold is described as
+  "too few separate operators" rather than a number, for the same reason the
+  0.35 recurrence cut was left undocumented: a README that quotes a tunable
+  goes stale the day it is tuned.
+- **Two new honesty statements**: that popups flag stations whose own beacon
+  cannot be trusted about their position (F-33), and that nothing is judged at
+  all while the APRS-IS feed is down (F-35).
+
+Block 2 also gained one clause: the bundle now carries how many distinct
+operators and independent gates the silent set represents.
+
+**No GitHub Release was cut, and the badge was not touched.** Option 1 removes
+the reason to — the sentence is now true whatever the badge says, and a release
+without a Windows build would promise a download that does not exist.
+
+---
+
+Three blocks changed, and one line needed a decision.
 
 ---
 
