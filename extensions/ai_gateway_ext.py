@@ -93,6 +93,12 @@ def _split_message(text: str, max_parts: int) -> list[str]:
     return parts
 
 
+# Sent back to a sender who has emptied their bucket, once per episode.
+# {m} is replaced with the whole minutes until they can ask again.
+_DEFAULT_RATE_NOTICE = "Too many questions - please wait {m} min, then ask again"
+_DEFAULT_DAILY_NOTICE = "Daily question limit reached on this gateway - try tomorrow"
+
+
 class AIGateway(Extension):
 
     # How often the gateway re-reads its own section from the config file.
@@ -115,7 +121,10 @@ class AIGateway(Extension):
         # refill only bites on sustained hammering. A flat cooldown would have
         # punished exactly the people worth having — someone meeting the thing
         # for the first time asks three or four questions back to back.
-        self._buckets: dict[str, list] = {}   # sender -> [tokens, last_refill]
+        self._buckets: dict[str, list] = {}   # sender -> [tokens, last_refill, told]
+        self._day = ""
+        self._day_count = 0
+        self._day_told = False
 
     def _live_config(self) -> dict:
         """The gateway's own config section, re-read when the file changes.
@@ -149,30 +158,68 @@ class AIGateway(Extension):
             self.warn(f"config reload failed, keeping previous: {e}")
         return self._config
 
-    def _allow_rate(self, sender: str, cfg: dict) -> bool:
-        """Token bucket. Returns False only when a sender is hammering."""
+    def _allow_rate(self, sender: str, cfg: dict) -> "tuple[bool, Optional[str]]":
+        """Token bucket. Returns (allowed, notice to send back or None).
+
+        A refusal that says nothing looks like a broken service, and the person
+        on the other end has no way to tell "you asked too fast" from "the
+        gateway is down". So the first refusal of an episode answers.
+
+        Only the first: telling someone off once per message would turn a
+        hammering sender into a hammering transmitter, at our own expense and
+        on a shared RF resource. The notice unlocks again only after they have
+        earned a token back.
+        """
         burst = float(cfg.get("rate_burst", 4) or 0)
         refill_s = float(cfg.get("rate_refill_s", 180) or 0)
         if burst <= 0 or refill_s <= 0:
-            return True                       # limiter off
+            return True, None                 # limiter off
         now = time.time()
         b = self._buckets.get(sender)
         if b is None:
-            self._buckets[sender] = [burst - 1.0, now]
-            return True
-        tokens, last = b
-        tokens = min(burst, tokens + (now - last) / refill_s)
+            self._buckets[sender] = [burst - 1.0, now, False]
+            return True, None
+        tokens = min(burst, b[0] + (now - b[1]) / refill_s)
         if tokens < 1.0:
             b[0], b[1] = tokens, now
-            return False
-        b[0], b[1] = tokens - 1.0, now
+            if b[2]:
+                return False, None            # already told them this episode
+            b[2] = True
+            wait_min = max(1, int(round((1.0 - tokens) * refill_s / 60.0)))
+            tmpl = cfg.get("rate_notice") or _DEFAULT_RATE_NOTICE
+            return False, tmpl.replace("{m}", str(wait_min))[:64]
+        b[0], b[1], b[2] = tokens - 1.0, now, False
         # Senders idle longer than a full refill are forgotten, so the dict
         # cannot grow without bound on a worldwide feed.
         if len(self._buckets) > 2000:
             cutoff = now - burst * refill_s
             for k in [k for k, v in self._buckets.items() if v[1] < cutoff]:
                 del self._buckets[k]
-        return True
+        return True, None
+
+    def _allow_daily(self, cfg: dict) -> "tuple[bool, Optional[str]]":
+        """Whole-instance ceiling for the day. 0 = no ceiling.
+
+        Left OFF by default deliberately: this instance runs open, and a limit
+        nobody asked for is a surprise. But anyone who downloads this and points
+        it at a paid provider is one viral post away from a bill they did not
+        agree to, and per-sender buckets do not help — a thousand strangers
+        asking one question each is a thousand calls. So the ceiling exists,
+        with the operator choosing the number.
+        """
+        limit = int(cfg.get("daily_limit", 0) or 0)
+        if limit <= 0:
+            return True, None
+        today = time.strftime("%Y-%m-%d", time.gmtime())
+        if today != self._day:
+            self._day, self._day_count, self._day_told = today, 0, False
+        if self._day_count >= limit:
+            if self._day_told:
+                return False, None
+            self._day_told = True
+            return False, (cfg.get("daily_notice") or _DEFAULT_DAILY_NOTICE)[:64]
+        self._day_count += 1
+        return True, None
 
         self._provider = config.get("provider", "puter")
         self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(self._provider, _PROVIDER_URLS["puter"])
@@ -380,8 +427,20 @@ class AIGateway(Extension):
                 self.warn(f"blocked {sender_full} — not in whitelist")
                 return None
 
-        if not self._allow_rate(sender_base, cfg):
-            self.warn(f"rate-limited {sender_full}")
+        allowed, notice = self._allow_rate(sender_base, cfg)
+        if not allowed:
+            self.warn(f"rate-limited {sender_full}"
+                      + (" (told)" if notice else " (already told)"))
+            if notice:
+                await self._send_reply(my_call, sender_full, notice)
+            return None
+
+        allowed, notice = self._allow_daily(cfg)
+        if not allowed:
+            self.warn(f"daily limit reached, refused {sender_full}"
+                      + (" (told)" if notice else ""))
+            if notice:
+                await self._send_reply(my_call, sender_full, notice)
             return None
 
         self.log(f"RX from {sender_full}: {question}")

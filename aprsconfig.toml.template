@@ -383,6 +383,20 @@ whitelist = []
 rate_burst = 4
 rate_refill_s = 180
 
+# What a rate-limited sender is told, once per episode ({m} = minutes to wait).
+# A silent refusal is indistinguishable from a broken gateway, and the person
+# on the other end cannot tell which they are looking at. Kept to one message
+# per episode: answering every message would turn a hammering sender into a
+# hammering transmitter, on a shared RF resource and at your expense.
+rate_notice = "Too many questions - please wait {m} min, then ask again"
+
+# Whole-instance ceiling on questions answered per UTC day. 0 = no ceiling.
+# Per-sender limits do not protect you from a thousand strangers asking one
+# question each, which is what happens the first time somebody posts about
+# your gateway. Set this to whatever you are willing to pay for in a day.
+daily_limit = 0
+daily_notice = "Daily question limit reached on this gateway - try tomorrow"
+
 # One API key per provider, so switching "provider" above recalls that
 # provider's own key automatically instead of overwriting a single field.
 # Only the key matching the active provider is used. Must come after every
