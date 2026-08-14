@@ -226,7 +226,7 @@
     </div></li>
     <li><div>
       <strong>▶ Başlat</strong> butonuna tıklayın.
-      Log penceresinde <em>"TA3HRJ verified"</em> gibi bir mesaj görürseniz bağlantı başarılıdır.
+      Log penceresinde <em>"TA1ABC verified"</em> gibi bir mesaj görürseniz bağlantı başarılıdır.
     </div></li>
   </ol>
 
@@ -256,7 +256,7 @@
       </tr>
       <tr>
         <td><span class="field-name">Çağrı İşareti</span></td>
-        <td>Kendi çağrı işaretinizi girin. Örnek: <code>TA3HRJ</code></td>
+        <td>Kendi çağrı işaretinizi girin. Örnek: <code>TA1ABC</code></td>
         <td><span class="badge req">Zorunlu</span></td>
       </tr>
       <tr>
@@ -347,7 +347,7 @@
       </tr>
       <tr>
         <td><span class="field-name">İstasyon SSID</span></td>
-        <td>Çağrı işaretiniz + SSID. Örnek: <code>TA3HRJ-10</code><br>
+        <td>Çağrı işaretiniz + SSID. Örnek: <code>TA1ABC-10</code><br>
             SSID -1 ile -15 arasında herhangi bir sayı olabilir.</td>
         <td><span class="badge req">Zorunlu</span></td>
       </tr>
@@ -361,7 +361,7 @@
       <tr>
         <td><span class="field-name">Beacon açıklaması</span></td>
         <td>aprs.fi haritasında adınızın yanında görünecek kısa metin.
-            Örnek: <code>TA3HRJ Home Station</code></td>
+            Örnek: <code>TA1ABC Home Station</code></td>
         <td><span class="badge opt">İsteğe bağlı</span></td>
       </tr>
       <tr>
@@ -493,7 +493,7 @@
     </table>
     <div class="callout tip" style="margin-top:12px;">
       <strong>Örnek bildirim</strong>
-      🔴 YM5KAD şu an ÇEVRİMDIŞI (son duyulma 1s 23dk önce)<br>
+      🔴 YM1ABC şu an ÇEVRİMDIŞI (son duyulma 1s 23dk önce)<br>
       Adana · 145.7000 MHz · FM
     </div>
   </div>
@@ -709,7 +709,10 @@
       <tr><td><span class="field-name">Sağlayıcı</span></td><td>AI sağlayıcı: ChatGPT (OpenAI), Claude (Anthropic), DeepSeek, Groq, OpenRouter, Puter (ücretsiz) veya özel endpoint.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">API Anahtarı</span></td><td>Her sağlayıcı için ayrı saklanır — sağlayıcı değiştirilince o sağlayıcının kendi anahtarı otomatik gelir, tek bir alanın üzerine yazılmaz.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">Ek SMS Parçası</span></td><td>0 = tek 64 karakterlik yanıt. 1-5 = uzun yanıtlar için çok parçalı mesaj.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
-      <tr><td><span class="field-name">Whitelist</span></td><td>Etkinleştirilirse sadece listedeki çağrı işaretlerinden gelen mesajlar yanıtlanır.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">Whitelist</span></td><td>Etkinleştirilirse sadece listedeki çağrı işaretlerinden gelen mesajlar yanıtlanır. <strong>Liste boşken açık bırakılırsa hiç kimseye yanıt verilmez</strong> — listeyi boşaltmak kapıyı açmaz, kapatır. Değişiklik yeniden başlatma gerektirmez: Kaydet dedikten ~5 saniye sonra geçerli olur.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+<tr><td><span class="field-name">Art arda soru</span></td><td>Bir gönderenin beklemeden art arda sorabileceği soru sayısı (varsayılan 4). Hakkı biten kişiye ne kadar bekleyeceğini söyleyen tek bir mesaj gönderilir; ısrarla soranlara tekrar tekrar yazılmaz. <code>0</code> = sınır yok.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+<tr><td><span class="field-name">Dolum (saniye)</span></td><td>Bu kadar saniyede bir soru hakkı geri gelir (varsayılan 180). Boşta kalan gönderen hakkını tam sayıya kadar biriktirir. <code>0</code> = sınır yok.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+<tr><td><span class="field-name">Günlük tavan</span></td><td>Tüm gönderenler için günde yanıtlanan toplam soru (varsayılan <code>0</code> = tavan yok). Kişi başı sınır, çok sayıda yabancının birer soru sormasına karşı korumaz — sunucuyu kendi donanımında çalıştıran ve ücretli bir AI sağlayıcı kullananlar için önemlidir.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
     </table>
   </div>
 
@@ -724,7 +727,7 @@
     </p>
     <div class="callout tip">
       <strong>📧 E-posta konu formatı</strong>
-      <code>TA3HRJ-7 Merhaba, beacon calisiyor!</code><br>
+      <code>TA1ABC-7 Merhaba, beacon calisiyor!</code><br>
       İlk kelime = hedef çağrı işareti, geri kalanı = mesaj metni.
     </div>
     <table>
@@ -954,7 +957,7 @@
     </div></li>
     <li><div>
       Click <strong>▶ Start</strong>.
-      If you see <em>"TA3HRJ verified"</em> (your callsign) in the log, you're connected.
+      If you see <em>"TA1ABC verified"</em> (your callsign) in the log, you're connected.
     </div></li>
   </ol>
 
@@ -984,7 +987,7 @@
       </tr>
       <tr>
         <td><span class="field-name">Callsign</span></td>
-        <td>Your amateur radio callsign. Example: <code>TA3HRJ</code></td>
+        <td>Your amateur radio callsign. Example: <code>TA1ABC</code></td>
         <td><span class="badge req">Required</span></td>
       </tr>
       <tr>
@@ -1073,7 +1076,7 @@
       </tr>
       <tr>
         <td><span class="field-name">Station SSID</span></td>
-        <td>Your callsign with SSID suffix. Example: <code>TA3HRJ-10</code><br>
+        <td>Your callsign with SSID suffix. Example: <code>TA1ABC-10</code><br>
             Any number from -1 to -15 is valid.</td>
         <td><span class="badge req">Required</span></td>
       </tr>
@@ -1087,7 +1090,7 @@
       <tr>
         <td><span class="field-name">Beacon comment</span></td>
         <td>Short text shown next to your callsign on maps.
-            Example: <code>TA3HRJ Home Station</code></td>
+            Example: <code>TA1ABC Home Station</code></td>
         <td><span class="badge opt">Optional</span></td>
       </tr>
       <tr>
@@ -1222,7 +1225,7 @@
     </table>
     <div class="callout tip" style="margin-top:12px;">
       <strong>Notification example</strong>
-      🔴 YM5KAD is now OFFLINE (last heard 1h 23m ago)<br>
+      🔴 YM1ABC is now OFFLINE (last heard 1h 23m ago)<br>
       Adana · 145.7000 MHz · FM
     </div>
   </div>
@@ -1440,7 +1443,10 @@
       <tr><td><span class="field-name">Provider</span></td><td>AI provider: ChatGPT (OpenAI), Claude (Anthropic), DeepSeek, Groq, OpenRouter, Puter (free), or a custom endpoint.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">API Key</span></td><td>Stored separately per provider — switching providers recalls that provider's own key automatically instead of overwriting one shared field.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Extra SMS Parts</span></td><td>0 = single 64-char reply. 1-5 = multi-part messages for longer responses.</td><td><span class="badge opt">Optional</span></td></tr>
-      <tr><td><span class="field-name">Whitelist</span></td><td>If enabled, only messages from listed callsigns are answered.</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Whitelist</span></td><td>If enabled, only messages from listed callsigns are answered. <strong>Enabled with an empty list answers nobody</strong> — clearing the list closes the gate, it does not open it. Changes need no restart: they take effect about 5 seconds after Save.</td><td><span class="badge opt">Optional</span></td></tr>
+<tr><td><span class="field-name">Questions in a row</span></td><td>How many a sender may ask back to back before being asked to wait (default 4). Someone who runs out is told once, with the wait in minutes — not once per message, which would answer a hammering sender with hammering of our own. <code>0</code> = no limit.</td><td><span class="badge opt">Optional</span></td></tr>
+<tr><td><span class="field-name">Refill (seconds)</span></td><td>One more question per this many seconds (default 180), building back up to the full burst once idle. <code>0</code> = no limit.</td><td><span class="badge opt">Optional</span></td></tr>
+<tr><td><span class="field-name">Daily ceiling</span></td><td>Total questions answered per day across all senders (default <code>0</code> = no ceiling). Per-sender limits do nothing against many strangers asking once each, which matters most if you run this on your own hardware against a paid AI provider.</td><td><span class="badge opt">Optional</span></td></tr>
     </table>
   </div>
 
@@ -1455,7 +1461,7 @@
     </p>
     <div class="callout tip">
       <strong>📧 Email subject format</strong>
-      <code>TA3HRJ-7 Hello, your beacon is working!</code><br>
+      <code>TA1ABC-7 Hello, your beacon is working!</code><br>
       First word = destination callsign, rest = message text.
     </div>
     <table>

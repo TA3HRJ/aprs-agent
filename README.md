@@ -35,8 +35,8 @@ between versions, see the
 | | Feature | Description |
 |---|---|---|
 | 🖥️ | **Desktop GUI** *(frozen at v2.8.0)* | Form-based config editor, Start/Stop, system tray, EN/TR language toggle, live stats bar (RX/TX/Errors/Packets/Stations/Callsigns/Uptime), Live Log + Stations bottom panel with real APRS symbol icons and type/status/search filters |
-| 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, Stations tab, Map tab, gzip-compressed |
-| 🗺️ | **Silence Map** | Leaflet map of all heard stations with real APRS symbols; detects regions where stations fall silent together (per-station beacon-cadence baseline, Maidenhead cell clustering, igate-failure discrimination) and paints affected cells. **An alert means the silence is news, not merely that the threshold was met.** Three things demote a cell out of the alert list — and off the notifications and the AI spend — while leaving it on the map: a *chronic* cell, whose silent stations are all ones it habitually misses; a cell whose silent callsigns belong to too few separate operators, since three SSIDs of one base callsign are three radios in one shack on one power strip and cannot fail independently; and a cell where **no igate ever heard any of them** — every station either gated itself or dialled an APRS-IS backbone server directly, which makes their silence an internet or app dropout rather than anything about a region. That last one is not rare: on the worldwide feed it accounted for 23 of 36 cells, all of them previously reported as regional outages. What keeps a cell alerting is a station that is *unusual there* — one present in under 35 % of that cell's own past alerts — and the popup names it, so the reason is a callsign rather than a colour: *"New here: PY2GR-D — normally not among this cell's missing stations."* The raw threshold result is still reported as `threshold_met` and is still what gets stored, so nothing is hidden and fourteen days of history keep the meaning they were written with. Cell colour separates the cases: red for a regional silence, yellow when a shared igate was **seen** to go quiet, orange when one gate carries every silent station but cannot be seen at all, purple when nothing local ever observed them, grey for measured but not announced. Popups also flag silent stations whose own beacon cannot be trusted about where they are — a US callsign transmitting an eastern longitude is a well-known hotspot misconfiguration, and a cell built out of those is not describing the region it is drawn on. If the APRS-IS feed itself stops, nothing is judged at all: the page says so and holds the last confirmed reading rather than reporting the world as silent. Timeline slider replays the last 14 days of snapshots; new alerts get an AI assessment (via AI Gateway) shown in cell popups and are sent to the Monitor notify channel (Telegram/email). The agent's own Fixed Beacon is shown on the map but excluded from silence detection (it is self-generated and would otherwise be a phantom "still active" vote). Detection can be scoped to your own region with `monitor.silence_grids` (Maidenhead fields, e.g. `["KM","KN","LM","LN"]` for Turkey) — a prefix station filter such as `p/TA` also matches callsigns abroad, and without this their outages raise alerts too. For worldwide monitoring, `monitor.silence_digest_mins` batches alerts into one combined notification per interval. APRS Object packets (event advisories that expire by design) are never counted as silence sensors |
+| 🌐 | **Web GUI** | Browser-based interface, installable PWA, live stats, Last Heard strip, Stations tab, Map tab. **The map is what opens** — somebody watching a region should see the region, not a wall of scrolling packet text; your own last choice of tab is remembered and wins from the second visit. Everything is gzip-compressed, including the JSON APIs: on the live feed that is 932 KB → 112 KB for the station list, and one open tab costs roughly a sixth of what it used to |
+| 🗺️ | **Silence Map** | Leaflet map of all heard stations with real APRS symbols; detects regions where stations fall silent together (per-station beacon-cadence baseline, Maidenhead cell clustering, igate-failure discrimination) and paints affected cells. **An alert means the silence is news, not merely that the threshold was met.** Three things demote a cell out of the alert list — and off the notifications and the AI spend — while leaving it on the map: a *chronic* cell, whose silent stations are all ones it habitually misses; a cell whose silent callsigns belong to too few separate operators, since three SSIDs of one base callsign are three radios in one shack on one power strip and cannot fail independently; and a cell where **no igate ever heard any of them** — every station either gated itself or dialled an APRS-IS backbone server directly, which makes their silence an internet or app dropout rather than anything about a region. That last one is not rare: on the worldwide feed it accounted for 23 of 36 cells, all of them previously reported as regional outages. What keeps a cell alerting is a station that is *unusual there* — one present in under 35 % of that cell's own past alerts — and the popup names it, so the reason is a callsign rather than a colour: *"New here: YM1ABC-7 — normally not among this cell's missing stations."* The raw threshold result is still reported as `threshold_met` and is still what gets stored, so nothing is hidden and fourteen days of history keep the meaning they were written with. Cell colour separates the cases: red for a regional silence, yellow when a shared igate was **seen** to go quiet, orange when one gate carries every silent station but cannot be seen at all, purple when nothing local ever observed them, grey for measured but not announced. Popups also flag silent stations whose own beacon cannot be trusted about where they are — a US callsign transmitting an eastern longitude is a well-known hotspot misconfiguration, and a cell built out of those is not describing the region it is drawn on. If the APRS-IS feed itself stops, nothing is judged at all: the page says so and holds the last confirmed reading rather than reporting the world as silent. Timeline slider replays the last 14 days of snapshots; new alerts get an AI assessment (via AI Gateway) shown in cell popups and are sent to the Monitor notify channel (Telegram/email). The agent's own Fixed Beacon is shown on the map but excluded from silence detection (it is self-generated and would otherwise be a phantom "still active" vote). Detection can be scoped to your own region with `monitor.silence_grids` (Maidenhead fields, e.g. `["KM","KN","LM","LN"]` for Turkey) — a prefix station filter such as `p/TA` also matches callsigns abroad, and without this their outages raise alerts too. For worldwide monitoring, `monitor.silence_digest_mins` batches alerts into one combined notification per interval. APRS Object packets (event advisories that expire by design) are never counted as silence sensors |
 | 📡 | **RF Propagation Tracking** | Every qAR/qAO-gated packet is one realised RF link whose length is known exactly (sender's in-packet position to the igate's position). Per-gate baselines separate "this mountain-top gate always hears far" from "the band just opened"; abnormally long links draw as dashed great-circle lines on the map, colour-tiered by distance. Two or more distinct senders in the same Maidenhead field within 30 minutes become a **band-opening event** — notified via Telegram/email with an optional AI read (tropo / sporadic-E / aurora) and replayable from the map timeline. Internet-origin, digipeated, object, balloon (>3000 m) and >5000 km (GPS garbage) packets are excluded |
 | 💾 | **Persistence** | Station records, beacon-cadence history and the station's lifelong uptime survive restarts (SQLite `aprs_stations.db` next to the config, shared by both GUIs) |
 | 💬 | **Messages Tab** | Every APRS message the agent hears or sends, in one panel — time, direction, from, to, text, and the bridge it belongs to (AI / Telegram / WhatsApp / Email / …). Outgoing messages are captured from the send loop, since APRS-IS never echoes our own traffic. Rolling buffer of the last 400 messages, pushed live over WebSocket; ack/telemetry chatter filtered out. Admin only — not exposed on the public view |
@@ -278,7 +278,7 @@ prop_notify_grids   = []             # Maidenhead fields a band-opening NOTIFICA
 
 Notification example:
 ```
-🔴 YM5KAD is now OFFLINE (last heard 1h 23m ago)
+🔴 YM1ABC is now OFFLINE (last heard 1h 23m ago)
 Adana · 145.7000 MHz · FM
 ```
 
@@ -316,7 +316,26 @@ system_prompt  = ""                   # optional: custom system prompt
 trigger_prefix = ""                   # optional: only respond if message starts with this
 extra_sms      = 1                    # 0 = single 64-char reply, 1–5 = multi-part
 whitelist_enabled = false
-whitelist      = []                   # callsigns allowed to use AI (empty = everyone)
+whitelist      = []                   # callsigns allowed to use AI (wildcards OK: TA1*)
+                                      # NOTE: enabled with an EMPTY list answers nobody.
+                                      # Clearing the list closes the gate, it does not open it.
+
+# Per-sender token bucket. A sender may ask `rate_burst` questions back to back,
+# then one more per `rate_refill_s` seconds, refilling to the full burst once
+# idle. Deliberately not a flat cooldown: the first people to try a new gateway
+# ask several questions in a row, and freezing them out teaches the wrong thing.
+# Someone who runs out is told once per episode, with the wait in minutes.
+# Either setting at 0 switches the limiter off.
+rate_burst     = 4
+rate_refill_s  = 180
+rate_notice    = "Too many questions - please wait {m} min, then ask again"
+
+# Whole-instance ceiling per UTC day. 0 = none. Per-sender limits do nothing
+# against a thousand strangers asking one question each, which is what happens
+# the first time somebody posts about your gateway — set this to whatever you
+# are willing to pay for in a day.
+daily_limit    = 0
+daily_notice   = "Daily question limit reached on this gateway - try tomorrow"
 
 # One key per provider — switching "provider" above recalls that provider's
 # own key automatically (required even on a provider's free tier)
@@ -329,6 +348,14 @@ To ask the AI via APRS, send a message to the configured callsign:
 ```
 YOUR_CALLSIGN What is APRS?
 ```
+
+**Opening it to the whole feed, and closing it again.** Turning the whitelist off
+makes the gateway answer anybody on APRS-IS, which is a reasonable thing to do
+and a real cost: each question is one paid API call and up to `extra_sms + 1`
+transmissions. The whitelist, the two bucket settings and the daily ceiling are
+all fields in the admin screen, and the gateway re-reads them when the file
+changes — **shutting the gate takes about five seconds and no restart**. A
+broken edit keeps the previous settings rather than falling open.
 
 The agent queries the AI and sends the response back as APRS message(s).
 
@@ -425,7 +452,7 @@ poll_interval_mins = 5
 
 To send an APRS message via email, compose an email with subject:
 ```
-TA3HRJ-7 Hello, your beacon is working fine!
+TA1ABC-7 Hello, your beacon is working fine!
 ```
 First word = destination callsign, rest = message text.
 
