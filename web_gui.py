@@ -354,11 +354,31 @@ def _cell_context_stats(c: dict, history: dict) -> dict:
     # outage and chronically normal in the same breath. snapshots is now the
     # number of snapshot RUNS since the cell was first seen.
     pct = int(round(100.0 * alerting / snaps)) if snaps else 0
+    # How often a cell alerts turned out not to be the useful question — cells
+    # alerting in 2% of runs still had the identical cast of silent stations
+    # every time. Whether any station currently silent is one this cell does
+    # NOT usually miss is the question, so the prompt gets that too, and gets
+    # it named rather than implied.
+    recur = c.get("recurrence") or {}
+    novel = c.get("novel_stations") or []
+    if not recur:
+        stations = ""
+    elif novel:
+        stations = (" These stations are silent and are NOT usually among "
+                    "this cell's missing: {n}. That is the part that needs "
+                    "explaining; the rest of the silent set is routine for "
+                    "this cell.").format(n=", ".join(novel))
+    else:
+        stations = (" Every station currently silent here is one that is "
+                    "usually among this cell's missing, so this is the same "
+                    "set as before rather than something new.")
     return {
         "snapshots": snaps,
         "alerting_snapshots": alerting,
         "alerting_share": round(alerting / snaps, 3) if snaps else None,
         "always_alerting": bool(snaps) and pct >= 90,
+        "station_recurrence": recur,
+        "novel_stations": novel,
         "recent_sampled": len(recent),
         "recent_at_or_above_current_ratio": at_or_above,
         "reading": (
@@ -370,7 +390,7 @@ def _cell_context_stats(c: dict, history: dict) -> dict:
             if pct >= 90 else
             "So it alerts intermittently, and has recovered in between — do "
             "not describe it as permanently or chronically silent."
-        )) if snaps else "no stored history for this cell yet",
+        )) + stations if snaps else "no stored history for this cell yet",
     }
 
 

@@ -1219,9 +1219,13 @@ class StationDB:
     # is still what gets WRITTEN to silence_history — the stored column keeps
     # its original meaning so the 860 snapshots already recorded do not
     # quietly change what they say, and so this can always be recomputed.
-    _CHRONIC_RATIO = 0.9
-    _CHRONIC_MIN_SNAPSHOTS = 12
-    _CHRONIC_MIN_SPAN_S = 24 * 3600
+    # Chronic was first defined as "alerts in >=90% of runs". Measured on
+    # live data that never fired once: the busiest cell reached 0.63, and
+    # cells alerting in as little as 2% of runs still had the identical cast
+    # of silent stations every time. How OFTEN a cell alerts was never the
+    # question — whether it is the SAME THING AGAIN is. See _NOVEL_RECURRENCE.
+    # persistence is still published, because it is real and a reader may want
+    # it; it just no longer decides anything.
     _PERSIST_TTL_S = 60.0
     _persist_cache: tuple = (0.0, None)
 
@@ -1269,6 +1273,65 @@ class StationDB:
             # to read the very evidence that would justify narrowing it.
             out = {}
         self._persist_cache = (now, out)
+        return out
+
+    # A station's recurrence: of the times ITS cell alerted, how often was it
+    # one of the silent ones. Below this it is unusual for that cell, and its
+    # silence is the thing worth telling someone about.
+    #
+    # Measured before choosing: across 38 live alerting cells, 17 contained no
+    # unusual station at all — the same faces every time — while 21 contained
+    # at least one below this line. Persistence could not see the difference:
+    # cells alerting in 2-7% of runs still had the same cast every time, so
+    # "how often does this cell alert" was never the question.
+    _NOVEL_RECURRENCE = 0.35
+    # Below this many alerts, recurrence means nothing: a cell that has alerted
+    # once has every station at 1.0 by arithmetic.
+    _RECUR_MIN_ALERTS = 12
+    _recur_cache: tuple = (0.0, None)
+
+    def _recurrence_stats(self, path: str,
+                          cells: list) -> dict[str, dict[str, float]]:
+        """Per cell: {callsign: share of that cell's alerts it was silent in}.
+
+        Only the cells that currently meet the threshold are read — a few
+        dozen rather than the whole registry — and the result is cached beside
+        the persistence figures, which move on the same timescale.
+        """
+        now = time.time()
+        cached_at, stats = self._recur_cache
+        if stats is not None and (now - cached_at) < self._PERSIST_TTL_S:
+            return stats
+        out: dict[str, dict[str, float]] = {}
+        if cells:
+            try:
+                con = sqlite3.connect(path)
+                try:
+                    marks = ",".join("?" * len(cells))
+                    counts: dict[str, dict[str, int]] = {}
+                    totals: dict[str, int] = {}
+                    for cell, calls in con.execute(
+                            "SELECT cell, silent_calls FROM silence_history "
+                            "WHERE cell IN (%s)" % marks, list(cells)):
+                        totals[cell] = totals.get(cell, 0) + 1
+                        try:
+                            parsed = json.loads(calls or "[]")
+                        except Exception:
+                            continue
+                        per = counts.setdefault(cell, {})
+                        for c in parsed:
+                            per[c] = per.get(c, 0) + 1
+                    for cell, per in counts.items():
+                        t = totals.get(cell, 0)
+                        if t:
+                            out[cell] = {c: n / t for c, n in per.items()}
+                finally:
+                    con.close()
+            except sqlite3.Error:
+                # Same rule as persistence: nothing is chronic until shown to
+                # be. Failing to read the evidence must never narrow an alert.
+                out = {}
+        self._recur_cache = (now, out)
         return out
 
     def silence_cells(
@@ -1346,8 +1409,10 @@ class StationDB:
         # deliberately does not supply one: what it stores must stay the raw
         # threshold result.
         persist = self._persistence_stats(history_path) if history_path else {}
-        now_i = int(now)
-        out = []
+        # First pass settles the threshold and the cause, both purely from
+        # memory. Only then is the history read, and only for the handful of
+        # cells that qualified — a few dozen instead of a few thousand.
+        staged = []
         for c in cells.values():
             ratio = c["silent"] / c["baseline"] if c["baseline"] else 0.0
             threshold_met = c["silent"] >= min_silent and ratio >= min_ratio
@@ -1377,15 +1442,34 @@ class StationDB:
                         # simply cannot see. Sharing a single gate is itself
                         # strong evidence of a shared path failing.
                         cause = "shared_gate"
+            staged.append((c, ratio, threshold_met, cause, shared_gate))
+
+        recur = (self._recurrence_stats(
+                     history_path,
+                     [s[0]["cell"] for s in staged if s[2]])
+                 if history_path else {})
+
+        out = []
+        for c, ratio, threshold_met, cause, shared_gate in staged:
             n, n_alert, peak, first_ts = persist.get(c["cell"], (0, 0, 0, 0))
-            chronic = bool(
-                n >= self._CHRONIC_MIN_SNAPSHOTS
-                and first_ts
-                and (now_i - first_ts) >= self._CHRONIC_MIN_SPAN_S
-                and (n_alert / n) >= self._CHRONIC_RATIO
-            )
+            calls = sorted(c["silent_calls"])[:20]
+            cell_recur = recur.get(c["cell"], {})
+            shares = {call: round(cell_recur.get(call, 0.0), 3)
+                      for call in calls}
+            # The stations that are unusual HERE. One of these is the whole
+            # reason to tell somebody: "X is silent, and X is normally not."
+            novel = sorted(k for k, v in shares.items()
+                           if v < self._NOVEL_RECURRENCE)
+            # Chronic: this cell has alerted often enough for its cast to be
+            # known, and not one of the stations currently silent is a
+            # surprise. The mean would be the wrong test — a cell can average
+            # 0.66 and still contain a station at 0.06, which is exactly the
+            # case worth surfacing, so the decision rests on the minimum.
+            chronic = bool(threshold_met
+                           and n_alert >= self._RECUR_MIN_ALERTS
+                           and cell_recur and not novel)
             # Past its own worst is still news, even for a chronic cell —
-            # that is the case option 1 (plain suppression) would have hidden.
+            # that is the case plain suppression would have hidden.
             alert = threshold_met and (not chronic or c["silent"] > peak)
             b = _cell_bounds(c["cell"])
             entry = {
@@ -1404,18 +1488,32 @@ class StationDB:
                 # timing, or invent something else.
                 "gate_of": dict(c["gate_of"]),
                 "shared_gate": shared_gate if threshold_met else "",
-                "silent_calls": sorted(c["silent_calls"])[:20],
+                "silent_calls": calls,
                 "since": int(c["first_silent"]) if c["first_silent"] else None,
                 "bounds": b,
             }
             if history_path:
-                # Published whether or not the cell is chronic: the ratio is
-                # the reader's means of judging the verdict for themselves.
+                # Published whether or not the cell is chronic, so a reader can
+                # check the verdict instead of taking it.
                 entry["chronic"] = chronic
                 entry["snapshots"] = n
                 entry["alerting_snapshots"] = n_alert
                 entry["persistence"] = round(n_alert / n, 3) if n else None
                 entry["peak_silent"] = peak
+                # Per silent station: the share of this cell's own alerts it
+                # was one of the missing in. This, not persistence, is what
+                # separates "the usual suspects" from "something new".
+                #
+                # Published ONLY for cells that met the threshold, because
+                # only those were queried. For the rest these would be zeros
+                # from a lookup never performed — and a zero here reads as
+                # "this station is never normally missing", which is the
+                # strongest claim the field can make. Omitting beats
+                # answering from an empty dict.
+                if threshold_met:
+                    entry["recurrence"] = shares
+                    entry["novel_stations"] = novel
+                    entry["novel_threshold"] = self._NOVEL_RECURRENCE
             out.append(entry)
         # threshold_met keeps its place in the ordering so a chronic cell still
         # outranks quiet noise — it is demoted, not buried.

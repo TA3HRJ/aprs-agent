@@ -204,7 +204,63 @@ operator reported "no warning" twice and was right in every way that matters.
 all three were wrong. The access log answered it in one read. When a browser
 symptom resists explanation, ask the server what it saw.
 
-### F-2026-08-14-30 — the same denominator bug, third location, and this one talked to the operator
+### F-2026-08-14-31 — chronic moves from "how often" to "the same faces"
+**Source:** measurement requested by the operator · **Verdict:** improvement
+
+Persistence never fired: measured across 38 live alerting cells the busiest
+reached 0.63, nowhere near the 0.90 cut. Measuring the other axis — of the
+times a cell alerted, how often was each station one of the missing — showed
+why the question was wrong:
+
+| cell | alerts in | same cast |
+|---|---|---|
+| FG46 | 7 % of runs | **0.99** |
+| DM90 | 2 % of runs | **0.82** |
+| DM34 | 5 % of runs | **0.87** |
+
+A cell can alert almost never and still produce the identical set of silent
+stations every single time. "How often does this cell alert" was never the
+question; **"is this the same thing again"** is.
+
+**Live distribution across the 38:** mean recurrence 0.80–1.00 in 14 cells,
+0.60–0.79 in 16, 0.40–0.59 in 5, 0.20–0.39 in 3, none below 0.20. Seventeen
+cells contained no unusual station at all; twenty-one contained at least one
+below 0.35.
+
+**Not degenerate, which was the worry.** Only 4 of the 38 had their whole cell
+silent, so recurrence is not high by arithmetic. Partial cells still averaged
+0.69.
+
+**The minimum decides, not the mean** — and this is the part worth keeping.
+GG57 averages 0.66, which reads as thoroughly habitual, and contains a station
+at **0.06**: one that is almost never among the missing, silent now. The
+average hides precisely the case that matters. So a cell is chronic when
+**every** station currently silent is one it usually misses; one surprise is
+enough to make it news.
+
+**Shipped in v3.2.21**, threshold 0.35 (the operator's choice, from 0.35 vs
+0.20 — 21 alerts survive rather than 12, and starting permissive is the safer
+direction after being burned once by tuning on thin data):
+
+- `recurrence` per silent station and `novel_stations` in the cell and the
+  bundle, so the verdict can be checked rather than taken
+- the popup names them: *"New here: BI1PZJ-3 — normally not among this cell's
+  missing stations"*, which is the sentence an operator can act on
+- the AI prompt gets the same, named, instead of inferring from how often the
+  cell alerts
+- `persistence` is still published — it is real, it just decides nothing now
+
+**Cost:** history is read only for cells that met the threshold, a few dozen
+rather than a few thousand, cached for a minute beside the persistence figures.
+
+**And a smaller trap avoided on the way.** The first version published
+`recurrence` for every cell, including the ones never queried — where it came
+back as zeros, which reads as *"none of these stations is ever normally
+missing"*, the strongest claim the field can make. Now it is omitted unless
+the cell was actually measured. That is the fourth time in two days an
+unqueried or tautological number nearly went out as a measurement; the pattern
+is worth naming on its own: **a field that is absent is honest, a field that
+is zero because nothing was asked is not.**
 **Source:** operator, OM79 popup · **Verdict:** our fault
 
 Reported: a popup reading **"Regional silence (possible outage)"** in red, with

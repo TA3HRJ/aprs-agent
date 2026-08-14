@@ -201,6 +201,7 @@ body.public .stat-bar .cell.diag{display:none!important}
 .sil-ev a{color:#99c1f1;cursor:pointer;text-decoration:none}
 .sil-ev a:hover{text-decoration:underline}
 .sil-chronic{color:#c0bfbc;font-size:11px}
+.sil-novel{color:#ff7b63;font-size:11px}
 /* A link that has started work must not look like one that has not. The
    repeated clicking behind F-19 came from a link that sat there unchanged for
    six seconds while it was already fetching. */
@@ -827,8 +828,9 @@ const S={en:{
   sil_ev_err:"Could not fetch the evidence for this cell.",
   leg_key:"Key",
   leg_chronic:"Long-standing, not a new event",
-  sil_chronic:"Chronic: alerting in {a} of its {n} recorded snapshots — this "
-    +"is the cell's long-standing state, not a new event.",
+  sil_chronic:"Chronic: every station silent here is one that usually is — "
+    +"the cell's long-standing state, not a new event.",
+  sil_novel:"New here: {c} — normally not among this cell's missing stations.",
   sil_ev_busy:"Still fetching the previous evidence — one request at a time.",
   sil_ev_slow:"The server did not answer in time. The request was dropped so "
     +"the rest of the page keeps working — try again.",
@@ -950,8 +952,9 @@ const S={en:{
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
   leg_key:"Gösterge",
   leg_chronic:"Süregelen, yeni bir olay değil",
-  sil_chronic:"Kronik: kayıtlı {n} anlık görüntünün {a} tanesinde alarm veriyor "
-    +"— bu hücrenin yeni bir olayı değil, süregelen hâli.",
+  sil_chronic:"Kronik: burada susan her istasyon zaten genelde susan biri — "
+    +"hücrenin süregelen hâli, yeni bir olay değil.",
+  sil_novel:"Burada yeni: {c} — bu hücrede normalde eksik olmayan istasyon(lar).",
   sil_ev_busy:"Önceki veri hâlâ alınıyor — aynı anda tek istek.",
   sil_ev_slow:"Sunucu zamanında yanıt vermedi. Sayfanın geri kalanı çalışmaya "
     +"devam etsin diye istek iptal edildi — tekrar deneyin.",
@@ -1547,8 +1550,14 @@ function silPopup(c){
   // itself. Three cells read by outside models were alerting in every snapshot
   // they had, and every reading called them an artefact rather than an
   // incident — a verdict no reader could reach from this popup before.
-  if(c.chronic)h+='<span class="sil-chronic">'+t('sil_chronic')
-    .replace('{a}',c.alerting_snapshots).replace('{n}',c.snapshots)+'</span><br>';
+  if(c.chronic)h+='<span class="sil-chronic">'+t('sil_chronic')+'</span><br>';
+  // The reason this one is news, named. A cell can average a perfectly
+  // habitual recurrence and still contain a station that is almost never
+  // among the missing — that station is the whole story, and the average
+  // hides it.
+  else if(c.novel_stations&&c.novel_stations.length)
+    h+='<span class="sil-novel">'+t('sil_novel')
+      .replace('{c}',esc(c.novel_stations.join(', ')))+'</span><br>';
   // Object packets put an arbitrary transmitted name where a callsign goes.
   h+='<span style="opacity:.7;font-size:11px">'+esc(c.silent_calls.join(', '))+'</span>';
   if(c.quakes)for(const q of c.quakes){
