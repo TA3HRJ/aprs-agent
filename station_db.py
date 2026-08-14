@@ -36,6 +36,92 @@ _US_CALL_RE = re.compile(r"^(A[A-L]|[KNW][A-Z]?)[0-9]")
 _HOTSPOT_RE = re.compile(r"MMDVM|D-?STAR|PI-?STAR|DMRGATEWAY", re.I)
 
 
+# How close two stations must be before they are reported as possibly one site.
+# REPORTED ONLY — it never affects whether a cell alerts. Position cannot tell a
+# club site with two callsigns from two neighbours with separate power, and
+# collapsing the second case would delete a real independent witness. The number
+# is published so the judgement can be made by someone who knows the difference.
+_SITE_RADIUS_KM = 0.2
+
+
+def _call_owner(callsign: str) -> str:
+    """The operator behind an SSID. `KC9SIO-B` and `KC9SIO-N` are one person."""
+    return callsign.split("-")[0].split(" ")[0]
+
+
+def owner_sites(calls) -> int:
+    """Distinct operators among a set of silent stations.
+
+    F-25. The detector counts callsigns, and a callsign is not a witness — three
+    SSIDs of one base callsign are three radios in one shack, sharing one aerial,
+    one power strip and one internet connection. They cannot fail independently,
+    so counting them as three observations of a regional event is counting the
+    same observation three times. NM58 reached the operator as an outage in
+    China on exactly this arithmetic.
+
+    Unambiguous by construction, which is why this is the count that qualifies
+    an alert while the proximity one below only gets reported.
+    """
+    return len({_call_owner(c) for c in calls})
+
+
+def colocated_sites(calls, pos: dict) -> int:
+    """Distinct sites, merging both same-operator and same-place stations.
+
+    Reported, never acted on — see _SITE_RADIUS_KM.
+    """
+    groups: list[list[str]] = []
+    for c in calls:
+        groups.append([c])
+
+    def near(a: str, b: str) -> bool:
+        pa, pb = pos.get(a), pos.get(b)
+        if not pa or not pb or pa[0] is None or pb[0] is None:
+            return False
+        dla = math.radians(pb[0] - pa[0])
+        dlo = math.radians(pb[1] - pa[1])
+        h = (math.sin(dla / 2) ** 2
+             + math.cos(math.radians(pa[0])) * math.cos(math.radians(pb[0]))
+             * math.sin(dlo / 2) ** 2)
+        return 6371.0 * 2 * math.asin(min(1.0, math.sqrt(h))) <= _SITE_RADIUS_KM
+
+    merged = True
+    while merged:
+        merged = False
+        for i in range(len(groups)):
+            for j in range(i + 1, len(groups)):
+                a, b = groups[i], groups[j]
+                if any(_call_owner(x) == _call_owner(y) for x in a for y in b) \
+                        or any(near(x, y) for x in a for y in b):
+                    groups[i] = a + b
+                    groups.pop(j)
+                    merged = True
+                    break
+            if merged:
+                break
+    return len(groups)
+
+
+def gate_independence(gate_of: dict, calls) -> "tuple[int, int]":
+    """(independent gates, self-gated stations) across a silent set.
+
+    A Pi-Star that reaches APRS-IS through its own `-BS` uplink is not using a
+    gate, it *is* its own gate. Counting that as a distinct path is what made
+    four boxes in one house look like four independently-observed witnesses in
+    NM58, and it is why `shared_gate` could never fire there.
+    """
+    indep, selfed = set(), 0
+    for c in calls:
+        gw = gate_of.get(c)
+        if not gw:
+            continue
+        if _call_owner(gw) == _call_owner(c):
+            selfed += 1
+        else:
+            indep.add(gw)
+    return len(indep), selfed
+
+
 def suspect_position(rec) -> bool:
     """True when a station's own beacon puts a US callsign in the east.
 
@@ -1465,7 +1551,7 @@ class StationDB:
             c = cells.setdefault(cell, {
                 "cell": cell, "baseline": 0, "silent": 0,
                 "silent_calls": [], "gate_of": {}, "first_silent": None,
-                "suspect_position": 0,
+                "suspect_position": 0, "pos": {},
             })
             c["baseline"] += 1
             threshold = max(3.0 * r.ema_interval_s, 900.0)
@@ -1477,6 +1563,11 @@ class StationDB:
                 # witnesses an alert is built on, not to survey the cell.
                 if suspect_position(r):
                     c["suspect_position"] += 1
+                # Kept only for the co-location count below, and dropped before
+                # the entry is built — the silent set is a handful of stations,
+                # so this costs nothing; doing the same for the baseline would
+                # mean grouping the whole cell, which the walk cannot afford.
+                c["pos"][r.callsign] = (r.lat, r.lon)
                 if r.last_gate:
                     c["gate_of"][r.callsign] = r.last_gate
                 # When this station crossed its silence threshold
@@ -1547,9 +1638,25 @@ class StationDB:
             chronic = bool(threshold_met
                            and n_alert >= self._RECUR_MIN_ALERTS
                            and cell_recur and not novel)
+            # F-25. How many separate parties the silent set actually
+            # represents, and how much of the path is genuinely independent.
+            n_sites = owner_sites(c["silent_calls"])
+            n_near = colocated_sites(c["silent_calls"], c["pos"])
+            n_gates, n_selfed = gate_independence(c["gate_of"], c["silent_calls"])
+            # A cell whose silent stations belong to fewer than min_silent
+            # operators cannot be evidence of a regional event, however many
+            # callsigns it holds — one shack losing power produces exactly this
+            # and it is not news about a region. Demoted the same way a chronic
+            # cell is: still measured, still drawn, no longer announced.
+            #
+            # No "past its own peak" escape hatch here, unlike chronic. A cell
+            # that has never had more than one owner in it does not become a
+            # regional outage by having a worse day.
+            few_sites = bool(threshold_met and n_sites < min_silent)
             # Past its own worst is still news, even for a chronic cell —
             # that is the case plain suppression would have hidden.
-            alert = threshold_met and (not chronic or c["silent"] > peak)
+            alert = (threshold_met and not few_sites
+                     and (not chronic or c["silent"] > peak))
             b = _cell_bounds(c["cell"])
             entry = {
                 "cell": c["cell"],
@@ -1572,6 +1679,20 @@ class StationDB:
                 # beacon cannot be trusted about (F-33). A cell where this
                 # equals `silent` is not describing the region it is drawn on.
                 "suspect_position": c["suspect_position"],
+                # F-25. `sites` is the count that qualifies the alert: distinct
+                # operators, which is not a judgement call. `sites_colocated`
+                # additionally merges stations within site_radius_m of each
+                # other and is REPORTED ONLY — position cannot distinguish one
+                # club site from two neighbours, so it informs a reader and
+                # decides nothing.
+                "sites": n_sites,
+                "sites_colocated": n_near,
+                # Gates that are somebody else's, and stations that reach
+                # APRS-IS through their own uplink and so were never
+                # independently observed at all.
+                "independent_gates": n_gates,
+                "self_gated": n_selfed,
+                "few_sites": few_sites,
                 "since": int(c["first_silent"]) if c["first_silent"] else None,
                 "bounds": b,
             }

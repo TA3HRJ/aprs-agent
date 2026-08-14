@@ -692,7 +692,7 @@ body.public .sb-toggle{display:none!important}
       <span><i style="background:#e01b24"></i><em data-i="sil_outage">Regional silence (possible outage)</em></span>
       <span><i style="background:#f5c211"></i><em data-i="sil_igate">IGate failure</em></span>
       <span><i style="background:#ff7800"></i><em data-i="sil_shared_gate">One shared gate — its own state unknown</em></span>
-      <span><i style="background:#77767b"></i><em data-i="leg_chronic">Long-standing, not a new event</em></span>
+      <span><i style="background:#77767b"></i><em data-i="leg_chronic">Measured, not announced</em></span>
       <span><i style="background:#2ec27e"></i><em data-i="leg_prop1">Opening &lt; 600 km</em></span>
       <span><i style="background:#62a0ea"></i><em data-i="leg_prop2">600–1200 km</em></span>
       <span><i style="background:#dc8add"></i><em data-i="leg_prop3">&gt; 1200 km</em></span>
@@ -842,8 +842,11 @@ const S={en:{
   sil_ev_err:"Could not fetch the evidence for this cell.",
   deaf_bar:"⚠ No APRS-IS feed for {m} min — silence detection is paused. Nothing is being judged right now; any cells shown are the last confirmed reading, not the current one.",
   sil_suspect:"⚠ {n} of the {s} silent stations report a position their own beacon cannot be trusted about — a US callsign at an eastern longitude, the known hotspot misconfiguration. This cell may not describe the region it is drawn on.",
+  sil_few_sites_one:"Not announced: all {s} silent callsigns belong to one operator. A single site losing power looks exactly like this, and it is not news about a region.",
+  sil_few_sites:"Not announced: the {s} silent callsigns belong to only {n} operators. Equipment at that few sites cannot fail independently, so this is not news about a region.",
+  sil_self_gated:"⚠ Every silent station here reached APRS-IS through its own uplink — nothing independent observed any of them.",
   leg_key:"Key",
-  leg_chronic:"Long-standing, not a new event",
+  leg_chronic:"Measured, not announced — long-standing, or one operator's equipment",
   sil_chronic:"Chronic: every station silent here is one that usually is — "
     +"the cell's long-standing state, not a new event.",
   sil_novel:"New here: {c} — normally not among this cell's missing stations.",
@@ -970,8 +973,11 @@ const S={en:{
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
   deaf_bar:"⚠ {m} dakikadır APRS-IS beslemesi yok — sessizlik tespiti duraklatıldı. Şu anda hiçbir şey yargılanmıyor; görünen hücreler güncel değil, son doğrulanmış okumadır.",
   sil_suspect:"⚠ Susan {s} istasyondan {n} tanesi, kendi işaretinin güvenilir olmadığı bir konum bildiriyor — doğu boylamında bir ABD çağrı işareti, bilinen hotspot yapılandırma hatası. Bu hücre, çizildiği bölgeyi anlatmıyor olabilir.",
+  sil_few_sites_one:"Duyurulmadı: susan {s} çağrı işaretinin hepsi tek bir operatöre ait. Tek bir sahanın elektriği gitse tam olarak böyle görünür ve bu, bir bölge hakkında haber değildir.",
+  sil_few_sites:"Duyurulmadı: susan {s} çağrı işareti yalnızca {n} operatöre ait. Bu kadar az sahadaki cihazlar birbirinden bağımsız arızalanamaz, dolayısıyla bu bir bölge haberi değildir.",
+  sil_self_gated:"⚠ Burada susan her istasyon APRS-IS'e kendi bağlantısıyla ulaşmış — hiçbirini bağımsız bir kaynak görmedi.",
   leg_key:"Gösterge",
-  leg_chronic:"Süregelen, yeni bir olay değil",
+  leg_chronic:"Ölçüldü, duyurulmadı — süregelen ya da tek operatörün cihazları",
   sil_chronic:"Kronik: burada susan her istasyon zaten genelde susan biri — "
     +"hücrenin süregelen hâli, yeni bir olay değil.",
   sil_novel:"Burada yeni: {c} — bu hücrede normalde eksik olmayan istasyon(lar).",
@@ -1598,7 +1604,18 @@ function silPopup(c){
   // itself. Three cells read by outside models were alerting in every snapshot
   // they had, and every reading called them an artefact rather than an
   // incident — a verdict no reader could reach from this popup before.
+  // Why this cell is drawn but not announced. Said before the chronic line
+  // because it is the stronger objection: a chronic cell is at least a region,
+  // this one is one operator's equipment.
+  if(c.few_sites)h+='<span class="sil-chronic">'
+    +t(c.sites===1?'sil_few_sites_one':'sil_few_sites')
+      .replace('{n}',c.sites).replace('{s}',c.silent)+'</span><br>';
   if(c.chronic)h+='<span class="sil-chronic">'+t('sil_chronic')+'</span><br>';
+  // The sharp case, and it is silent otherwise: every silent station reached
+  // APRS-IS through its own uplink, so nothing independent ever saw any of
+  // them. shared_gate cannot fire here, because there is no shared gate.
+  if(c.threshold_met&&c.independent_gates===0&&c.self_gated)
+    h+='<span class="sil-suspect">'+t('sil_self_gated')+'</span><br>';
   // The reason this one is news, named. A cell can average a perfectly
   // habitual recurrence and still contain a station that is almost never
   // among the missing — that station is the whole story, and the average
@@ -2018,11 +2035,15 @@ function renderSilence(cells,meta){
     // see it at all. Different evidence, different confidence, so different
     // colours. Chronic overrides both — "not news" outranks the cause, and
     // the popup still names it.
-    const color=c.chronic?'#77767b'
+    // few_sites joins chronic in the demoted grey, and for the same reason:
+    // the measurement stands, the announcement does not. A cell whose silent
+    // callsigns are all one operator is one shack, not a region.
+    const dim=c.chronic||c.few_sites;
+    const color=dim?'#77767b'
                :c.cause==='igate'?'#f5c211'
                :c.cause==='shared_gate'?'#ff7800':'#e01b24';
     const opts={color:color,weight:1,fillColor:color,
-                fillOpacity:(c.chronic?0.04:0.10)+(c.chronic?0.10:0.30)*Math.min(c.ratio,1)};
+                fillOpacity:(dim?0.04:0.10)+(dim?0.10:0.30)*Math.min(c.ratio,1)};
     let rc=silRects[c.cell];
     if(rc){rc.setStyle(opts);rc.setPopupContent(silPopup(c))}
     else{

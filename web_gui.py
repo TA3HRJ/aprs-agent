@@ -2271,6 +2271,11 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
                                    "beacon interval, minimum 15 minutes",
             "quake_radius_km": _QUAKE_RADIUS_KM,
             "quake_window_s": _QUAKE_WINDOW_S,
+            # min_silent is applied to `sites` as well as to `silent`, which is
+            # what demotes a cell whose callsigns all belong to one operator.
+            "site_rule": "distinct operators (base callsign); a cell with "
+                         "fewer than min_silent of them cannot alert",
+            "site_radius_m": int(station_db_module._SITE_RADIUS_KM * 1000),
         },
         "caveats": [
             "Point-in-time snapshot: the cell may have recovered since "
@@ -2294,6 +2299,23 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
             "configured without the minus sign on its longitude, which places "
             "a US gateway on the far side of the planet. The packet really "
             "does say E, so this is the sender's error and not a decoding "
+            "cell.silent counts CALLSIGNS, which are not witnesses. "
+            "cell.sites is how many distinct operators those callsigns belong "
+            "to — three SSIDs of one base callsign are three radios in one "
+            "shack, on one aerial and one power strip, and cannot fail "
+            "independently. A cell with sites below min_silent is demoted out "
+            "of 'alert' for that reason alone (few_sites), and must not be "
+            "read as evidence of a regional event however many callsigns it "
+            "holds. cell.sites_colocated additionally merges stations within "
+            "detection.site_radius_m of each other; it is REPORTED ONLY and "
+            "changes no decision, because a position cannot distinguish one "
+            "club site with two callsigns from two neighbours with separate "
+            "power.",
+            "cell.independent_gates counts gates belonging to somebody else. "
+            "cell.self_gated counts silent stations that reached APRS-IS "
+            "through their OWN uplink, which means nothing independent ever "
+            "observed them. A cell with independent_gates = 0 has no "
+            "corroboration at all, whatever its gate list looks like.",
             "one, but if this number approaches 'silent' then the cell is not "
             "describing the region it is drawn on and its cause should not be "
             "read as a regional one.",
