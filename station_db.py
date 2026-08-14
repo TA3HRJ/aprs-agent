@@ -1199,8 +1199,15 @@ class StationDB:
         rows = self._slim_all()
         if bbox is not None:
             s, w, n, e = bbox
+            # .get(), not [] — v3.2.29 stopped emitting empty values to save a
+            # quarter of the payload, and a station with no position has no
+            # "lat" key at all. This indexed it directly and raised KeyError,
+            # so every bbox request answered 500 for a day. Nothing noticed
+            # because the map asks without a bbox: 2,739 requests to 4 in the
+            # access log. Found by measuring what bbox would save, which is
+            # the one thing that had to touch this path.
             rows = [r for r in rows
-                    if r["lat"] is not None and r["lon"] is not None
+                    if r.get("lat") is not None and r.get("lon") is not None
                     and s <= r["lat"] <= n and w <= r["lon"] <= e]
         total = len(rows)
         if limit > 0:
