@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import gzip
+import hashlib
 import json
 import math
 import queue
@@ -2449,7 +2450,20 @@ async def get_missing(request: web.Request) -> web.Response:
         out.append({**st, "cell": meta.get("cell", ""),
                     "flagged": int(meta.get("flagged", 0))})
     out.sort(key=lambda s: s["last_seen"])
-    return web.json_response({"missing": out})
+    # Measured 2026-08-15: 135 KB, seven times in two minutes, every one a full
+    # body, because this endpoint had no validator at all while /api/stations
+    # beside it answered 14 of 19 polls with a 304. The list changes only when
+    # a station is flagged or comes back — minutes apart — so almost every poll
+    # can be free. Hashing the built payload is the honest validator here: it
+    # cannot go stale or claim a match that is not one, and at this size it
+    # costs well under a millisecond.
+    body = json.dumps({"missing": out}, separators=(",", ":"))
+    etag = '"' + hashlib.sha1(body.encode("utf-8")).hexdigest()[:24] + '"'
+    if request.headers.get("If-None-Match") == etag:
+        return web.Response(status=304, headers={"ETag": etag})
+    return web.Response(body=body.encode("utf-8"),
+                        content_type="application/json",
+                        headers={"ETag": etag})
 
 
 @routes.get("/api/prop")

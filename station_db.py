@@ -1128,7 +1128,12 @@ class StationDB:
     _SLIM_FIELDS = (
         "callsign", "type", "icon", "symbol", "symbol_table",
         "symbol_overlay", "city", "district", "locator", "lat", "lon",
-        "freq_mhz", "ai_org", "online", "last_seen", "last_seen_ago_s",
+        "freq_mhz", "ai_org", "online", "last_seen",
+        # last_seen_ago_s is deliberately NOT here: it is last_seen subtracted
+        # from now, and it cost 83 KB of a 1.24 MB response to send a number
+        # the client can work out from the field beside it. to_dict() still
+        # carries it, so the single-station endpoint and the desktop GUI are
+        # unaffected.
         "self_beacon",
     )
 

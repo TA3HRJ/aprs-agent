@@ -1382,6 +1382,16 @@ async function pollSilence(){
   try{const s=await api('GET','/api/silence');renderSilence(s.cells||[],s)}catch(e){}
   try{const m=await api('GET','/api/missing');renderMissing(m.missing||[])}catch(e){}
 }
+// The slim station list no longer carries last_seen_ago_s — it is last_seen
+// subtracted from now, and sending both cost 83 KB of every 1.24 MB response.
+// Written to accept either shape: the single-station endpoint and the desktop
+// GUI still get the field from to_dict(), and a cached page from before this
+// change keeps working rather than showing blanks.
+function agoOf(r){
+  if(r.last_seen_ago_s!==null&&r.last_seen_ago_s!==undefined)return r.last_seen_ago_s;
+  if(r.last_seen)return Math.max(0,Math.floor(Date.now()/1000-r.last_seen));
+  return null;
+}
 function fmtAgoLong(s){if(s===null||s===undefined)return'—';if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';const h=Math.floor(s/3600);return h+'h '+String(Math.floor(s%3600/60)).padStart(2,'0')+'m'}
 function fmtFreq(f){if(!f&&f!==0)return'';return parseFloat(f).toFixed(4)}
 function dotClass(r){if(r.online===null||r.online===undefined)return'db';if(r.online)return'on';return'off'}
@@ -1445,8 +1455,9 @@ function mapPopup(r){
   h+='<br>'+r.type;
   if(loc)h+=' &middot; '+loc;
   if(r.freq_mhz)h+='<br>'+fmtFreq(r.freq_mhz)+' MHz';
-  if(r.last_seen_ago_s!==null&&r.last_seen_ago_s!==undefined)
-    h+='<br><span style="opacity:.7">'+fmtAgoLong(r.last_seen_ago_s)+'</span>';
+  const _ago=agoOf(r);
+  if(_ago!==null)
+    h+='<br><span style="opacity:.7">'+fmtAgoLong(_ago)+'</span>';
   return h;
 }
 function mapDetail(cs){const r=staData.find(x=>x.callsign===cs)||(vpData||[]).find(x=>x.callsign===cs)||{callsign:cs};showDetail(r)}
@@ -2405,7 +2416,7 @@ function renderStations(){
       '<td class="s-org">'+esc(r.ai_org||'')+'</td>'+
       '<td class="s-freq">'+(fmtFreq(r.freq_mhz)||'')+'</td>'+
       '<td><span class="s-dot '+dc+'"></span></td>'+
-      '<td class="s-ago">'+fmtAgoLong(r.last_seen_ago_s)+'</td>';
+      '<td class="s-ago">'+fmtAgoLong(agoOf(r))+'</td>';
     tr.onclick=()=>showDetail(r);
     body.appendChild(tr);
   }
@@ -2459,7 +2470,7 @@ async function showDetail(r){
   $('sd-body').innerHTML=html;
   const dc=dotClass(r);
   const statusText=dc==='on'?t('sta_online'):dc==='off'?t('sta_offline'):t('sta_db_only');
-  $('sd-sub').innerHTML='<span class="s-dot '+dc+'" style="margin-right:4px"></span>'+statusText+(r.last_seen_ago_s!==null?' · '+fmtAgoLong(r.last_seen_ago_s)+' ago':'');
+  $('sd-sub').innerHTML='<span class="s-dot '+dc+'" style="margin-right:4px"></span>'+statusText+(agoOf(r)!==null?' · '+fmtAgoLong(agoOf(r))+' ago':'');
   $('sta-modal').hidden=false;
 }
 function closeDetail(){$('sta-modal').hidden=true}

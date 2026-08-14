@@ -28,7 +28,6 @@ import asyncio
 import json
 import urllib.request
 import urllib.error
-import time
 from typing import Optional
 
 import aprslib
