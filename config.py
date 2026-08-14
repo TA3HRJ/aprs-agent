@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.36"
+VERSION = "3.2.37"
 
 # ── Secret handling for the HTTP API ────────────────────────────────────────
 # print_config()'s masking below is for human eyes: it keeps the first and last
@@ -246,6 +246,16 @@ DEFAULTS: dict[str, Any] = {
             "extra_sms": 0,
             "whitelist_enabled": False,
             "whitelist": [],
+            # Per-sender token bucket. Defaults match the extension's own, so
+            # a config written from the UI cannot quietly disable a limiter
+            # that was in force a moment earlier.
+            "rate_burst": 4,
+            "rate_refill_s": 180,
+            # Whole-instance ceiling per UTC day. 0 = none, which is what an
+            # open gateway on somebody's own hardware usually wants; it exists
+            # because per-sender limits do nothing against many strangers
+            # asking once each.
+            "daily_limit": 0,
         },
         "imap": {
             "enabled": False,

@@ -524,6 +524,9 @@ body.public .sb-toggle{display:none!important}
   <div class="slider-row"><label data-i="ai_extra_sms">Extra SMS Parts</label><div class="slider-inner"><input id="f-ai-extra-sms" type="range" min="0" max="5" value="0" oninput="$('ai-sms-val').textContent=this.value==0?'Off':this.value+' extra'"><span class="val" id="ai-sms-val">Off</span></div></div>
   <div class="action-row"><div class="content"><div class="title" data-i="ai_wl_enabled">Whitelist</div><div class="subtitle" data-i="ai_wl_sub">Only respond to listed callsigns</div></div><label class="adw-switch"><input type="checkbox" id="f-ai-wl-enabled"><span></span></label></div>
   <div class="entry-row"><label data-i="ai_whitelist">Allowed Callsigns</label><input id="f-ai-whitelist" type="text" placeholder="TA3HRJ, TA3*"><div class="hint" data-i="ai_whitelist_hint">Wildcards OK</div></div>
+  <div class="entry-row"><label data-i="ai_rate_burst">Questions in a row</label><input id="f-ai-rate-burst" type="number" min="0" max="50" style="max-width:110px"><div class="hint" data-i="ai_rate_burst_hint">How many a sender may ask back to back before being asked to wait. 0 = no limit</div></div>
+  <div class="entry-row"><label data-i="ai_rate_refill">Refill (seconds)</label><input id="f-ai-rate-refill" type="number" min="0" max="86400" style="max-width:110px"><div class="hint" data-i="ai_rate_refill_hint">One more question per this many seconds, back up to the burst once idle. 0 = no limit</div></div>
+  <div class="entry-row"><label data-i="ai_daily_limit">Daily ceiling</label><input id="f-ai-daily-limit" type="number" min="0" max="100000" style="max-width:110px"><div class="hint" data-i="ai_daily_limit_hint">Total questions answered per day across ALL senders. 0 = no ceiling. Per-sender limits do not protect you from many strangers asking once each</div></div>
 </div></div>
 
 <!-- EMAIL -->
@@ -855,6 +858,9 @@ const S={en:{
   ai_model:"Model",ai_model_hint:"Leave empty for provider default",ai_system_prompt:"System Prompt",ai_trigger_prefix:"Trigger Prefix",ai_trigger_prefix_hint:"Only messages starting with this prefix trigger AI",
   ai_trigger_aliases:"Trigger Aliases",ai_trigger_aliases_hint:"Extra APRS addressees, comma-separated",ai_extra_sms:"Extra SMS Parts",
   ai_wl_enabled:"Whitelist",ai_wl_sub:"Only respond to listed callsigns",ai_whitelist:"Allowed Callsigns",ai_whitelist_hint:"Wildcards OK",
+  ai_rate_burst:"Questions in a row",ai_rate_burst_hint:"How many a sender may ask back to back before being asked to wait. 0 = no limit",
+  ai_rate_refill:"Refill (seconds)",ai_rate_refill_hint:"One more question per this many seconds, back up to the burst once idle. 0 = no limit",
+  ai_daily_limit:"Daily ceiling",ai_daily_limit_hint:"Total questions answered per day across ALL senders. 0 = no ceiling. Per-sender limits do not protect you from many strangers asking once each",
   email_send_title:"Send — Radio → Email (SMTP)",email_recv_title:"Receive — Email → Radio (IMAP)",
   smtp_enabled:"SMTP Send",smtp_server:"SMTP Server",smtp_user:"Username",smtp_pass:"Password",smtp_senders:"Allowed APRS senders",smtp_recip:"Allowed APRS recipients",
   smtp_emails:"Allowed destination emails",smtp_emails_hint:"Comma-separated, empty = allow all",smtp_from:"From address",
@@ -993,6 +999,9 @@ const S={en:{
   ai_model:"Model",ai_model_hint:"Varsayılan için boş bırakın",ai_system_prompt:"Sistem Promptu",ai_trigger_prefix:"Tetikleme Ön Eki",ai_trigger_prefix_hint:"Sadece bu ön ekle başlayanlar AI'ı tetikler",
   ai_trigger_aliases:"Tetikleme Takma Adları",ai_trigger_aliases_hint:"Ek APRS alıcı adları, virgülle ayır",ai_extra_sms:"Ek SMS Parçası",
   ai_wl_enabled:"Whitelist",ai_wl_sub:"Sadece listedeki çağrı işaretlerine yanıt ver",ai_whitelist:"İzin Verilen Çağrı İşaretleri",ai_whitelist_hint:"Joker karakter OK",
+  ai_rate_burst:"Art arda soru",ai_rate_burst_hint:"Bir gönderenin beklemesi istenmeden art arda sorabileceği soru sayısı. 0 = sınırsız",
+  ai_rate_refill:"Dolum (saniye)",ai_rate_refill_hint:"Bu kadar saniyede bir soru hakkı geri gelir; boşta kaldıkça tekrar tam sayıya çıkar. 0 = sınırsız",
+  ai_daily_limit:"Günlük tavan",ai_daily_limit_hint:"TÜM gönderenler için günde yanıtlanan toplam soru. 0 = tavan yok. Kişi başı sınır, çok sayıda yabancının birer soru sormasına karşı korumaz",
   email_send_title:"Gönder — Telsiz → E-Posta (SMTP)",email_recv_title:"Al — E-Posta → Telsiz (IMAP)",
   smtp_enabled:"SMTP Gönder",smtp_server:"SMTP Sunucusu",smtp_user:"Kullanıcı adı",smtp_pass:"Şifre",smtp_senders:"İzin verilen APRS göndericileri",smtp_recip:"İzin verilen APRS alıcıları",
   smtp_emails:"İzin verilen hedef e-postalar",smtp_emails_hint:"Virgülle ayır, boş = hepsi",smtp_from:"Gönderen adresi",
@@ -1206,12 +1215,28 @@ function loadCfg(cfg){
   $('f-ai-base-url').value=ai.base_url||'';$('f-ai-model').value=ai.model||'';$('f-ai-system-prompt').value=ai.system_prompt||'';
   $('f-ai-trigger-prefix').value=ai.trigger_prefix||'';$('f-ai-trigger-aliases').value=csv(ai.trigger_aliases);$('f-ai-extra-sms').value=ai.extra_sms||0;
   $('ai-sms-val').textContent=(ai.extra_sms||0)==0?'Off':ai.extra_sms+' extra';$('f-ai-wl-enabled').checked=ai.whitelist_enabled||false;$('f-ai-whitelist').value=csv(ai.whitelist);
+  // Absent in the config means the extension's own defaults are in force, so
+  // the fields must show those numbers rather than a blank or a zero — a zero
+  // here means "no limit", and showing it for "not configured" would tell the
+  // operator the gateway is unlimited when it is not.
+  $('f-ai-rate-burst').value=(ai.rate_burst===undefined||ai.rate_burst===null)?4:ai.rate_burst;
+  $('f-ai-rate-refill').value=(ai.rate_refill_s===undefined||ai.rate_refill_s===null)?180:ai.rate_refill_s;
+  $('f-ai-daily-limit').value=ai.daily_limit||0;
   const im=(cfg.extensions||{}).imap||{};$('f-imap-enabled').checked=im.enabled||false;$('f-imap-server').value=im.imap_server||'';$('f-imap-user').value=im.imap_username||'';
   $('f-imap-pass').value=im.imap_password||'';$('f-imap-interval').value=im.poll_interval_mins||5;$('f-imap-from').value=im.from_callsign||'';$('f-imap-allowed').value=csv(im.allowed_senders);
   const sm=(cfg.extensions||{}).smtp||{};$('f-smtp-enabled').checked=sm.enabled||false;$('f-smtp-server').value=sm.smtp_server||'';$('f-smtp-user').value=sm.smtp_username||'';
   $('f-smtp-pass').value=sm.smtp_password||'';$('f-smtp-senders').value=csv(sm.allowed_senders);$('f-smtp-recip').value=csv(sm.allowed_recipients);
   $('f-smtp-emails').value=csv(sm.allowed_receiver_emails);$('f-smtp-from').value=sm.from_email||'';
   const es=cfg.extension_server||{};$('f-ext-enabled').checked=es.enabled||false;$('f-ext-host').value=es.host||'127.0.0.1';$('f-ext-port').value=es.port||65080;
+}
+// A limit is a safety setting, so unreadable input must not weaken it. An
+// explicit 0 means "no limit" and is kept; anything that is not a number at or
+// above zero — a cleared box, a stray minus, pasted text — falls back to the
+// default rather than to 0. Same trap as an empty whitelist meaning "everyone":
+// a typo should never quietly open something.
+function numOr(v,dflt){
+  const n=parseInt(String(v).trim(),10);
+  return (Number.isFinite(n)&&n>=0)?n:dflt;
 }
 function getCfg(){return{
   server:$('f-server').value.trim(),port:parseInt($('f-port').value)||14580,callsign:$('f-callsign').value.trim().toUpperCase(),
@@ -1234,7 +1259,10 @@ function getCfg(){return{
       return {enabled:$('f-ai-enabled').checked,callsign:$('f-ai-callsign').value.trim().toUpperCase(),provider:$('f-ai-provider').value,
         api_key:curKey,   // legacy mirror of the active provider's key — older code paths still work
         api_keys:Object.assign({},aiKeysByProvider),
-        base_url:$('f-ai-base-url').value.trim(),model:$('f-ai-model').value.trim(),system_prompt:$('f-ai-system-prompt').value,trigger_prefix:$('f-ai-trigger-prefix').value.trim(),trigger_aliases:lst($('f-ai-trigger-aliases').value),extra_sms:parseInt($('f-ai-extra-sms').value)||0,whitelist_enabled:$('f-ai-wl-enabled').checked,whitelist:lst($('f-ai-whitelist').value)};
+        base_url:$('f-ai-base-url').value.trim(),model:$('f-ai-model').value.trim(),system_prompt:$('f-ai-system-prompt').value,trigger_prefix:$('f-ai-trigger-prefix').value.trim(),trigger_aliases:lst($('f-ai-trigger-aliases').value),extra_sms:parseInt($('f-ai-extra-sms').value)||0,whitelist_enabled:$('f-ai-wl-enabled').checked,whitelist:lst($('f-ai-whitelist').value),
+        rate_burst:numOr($('f-ai-rate-burst').value,4),
+        rate_refill_s:numOr($('f-ai-rate-refill').value,180),
+        daily_limit:numOr($('f-ai-daily-limit').value,0)};
     })(),
     imap:{enabled:$('f-imap-enabled').checked,imap_server:$('f-imap-server').value.trim(),imap_username:$('f-imap-user').value.trim(),imap_password:$('f-imap-pass').value,poll_interval_mins:parseInt($('f-imap-interval').value)||5,from_callsign:$('f-imap-from').value.trim().toUpperCase(),allowed_senders:lst($('f-imap-allowed').value)},
     smtp:{enabled:$('f-smtp-enabled').checked,smtp_server:$('f-smtp-server').value.trim(),smtp_username:$('f-smtp-user').value.trim(),smtp_password:$('f-smtp-pass').value,allowed_senders:lst($('f-smtp-senders').value),allowed_recipients:lst($('f-smtp-recip').value),allowed_receiver_emails:lst($('f-smtp-emails').value),from_email:$('f-smtp-from').value.trim()},
