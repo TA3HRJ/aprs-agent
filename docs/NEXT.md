@@ -9,40 +9,45 @@ what merely under-informs them.**
 
 ---
 
-## OPEN RIGHT NOW — 2026-08-14 morning, mid-session
+## OPEN RIGHT NOW — 2026-08-14 afternoon
 
-**Deployed: v3.2.22.** Everything below is either undone or sitting in the
-working tree. Written down because a fresh session would otherwise find
-modified files with no explanation.
+**Deployed: v3.2.24.** The working tree is clean and the release is verified on
+the server.
 
-### ✅ Closed since this section was written — v3.2.23
+### ✅ Closed — v3.2.24
 
-The working tree is clean again; both items below shipped and were verified.
+- **F-34 — the feed had no liveness check.** `readline()` now has a 120 s
+  deadline, logs when it fires, and reconnects. Verified against a socket that
+  accepts and then says nothing: the loop returns at the deadline and logs;
+  with keepalives flowing it never fires.
+- **F-35 — a deaf feed read as "nothing is silent anywhere".** Deaf is a state
+  now (`StationDB.deaf_since()`). The monitor loop holds every episode instead
+  of retracting it, the cached cells are held rather than overwritten,
+  `/api/silence` carries `deaf`/`deaf_since`, the evidence endpoint answers
+  **503 naming the feed** instead of 404 naming the cell, and the page shows a
+  bar. Verified end-to-end through the real handlers with the feed clock moved
+  back 729 s.
+- **F-36 — the cache floor.** 2.0 s → 10 s, and an empty result is now cached.
+  **Partial:** median 0.101 s and 7-in-90 over half a second, against ~1-in-5
+  before — but a 7.85 s outlier remains and did not reproduce on demand. See
+  the measured block under F-36 in [FINDINGS.md](FINDINGS.md).
+- **F-33 — `suspect_position`.** Cells carry how many of their silent stations
+  beacon a US callsign from an eastern longitude on hotspot firmware. Live:
+  7 cells of 2,125 carry it, **5 of them entirely** — NM58 reads 3 of 3.
+  Flagged in the popup, in both languages, and in the bundle's caveats.
 
-- **Security: `esc()` used in attribute positions (F-32).** Four sinks, all
-  fixed — three `title`/`href` sites moved to a new `escA()`, and the map popup
-  stopped generating JavaScript from packet data entirely (delegated click on a
-  `data-cs` attribute). Verified with a real `a"'<b>cde` object name and with
-  `onmouseover` payloads driven through the actual functions, not source reads.
-  A fifth `title="'+ti+'"` was checked and cleared — i18n only.
-- **The `(cell, ts)` index.** Shipped, and a disappointment worth recording:
-  **110.7 ms → 89.7 ms, 1.2×** on 80 000 synthetic rows. Kept because it is
-  free and the plan confirms a covering index, but it does **not** explain the
-  slowness it was meant to explain.
+### ⏱ Still unexplained: the rebuild that costs eight seconds
 
-### ⏱ Still unexplained: the evidence endpoint's slowness
+Three hypotheses are now retired — `COUNT(DISTINCT ts)`, the unindexed `cell`
+scans, and the cache window. The window was real and shipped; it did not take
+the tail with it.
 
-Measured live at **1.7 s**, and once past **20 s** (the F-19 deadline fired).
-Two hypotheses have now been wrong:
-
-1. My own `COUNT(DISTINCT ts)` — it can use the primary key. No.
-2. The four unindexed `WHERE cell = ?` scans — 1.2× when indexed. Not enough.
-
-**Where to look next, on the server rather than in a harness:** the registry
-walk behind `silence_cells_cached` (0.3–0.9 s at 165k stations) and what
-happens on a cache miss when several callers arrive together. Measure before
-changing anything — this is the third hypothesis and the first two cost a
-release each.
+What is established: the walk runs about a fifth as often, and the common case
+is sub-quarter-second. What is not: why an occasional rebuild costs eight
+seconds where the next one costs 0.086 s. The server has other pollers keeping
+the cache warm, so a request's starting state cannot be controlled from
+outside — any fourth hypothesis needs instrumentation inside the build, not
+another probe from the edge.
 
 ### Open questions, no code yet
 

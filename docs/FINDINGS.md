@@ -251,6 +251,31 @@ costs a full walk.
 **Fix:** raise the floor — ten seconds is far more than the map needs — and
 cache an empty result like any other.
 
+**Measured after v3.2.24 shipped, and it is a partial result.** Same probe,
+same server, 90 samples at 1 Hz against 2,125 cells:
+
+| | before (v3.2.23) | after (v3.2.24) |
+|---|---|---|
+| median | ~0.15 s | **0.101 s** |
+| p90 | — | **0.265 s** |
+| over 0.5 s | ~1 in 5 | **7 in 90** |
+| max | 2.4 s | **7.85 s** |
+
+The frequency of the walk fell by roughly the factor the floor predicts, and
+the common case is now firmly sub-quarter-second. **The tail did not go away**,
+and one sample at 7.85 s is worse than anything seen before the change.
+
+It was the *first* sample of two consecutive probes, which looked like a
+cold-cache cost — and then it refused to reproduce: a deliberate 150 s idle
+followed by a cold request measured 2.0 s, and the rebuild after it 0.086 s.
+The server has other pollers (both map views) keeping the cache warm, so the
+state at the moment of any given request is not controllable from outside.
+
+**Recorded as open, not chased.** What is established is that the walk now runs
+about a fifth as often; what is not established is what makes an occasional
+rebuild cost eight seconds instead of one. That is a fourth hypothesis waiting
+to be formed, and this endpoint has already retired three.
+
 ### F-2026-08-14-35 — the deaf guard is right, and invisible
 **Source:** operator, "copy still doesn't work" · **Verdict:** our fault
 
