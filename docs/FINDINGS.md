@@ -2295,6 +2295,68 @@ silent" can be one igate or one power strip. There are now 14 days of
 
 ---
 
+### F-2026-08-16-01 — the bundle's gate baseline is created by the event it is used to judge
+
+An outside reading of `EA5URX-7 ⇄ EA5JFX-10` (538.2 km) reasoned carefully and
+reached a confident verdict from numbers the link itself had written.
+
+The popup said **5382.0× its usual reach**. The bundle in the same request said
+the gate's mean was 27.0 km, σ 120.3, threshold 508.3 — so the reader concluded
+"exceeds the gate-specific threshold by 6%, very strongly anomalous, 99%".
+538.2 / 27.0 is 19.9, not 5382. Two numbers, one system, no way to tell which
+is the baseline.
+
+Asking the live API settled it in one read:
+
+| | samples | mean | threshold |
+|---|---|---|---|
+| `at_flag` — what the decision used | **40** | 0.1 km | not carried |
+| `gate_baseline` — what the bundle published | **41** | 27.0 km | 508.3 km |
+
+**41 = 40 + 1, and the extra sample is this link.** The EMA confirms it exactly:
+`0.95 × 0.1 + 0.05 × 538.2 = 27.0`. The baseline offered as "this gate's own
+history" did not exist until the event arrived, and the threshold it implies
+was manufactured by the thing being measured. The reader was not careless; the
+file handed it a circle.
+
+**Two faults, both the file's.**
+
+**a. `gate_baseline` is read at export time.** This is F-2026-08-13's problem
+in a second path. The *link* record was given `at_flag` so its baseline would
+be the flag-time one; the evidence bundle's `gate_baseline` block was left
+reading live and nobody checked it. A fix applied to one route is not a fix.
+
+**b. "N× its usual reach" divides by a number that hugs zero.** The denominator
+is an EMA (α = 0.05) of the gate's link distances. A gate that mostly hears
+stations beside it sits at ~0.1 km, so any real link yields a four-digit
+multiplier. 5382× measures how near zero the denominator is, not how unusual
+the link is — the neighbouring gate `EA5CKO-10`, ema 0.2, would have shown
+2696× for the same 539 km. **Two adjacent gates, one event, a factor of two
+between the headlines.**
+
+There is a third, quieter consequence. The flag test is
+`max(3 × mean, mean + 4σ)`; on a near-zero mean the σ term decides, and σ is an
+EMA of squared deviations, equally contaminated. `at_flag` carries neither σ nor
+the threshold, so the bundle **cannot** show what the decision actually compared
+against, only what the numbers became afterwards.
+
+| change |
+|---|
+| `at_flag` carries σ and the threshold as well — the decision's full triple |
+| `gate_baseline` reports the flag-time state, or is renamed to say plainly that it is the after state and the flag-time one is printed beside it |
+| the popup's multiplier is taken against the **threshold**, not the EMA: *"1.06× the threshold it had to beat"*. A threshold denominator cannot approach zero, and the figure becomes comparable between gates |
+
+The third item was proposed a day earlier on aesthetic grounds — that offering
+the mean-ratio prominently and the threshold as a bare number anchors readers on
+the more dramatic framing. It now has a measured defect behind it rather than a
+preference.
+
+**Not the model's fault.** It separated anomalous / opening / proven-path
+correctly, labelled the physical path unverified, and only trusted the one
+number the file presented as authoritative.
+
+---
+
 ## Closed
 
 ### F-2026-08-12-05 — a bundle with no history invites an invented history

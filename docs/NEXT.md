@@ -381,14 +381,23 @@ that has been waiting since July.
 | finding | change |
 |---|---|
 | **F-16** | record the gate's `samples`, `mean`, `sigma` and threshold **as they stood at flag time**, on the link. Show both that and the current baseline |
+| **F-2026-08-16-01** | **first, and it is half of F-16 done badly.** `at_flag` shipped in v3.2.34 carrying only `samples` and `ema_km`, and the bundle's `gate_baseline` block was left reading live — so the published baseline is the post-event one. Measured: `at_flag` 40 samples / 0.1 km, `gate_baseline` 41 samples / 27.0 km / threshold 508.3, where the extra sample **is the link being judged** and `0.95 × 0.1 + 0.05 × 538.2 = 27.0` exactly. Add σ and the threshold to `at_flag`; make `gate_baseline` either flag-time or plainly named as the after state |
+| **F-2026-08-16-01b** | the popup's multiplier divides by the EMA, which hugs zero on gates that mostly hear stations beside them — one link read **5382× its usual reach** where the ratio to the mean is 19.9, and the gate next door would have said 2696× for the same distance. Take the multiplier against the **threshold** instead: it cannot approach zero and it is comparable between gates |
 | **F-03** | with that field recorded, count how many of the anomalies came from gates below the 20-sample threshold. Then decide whether the absolute-floor branch is producing signal or noise — with numbers, not judgement |
 | ~~**F-02**~~ | ~~say plainly that mean and sigma are not meaningful yet~~ — **closed by F-24 in v3.2.15**, which removed the fields rather than annotating them |
 | **F-09** | replace `opening: null` with three states — a recorded event exists / the rule is met right now but nothing was written / genuinely one sender. Add the live field context (other anomalous links and distinct senders in the same field) and the repeat count for this sender→gate pair |
 | **F-22** | group openings by **receiving gate** as well as by midpoint field. The current rule cannot see the strongest evidence there is — one gate hearing several distant unrelated senders — and the operator has already run this grouping by hand once, which is how the finding was found |
 | **F-23** | carry the gate's anomalous fraction. A gate with four anomalies in six measured links is a candidate for being misplaced, and reads today as four separate discoveries |
 
-**Order inside B:** F-16 first — it is one field, and F-03 leans on it. F-09,
-F-22 and F-23 are independent of it.
+**Order inside B:** F-2026-08-16-01 first, then the rest of F-16 — they are the
+same field, and the 16th's fix was applied to one of the two routes that read
+it. F-03 leans on both. F-09, F-22 and F-23 are independent.
+
+**Why this one goes to the front:** every other item in B makes the bundle say
+*more*. This one stops it saying something false — it currently offers, as the
+gate's own history, a number the event itself wrote. An outside reader used it
+to compute a threshold and a margin, correctly, and reached a confident verdict
+from a circle. Fix what misinforms before what under-informs.
 
 **F-22 and F-23 must ship together.** Grouping by receiving gate is right, but
 a misplaced gate would then manufacture apparent openings from everything it
@@ -406,7 +415,9 @@ opening? The gap between those two numbers is the size of the finding.
 
 **Verify:** a link whose printed baseline says it should not have been flagged
 must also carry the baseline that did flag it, and the two must differ in the
-direction the caveat describes.
+direction the caveat describes. Additionally: `gate_baseline.samples` must never
+exceed `at_flag.samples`, and no published multiplier may have a denominator
+below the 300 km floor.
 
 **Note:** F-03's measurement needs a few days of data after the field ships.
 That waiting period is the reason to start B soon even though A matters more.
