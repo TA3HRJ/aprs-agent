@@ -469,3 +469,40 @@ good outcome to have on record.
   it measured, or stop producing prose at all and emit structured claims the
   interface renders. That is a design decision, and it belongs to the operator,
   not to me.
+
+---
+
+## E · "Stations" in the stat bar counts the session — 2026-08-15
+
+The Web GUI's stat bar labels the run counter as **Stations**. It starts at
+zero on every restart, so twenty seconds after a deploy the interface tells a
+visitor the network holds 1,641 stations, and four hours later it says 40,000
+— while the registry has held ~173,000 the whole time. Nothing about the label
+says which of those two numbers it is.
+
+This was caught twice from opposite directions on the same day.
+
+The first was `/api/counters`, written for the landing page. Its first version
+reported the same run counter under the same name; measured 26 seconds after a
+deploy it read **1,641 against a registry of 173,659** — a factor of 90. Fixed
+before it shipped (v3.2.51): `stations` is the registry, and the run counters
+stay as `heard_this_run` / `calls_this_run`, named for what they are.
+
+The second was the landing page's own screenshot. The crop happened to place
+the app's stat bar — *37,717 Stations* — directly above the page's registry
+count of *173,754 stations on record*. Same word, two numbers, four lines
+apart. The screenshot was re-cropped; the interface was not.
+
+So the fault is the map's cluster-badge fault again, one layer up: **a number
+that describes how recently the process restarted, presented as a description
+of the network.** It has now been found in the badges, in a new API, and in
+the stat bar. Worth assuming there is a fourth.
+
+| change |
+|---|
+| relabel the stat-bar figure as **Heard (session)** / **Duyulan (oturum)**, or show the registry total beside it |
+| whichever is chosen, the i18n strings and the public page's copy of the bar both need it |
+
+Small and self-contained. The reason it is written down rather than done is
+that the *right* answer may be to show both numbers, and that is a layout
+decision on a bar that is already full.
