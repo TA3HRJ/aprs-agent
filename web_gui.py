@@ -1960,6 +1960,7 @@ async def info(request: web.Request) -> web.Response:
         "callsign": cfg.get("callsign", ""),
         "public_title": cfg.get("public_title", ""),
         "public_subtitle": cfg.get("public_subtitle", ""),
+        "public_home_url": cfg.get("public_home_url", ""),
         # Which modules are actually doing something right now — none of
         # this is sensitive (no keys/paths), so it's exposed on the public
         # app too. Kept separate from the "Running" action bar, which the
@@ -2040,7 +2041,11 @@ async def save_config(request: web.Request) -> web.Response:
         data = await request.json()
         # Fields the operator did not retype come back as the mask; restore
         # them from the file instead of writing asterisks over real keys.
-        data = cfg_module.unmask_secrets(data, mgr.get_config())
+        current = mgr.get_config()
+        data = cfg_module.unmask_secrets(data, current)
+        # The form posts what it renders, not the whole file — see
+        # config.apply_partial for what writing it straight out cost.
+        data = cfg_module.apply_partial(current, data)
         mgr.save_config(data)
         return web.json_response({"ok": True})
     except Exception as e:

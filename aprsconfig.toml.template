@@ -69,6 +69,9 @@ public_port = 0
 #   public_subtitle = "Live view of the APRS network"
 public_title = ""
 public_subtitle = ""
+# Optional "Home" link in the public header, e.g. "https://example.org/"
+# Empty = no link shown.
+public_home_url = ""
 
 
 # =============================================================================

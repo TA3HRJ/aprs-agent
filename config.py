@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.54"
+VERSION = "3.2.55"
 
 # ── Secret handling for the HTTP API ────────────────────────────────────────
 # print_config()'s masking below is for human eyes: it keeps the first and last
@@ -133,6 +133,10 @@ DEFAULTS: dict[str, Any] = {
     # Identity shown in the public page header (empty = generic defaults)
     "public_title": "",
     "public_subtitle": "",
+    # Optional "Home" link in the public header — a project site the map
+    # belongs to. Empty = no link, which is the right default: this page is
+    # often the only thing an operator publishes.
+    "public_home_url": "",
     "monitor": {
         "enabled": False,
         "watch_callsigns": [],
@@ -307,6 +311,22 @@ def strip_ssid(callsign: str) -> str:
     Used by calculate_passcode() and the Twitter/SMTP extensions.
     """
     return callsign.split("-")[0]
+
+
+def apply_partial(stored: dict, incoming: dict) -> dict:
+    """Overlay a partial config onto the stored one.
+
+    The Web GUI's settings form posts the fields it renders, which is not the
+    whole file. Writing that dict straight out silently reverted every key the
+    form has no widget for — public_title vanished from a live deployment this
+    way, and the page went back to appending a callsign nobody had asked it to
+    show. A form that shows part of the config must be allowed to save part of
+    the config.
+
+    Keys present in `incoming` win, including deliberately emptied ones. Keys
+    absent from it keep whatever is on disk.
+    """
+    return _deep_merge(stored, incoming)
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
