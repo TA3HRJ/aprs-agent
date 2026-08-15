@@ -366,8 +366,8 @@ class AIGateway(Extension):
             aliases.add(a.upper())
         aliases.discard("")
 
-        # An addressee carries an SSID as often as not, and DMWGPT-1 is the
-        # same service as DMWGPT — those messages used to fall through in
+        # An addressee carries an SSID as often as not, and MYBOT-1 is the
+        # same service as MYBOT — those messages used to fall through in
         # silence. The sender is already compared SSID-free just below.
         if recipient not in aliases and strip_ssid(recipient) not in {
                 strip_ssid(a) for a in aliases}:

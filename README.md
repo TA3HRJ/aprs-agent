@@ -314,6 +314,21 @@ base_url       = ""                   # leave empty for built-in providers
 model          = ""                   # leave empty to use provider default
 system_prompt  = ""                   # optional: custom system prompt
 trigger_prefix = ""                   # optional: only respond if message starts with this
+
+# Extra addressees this gateway also answers to, on top of "callsign" above.
+# The APRS addressee field is a fixed 9 characters either way, so a short alias
+# saves nothing on air — what it saves is key presses on a handheld keypad,
+# where a digit costs four presses and a letter often costs one.
+# Both the callsign and every alias are matched with the SSID ignored, so
+# MYBOT-1 reaches the same gateway as MYBOT.
+#
+# Leave this EMPTY unless you mean it. APRS-IS is one worldwide feed: an
+# addressee is not yours, it is first-come and unenforced. Pick something
+# nobody else would plausibly choose, and never publish a name you did not
+# pick yourself — two gateways answering the same addressee means a stranger's
+# question gets two answers, and neither operator can tell it is happening.
+trigger_aliases = []                  # e.g. ["MYBOT"] — see the warning above
+
 extra_sms      = 1                    # 0 = single 64-char reply, 1–5 = multi-part
 whitelist_enabled = false
 whitelist      = []                   # callsigns allowed to use AI (wildcards OK: TA1*)
