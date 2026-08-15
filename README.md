@@ -312,6 +312,19 @@ max_batch      = 20     # max stations analysed per run
 ### AI Gateway
 
 Auto-responds to incoming APRS messages using AI. Free providers available.
+
+> **⚠️ Everything that passes through this is public.**
+> Amateur radio is conducted in the clear; encoding a transmission to obscure
+> its meaning is not permitted (ITU Radio Regulations, Article 25, which governs
+> the amateur service). Both the incoming question and the reply go out in the
+> clear over RF and onto the internet through APRS-IS, and sites like aprs.fi
+> aggregate that traffic, keep it searchable and retain it for years. If you run
+> a gateway, that applies to **everyone who writes to it**, not only to you —
+> tell them so where they will see it.
+>
+> Answers can be wrong; a language model can be confidently mistaken. APRS
+> guarantees no delivery, so this is not an emergency tool. APRS-IS is for
+> licensed amateur radio operators.
 Bidirectional design follows [aprs-ai-gateway](https://github.com/ArdaYalinOzkan/aprs-ai-gateway) by TA3EKM — the contribution that made an APRS station able to answer rather than only report.
 
 ```toml
