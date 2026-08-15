@@ -152,6 +152,158 @@ def gate_independence(gate_of: dict, calls) -> "tuple[int, int, int]":
     return len(indep), selfed, backbone
 
 
+# ── Callsign region corroboration ──────────────────────────────────────────
+#
+# Six outside readings of propagation bundles agreed on one thing: the third
+# question — is this RF path physically real — could not be answered at all,
+# because both positions are self-reported and nothing in the file corroborated
+# them. Every reading said "unverified" at ~95%, which is correct and useless.
+#
+# A callsign prefix is allocated by country, and an operator's own transmitted
+# position either falls inside that allocation or does not. It is not proof:
+# consistency is weak (an error inside the right country still looks fine), and
+# inconsistency is ambiguous (a wrong position, or an operator away from home).
+# But it is the one independent fact available, and stating it beats leaving the
+# question blank.
+#
+# Measured on 147,307 positioned stations, 2026-08-15: 64% carry a real callsign
+# shape at all — the rest are APRS object and item names, which an earlier
+# version of this judged as if they were callsigns and reported 18% of the
+# world as misplaced. Of the callsign-shaped ones the table recognises 96.6%,
+# and 5.8% of those sit outside their allocation.
+_CALLSIGN_SHAPE = re.compile(r"^[A-Z0-9]{1,2}[0-9][A-Z]{1,4}$")
+
+# prefix -> (name, south, west, north, east). Conservative by design: a country
+# appears only if its allocation is unambiguous and a box means something for
+# it. Anything absent returns "unknown", which is an honest answer where a
+# wrong box would be worse than none.
+_REGIONS = [
+    (r"^(TA|TB|TC|YM)",            "Turkey",         35.5,  25.5,  42.5,  45.0),
+    (r"^(F[0-9]|TM|TK|HW|HX|HY)",  "France",         41.0,  -5.5,  51.5,   9.8),
+    (r"^(D[A-R])",                 "Germany",        47.0,   5.5,  55.2,  15.2),
+    (r"^(EA|EB|EC|ED|EE|EF|EG|EH)","Spain",          35.8, -18.5,  44.0,   4.5),
+    (r"^(I[0-9]|IK|IZ|IW|IU|IT|IR|IQ|IN|IO|II)", "Italy", 35.4, 6.5, 47.1, 18.6),
+    (r"^(G[0-9]|M[0-9]|2E|G[A-Z]|M[A-Z])", "UK",     49.8, -8.7,  61.0,   2.0),
+    (r"^(HB)",                     "Switzerland",    45.8,   5.9,  47.9,  10.5),
+    (r"^(OE)",                     "Austria",        46.3,   9.5,  49.1,  17.2),
+    (r"^(S5)",                     "Slovenia",       45.4,  13.3,  46.9,  16.7),
+    (r"^(SP|SN|SO|SQ|SR|3Z|HF)",   "Poland",         49.0,  14.1,  54.9,  24.2),
+    (r"^(OK|OL)",                  "Czechia",        48.5,  12.0,  51.1,  18.9),
+    (r"^(OM)",                     "Slovakia",       47.7,  16.8,  49.7,  22.6),
+    (r"^(HA|HG)",                  "Hungary",        45.7,  16.1,  48.6,  22.9),
+    (r"^(YO|YP|YQ|YR)",            "Romania",        43.6,  20.2,  48.3,  29.7),
+    (r"^(LZ)",                     "Bulgaria",       41.2,  22.3,  44.3,  28.7),
+    (r"^(SV|SW|SX|SY|SZ|J4)",      "Greece",         34.7,  19.3,  41.8,  29.7),
+    (r"^(9A)",                     "Croatia",        42.3,  13.4,  46.6,  19.5),
+    (r"^(E7)",                     "Bosnia",         42.5,  15.7,  45.3,  19.7),
+    (r"^(YT|YU|YZ)",               "Serbia",         42.2,  18.8,  46.2,  23.1),
+    (r"^(Z3)",                     "North Macedonia",40.8,  20.4,  42.4,  23.1),
+    (r"^(ZA)",                     "Albania",        39.6,  19.2,  42.7,  21.1),
+    (r"^(LA|LB|LC|LN)",            "Norway",         57.9,   4.0,  71.4,  31.2),
+    (r"^(SM|SA|SB|SC|SD|SE|SF|SG|SH|SI|SJ|SK|SL|7S|8S)", "Sweden", 55.3, 10.9, 69.1, 24.2),
+    (r"^(OH|OF|OG|OI)",            "Finland",        59.7,  19.1,  70.1,  31.6),
+    (r"^(OZ|OU|OV|5P|5Q)",         "Denmark",        54.5,   8.0,  57.8,  15.2),
+    (r"^(PA|PB|PC|PD|PE|PF|PG|PH|PI)", "Netherlands",50.7,   3.3,  53.6,   7.3),
+    (r"^(ON|OO|OP|OQ|OR|OS|OT)",   "Belgium",        49.4,   2.5,  51.6,   6.5),
+    (r"^(CT|CQ|CR|CS)",            "Portugal",       36.9, -31.5,  42.2,  -6.1),
+    (r"^(EI|EJ)",                  "Ireland",        51.3, -10.6,  55.5,  -5.9),
+    (r"^(LY)",                     "Lithuania",      53.8,  20.9,  56.5,  26.9),
+    (r"^(YL)",                     "Latvia",         55.6,  20.9,  58.1,  28.3),
+    (r"^(ES)",                     "Estonia",        57.5,  21.7,  59.7,  28.3),
+    (r"^(UR|US|UT|UU|UV|UW|UX|UY|UZ|EM|EN|EO)", "Ukraine", 44.3, 22.1, 52.4, 40.3),
+    (r"^(EU|EV|EW)",               "Belarus",        51.2,  23.1,  56.2,  32.8),
+    (r"^(4X|4Z)",                  "Israel",         29.4,  34.2,  33.4,  35.9),
+    (r"^(5B|C4|P3)",               "Cyprus",         34.5,  32.2,  35.8,  34.7),
+    (r"^(VK)",                     "Australia",     -44.0, 112.0, -10.0, 154.0),
+    (r"^(ZL|ZM)",                  "New Zealand",   -47.5, 166.0, -34.0, 179.0),
+    (r"^(B[A-Z])",                 "China",          17.9,  73.4,  53.6, 134.8),
+    (r"^(BV)",                     "Taiwan",         21.8, 119.3,  25.4, 122.1),
+    (r"^(J[A-S]|7[J-N]|8[J-N])",   "Japan",          24.0, 122.9,  45.6, 146.0),
+    (r"^(HL|DS|DT|6K|6L|6M|6N)",   "South Korea",    33.0, 125.0,  38.7, 129.7),
+    (r"^(9M|9W)",                  "Malaysia",        0.8,  99.6,   7.4, 119.3),
+    (r"^(9V)",                     "Singapore",       1.1, 103.6,   1.5, 104.1),
+    (r"^(HS|E2)",                  "Thailand",        5.6,  97.3,  20.5, 105.7),
+    (r"^(YB|YC|YD|YE|YF|YG|YH|8A|8B|7A|7B)", "Indonesia", -11.1, 95.0, 6.1, 141.1),
+    (r"^(DU|DV|DW|DX|DY|DZ|4D|4E|4F|4G|4H|4I)", "Philippines", 4.6, 116.9, 21.1, 126.6),
+    (r"^(VU|AT|AU|AV|AW)",         "India",           6.7,  68.1,  35.5,  97.4),
+    (r"^(9K)",                     "Kuwait",         28.5,  46.5,  30.1,  48.4),
+    (r"^(A6|A9|A4|A7)",            "Gulf",           22.6,  50.7,  26.6,  59.9),
+    (r"^(ZS|ZR|ZT|ZU)",            "South Africa",  -35.0,  16.4, -22.1,  32.9),
+    (r"^(PY|PP|PQ|PR|PS|PT|PU|PV|PW|ZV|ZW|ZX|ZY|ZZ)", "Brazil", -34.0, -74.0, 5.3, -34.8),
+    (r"^(LU|AY|AZ|L[2-9])",        "Argentina",     -55.1, -73.6, -21.8, -53.6),
+    (r"^(CE|CA|CB|CC|XQ|XR|3G)",   "Chile",         -56.0, -75.7, -17.5, -66.4),
+    (r"^(XE|XF|4A|4B|4C|6D|6E|6F|6G|6H|6I|6J)", "Mexico", 14.5, -118.4, 32.7, -86.7),
+    (r"^(VE|VA|VO|VY|CF|CG|CH|CI|CJ|CK|XJ|XK|XL|XM|XN|XO)", "Canada", 41.6, -141.0, 83.2, -52.6),
+    # United States, mainland only. KH6/KL7 and the other island prefixes are
+    # deliberately absent rather than widening the box to the Pacific, which
+    # would make the test meaningless for the 48 states.
+    (r"^(A[A-L]|[KNW][A-Z]?[0-9])","USA (mainland)", 24.4, -125.0,  49.4,  -66.9),
+    (r"^(R[A-Z]|U[A-I])",          "Russia",         41.1,  19.6,  77.7, 190.0),
+    (r"^(4L)",                     "Georgia",        41.0,  40.0,  43.6,  46.7),
+    (r"^(EK)",                     "Armenia",        38.8,  43.4,  41.3,  46.6),
+    (r"^(EP|EQ)",                  "Iran",           25.0,  44.0,  39.8,  63.3),
+    (r"^(9N)",                     "Nepal",          26.3,  80.0,  30.5,  88.2),
+    (r"^(S2)",                     "Bangladesh",     20.6,  88.0,  26.6,  92.7),
+    (r"^(4S)",                     "Sri Lanka",       5.9,  79.6,   9.9,  81.9),
+    (r"^(HZ|7Z|8Z)",               "Saudi Arabia",   16.3,  34.5,  32.2,  55.7),
+    (r"^(SU)",                     "Egypt",          21.9,  24.7,  31.7,  36.9),
+    (r"^(CN)",                     "Morocco",        27.6, -13.2,  35.9,  -1.0),
+    (r"^(3V|TS)",                  "Tunisia",        30.2,   7.5,  37.5,  11.6),
+    (r"^(5T)",                     "Mauritania",     14.7, -17.1,  27.3,  -4.8),
+    (r"^(TF)",                     "Iceland",        63.2, -24.6,  66.6, -13.5),
+    (r"^(LX)",                     "Luxembourg",     49.4,   5.7,  50.2,   6.5),
+    (r"^(9H)",                     "Malta",          35.8,  14.1,  36.1,  14.6),
+]
+_REGIONS_C = [(re.compile(p), n, s, w, no, e) for p, n, s, w, no, e in _REGIONS]
+
+
+def callsign_region(callsign: str) -> Optional[dict]:
+    """The area a callsign's prefix is allocated to, or None if not known."""
+    base = (callsign or "").split("-")[0].split(" ")[0].upper()
+    if not _CALLSIGN_SHAPE.match(base):
+        return None
+    for rx, name, s, w, n, e in _REGIONS_C:
+        if rx.match(base):
+            return {"region": name, "bbox": [s, w, n, e]}
+    return None
+
+
+def position_corroboration(callsign: str, lat, lon) -> dict:
+    """Does a station's own reported position agree with its own callsign?
+
+    Deliberately three-valued. `null` means the prefix is not in the table or
+    the identifier is not a callsign at all, and saying so is better than
+    guessing — an APRS object named TABOR is not a Turkish station.
+    """
+    out = {"callsign": callsign, "consistent": None, "region": None}
+    if lat is None or lon is None:
+        out["note"] = "no position reported"
+        return out
+    # 0,0 is not a place anyone transmits from; it is an unset GPS. Worth its
+    # own note because it is unambiguous where the region test is not.
+    if abs(lat) < 0.001 and abs(lon) < 0.001:
+        out["consistent"] = False
+        out["note"] = ("position is 0,0 — an unset GPS rather than a location, "
+                       "so any distance computed from it is meaningless")
+        return out
+    reg = callsign_region(callsign)
+    if not reg:
+        out["note"] = ("no allocation known for this identifier — either the "
+                       "prefix is not in the table or this is an APRS object "
+                       "name rather than a callsign")
+        return out
+    s, w, n, e = reg["bbox"]
+    out["region"] = reg["region"]
+    out["consistent"] = bool(s <= lat <= n and w <= lon <= e)
+    out["note"] = ("position falls inside the area this prefix is allocated to"
+                   if out["consistent"] else
+                   "position falls OUTSIDE the area this prefix is allocated "
+                   "to — either the position is wrong, or the operator is "
+                   "transmitting away from home, and this evidence cannot "
+                   "separate those")
+    return out
+
+
 def suspect_position(rec) -> bool:
     """True when a station's own beacon puts a US callsign in the east.
 

@@ -2478,6 +2478,75 @@ async def get_prop(request: web.Request) -> web.Response:
     return web.json_response(data)
 
 
+def _prop_position_corroboration(link: dict) -> dict:
+    """The third question, which had no evidence at all until now.
+
+    Six outside readings agreed the physical reality of a link could not be
+    established, all at about 95% confidence, all for the same reason: both
+    coordinates are self-reported and nothing corroborated them. That is a
+    correct answer and a useless one, and it was the file's fault — the one
+    independent fact available was never offered.
+
+    A callsign prefix is allocated by country. The station's own transmitted
+    position either falls inside that allocation or does not. The two
+    directions are NOT symmetric and the reading below says so:
+
+      consistent   weak corroboration. It rules out a position invented at
+                   random; it does not rule out an error inside the right
+                   country, which is most errors.
+      inconsistent ambiguous. A wrong position and an operator transmitting
+                   away from home look identical from here.
+      0,0          not ambiguous at all: an unset GPS, and any distance
+                   computed from it is meaningless.
+    """
+    sender = station_db_module.position_corroboration(
+        link.get("call"), link.get("s_lat"), link.get("s_lon"))
+    gate = station_db_module.position_corroboration(
+        link.get("gate"), link.get("g_lat"), link.get("g_lon"))
+    both = [sender.get("consistent"), gate.get("consistent")]
+    if False in both:
+        verdict = "contradicted"
+        reading = (
+            "At least one end reports a position outside the area its own "
+            "callsign is allocated to, so the distance between them may not be "
+            "a distance between those two places at all. This does not prove "
+            "the link is bogus — an operator away from home looks exactly the "
+            "same — but it is the one thing here that argues against taking "
+            "the geometry at face value."
+        )
+    elif both == [True, True]:
+        verdict = "both_consistent"
+        reading = (
+            "Both stations report positions inside the areas their own "
+            "callsigns are allocated to. Two independent allocations agreeing "
+            "with two self-reported positions is weak corroboration: it rules "
+            "out coordinates invented at random, and it does not rule out an "
+            "error inside the right country. Treat it as the difference "
+            "between 'unverified' and 'unverified but not obviously wrong' — "
+            "not as confirmation that RF crossed this path."
+        )
+    elif True in both:
+        verdict = "one_consistent"
+        reading = (
+            "One end agrees with its own callsign's allocation and the other "
+            "cannot be checked — an unrecognised prefix, or an APRS object "
+            "name rather than a callsign. Half of the geometry has weak "
+            "corroboration and half has none."
+        )
+    else:
+        verdict = "unknown"
+        reading = (
+            "Neither end can be checked against a callsign allocation, so this "
+            "adds nothing to the physical question: the distance rests "
+            "entirely on what the two stations said about themselves."
+        )
+    return {"sender": sender, "gate": gate, "verdict": verdict,
+            "reading": reading,
+            "method": "callsign prefix allocation vs the station's own "
+                      "reported position; weak evidence in the positive "
+                      "direction, ambiguous in the negative"}
+
+
 def _prop_vs_baseline(link: dict, base: dict, params: dict) -> dict:
     """Put the link's distance and the gate's own figure in one statement.
 
@@ -2614,6 +2683,9 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
         # then five of five, did not do it.
         "vs_gate_baseline": _prop_vs_baseline(link, db.gate_baseline(gate),
                                               db.prop_detection_params()),
+        # The third question every outside reading has had to answer with
+        # "unverified": whether the two stations are really where they say.
+        "position_corroboration": _prop_position_corroboration(link),
         # The opening this link belongs to, if it was part of one. Absent
         # means the link was anomalous on its own but never met the
         # two-distinct-senders rule — which is not an opening.
@@ -2636,7 +2708,13 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
             "because a single misconfigured GPS can fake any distance.",
             "Distance is computed from positions the stations transmitted "
             "themselves. A wrong position produces a wrong distance, and the "
-            "station will not know it.",
+            "station will not know it. position_corroboration checks each "
+            "position against the area its own callsign prefix is allocated "
+            "to — the only independent fact available here. Read its two "
+            "directions differently: agreement is weak evidence, because most "
+            "errors land inside the right country anyway, while disagreement "
+            "is ambiguous between a wrong position and an operator "
+            "transmitting away from home.",
             "The gate baseline is a smoothed average that the link itself "
             "then updates, so a permanently unusual gate slowly becomes its "
             "own normal and stops being flagged. It is also read at export "
