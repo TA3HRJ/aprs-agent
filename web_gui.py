@@ -58,6 +58,12 @@ _DEFAULT_CFG = Path(__file__).parent / "aprsconfig.toml"
 # Cache headers: app shell revalidates via ETag, immutable assets cache for a day
 _NO_CACHE = {"Cache-Control": "no-cache"}
 _DAY_CACHE = {"Cache-Control": "public, max-age=86400"}
+# Brand assets revalidate instead of sitting in the cache for a day.
+# Replacing the logo changed the bytes and the ETag, and browsers that
+# already held it kept showing the old mark because max-age told them not
+# to ask. A conditional GET on a 17 KB file is cheap; being wrong for a
+# day is not.
+_REVALIDATE = {"Cache-Control": "public, no-cache"}
 
 # In-memory gzip cache for index.html, keyed by file mtime/size so edits
 # during development are picked up automatically.
@@ -1933,7 +1939,7 @@ async def pwa_icon(request: web.Request) -> web.Response:
     size = request.match_info["size"]
     if size not in ("192", "512"):
         raise web.HTTPNotFound()
-    return web.FileResponse(_STATIC_DIR / f"icon-{size}.png", headers=_DAY_CACHE)
+    return web.FileResponse(_STATIC_DIR / f"icon-{size}.png", headers=_REVALIDATE)
 
 
 @routes.get("/api/info")
@@ -2849,11 +2855,21 @@ async def get_station(request: web.Request) -> web.Response:
     return web.json_response(rec)
 
 
+@routes.get("/logo.svg")
+async def logo_svg(request: web.Request) -> web.Response:
+    """The project mark, square-cropped and transparent — one file for the
+    dark app header and the light project site alike."""
+    svg = _STATIC_DIR / "logo.svg"
+    if svg.exists():
+        return web.FileResponse(svg, headers=_REVALIDATE)
+    raise web.HTTPNotFound()
+
+
 @routes.get("/favicon.ico")
 async def favicon(request: web.Request) -> web.Response:
     ico = _resolve_path("aprs-agent.ico")
     if ico.exists():
-        return web.FileResponse(ico, headers=_DAY_CACHE)
+        return web.FileResponse(ico, headers=_REVALIDATE)
     raise web.HTTPNotFound()
 
 
@@ -2923,6 +2939,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/sw.js", service_worker),
         web.get("/icon-{size}.png", pwa_icon),
         web.get("/favicon.ico", favicon),
+        web.get("/logo.svg", logo_svg),
         web.get("/aprs-symbols-24-{table}.png", symbols),
         web.get("/api/info", info),
         web.get("/api/counters", counters),
