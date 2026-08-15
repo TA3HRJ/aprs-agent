@@ -384,7 +384,7 @@
     </div>
   </div>
 
-  <h2>İstasyonlar ve Harita <span class="badge web">Web GUI</span></h2>
+  <h2 id="map-tr">İstasyonlar ve Harita <span class="badge web">Web GUI</span></h2>
 
   <div class="card">
     <div class="card-title">📊 İstasyonlar Sekmesi</div>
@@ -433,7 +433,7 @@
     </div>
   </div>
 
-  <h2>Sessizlik Haritası ve İzleme</h2>
+  <h2 id="silence-tr">Sessizlik Haritası ve İzleme</h2>
 
   <div class="card">
     <div class="card-title">🔴 Sessizlik Tespiti</div>
@@ -498,7 +498,7 @@
     </div>
   </div>
 
-  <h2>RF Propagasyon Takibi</h2>
+  <h2 id="prop-tr">RF Propagasyon Takibi</h2>
 
   <div class="card">
     <div class="card-title">📡 Bant Açılması Tespiti</div>
@@ -562,7 +562,7 @@
     </table>
   </div>
 
-  <h2>AI İstasyon Analizi</h2>
+  <h2 id="stations-tr">AI İstasyon Analizi</h2>
 
   <div class="card">
     <div class="card-title">🤖 AI İstasyon Analizi</div>
@@ -657,7 +657,7 @@
     </table>
   </div>
 
-  <h2>Telegram Sekmesi</h2>
+  <h2 id="ext-tr">Telegram Sekmesi</h2>
 
   <div class="card">
     <div class="card-title">💬 Telegram Entegrasyonu</div>
@@ -687,7 +687,7 @@
     </div>
   </div>
 
-  <h2>AI Gateway Sekmesi</h2>
+  <h2 id="ai-tr">AI Gateway Sekmesi</h2>
 
   <div class="card">
     <div class="card-title">🤖 AI Gateway</div>
@@ -1114,7 +1114,7 @@
     </div>
   </div>
 
-  <h2>Stations and Map <span class="badge web">Web GUI</span></h2>
+  <h2 id="map-en">Stations and Map <span class="badge web">Web GUI</span></h2>
 
   <div class="card">
     <div class="card-title">📊 Stations Tab</div>
@@ -1165,7 +1165,7 @@
     </div>
   </div>
 
-  <h2>Silence Map and Monitor</h2>
+  <h2 id="silence-en">Silence Map and Monitor</h2>
 
   <div class="card">
     <div class="card-title">🔴 Silence Detection</div>
@@ -1231,7 +1231,7 @@
     </div>
   </div>
 
-  <h2>RF Propagation Tracking</h2>
+  <h2 id="prop-en">RF Propagation Tracking</h2>
 
   <div class="card">
     <div class="card-title">📡 Band-Opening Detection</div>
@@ -1295,7 +1295,7 @@
     </table>
   </div>
 
-  <h2>AI Station Analysis</h2>
+  <h2 id="stations-en">AI Station Analysis</h2>
 
   <div class="card">
     <div class="card-title">🤖 AI Station Analysis</div>
@@ -1392,7 +1392,7 @@
     </table>
   </div>
 
-  <h2>Telegram Tab</h2>
+  <h2 id="ext-en">Telegram Tab</h2>
 
   <div class="card">
     <div class="card-title">💬 Telegram Integration</div>
@@ -1422,7 +1422,7 @@
     </div>
   </div>
 
-  <h2>AI Gateway Tab</h2>
+  <h2 id="ai-en">AI Gateway Tab</h2>
 
   <div class="card">
     <div class="card-title">🤖 AI Gateway</div>
@@ -1626,6 +1626,31 @@
       }
     });
   }
+
+  // Section anchors carry their language: #silence-tr and #silence-en are the
+  // same section in the two halves of this file. Only one half is displayed at
+  // a time, so arriving at an anchor has to switch to the half that holds it —
+  // otherwise the link scrolls to a hidden element and the reader sees the top
+  // of the wrong language.
+  function gotoHash() {
+    var h = (location.hash || '').replace('#', '');
+    if (!h) return;
+    if (h.slice(-3) === '-en') setLang('en');
+    else if (h.slice(-3) === '-tr') setLang('tr');
+    var el = document.getElementById(h);
+    if (el) el.scrollIntoView();
+  }
+  window.addEventListener('hashchange', gotoHash);
+  // Twice on purpose. The first call happens while the page is still laying
+  // out — swapping the language changes the height of everything above the
+  // target, and a position measured before that reflow lands thousands of
+  // pixels off (measured: 8132 px past the section, at the very bottom of the
+  // document). The second runs after load, on the next frame, when the
+  // geometry is final.
+  window.addEventListener('load', function () {
+    requestAnimationFrame(gotoHash);
+  });
+  gotoHash();
 </script>
 </body>
 </html>
