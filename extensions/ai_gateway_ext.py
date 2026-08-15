@@ -125,6 +125,16 @@ class AIGateway(Extension):
         self._day = ""
         self._day_count = 0
         self._day_told = False
+        self._provider = config.get("provider", "puter")
+        self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(
+            self._provider, _PROVIDER_URLS["puter"])
+        self._model = config.get("model", "") or _PROVIDER_MODELS.get(
+            self._provider, "gpt-4o-mini")
+        self.log(
+            f"initialized | provider={self._provider} "
+            f"| model={self._model} "
+            f"| callsign={config.get('callsign', '')}"
+        )
 
     def _live_config(self) -> dict:
         """The gateway's own config section, re-read when the file changes.
@@ -220,15 +230,6 @@ class AIGateway(Extension):
             return False, (cfg.get("daily_notice") or _DEFAULT_DAILY_NOTICE)[:64]
         self._day_count += 1
         return True, None
-
-        self._provider = config.get("provider", "puter")
-        self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(self._provider, _PROVIDER_URLS["puter"])
-        self._model = config.get("model", "") or _PROVIDER_MODELS.get(self._provider, "gpt-4o-mini")
-        self.log(
-            f"initialized | provider={self._provider} "
-            f"| model={self._model} "
-            f"| callsign={config.get('callsign', '')}"
-        )
 
     def _validate(self) -> None:
         cfg = self._config
