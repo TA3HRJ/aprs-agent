@@ -244,8 +244,14 @@ the internet while the admin port on 8080 stays local. Web GUI only.
 
 ```toml
 public_port     = 8082    # 0 = disabled
-public_title    = ""      # header title    — empty = "APRS-Agent · CALLSIGN"
-public_subtitle = ""      # one-line description — empty = language-aware default
+public_title    = ""      # header title — empty = "APRS-Agent · CALLSIGN".
+                          # Setting it replaces the whole thing, callsign
+                          # included: a page you named yourself is not one
+                          # we should be appending to.
+public_subtitle = ""      # one-line description — empty = language-aware
+                          # default. A value here is a single fixed string,
+                          # so it stays in whichever language you wrote it
+                          # even when the reader switches to the other.
 ```
 
 > ⚠️ Forward **only** this port. The admin port has no built-in authentication —
