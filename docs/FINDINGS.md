@@ -212,6 +212,86 @@ symptom resists explanation, ask the server what it saw.
 > speed. The feed had been deaf for twelve minutes, and every layer above it
 > reported that as *nothing is silent anywhere*.
 
+### F-2026-08-15-45 — the corroboration field found a fault on its first run
+**Source:** verifying F-44 against live links · **Verdict:** our fault · **Open, small**
+
+The first live batch of `position_corroboration` returned one `contradicted`:
+`OE9XVI-6`, an Austrian callsign for Vorarlberg, reporting from **50.88 N,
+12.13 E** — Saxony, 360 km north. The Austria box was checked first and is
+correct; the position really is in Germany.
+
+The record explains itself:
+
+```
+comment: {'source': 'DB0SLF', 'destination': 'OE9XVI-6', 'path': ['AP...
+```
+
+A third-party packet. `DB0SLF` is the station that actually holds that
+position, and it was filed under the outer callsign.
+
+**Scale, measured before calling it urgent:** 172,301 stations carry a comment,
+85 of those carry a parsed dict rather than an info field, and 59 of the 85 have
+an inner `source` that differs from the callsign it was stored under. Thirty
+records in a hundred thousand — real, and not an emergency.
+
+```
+DB0SDA    <- ON3HJM-7      PY2KO-10  <- PU2NVX
+OE9XVI-6  <- DB0SLF        EA1HJA    <- EB1LA-1
+NE1CU-10  <- W1DMR-11      IQ3FX-11  <- IV3CTT-10
+```
+
+**The point worth keeping is not the bug.** It is that a field built to answer
+one question — is this RF path real — surfaced a different fault nobody was
+looking for, on its first pass over live data, because it was the first thing
+to ask whether a position and a callsign agreed. Every one of these 59 records
+has been quietly wrong for as long as the registry has existed.
+
+### F-2026-08-15-44 — the third question had no evidence, and that was the file's fault
+**Source:** six outside readings agreeing on the same non-answer · **Verdict:** our fault · **Closed: v3.2.44**
+
+Six readings of propagation bundles were asked whether the RF path was
+physically real. All six said the same thing at about the same confidence:
+unverified, ~95%, because both coordinates are self-reported and nothing
+corroborates them.
+
+That answer is correct. It is also the file's fault: the one independent fact
+available was never offered. A callsign prefix is allocated by country, and a
+station's own transmitted position either falls inside that allocation or does
+not.
+
+`position_corroboration` now states it for both ends, and states the two
+directions **differently**, because they are not symmetric:
+
+| | |
+|---|---|
+| consistent | weak. It rules out coordinates invented at random. It does not rule out an error inside the right country, which is most errors |
+| inconsistent | ambiguous. A wrong position and an operator transmitting away from home look identical from here |
+| `0,0` | not ambiguous at all — an unset GPS, and any distance computed from it is meaningless |
+
+**The first version of this was wrong and measuring caught it.** Applied to
+147,307 positioned stations it reported **18% of the world as misplaced**. The
+cause: it treated any identifier starting with a known prefix as a callsign, so
+`TABOR`, `TAPIOLA` and `TAOSKI` were judged as Turkish stations. They are APRS
+object names.
+
+With a callsign-shape filter first — 1-2 characters, a digit, 1-4 letters — the
+numbers become believable:
+
+| | |
+|---|---|
+| positioned stations | 147,307 |
+| actually callsign-shaped | 94,354 (64%) |
+| the table recognises | 91,137 (96.6% of those) |
+| consistent | 85,820 (94.2%) |
+| **inconsistent** | **5,317 (5.8%)** |
+
+A believable population of errors and travellers, and spot checks inside it
+found two stations at exactly `0,0` and several at round-number defaults.
+
+**Rule, and it is the same one as F-33:** before judging an identifier, check
+it is the kind of thing you think it is. Two thirds of what this registry calls
+a "callsign" is not one.
+
 ### F-2026-08-15-43 — I measured the detector and reported my own deploy cadence
 **Source:** six outside readings, then the arithmetic that should have come first · **Verdict:** my error, and a real defect underneath it
 
