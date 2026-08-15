@@ -1357,7 +1357,14 @@ async function fetchStations(){
   // Polling 4,000 worldwide stations every 5 s to draw nothing is the waste
   // this change removes — a Turkey-wide view now costs one 2,459-station
   // request instead of a 4,000-station one that answered 2.4% of the question.
-  if(activeTab==='map'&&mapClusterMode&&vpData&&vpData.length)return;
+  if(activeTab==='map'&&mapClusterMode&&vpData&&vpData.length){
+    // Skip the WORLD, not the refresh. The first version of this returned
+    // outright and stopped the map dead — renderMap() was called from inside
+    // this function's success path, so dropping the fetch dropped the redraw
+    // with it: measured at 12 seconds with zero renders and zero requests.
+    fetchViewport(true);
+    return;
+  }
   try{
     const o={headers:{}};
     if(staEtag)o.headers['If-None-Match']=staEtag;
@@ -1550,16 +1557,29 @@ function renderMap(){
 // High-zoom cluster mode: the global list is capped, so ask the server for
 // the stations inside the current view — this guarantees that zooming in
 // shows every station of that area regardless of worldwide volume.
-let vpData=null,vpKey='',vpBusy=false;
-async function fetchViewport(){
+let vpData=null,vpKey='',vpBusy=false,vpEtag='';
+async function fetchViewport(force){
   if(!map||vpBusy)return;
   const b=map.getBounds().pad(0.2);
   const key=b.getSouth().toFixed(2)+','+b.getWest().toFixed(2)+','+b.getNorth().toFixed(2)+','+b.getEast().toFixed(2);
   // On a cache hit at low zoom there is nothing to redraw and renderMap() is
-  // what called us — going back into it would recurse.
-  if(key===vpKey&&vpData){if(map.getZoom()>=9)drawViewport();return}
+  // what called us — going back into it would recurse. `force` is the live
+  // poll asking for the same area again, which must not take this path.
+  if(!force&&key===vpKey&&vpData){if(map.getZoom()>=9)drawViewport();return}
   vpBusy=true;
-  try{const r=await api('GET','/api/stations?limit=3000&bbox='+key);vpData=r.stations||[];vpKey=key}catch(e){}
+  try{
+    // Same ETag habit as the global list, keyed on the area: a poll of an
+    // unchanged view costs a 304 instead of 3,000 stations.
+    const o={headers:{}};
+    if(key===vpKey&&vpEtag)o.headers['If-None-Match']=vpEtag;
+    const res=await fetch('/api/stations?limit=3000&bbox='+key,o);
+    if(res.status!==304){
+      vpEtag=res.headers.get('ETag');
+      const r=await res.json();
+      vpData=r.stations||[];
+    }
+    vpKey=key;
+  }catch(e){}
   vpBusy=false;
   // Fresh data: below zoom 9 the clusters are drawn by renderMap(), above it by
   // drawViewport(). The key now matches, so the call above returns immediately
