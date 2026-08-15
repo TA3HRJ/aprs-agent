@@ -8,7 +8,10 @@ An APRS-IS server agent with a graphical interface and extensible plugin system,
 Connects to the global [APRS-IS](http://www.aprs2.net/) network and provides
 several automation features useful for amateur radio operators.
 
-### 🔴 Live demo — [ta3hrj.duckdns.org](https://ta3hrj.duckdns.org/)
+### 🔴 [aprsagent.com](https://aprsagent.com/) — project site and live demo
+
+The site explains what the software does; the live instance runs at
+[map.aprsagent.com](https://map.aprsagent.com/).
 
 A real instance in **World Mode**, carrying the full worldwide APRS-IS feed:
 the live log, every station heard, the Silence Map with its AI assessments,

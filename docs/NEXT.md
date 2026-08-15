@@ -506,3 +506,38 @@ the stat bar. Worth assuming there is a fourth.
 Small and self-contained. The reason it is written down rather than done is
 that the *right* answer may be to show both numbers, and that is a layout
 decision on a bar that is already full.
+
+---
+
+## F · "AI: active" while the gateway could answer nothing — 2026-08-15
+
+The AI Gateway raised an exception on every message it received for most of a
+day. `/api/info` reported `active.ai: true` the whole time, the badge row on
+both the admin and public pages showed the module lit, and the only sign
+anything was wrong was a log line that stopped appearing — which nobody was
+watching for, because you do not watch for absences.
+
+`active.ai` is computed from configuration alone:
+
+```python
+ai_ok = bool(ai_cfg.get("enabled")
+            and (ai_cfg.get("provider") or ai_cfg.get("base_url")))
+```
+
+That is an honest answer to "is this feature switched on", and it was being
+read as "is this feature working". The two are not the same claim, and this is
+the third time that distinction has cost something on this project.
+
+| change |
+|---|
+| have the extension record its last outcome — answered, refused by a limiter, or raised — and let the badge reflect it |
+| decide what an extension that has never been exercised should show: *configured* is not *working*, but neither is it *broken* |
+
+The badge does not need to become a health monitor. It needs to stop saying
+one thing when it knows another. A third state — configured, not yet
+exercised — is probably the whole fix.
+
+**Related:** the fault itself was self-inflicted (a constructor's tail severed
+by an insertion, v3.2.52) and now has a guard: `tools/check_unreachable.py`.
+That prevents this particular cause. It does nothing about the reporting,
+which would have hidden any other cause just as well.
