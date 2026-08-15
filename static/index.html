@@ -1352,6 +1352,12 @@ let staTotal=0;
 // of the full station list — most polls with many concurrent visitors.
 let staEtag=null;
 async function fetchStations(){
+  // While the map is clustering from the viewport, the global list has no
+  // reader: renderMap() uses vpData and the Stations tab refetches when opened.
+  // Polling 4,000 worldwide stations every 5 s to draw nothing is the waste
+  // this change removes — a Turkey-wide view now costs one 2,459-station
+  // request instead of a 4,000-station one that answered 2.4% of the question.
+  if(activeTab==='map'&&mapClusterMode&&vpData&&vpData.length)return;
   try{
     const o={headers:{}};
     if(staEtag)o.headers['If-None-Match']=staEtag;
@@ -1507,9 +1513,21 @@ function renderMap(){
   clearStaMarkers();mapClusterMode=true;
   const z=map.getZoom();
   if(z<9){
+    // Cluster from what is actually in view, not from the global list.
+    //
+    // The global list is the 4,000 most recently heard stations WORLDWIDE,
+    // which on this feed is about 74 seconds of traffic. Clustering that and
+    // putting a number on it produced badges that read as "stations here" and
+    // meant "stations here that transmitted in the last minute": measured at
+    // z6 over Turkey, 60 of 2,459, and 4 of 185 over Izmir. A true number
+    // answering a question nobody asked.
+    fetchViewport();
+    const src=(vpKey&&vpData&&vpData.length)
+      ? vpData.filter(r=>r.lat!==null&&r.lat!==undefined&&r.lon!==null&&r.lon!==undefined)
+      : pts;                          // first paint, before the area arrives
     const cell=360/Math.pow(2,z+3);   // bucket size shrinks as you zoom in
     const buckets={};
-    for(const r of pts){
+    for(const r of src){
       const k=Math.floor(r.lat/cell)+'_'+Math.floor(r.lon/cell);
       (buckets[k]=buckets[k]||[]).push(r);
     }
@@ -1537,11 +1555,16 @@ async function fetchViewport(){
   if(!map||vpBusy)return;
   const b=map.getBounds().pad(0.2);
   const key=b.getSouth().toFixed(2)+','+b.getWest().toFixed(2)+','+b.getNorth().toFixed(2)+','+b.getEast().toFixed(2);
-  if(key===vpKey&&vpData){drawViewport();return}
+  // On a cache hit at low zoom there is nothing to redraw and renderMap() is
+  // what called us — going back into it would recurse.
+  if(key===vpKey&&vpData){if(map.getZoom()>=9)drawViewport();return}
   vpBusy=true;
   try{const r=await api('GET','/api/stations?limit=3000&bbox='+key);vpData=r.stations||[];vpKey=key}catch(e){}
   vpBusy=false;
-  drawViewport();
+  // Fresh data: below zoom 9 the clusters are drawn by renderMap(), above it by
+  // drawViewport(). The key now matches, so the call above returns immediately
+  // and this does not loop.
+  if(map.getZoom()<9)renderMap();else drawViewport();
 }
 function drawViewport(){
   if(!map||!mapClusterMode||map.getZoom()<9)return;
