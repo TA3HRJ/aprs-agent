@@ -1989,6 +1989,28 @@ async def info(request: web.Request) -> web.Response:
     return web.json_response(data)
 
 
+@routes.get("/api/counters")
+async def counters(request: web.Request) -> web.Response:
+    """The headline numbers, for a page that only wants them once.
+
+    The stat bar receives these over the WebSocket, which is right for a page
+    already open and watching. An outside page — a landing page, a status
+    board — wants three numbers and then nothing, and holding a WebSocket
+    open per visitor to deliver that would cost a connection each. Read-only
+    counts, nothing here identifies anyone.
+    """
+    mgr: AgentManager = request.app["manager"]
+    s = mgr._stats_payload()
+    return web.json_response({
+        "running":      s["running"],
+        "packets":      s["packets"],
+        "stations":     s["unique"],
+        "callsigns":    s["unique_calls"],
+        "uptime":       s["uptime"],
+        "uptime_total": s["uptime_total"],
+    }, headers={"Cache-Control": "public, max-age=30"})
+
+
 @routes.get("/api/config")
 async def get_config(request: web.Request) -> web.Response:
     """The config with every credential masked.
@@ -2889,6 +2911,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/favicon.ico", favicon),
         web.get("/aprs-symbols-24-{table}.png", symbols),
         web.get("/api/info", info),
+        web.get("/api/counters", counters),
         web.get("/api/status", get_status),
         web.get("/api/stations", get_stations),
         web.get("/api/stations/{callsign}", get_station),
