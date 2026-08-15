@@ -2001,13 +2001,22 @@ async def counters(request: web.Request) -> web.Response:
     """
     mgr: AgentManager = request.app["manager"]
     s = mgr._stats_payload()
+    # "stations" is deliberately the registry, not this run's unique count.
+    # The run counters start at zero on every restart, so a page showing one
+    # of them says 1,600 a minute after a deploy and 40,000 an hour later
+    # while looking like a description of the network. That is the same fault
+    # the map's cluster badges had. The run counters are still here, named
+    # for what they are, for anyone who wants them.
+    db = getattr(mgr, "_station_db", None)
+    registry = db.count() if db is not None else None
     return web.json_response({
-        "running":      s["running"],
-        "packets":      s["packets"],
-        "stations":     s["unique"],
-        "callsigns":    s["unique_calls"],
-        "uptime":       s["uptime"],
-        "uptime_total": s["uptime_total"],
+        "running":       s["running"],
+        "stations":      registry,
+        "packets":       s["packets"],
+        "heard_this_run": s["unique"],
+        "calls_this_run": s["unique_calls"],
+        "uptime":        s["uptime"],
+        "uptime_total":  s["uptime_total"],
     }, headers={"Cache-Control": "public, max-age=30"})
 
 
