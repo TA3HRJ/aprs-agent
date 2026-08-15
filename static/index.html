@@ -213,6 +213,10 @@ body.public .stat-bar .cell.diag{display:none!important}
 /* Amber like the deaf bar and for the same reason: this is a doubt about our
    own input, not a finding about the world. */
 .sil-suspect{color:#f5c211;font-size:11px}
+/* A link judged against a real baseline says more than one that merely cleared
+   the floor. Same distance colours, different confidence. */
+.prop-est{color:#8ff0a4;font-size:11px}
+.prop-young{color:#c0bfbc;font-size:11px}
 /* A link that has started work must not look like one that has not. The
    repeated clicking behind F-19 came from a link that sat there unchanged for
    six seconds while it was already fetching. */
@@ -736,6 +740,7 @@ body.public .sb-toggle{display:none!important}
       <span><i style="background:#2ec27e"></i><em data-i="leg_prop1">Opening &lt; 600 km</em></span>
       <span><i style="background:#62a0ea"></i><em data-i="leg_prop2">600–1200 km</em></span>
       <span><i style="background:#dc8add"></i><em data-i="leg_prop3">&gt; 1200 km</em></span>
+      <span><i style="background:#c0bfbc;opacity:.4"></i><em data-i="leg_prop_young">Faint: gate too new to have a normal</em></span>
     </div>
     <div class="map-timeline" id="map-timeline" hidden>
       <button class="tl-btn" id="tl-play" onclick="tlPlay()">▶</button>
@@ -885,6 +890,8 @@ const S={en:{
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
+  prop_judged_gate:"Judged against this gate's own history — {n} samples, {r}× its usual reach",
+  prop_judged_floor:"Judged by the 300 km floor alone — this gate has only {n} samples, so it has no usual reach yet",
   ev_render_err:"The evidence arrived but the page could not show it",
   ev_copy:"Copy",
   ev_save:"Save as file",
@@ -938,6 +945,7 @@ const S={en:{
   miss_hint:"— no APRS signal since the time shown. Not a confirmed emergency.",
   miss_since:"no signal for",
   leg_prop1:"Opening < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
+  leg_prop_young:"Faint: gate too new to have a normal",
   prop_link:"Realised RF link — possible band opening",
   tl_live:"Live",tz_local:"local",
   own_station:"your station",
@@ -1026,6 +1034,8 @@ const S={en:{
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
   sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
+  prop_judged_gate:"Gate'in kendi geçmişine göre değerlendirildi — {n} örnek, olağanının {r} katı",
+  prop_judged_floor:"Yalnızca 300 km tabanıyla değerlendirildi — bu gate'in {n} örneği var, henüz bir olağanı yok",
   ev_render_err:"Veri geldi ama sayfa gösteremedi",
   ev_copy:"Kopyala",
   ev_save:"Dosya olarak kaydet",
@@ -1080,6 +1090,7 @@ const S={en:{
   miss_hint:"— gösterilen saatten beri APRS sinyali yok. Teyit edilmiş bir acil durum değildir.",
   miss_since:"sinyal yok:",
   leg_prop1:"Açılma < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
+  leg_prop_young:"Soluk: gate'in henüz bir olağanı yok",
   prop_link:"Gerçekleşmiş RF linki — olası bant açılması",
   tl_live:"Canlı",tz_local:"yerel",
   own_station:"kendi istasyonun",
@@ -2361,6 +2372,21 @@ function renderProp(links,hist){
         +l.km+' km · '+fmtAgoLong(Math.max(0,Math.floor(now-l.ts)))+'<br>'
         +(l.note?'<span class="alert-ai">'+esc(l.note)+'</span><br>':'')
         +'<span style="opacity:.7">'+t('prop_link')+'</span>'
+        // How this link was judged. The difference between "this gate has
+        // heard 200 links and never one like this" and "this gate is new and
+        // anything past 300 km trips the floor" is the whole confidence of the
+        // claim, and both were drawn as the same dashed line. Measured
+        // 2026-08-15: 76% of flags come from the floor alone, and 87% of those
+        // would not have been flagged had their gate been established.
+        +(function(){
+           const a=l.at_flag; if(!a)return '';
+           if(a.established)
+             return '<br><span class="prop-est">'+t('prop_judged_gate')
+                    .replace('{n}',a.samples)
+                    .replace('{r}',a.ema_km?(l.km/a.ema_km).toFixed(1):'?')+'</span>';
+           return '<br><span class="prop-young">'+t('prop_judged_floor')
+                    .replace('{n}',a.samples)+'</span>';
+         })()
         // The distance alone says nothing without the gate's own baseline and
         // the opening it belongs to, and neither is on the map.
         +'<div class="sil-ev"><a onclick="propEvidence('+args+',0,this)">⬇ '+t('sil_dl')
@@ -2380,7 +2406,14 @@ function renderProp(links,hist){
     // wide line underneath does the actual hit-testing (click AND hover)
     // while the visible line on top stays visually unobtrusive.
     const hit=L.polyline(coords,{color:col,weight:16,opacity:0}).addTo(map);
-    const vis=L.polyline(coords,{color:col,weight:3,opacity:.8,dashArray:'6 6',interactive:false}).addTo(map);
+    // Judged against the gate's own history, or only against the 300 km floor?
+    // The second is the majority and much the weaker claim, so it is drawn as
+    // the weaker line rather than identically.
+    const est=!!(l.at_flag&&l.at_flag.established);
+    const vis=L.polyline(coords,{color:col,weight:est?3:2,
+                                 opacity:est?0.85:0.35,
+                                 dashArray:est?'6 6':'2 8',
+                                 interactive:false}).addTo(map);
     const entry={hit:hit,vis:vis,note:l.note||'',pinned:false,
                  remove:function(){map.removeLayer(hit);map.removeLayer(vis)}};
     hit.bindPopup(popupHtml)
