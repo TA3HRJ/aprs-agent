@@ -212,6 +212,69 @@ symptom resists explanation, ask the server what it saw.
 > speed. The feed had been deaf for twelve minutes, and every layer above it
 > reported that as *nothing is silent anywhere*.
 
+### F-2026-08-15-46 — F-03 answered, on a population that could finally accumulate
+**Source:** the re-measurement F-43 said was impossible until baselines persisted · **Verdict:** measurement
+
+Gate baselines survive a restart since v3.2.34. Twenty hours later **2,373 of
+4,401 persisted gates (53.9%) have crossed the 20 samples** their own threshold
+requires, the largest at 864. Before persistence that count was zero, always,
+because every release reset it. F-03 could not be asked; now it can.
+
+**Sample:** 200 live anomalous links, every one carrying its flag-time baseline
+(F-16), against 169,335 measured links and 5,272 gates with baselines.
+
+| | |
+|---|---|
+| flagged by the gate's **own** threshold (established) | **48 (24%)** |
+| flagged by the **300 km floor alone** (young gate) | **152 (76%)** |
+
+**The established 48 are real outliers by construction** — min 3.1×, median
+6.7×, max 255.3× their own gate's figure.
+
+**Of the 152 young-gate flags, 20 (13%) would still clear 3× if their gate were
+established. 132 (87%) would not.** So the absolute-floor branch is 87% noise,
+and it accounts for 66% of everything the detector flags.
+
+**The earlier figure was 86%, and it was right by accident.** F-43 recorded that
+measurement as invalid because every gate was young — and it was invalid, as a
+statement about the detector. What it actually measured, the noise rate *within*
+young gates, survives almost unchanged. The conclusion drawn from it — "the
+detector is 86% noise" — was wrong then and is wrong now: a quarter of flags come
+from gates held to their own standard.
+
+### Crossed with position corroboration, which changes what the tail means
+
+| | both consistent | contradicted |
+|---|---|---|
+| established-gate flags (48) | 62% | **17%** |
+| young-gate flags (152) | 89% | **2%** |
+
+**The strongest anomalies are eight times more likely to carry a position that
+contradicts its own callsign.** That is the shape you would expect if wrong
+positions manufacture large apparent distances, and it puts a number on it.
+
+Five of the ten most extreme ratios are `contradicted`.
+
+**One station accounts for four of them.** `DL5RBZ-9`, a German callsign,
+reported **57.97 N, 37.08 E** — near Tver, Russia — at flag time, and produced
+four ~1,900 km links to three Bavarian gates 23 km apart from each other. The
+registry now holds it in Bavaria and consistent. A station does not move 1,900
+km between beacons.
+
+**Getting there took three attempts and two of them were wrong**, which is worth
+recording:
+
+1. The cross-tab said `contradicted`, so I wrote that the sender had a bad
+   position — true, but unsupported at that point.
+2. I checked the registry, found `DL5RBZ-9` consistent in Bavaria, and concluded
+   the *gates* were at fault. Wrong.
+3. Only the link's own stored coordinates settled it. The registry has moved on;
+   the link kept what was true when the flag was raised.
+
+That is F-16 justifying itself a second time. Without flag-time coordinates on
+the link this station would have looked innocent and its four anomalies
+unexplainable.
+
 ### F-2026-08-15-45 — the corroboration field found a fault on its first run
 **Source:** verifying F-44 against live links · **Verdict:** our fault · **Open, small**
 
