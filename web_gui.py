@@ -1014,6 +1014,37 @@ class AgentManager:
         now = time.time()
         recent = [l for l in list(self._station_db._prop_links)
                   if now - l["ts"] < 1800]
+        # A link whose own position contradicts its own callsign is dropped
+        # before the grouping, not after — the group IS the midpoint of the two
+        # positions, so a wrong position does not merely weaken the evidence,
+        # it files the link under the wrong field. Two such links could invent
+        # an opening in a place neither station has ever been.
+        #
+        # Only a positive contradiction removes a link. `unknown` stays: it
+        # means the prefix is not in the table or the identifier is an APRS
+        # object name, and dropping those would silence real openings wherever
+        # the table happens to be thin. Consistency is weak evidence, and
+        # contradiction is the only direction worth acting on.
+        #
+        # Measured 2026-08-15: 17% of gate-judged anomalies carry a
+        # contradicted position, against 2% of floor-only ones — wrong
+        # positions concentrate in exactly the extreme tail that looks most
+        # like a discovery.
+        kept = []
+        for l in recent:
+            sp = station_db_module.position_corroboration(
+                l.get("call"), l.get("s_lat"), l.get("s_lon"))
+            gp = station_db_module.position_corroboration(
+                l.get("gate"), l.get("g_lat"), l.get("g_lon"))
+            if sp.get("consistent") is False or gp.get("consistent") is False:
+                bad = l["call"] if sp.get("consistent") is False else l["gate"]
+                self._log_both(
+                    f"[prop] {l['call']}->{l['gate']} {l['km']:.0f}km excluded "
+                    f"from opening grouping: {bad} reports a position outside "
+                    f"its own callsign allocation")
+                continue
+            kept.append(l)
+        recent = kept
         groups: dict[str, list] = {}
         for l in recent:
             mid_lat = (l["s_lat"] + l["g_lat"]) / 2

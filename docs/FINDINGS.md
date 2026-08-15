@@ -275,6 +275,22 @@ That is F-16 justifying itself a second time. Without flag-time coordinates on
 the link this station would have looked innocent and its four anomalies
 unexplainable.
 
+**Acted on, v3.2.45 and v3.2.46**, both the operator's choice:
+
+- Floor-only links are drawn as the weaker claim they are — faint, thin, with a
+  legend line and a popup that says which test judged them. Detection unchanged.
+- Links whose own position contradicts their own callsign are dropped **before**
+  the opening grouping, because the group is the midpoint of the two positions:
+  a wrong position does not weaken the evidence, it files the link in a field
+  neither station has ever been in. Only a positive contradiction removes a
+  link; `unknown` stays, or a thin patch in the prefix table would silence real
+  openings.
+
+Tested against the case above: `DL5RBZ-9` reporting from Russia no longer
+combines with an honest second sender to manufacture an opening, and the
+exclusion is logged with its reason. Two honest senders still produce one; an
+unrecognised prefix still produces one.
+
 ### F-2026-08-15-45 — the corroboration field found a fault on its first run
 **Source:** verifying F-44 against live links · **Verdict:** our fault · **Open, small**
 
