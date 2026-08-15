@@ -15,6 +15,17 @@ ROOT = Path(SPECPATH)
 # ico is kept in the project folder (same dir as this spec) for reliable embedding
 ICON = str(ROOT / 'aprs-agent.ico')
 
+# Everything the web GUI serves, gathered by walking the folder rather than by
+# listing it. The list version silently dropped static/logo.svg the day it was
+# added: the build succeeded, and the header logo would have 404'd for every
+# Windows user. A file added to static/ is now shipped without anyone
+# remembering to come back here.
+_STATIC = sorted(
+    (str(p), 'static') for p in (ROOT / 'static').iterdir()
+    if p.is_file() and p.suffix.lower() in
+       ('.html', '.js', '.json', '.png', '.svg', '.ico', '.css', '.webp')
+)
+
 # ── Common hidden imports needed by the extensions ───────────────────────────
 _hidden = [
     'aprslib',
@@ -152,11 +163,7 @@ web_analysis = Analysis(
         ('aprs-agent.ico', '.'),
         ('aprs-symbols-24-0.png', '.'),
         ('aprs-symbols-24-1.png', '.'),
-        ('static/index.html',    'static'),             # web frontend
-        ('static/manifest.json', 'static'),             # PWA manifest
-        ('static/sw.js',         'static'),             # service worker
-        ('static/icon-192.png',  'static'),             # PWA icon
-        ('static/icon-512.png',  'static'),             # PWA icon
+        *_STATIC,                                      # everything under static/
         ('aprs-symbols-24-2.png', '.'),                 # APRS symbol sprites - overlay chars
     ],
     hiddenimports=_hidden,
