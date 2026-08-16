@@ -170,6 +170,14 @@ body.public .stat-bar .cell.diag{display:none!important}
 .pub-live.on{color:#57e389}
 /* One-line "what is this tab" strip */
 .tab-caption{padding:6px 14px;background:rgba(28,113,216,.12);border-bottom:1px solid var(--border2);font-size:11px;color:#a9c8e0}
+/* On a phone this paragraph ran to five lines and pushed the map off the
+   screen — measured at 375 px, 351 px of furniture stood above a 328 px
+   map. Worth reading once, not on every visit: it collapses to one line
+   and opens on tap. */
+.tab-caption.clamp{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;position:relative;padding-right:28px}
+.tab-caption.clamp::after{content:"▾";position:absolute;right:12px;top:6px;opacity:.75}
+.tab-caption.open{cursor:pointer;position:relative;padding-right:28px}
+.tab-caption.open::after{content:"▴";position:absolute;right:12px;top:6px;opacity:.75}
 /* Which modules are actually active — read-only, same on admin & public */
 /* One line, always: wrapping turned a phone with six modules enabled into
    three stacked rows of badges eating the map. Overflow scrolls instead. */
@@ -382,6 +390,19 @@ body.al-open .alert-panel:not([hidden]){display:block}
 body.ms-open .miss-panel:not([hidden]){display:block}
 body.public .sb-toggle{display:none!important}
 @media(max-width:700px){
+  /* The public header was 143 px of an 812 px screen: the subtitle wrapped
+     to two lines and pushed the action buttons onto a row of their own.
+     Letting the identity block shrink puts everything back on one row. */
+  .pub-hdr{flex-wrap:nowrap;gap:9px;padding:7px 10px}
+  .pub-id{flex:1 1 auto;min-width:0}
+  .pub-title{font-size:13px}
+  .pub-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px}
+  .pub-actions{margin-left:0;flex-shrink:0;gap:2px}
+  .pub-actions .log-btn{padding:0 6px;font-size:10px}
+  .pub-live{font-size:10px}
+  /* Which extensions are running is operator detail; the map is why a
+     visitor is here. */
+  .mod-status{display:none}
   .sidebar{display:none}
   body.sb-open .sidebar{display:block;position:fixed;inset:0;z-index:4000;width:100%;max-width:none;max-height:none;overflow-y:auto;background:var(--sidebar)}
   .sb-toggle{display:block}
@@ -1366,6 +1387,18 @@ function updCaption(){
   const k={log:'cap_log',sta:'cap_sta',map:'cap_map'}[activeTab];
   if(!k){c.hidden=true;return}
   c.textContent=t(k);c.hidden=false;
+  // Collapsed on narrow screens only; the desktop line already fits.
+  if(window.innerWidth<=700){
+    if(!c.dataset.wired){
+      c.dataset.wired='1';
+      c.addEventListener('click',function(){
+        c.classList.toggle('clamp');c.classList.toggle('open');
+      });
+    }
+    if(!c.classList.contains('open'))c.classList.add('clamp');
+  }else{
+    c.classList.remove('clamp','open');
+  }
 }
 
 // ── Stations ──
