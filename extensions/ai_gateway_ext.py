@@ -277,6 +277,11 @@ class AIGateway(Extension):
                 pkt = f"{call}>APRS,TCPIP*:>{_to_ascii(text)[:62]}" + _CRLF
                 try:
                     await self._own_writer.put(pkt.encode("utf-8"))
+                    # Logged on success, not only on failure: this packet is
+                    # how the service identifies its operator, and an operator
+                    # asked whether it was going out could otherwise only
+                    # answer from the absence of an error.
+                    self.log(f"status sent: {pkt.strip()}")
                 except Exception as e:
                     self.error(f"status packet failed: {type(e).__name__}: {e}")
             await asyncio.sleep(mins * 60)
