@@ -324,7 +324,10 @@ Auto-responds to incoming APRS messages using AI. Free providers available.
 >
 > Answers can be wrong; a language model can be confidently mistaken. APRS
 > guarantees no delivery, so this is not an emergency tool. APRS-IS is for
-> licensed amateur radio operators.
+> licensed amateur radio operators, and a sender's radio has to be able to
+> send **and receive** APRS messages — a radio that beacons position but
+> cannot display an incoming message will send the question and never show
+> the answer.
 Bidirectional design follows [aprs-ai-gateway](https://github.com/ArdaYalinOzkan/aprs-ai-gateway) by TA3EKM — the contribution that made an APRS station able to answer rather than only report.
 
 ```toml
