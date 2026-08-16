@@ -330,6 +330,35 @@ Auto-responds to incoming APRS messages using AI. Free providers available.
 > the answer.
 Bidirectional design follows [aprs-ai-gateway](https://github.com/ArdaYalinOzkan/aprs-ai-gateway) by TA3EKM — the contribution that made an APRS station able to answer rather than only report.
 
+#### Identification and responsibility
+
+A gateway addressee such as `MYBOT` **is not a callsign**. It identifies a piece
+of software, not a station: no authority issues it, and none needs to. Nor can
+it be mistaken for one — an allocated callsign carries a digit, and these
+service addressees do not.
+
+The agent **operates no transmitter**. It is an APRS-IS client over TCP; the
+session is authenticated with the operator's own callsign and passcode, and its
+packets carry the `TCPIP*` path that marks internet origin. Where a reply
+reaches RF, the transmitting station is an **igate**, keying up under its own
+licence and its own callsign, and that operator is responsible for that
+emission — the ordinary third-party model of APRS messaging.
+
+What that leaves with you, as the person running a gateway:
+
+- **Be findable.** `status_text` announces who operates the service as an APRS
+  status packet, so somebody meeting it on aprs.fi can find you without asking.
+- **Constrain the output.** Other licensees transmit your replies. `system_prompt`
+  is where you keep them inside amateur rules — no commercial content, no
+  profanity, nothing encoded to obscure meaning, no entertainment broadcast.
+- **Be able to stop.** `enabled = false` takes effect within about five seconds,
+  without a restart.
+
+Running an AI over amateur radio is a **new application, not an unregulated
+one**. The existing rules cover content whatever composed it, and the operator
+is answerable for what the station emits. Treat it as experimental in ambition
+and conventional in compliance.
+
 ```toml
 [extensions.ai_gateway]
 enabled        = true

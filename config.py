@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.65"
+VERSION = "3.2.66"
 
 # ── Secret handling for the HTTP API ────────────────────────────────────────
 # print_config()'s masking below is for human eyes: it keeps the first and last
@@ -260,6 +260,14 @@ DEFAULTS: dict[str, Any] = {
             # because per-sender limits do nothing against many strangers
             # asking once each.
             "daily_limit": 0,
+            # An APRS status packet naming who operates this gateway.
+            # The addressee is not a callsign and identifies software,
+            # not a station — but somebody who meets it on aprs.fi
+            # should be able to find the operator without asking.
+            # Empty text or 0 minutes = nothing is sent, which is the
+            # right default: it is not for us to publish anyone's name.
+            "status_text": "",
+            "status_interval_mins": 0,
         },
         "imap": {
             "enabled": False,

@@ -65,6 +65,9 @@ _PROVIDER_MODELS = {
 }
 
 
+_CRLF = "\r\n"
+
+
 def _to_ascii(text: str) -> str:
     for k, v in _UNICODE_REPLACE.items():
         text = text.replace(k, v)
@@ -125,6 +128,7 @@ class AIGateway(Extension):
         self._day = ""
         self._day_count = 0
         self._day_told = False
+        self._status_started = False
         self._provider = config.get("provider", "puter")
         self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(
             self._provider, _PROVIDER_URLS["puter"])
@@ -248,6 +252,34 @@ class AIGateway(Extension):
 
     def set_own_writer(self, q: asyncio.Queue) -> None:
         self._own_writer = q
+        if not self._status_started:
+            self._status_started = True
+            asyncio.create_task(self._status_loop())
+
+    async def _status_loop(self) -> None:
+        """Say, on the network itself, who operates this service.
+
+        The addressee is not a callsign — it identifies a piece of software,
+        not a station — so nothing here is a substitute for a licence. But
+        somebody who meets DMWGPT on aprs.fi should be able to find the
+        operator without asking, and an APRS status packet is where every
+        other service callsign puts that. Empty text = no status sent.
+        """
+        while True:
+            cfg = self._live_config()
+            mins = int(cfg.get("status_interval_mins", 0) or 0)
+            text = (cfg.get("status_text") or "").strip()
+            if mins <= 0 or not text or not self._own_writer:
+                await asyncio.sleep(300)
+                continue
+            call = cfg.get("callsign", "").upper()
+            if call:
+                pkt = f"{call}>APRS,TCPIP*:>{_to_ascii(text)[:62]}" + _CRLF
+                try:
+                    await self._own_writer.put(pkt.encode("utf-8"))
+                except Exception as e:
+                    self.error(f"status packet failed: {type(e).__name__}: {e}")
+            await asyncio.sleep(mins * 60)
 
     async def _ask_ai(self, question: str) -> str:
         cfg = self._config

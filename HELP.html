@@ -689,6 +689,36 @@
 
   <h2 id="ai-tr">AI Gateway Sekmesi</h2>
 
+  <div class="callout">
+      <strong>Kimlik ve sorumluluk</strong>
+      <p><strong>Geçit alıcı adı bir çağrı işareti değildir.</strong> Bir istasyonu
+      değil, bir yazılımı tanımlar; hiçbir otorite tarafından verilmez ve
+      verilmesi gerekmez. Çağrı işaretiyle karıştırılması da mümkün değildir:
+      tahsisli bir çağrı işareti rakam içerir, bu servis adları içermez.</p>
+      <p><strong>Ajan verici sürmez.</strong> APRS-IS ağına TCP üzerinden bağlanan
+      bir istemcidir; oturum operatörün kendi çağrı işareti ve erişim koduyla
+      kimliklendirilir, ürettiği paketler internet kaynağını belirten
+      <code>TCPIP*</code> yolunu taşır. Bir cevap RF'e ulaşıyorsa onu yayınlayan
+      istasyon bir <strong>igate</strong>'tir; kendi lisansı ve kendi çağrı
+      işaretiyle yayın yapar ve o yayından o operatör sorumludur. Bu, APRS
+      mesajlaşmasının olağan üçüncü taraf trafiği modelidir.</p>
+      <p>Geçidi işleten kişiye kalan üç şey:</p>
+      <ul>
+        <li><strong>Bulunabilir olun.</strong> <code>status_text</code>, hizmeti
+            kimin işlettiğini APRS durum paketi olarak duyurur.</li>
+        <li><strong>Çıktıyı sınırlandırın.</strong> Cevaplarınızı başka
+            lisanslıların vericileri yayınlar. <code>system_prompt</code> onları
+            amatör telsiz kuralları içinde tutmanın yeridir.</li>
+        <li><strong>Durdurabilir olun.</strong> <code>enabled = false</code>
+            yeniden başlatmadan, yaklaşık beş saniyede etkili olur.</li>
+      </ul>
+      <p>Yapay zekâyı amatör telsizde çalıştırmak <strong>yeni bir uygulamadır,
+      kuralsız bir alan değil.</strong> Mevcut kurallar içeriği kaynağından
+      bağımsız olarak kapsar ve istasyondan operatör sorumludur. Hedefte
+      deneysel, uyumda alışıldık olun.</p>
+    </div>
+
+
   <div class="callout warn">
       <strong>⚠️ Yazdığınız her şey herkese açıktır</strong>
       Amatör telsizde haberleşme açık yapılır; şifreleme veya anlamı gizleme amaçlı
@@ -1447,6 +1477,36 @@
   </div>
 
   <h2 id="ai-en">AI Gateway Tab</h2>
+
+  <div class="callout">
+      <strong>Identification and responsibility</strong>
+      <p><strong>A gateway addressee is not a callsign.</strong> It identifies a
+      piece of software, not a station: no authority issues it and none needs
+      to. Nor can it be mistaken for one — an allocated callsign carries a
+      digit, and these service addressees do not.</p>
+      <p><strong>The agent operates no transmitter.</strong> It is an APRS-IS
+      client over TCP; the session is authenticated with the operator's own
+      callsign and passcode, and its packets carry the <code>TCPIP*</code> path
+      that marks internet origin. Where a reply reaches RF, the transmitting
+      station is an <strong>igate</strong>, keying up under its own licence and
+      its own callsign, and that operator is responsible for that emission —
+      the ordinary third-party model of APRS messaging.</p>
+      <p>What that leaves with the person running a gateway:</p>
+      <ul>
+        <li><strong>Be findable.</strong> <code>status_text</code> announces who
+            operates the service as an APRS status packet.</li>
+        <li><strong>Constrain the output.</strong> Other licensees transmit your
+            replies; <code>system_prompt</code> is where you keep them inside
+            amateur rules.</li>
+        <li><strong>Be able to stop.</strong> <code>enabled = false</code> takes
+            effect in about five seconds, without a restart.</li>
+      </ul>
+      <p>Running an AI over amateur radio is a <strong>new application, not an
+      unregulated one.</strong> The existing rules cover content whatever
+      composed it, and the operator is answerable for what the station emits.
+      Experimental in ambition, conventional in compliance.</p>
+    </div>
+
 
   <div class="callout warn">
       <strong>⚠️ Everything you send is public</strong>

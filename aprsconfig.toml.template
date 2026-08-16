@@ -368,6 +368,19 @@ trigger_prefix = ""
 # Extra APRS addressees that trigger AI responses
 trigger_aliases = []
 
+# Who operates this gateway, announced on the network as an APRS status packet.
+# The service addressee is not a callsign - it identifies software, not a
+# station - so this is not a substitute for a licence. It is how somebody who
+# meets your gateway can find you. Empty = nothing sent.
+#   status_text = "AI gateway operated by N0CALL - example.org"
+status_text = ""
+status_interval_mins = 0
+
+# Constrain what the model may produce. Your replies are transmitted by other
+# licensees' igates, so the content has to stay inside amateur radio rules
+# whatever the model feels like writing.
+#   system_prompt = "You are an APRS assistant reached over amateur radio. #     Answer briefly and factually. Amateur radio rules apply to everything #     you send: no commercial content, no profanity, nothing encoded to #     obscure meaning, no entertainment broadcast. If you do not know, say so."
+
 # Number of extra SMS parts for longer responses (0 = single 64-char reply)
 extra_sms = 0
 
