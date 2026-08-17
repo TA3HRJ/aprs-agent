@@ -470,6 +470,94 @@ good outcome to have on record.
 
 ---
 
+---
+
+## G · "Where is my other radio" — drafted, deliberately not started
+
+The first night of public use produced this, and it is the one question the
+gateway is uniquely placed to answer and does not:
+
+```
+WD4ITE-15>DMWGPT: Where is WD4ITE-9
+DMWGPT>WD4ITE-15: WD4ITE-9's position is not available to me directly.
+                  For live APRS location, check aprs.fi or findu.com.
+```
+
+The registry holding 175,000 stations — position, last heard, locator, symbol,
+gate — is inside the same process that produced that answer.
+
+**The current answer is not wrong.** It is correct and unambitious, which is
+why this is an addition and not a fix, and why it gets the higher bar.
+
+### What could go wrong, in the order that matters
+
+**It turns a general assistant into a people-finder.** The data is public and
+aprs.fi already serves it, but a chatbot that answers *"where is XX1YYY"* is a
+different social object from a map somebody chose to open. Tracking another
+operator is not a hypothetical concern in this hobby.
+
+**Stale data arrives in the present tense.** The registry says *last heard three
+hours ago at X*; a model handed that position will say *"XX1YYY is at X"* and
+drop the qualifier. This is the fault this project has spent weeks removing —
+a figure that describes one thing presented as though it described another.
+
+**Our view is partial and sometimes wrong.** We know what our feed saw, and we
+have measured the positions themselves: 5.8 % fall outside the area their own
+callsign prefix is allocated to, and some sit at exactly 0,0.
+
+**A data channel invites invention.** The gateway has already claimed a
+restriction it did not have. Give it a lookup and an empty result becomes an
+opportunity to fill the gap.
+
+**Scope creep.** After *where* comes *who is near me*, *has it moved*, *tell me
+when it appears*. That is a different product with different obligations.
+
+### The line
+
+All of the risk is in third-party lookup. None of it is in asking about
+yourself — and the sender's callsign is already in the packet header, so who is
+asking is known rather than claimed.
+
+| | |
+|---|---|
+| **Safe** | the sender's own callsign — *is my beacon getting out, when was I last heard* |
+| **Defensible** | another SSID of the sender's own base callsign — the WD4ITE case above |
+| **Out of scope** | anything else |
+
+### The design: keep the model out of it
+
+The invention risk is not manageable by prompt. If the question names a
+callsign whose base matches the sender's, **the answer is built from a template
+and the model never sees the request**:
+
+```
+WD4ITE-9: 36.85N 76.06W (FM16su), heard 14 min ago via <gate>.
+Source: this station's own feed. Full history: aprs.fi
+```
+
+Base does not match — one fixed line, no model:
+
+```
+I do not give out other stations' positions. Try aprs.fi or findu.com.
+```
+
+That buys four properties a prompt cannot: the age is a required field rather
+than something a model may drop, the source is stated as *our feed* rather than
+authority, an empty registry says *not in my records* instead of guessing, and
+the scope cannot drift without a code change.
+
+**Explicitly not in scope:** proximity search, movement history, notifications,
+third-party lookup.
+
+### Why it is parked
+
+Not for technical reasons. The service is in the middle of a public argument
+about whether it belongs on the air at all; adding a capability that looks like
+tracking, in that week, would be answering a fair question with a worse one.
+Nothing is lost by waiting — the answer it gives today is honest.
+
+**Order:** after B. Revisit when the discussion has cooled.
+
 ## Not on this list
 
 - **New features.** The surface is already wide: map, silence, propagation,
