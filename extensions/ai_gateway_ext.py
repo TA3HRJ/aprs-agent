@@ -337,8 +337,10 @@ class AIGateway(Extension):
         rules = (
             "You are an AI reached over APRS on amateur radio. "
             f"Current date/time: {today}. "
-            f"Your whole answer must be under {char_limit} characters - "
-            "count them, and stop early rather than be cut off mid-sentence. "
+            f"Your whole answer must be under {int(char_limit * 0.85)} "
+            "characters - models count these badly, so aim well short: "
+            "stopping early costs a reader nothing, being cut off mid-sentence "
+            "costs them the end of the answer. "
             "Be concise and direct. "
             "Use only ASCII characters (a-z, A-Z, 0-9, punctuation). "
             "No emoji, no unicode. "
@@ -350,7 +352,9 @@ class AIGateway(Extension):
             # "Callsign" and was told "your callsign isn't in the message".
             rules += (
                 f" You are talking to {sender}; that is the station asking, "
-                "not you. Never claim to be that callsign or any other."
+                "not you. You are not a station and have no callsign of your "
+                "own. Never sign as another callsign, never use DE with one, "
+                "and do not role-play a QSO - answer as a service."
             )
         operator = cfg.get("system_prompt", "").strip()
         system_prompt = (rules + " " + operator) if operator else rules
