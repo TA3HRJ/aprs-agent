@@ -408,6 +408,34 @@ grouping starts trusting gates.
 senders inside the 30-minute window, against how many produced a recorded
 opening? The gap between those two numbers is the size of the finding.
 
+**The check is already written and already failing.** `tools/check_prop_bundle.py`
+asserts the three things this package has to make true, and run against the
+live bundle on 2026-08-17 it reported every one of them broken:
+
+```
+checked 6 of 7 anomalous links
+largest published multiplier: 23x  (SQ8MAE-9 -> SR8MBR-1)
+
+FAIL  at_flag has no sigma_km / threshold_km, so the bundle cannot show
+      what the distance was compared against
+FAIL  divides 446.3 km by an ema of 19.5 km — a denominator below the
+      300 km floor cannot bound the result
+FAIL  gate_baseline has 407 samples against at_flag's 399. The extra 8
+      arrived after the flag, so the baseline offered as this gate's own
+      history includes the event it is judging
+```
+
+Every link sampled failed all three, and the sample-count gap is between 1
+and 8 depending on how busy the gate is — the drift is not an edge case, it
+is what the bundle does. Writing the check first means the fix is provable in
+one command instead of by reading JSON and hoping.
+
+**Scheduled:** the week of 2026-08-24. Not for technical reasons — the change
+is a day's work — but because it edits `station_db.py`'s hot path and the
+class of mistake it invites is the invisible kind: a wrong baseline looks
+exactly like a right one. That is work for a fresh session, not the end of a
+long one.
+
 **Files:** `station_db.py` (`_prop_links.append`, `gate_baseline`,
 `find_prop_event`), `web_gui.py` (`get_prop_evidence`).
 
