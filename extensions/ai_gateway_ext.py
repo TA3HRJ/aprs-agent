@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import time
+import unicodedata
 from typing import Optional
 
 import aprslib
@@ -35,11 +37,26 @@ _TR_MAP = str.maketrans(
 )
 
 _UNICODE_REPLACE = {
-    "…": "...", "‘": "'", "’": "'",
-    "“": '"', "”": '"', "–": "-",
-    "—": "-", " ": " ", "​": "",
-    "°": " derece", "é": "e", "è": "e",
-    "à": "a",
+    "\u2026": "...", "\u2018": "'", "\u2019": "'",
+    "\u201c": '"', "\u201d": '"',
+    # Dashes are spaced on purpose. An unspaced dash straight after a
+    # callsign reads as an SSID: "operated by TA3HRJ\u2014more at ..."
+    # arrived as "TA3HRJ-more", which looks like a station rather than a
+    # sentence. Doubled spaces are collapsed in _to_ascii.
+    "\u2013": " - ", "\u2014": " - ",
+    "\u00a0": " ", "\u200b": "",
+    "\u00b0": " derece",
+}
+
+# Letters with no canonical decomposition, so stripping combining marks
+# cannot reach them. Everything else - e-acute, a-tilde, n-tilde, u-umlaut
+# and the rest of Latin script - is handled by the NFD pass below.
+_LATIN_EXTRA = {
+    "\u00df": "ss", "\u00e6": "ae", "\u00c6": "AE",
+    "\u0153": "oe", "\u0152": "OE",
+    "\u00f8": "o", "\u00d8": "O", "\u0111": "d", "\u0110": "D",
+    "\u0142": "l", "\u0141": "L",
+    "\u00fe": "th", "\u00de": "Th", "\u00f0": "d", "\u00d0": "D",
 }
 
 _PROVIDER_URLS = {
@@ -69,10 +86,22 @@ _CRLF = "\r\n"
 
 
 def _to_ascii(text: str) -> str:
+    """Fold to printable ASCII without losing the letter under the accent.
+
+    Order matters. The Turkish map runs first because dotless i has no
+    decomposition and would simply disappear in the NFD pass; after it, the
+    Turkish letters are already ASCII. Everything else in Latin script then
+    loses its combining marks rather than itself.
+    """
     for k, v in _UNICODE_REPLACE.items():
         text = text.replace(k, v)
     text = text.translate(_TR_MAP)
-    return "".join(ch for ch in text if 32 <= ord(ch) <= 126)
+    for k, v in _LATIN_EXTRA.items():
+        text = text.replace(k, v)
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = "".join(ch for ch in text if 32 <= ord(ch) <= 126)
+    return re.sub(r" {2,}", " ", text).strip()
 
 
 def _split_message(text: str, max_parts: int) -> list[str]:
