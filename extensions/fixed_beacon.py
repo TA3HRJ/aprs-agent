@@ -84,7 +84,28 @@ class FixedBeacon(Extension):
 
         while True:
             await self._send_beacon()
+            await self._send_status()
             await asyncio.sleep(interval_seconds)
+
+    async def _send_status(self) -> None:
+        """Send this station's APRS status packet, if one is configured.
+
+        A position report carries a comment; a status is a separate packet
+        with a separate text, and aprs.fi shows both at once. Keeping them
+        apart means the comment can say what the station is while the status
+        says who runs it, instead of one field carrying both badly.
+
+        The 62-character cap is the conventional limit for status text.
+        """
+        if self._queue is None:
+            return
+        text = (self._config.get("status_text") or "").strip()
+        if not text:
+            return
+        ssid = self._config.get("ssid", "N0CALL-10").upper()
+        packet = f"{ssid}>AP4GNT,TCPIP*:>{text[:62]}\r\n"
+        await self._queue.put(packet.encode("utf-8"))
+        self.log(f"status sent: {packet.strip()}")
 
     async def _send_beacon(self) -> None:
         """Build and enqueue one APRS position beacon packet."""

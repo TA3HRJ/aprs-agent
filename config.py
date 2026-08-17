@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.71"
+VERSION = "3.2.72"
 
 # ── Secret handling for the HTTP API ────────────────────────────────────────
 # print_config()'s masking below is for human eyes: it keeps the first and last
@@ -195,6 +195,10 @@ DEFAULTS: dict[str, Any] = {
             "symbol_table": "/",
             "symbol": "-",
             "comment": "APRS-Agent | https://github.com/YOUR_USERNAME/aprs-agent",
+            # A separate APRS status packet, shown by aprs.fi as "Last
+            # status" beside the comment rather than instead of it. Empty
+            # = nothing sent.
+            "status_text": "",
             "beacon_interval_mins": 15,
         },
         "bluesky": {

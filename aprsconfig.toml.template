@@ -219,6 +219,15 @@ comment = "APRS-Agent | https://github.com/YOUR_USERNAME/aprs-agent"
 # How often to send the beacon (in minutes)
 beacon_interval_mins = 15
 
+# A separate APRS status packet, sent alongside the position beacon.
+# APRS carries two independent texts per station and aprs.fi shows both:
+# "Comment" comes from the position report, "Last status" from this. Use
+# the comment for what the station is and the status for where it comes
+# from, instead of one field carrying both. Max 62 characters, empty =
+# nothing sent.
+#   status_text = "APRS-Agent | example.org"
+status_text = ""
+
 
 # --- SMTP Email ---
 # Forwards APRS messages to email. Useful for receiving APRS messages
