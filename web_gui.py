@@ -1807,8 +1807,12 @@ class AgentManager:
             "uptime": int(now - self._started_at) if self.running and self._started_at else 0,
             "uptime_total": int(self.lifelong_uptime()),
             "packets": self._pkt_count,
+            # Named for what it is. "unique" is this run; the registry is
+            # what is on record, and the bar used to show only the first
+            # under a label that read as the second.
             "unique": self._unique_count,
             "unique_calls": self._unique_calls,
+            "registry": self._station_db.count(),
             "received": self._ai_rx,
             "sent": self._ai_tx,
             "errors": self._err_count,
@@ -1994,6 +1998,24 @@ async def info(request: web.Request) -> web.Response:
         # Lifetime AI analysis calls (quota watch) — operator info too
         data["ai_calls"] = mgr._ai_calls
     return web.json_response(data)
+
+
+def _evidence(request: web.Request, payload: dict) -> web.Response:
+    """Send an evidence bundle, dropping our own reading when ?blind=1.
+
+    The method these bundles exist for asks for a blind first pass: let an
+    outside model reach its own conclusion before it sees ours. Doing that by
+    hand meant editing JSON, so it got skipped — and a note read first anchors
+    the reader rather than informing them. The whole block goes, not just the
+    note: `provider` alone is enough of a fingerprint to tell a reader which
+    family wrote the thing they are about to agree with.
+    """
+    if request.query.get("blind") in ("1", "true", "yes"):
+        payload = dict(payload)
+        payload.pop("assessment", None)
+        payload["assessment_omitted"] = (
+            "blind=1 — this station's own reading was removed before export")
+    return web.json_response(payload)
 
 
 @routes.get("/api/counters")
@@ -2402,7 +2424,7 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
     ai_cfg = cfg.get("extensions", {}).get("ai_gateway", {})
     note = mgr._silence_ai_notes.get(cell, "")
 
-    return web.json_response({
+    return _evidence(request, {
         "schema": "aprs-agent.silence-evidence/1",
         "generated_at": now,
         # Present when the timeline was scrubbed: this bundle describes the
@@ -2735,7 +2757,7 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
     ai_cfg = cfg.get("extensions", {}).get("ai_gateway", {})
     note = (event or {}).get("note", "") or link.get("note", "")
 
-    return web.json_response({
+    return _evidence(request, {
         "schema": "aprs-agent.propagation-evidence/1",
         "generated_at": int(time.time()),
         "generated_by": {

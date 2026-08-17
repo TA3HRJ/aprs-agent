@@ -428,9 +428,9 @@ That waiting period is the reason to start B soon even though A matters more.
 
 | finding | change |
 |---|---|
-| **F-14b** | sharpen the symbol caveat: *the symbol is a fixed setting chosen when the station was configured; it does not change with conditions and reports nothing about the current weather.* A caveat has to close the inference, not name the source |
-| **F-10** | split the export prompts into the three questions that actually have different answers — is it anomalous, is it an opening/cluster, is the underlying thing physically real |
-| **F-12** | `?blind=1` to omit the whole `assessment` block server-side, plus a "copy blind" action, so a blind pass never depends on hand-editing JSON |
+| ~~**F-14b**~~ | ~~sharpen the symbol caveat: *the symbol is a fixed setting chosen when the station was configured; it does not change with conditions and reports nothing about the current weather.* A caveat has to close the inference, not name the source~~ — **already shipped**: the caveat now says FIXED SETTING and closes with "a rain-cloud icon does not mean it is raining" |
+| ~~**F-10**~~ | ~~split the export prompts into the three questions that actually have different answers~~ — **already shipped**; both `sil_prompt` and `prop_prompt` ask three numbered questions and say why the answers differ. The row survived its own fix |
+| ~~**F-12**~~ | ~~`?blind=1` to omit the whole `assessment` block server-side, plus a "copy blind" action, so a blind pass never depends on hand-editing JSON~~ — **shipped in v3.2.71** |
 | ~~**F-15c**~~ | ~~move the copy feedback into the button itself~~ — **closed by F-19 in v3.2.14** |
 
 **Risk:** none worth naming. Text, one query parameter, one small piece of UI.

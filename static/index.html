@@ -793,7 +793,8 @@ body.public .sb-toggle{display:none!important}
     <div class="cell diag"><div class="v" id="xTX">0</div><div class="l" data-i="st_tx">Sent</div></div>
     <div class="cell diag"><div class="v" id="xER">0</div><div class="l" data-i="st_err">Errors</div></div>
     <div class="cell pk"><div class="v" id="xPK">0</div><div class="l" data-i="st_pk">Packets</div></div>
-    <div class="cell"><div class="v" id="xST">0</div><div class="l" data-i="st_stations">Stations</div></div>
+    <div class="cell"><div class="v" id="xST">0</div><div class="l" data-i="st_heard">Heard</div></div>
+      <div class="cell"><div class="v" id="xRG">0</div><div class="l" data-i="st_registry">Registry</div></div>
     <div class="cell"><div class="v" id="xCS">0</div><div class="l" data-i="st_calls">Callsigns</div></div>
     <div class="cell"><div class="v" id="xUP">—</div><div class="l" data-i="st_uptime">Uptime</div></div>
     <div class="cell"><div class="v" id="xLF">—</div><div class="l" data-i="st_lifetime">Lifetime</div></div>
@@ -903,7 +904,7 @@ const S={en:{
   imap_interval:"Poll interval (min)",imap_from:"From callsign",imap_allowed:"Allowed sender emails",imap_allowed_hint:"Comma-separated, empty = allow all",
   ext_enabled:"Extension Server",ext_sub:"Bidirectional TCP stream for external programs",ext_host:"Listen host",ext_port:"Listen port",
   cfg_path:"Path",status_stopped:"● Stopped",status_running:"● Running",btn_reload:"🔄 Reload",btn_save:"💾 Save",btn_start:"▶ Start",btn_stop:"■ Stop",
-  heard_label:"Last Heard",st_rx:"Received",st_tx:"Sent",st_err:"Errors",st_pk:"Packets",st_stations:"Stations",st_calls:"Callsigns",st_uptime:"Uptime",st_lifetime:"Lifetime",btn_about:"About",
+  heard_label:"Last Heard",st_rx:"Received",st_tx:"Sent",st_err:"Errors",st_pk:"Packets",st_heard:"Heard",st_registry:"Registry",st_stations:"Stations",st_calls:"Callsigns",st_uptime:"Uptime",st_lifetime:"Lifetime",btn_about:"About",
   about_title:"About APRS-Agent",about_desc:"A multi-extension APRS-IS agent for amateur radio operators.",about_devs:"Developers",about_source:"Source:",about_infra:"Infrastructure",about_infra_detail:"Contabo VPS, Germany · Ubuntu 22.04 LTS",about_ai_calls:"AI analysis calls (lifetime):",about_license:"MIT License",about_close:"Close",
   save_ok:"Config saved.",save_err:"Save failed.",reload_ok:"Config reloaded.",no_callsign:"Enter your callsign first.",
   save_restart_hint:"⚠ The running agent won't see this change until you Stop and Start it again.",
@@ -916,7 +917,7 @@ const S={en:{
   sil_no_local:"Not announced: not one of these stations was heard by an igate — every one either gated itself or dialled the APRS-IS backbone directly. Their silence is an internet or app dropout, and says nothing about this region.",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",
   sil_q_before:"{t} before",sil_q_after:"{t} after",
-  sil_dl:"Raw data",sil_cp:"Copy as AI prompt",
+  sil_dl:"Raw data",sil_cp:"Copy as AI prompt",sil_cp_blind:"Kör kopyala",sil_cp_blind:"Copy blind",
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
@@ -1047,7 +1048,7 @@ const S={en:{
   imap_interval:"Yoklama aralığı (dk)",imap_from:"Gönderen çağrı işareti",imap_allowed:"İzin verilen gönderen e-postalar",imap_allowed_hint:"Virgülle ayır, boş = hepsi",
   ext_enabled:"Extension Sunucusu",ext_sub:"Harici programlar için çift yönlü TCP akışı",ext_host:"Dinleme adresi",ext_port:"Dinleme portu",
   cfg_path:"Dosya yolu",status_stopped:"● Durduruldu",status_running:"● Çalışıyor",btn_reload:"🔄 Yenile",btn_save:"💾 Kaydet",btn_start:"▶ Başlat",btn_stop:"■ Durdur",
-  heard_label:"Son Duyulan",st_rx:"Alınan",st_tx:"Gönderilen",st_err:"Hata",st_pk:"Paket",st_stations:"İstasyon",st_calls:"Çağrı İşareti",st_uptime:"Süre",st_lifetime:"Toplam Süre",btn_about:"Hakkında",
+  heard_label:"Son Duyulan",st_rx:"Alınan",st_tx:"Gönderilen",st_err:"Hata",st_pk:"Paket",st_heard:"Duyulan",st_registry:"Kayıtlı",st_stations:"İstasyon",st_calls:"Çağrı İşareti",st_uptime:"Süre",st_lifetime:"Toplam Süre",btn_about:"Hakkında",
   about_title:"APRS-Agent Hakkında",about_desc:"Amatör radyo operatörleri için çok eklentili bir APRS-IS ajanı.",about_devs:"Geliştiriciler",about_source:"Kaynak:",about_infra:"Altyapı",about_infra_detail:"Contabo VPS, Almanya · Ubuntu 22.04 LTS",about_ai_calls:"AI analiz çağrısı (toplam):",about_license:"MIT Lisansı",about_close:"Kapat",
   save_ok:"Ayarlar kaydedildi.",save_err:"Kaydetme başarısız.",reload_ok:"Ayarlar yeniden yüklendi.",no_callsign:"Çağrı işaretinizi girin.",
   save_restart_hint:"⚠ Çalışan ajan bu değişikliği görmeyecek — Durdur'a basıp tekrar Başlat'a basmanız gerekir.",
@@ -1332,7 +1333,7 @@ function fmtUp(s){if(!s||s<=0)return'—';const h=Math.floor(s/3600),m=Math.floo
 function fmtAgo(t){if(t<60)return t+'s';if(t<3600)return Math.floor(t/60)+'m';return Math.floor(t/3600)+'h'}
 // Lifelong uptime spans releases and reboots, so it needs a days field
 function fmtLife(s){if(!s||s<=0)return'—';const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);if(d)return d+'d '+h+'h';if(h)return h+'h '+String(m).padStart(2,'0')+'m';return m+'m'}
-function onStats(d){setStatus(d.running);$('xPK').textContent=d.packets;$('xST').textContent=d.unique;$('xCS').textContent=d.unique_calls||0;$('xRX').textContent=d.received||0;$('xTX').textContent=d.sent||0;$('xER').textContent=d.errors||0;$('xUP').textContent=d.running?fmtUp(d.uptime):'—';$('xLF').textContent=fmtLife(d.uptime_total);lastStations=d.stations||[];renderHeard()}
+function onStats(d){setStatus(d.running);$('xPK').textContent=d.packets;$('xST').textContent=d.unique;$('xRG').textContent=d.registry!=null?d.registry:'\u2014';$('xCS').textContent=d.unique_calls||0;$('xRX').textContent=d.received||0;$('xTX').textContent=d.sent||0;$('xER').textContent=d.errors||0;$('xUP').textContent=d.running?fmtUp(d.uptime):'—';$('xLF').textContent=fmtLife(d.uptime_total);lastStations=d.stations||[];renderHeard()}
 function renderHeard(){
   const bar=$('heard');bar.querySelectorAll('.hc').forEach(el=>el.remove());
   const chips=lastStations.slice();
