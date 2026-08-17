@@ -140,13 +140,17 @@ class AIGateway(Extension):
     # the whole of APRS-IS.
     _CFG_REFRESH_S = 5.0
 
+    # How long a message counts as already seen. Long enough to swallow a
+    # sender's retries, short enough that asking again later is answered.
+    _DEDUP_TTL_S = 600.0
+
     def __init__(self, config: dict, config_path: str = ""):
         self._config = config
         self._config_path = config_path
         self._cfg_read_at = 0.0
         self._cfg_mtime = 0.0
         self._validate()
-        self._processed: set[str] = set()
+        self._processed: dict[str, float] = {}   # key -> expiry
         self._own_writer: Optional[asyncio.Queue] = None
         self._msg_counter = 0
         # Token bucket per sender: a burst of questions costs nothing, and the
@@ -315,7 +319,7 @@ class AIGateway(Extension):
                     self.error(f"status packet failed: {type(e).__name__}: {e}")
             await asyncio.sleep(mins * 60)
 
-    async def _ask_ai(self, question: str) -> str:
+    async def _ask_ai(self, question: str, sender: str = "") -> str:
         cfg = self._config
         extra = int(cfg.get("extra_sms", 0))
         total_parts = 1 + extra
@@ -323,15 +327,33 @@ class AIGateway(Extension):
 
         from datetime import datetime, timezone
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        system_prompt = cfg.get("system_prompt", "") or (
-            "You are an AI running on an APRS amateur radio system. "
+
+        # The mechanical constraints always apply. They used to live inside the
+        # default prompt, so setting system_prompt in the config discarded them
+        # along with everything else: measured live, 3 of 4 answers then ran
+        # past the limit and were cut mid-sentence, and the model no longer
+        # knew the date. An operator's prompt is about content and identity;
+        # the length of an APRS message is not theirs to choose.
+        rules = (
+            "You are an AI reached over APRS on amateur radio. "
             f"Current date/time: {today}. "
-            f"Keep your answer under {char_limit} characters. "
+            f"Your whole answer must be under {char_limit} characters - "
+            "count them, and stop early rather than be cut off mid-sentence. "
             "Be concise and direct. "
             "Use only ASCII characters (a-z, A-Z, 0-9, punctuation). "
-            "No emoji, no unicode, no special characters. "
+            "No emoji, no unicode. "
             "Answer in the same language as the question."
         )
+        if sender:
+            # The sender's callsign is in the packet header, so asking them for
+            # it is asking for something already known. TG5ALY-14 sent
+            # "Callsign" and was told "your callsign isn't in the message".
+            rules += (
+                f" You are talking to {sender}; that is the station asking, "
+                "not you. Never claim to be that callsign or any other."
+            )
+        operator = cfg.get("system_prompt", "").strip()
+        system_prompt = (rules + " " + operator) if operator else rules
 
         api_key = resolve_ai_api_key(cfg, self._provider)
         base_url = self._base_url
@@ -451,12 +473,20 @@ class AIGateway(Extension):
             return None
 
         msg_id = packet.get("msgNo", "")
+        # Retries have to be absorbed, but a repeat is not a retry. With no
+        # msgNo the key is sender+text, and it used to live forever: asking
+        # the same question an hour later was met with silence, which is
+        # indistinguishable from the gateway being down. Seen live -
+        # CT4TX-10 asked "what APRS mean?" twice, seven minutes apart, and
+        # was answered once.
+        now_ts = time.time()
+        if self._processed:
+            for k, exp in [(k, e) for k, e in self._processed.items() if e <= now_ts]:
+                del self._processed[k]
         dedup_key = f"{sender_full}:{msg_id or raw_msg}"
         if dedup_key in self._processed:
             return None
-        self._processed.add(dedup_key)
-        if len(self._processed) > 10000:
-            self._processed = set(list(self._processed)[-5000:])
+        self._processed[dedup_key] = now_ts + self._DEDUP_TTL_S
 
         # Ack immediately -- it means "your message was received", not
         # "answered", so it shouldn't wait on the AI call or the whitelist
@@ -517,7 +547,7 @@ class AIGateway(Extension):
 
         self.log(f"RX from {sender_full}: {question}")
 
-        answer = await self._ask_ai(question)
+        answer = await self._ask_ai(question, sender_full)
         if not answer:
             return None
 
