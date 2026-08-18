@@ -1378,6 +1378,25 @@ class StationDB:
         rec = self._stations.get(callsign)
         return rec.to_dict() if rec else None
 
+    def nearest_wx(self, lat: float, lon: float,
+                   max_km: float = 100.0) -> "Optional[tuple[dict, float]]":
+        """The closest station carrying a live weather reading, or None.
+
+        Walks the whole registry, so call it off the event loop like
+        silence_cells(). The temperature test comes first and rejects all but
+        a few thousand records before any trigonometry runs.
+        """
+        best, best_km = None, None
+        for rec in self._stations.values():
+            if rec.wx_temp_c is None or rec.lat is None or rec.lon is None:
+                continue
+            d = self._haversine_km(lat, lon, rec.lat, rec.lon)
+            if best_km is None or d < best_km:
+                best, best_km = rec, d
+        if best is None or best_km > max_km:
+            return None
+        return best.to_dict(), best_km
+
     def count(self) -> int:
         return len(self._stations)
 

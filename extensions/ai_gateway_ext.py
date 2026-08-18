@@ -150,6 +150,56 @@ def _station_answer(db, wanted: str, rec: "Optional[dict]") -> str:
     return " ".join(bits) + ". My own feed only; full history: aprs.fi"
 
 
+# A 4- or 6-character Maidenhead locator, standing alone in a question.
+_GRID_IN_TEXT = re.compile(r"\b([A-R]{2}[0-9]{2}(?:[A-X]{2})?)\b")
+
+_WX_RADIUS_KM = 100.0        # beyond this, somebody else's weather
+
+
+def _grid_to_latlon(grid: str):
+    """Centre of a Maidenhead square. Enough for "which station is nearest"."""
+    g = grid.upper()
+    try:
+        lon = (ord(g[0]) - 65) * 20 - 180
+        lat = (ord(g[1]) - 65) * 10 - 90
+        lon += int(g[2]) * 2
+        lat += int(g[3]) * 1
+        if len(g) >= 6:
+            lon += (ord(g[4]) - 65) * 5 / 60.0
+            lat += (ord(g[5]) - 65) * 2.5 / 60.0
+            return lat + 1.25 / 60.0, lon + 2.5 / 60.0
+        return lat + 0.5, lon + 1.0
+    except (IndexError, ValueError):
+        return None
+
+
+def _wx_answer(rec: dict, dist_km: float) -> str:
+    """One weather station's reading, with the two facts that qualify it.
+
+    Distance and age are fields, not sentences, so neither can be dropped:
+    a reading from 90 km away six hours ago is not the weather here, and the
+    reader has to be able to see that without being told.
+    """
+    bits = []
+    t = rec.get("wx_temp_c")
+    if t is not None:
+        bits.append("%.1fC" % t)
+    h = rec.get("wx_humidity")
+    if h is not None:
+        bits.append("%d%%RH" % h)
+    p = rec.get("wx_pressure_mb")
+    if p:
+        bits.append("%.0fmb" % p)
+    g = rec.get("wx_wind_gust_ms")
+    if g:
+        bits.append("gust %.1fm/s" % g)
+    ago = rec.get("last_seen_ago_s")
+    return "%s %.0fkm away, %s: %s. My own feed only, not a forecast" % (
+        rec.get("callsign", "?"), dist_km,
+        _ago(ago) if ago is not None else "age unknown",
+        ", ".join(bits) or "no readings")
+
+
 def _split_message(text: str, max_parts: int) -> list[str]:
     if len(text) <= 64:
         return [text]
@@ -376,6 +426,61 @@ class AIGateway(Extension):
                 except Exception as e:
                     self.error(f"status packet failed: {type(e).__name__}: {e}")
             await asyncio.sleep(mins * 60)
+
+    async def _wx_lookup(self, question: str,
+                         sender_full: str) -> "Optional[str]":
+        """Nearest weather station to the sender, or to a grid they name.
+
+        Returns None when the question is not about weather, so everything
+        else follows the ordinary path.
+
+        No geocoding: a city name is refused rather than guessed. We have no
+        gazetteer, and naming the wrong Izmir is worse than saying no.
+        """
+        db = self._station_db
+        if db is None:
+            return None
+        text = question.upper()
+        if not any(w in text for w in ("WEATHER", "WX ", " WX", "TEMP", "FORECAST",
+                                       "HAVA DURUMU", "HAVA NASIL", "SICAKLIK",
+                                       "YAGMUR", "RAIN")):
+            return None
+
+        # where to measure from
+        origin, origin_note = None, ""
+        grid = _GRID_IN_TEXT.search(text)
+        if grid:
+            origin = _grid_to_latlon(grid.group(1))
+            origin_note = grid.group(1)
+        if origin is None:
+            try:
+                me = db.get_one(sender_full) or db.get_one(strip_ssid(sender_full))
+            except Exception as e:
+                self.error(f"wx lookup failed: {e}")
+                return None
+            if me and me.get("lat") is not None:
+                origin, origin_note = (me["lat"], me["lon"]), "your last position"
+        if origin is None:
+            return ("I do not know where you are and I cannot look up place "
+                    "names. Send a grid like KM38, or use a weather service.")
+
+        # Nearest station carrying a reading. The scan walks the whole
+        # registry, so it goes to a thread - the same rule silence_cells()
+        # earned the hard way twice.
+        try:
+            hit = await asyncio.get_event_loop().run_in_executor(
+                None, db.nearest_wx, origin[0], origin[1], _WX_RADIUS_KM)
+        except Exception as e:
+            self.error(f"wx scan failed: {e}")
+            return None
+
+        if hit is None:
+            return ("No APRS weather station within %.0fkm of %s in my records. "
+                    "Try a weather service." % (_WX_RADIUS_KM, origin_note))
+        rec, dist_km = hit
+        self.log("wx lookup: %s -> %s at %.0fkm"
+                 % (sender_full, rec.get("callsign"), dist_km))
+        return _wx_answer(rec, dist_km)
 
     def _self_lookup(self, question: str, sender_base: str) -> "Optional[str]":
         """Answer about the sender's own station, or hand back to the model.
@@ -649,14 +754,6 @@ class AIGateway(Extension):
                 await self._send_reply(my_call, sender_full, notice)
             return None
 
-        allowed, notice = self._allow_daily(cfg)
-        if not allowed:
-            self.warn(f"daily limit reached, refused {sender_full}"
-                      + (" (told)" if notice else ""))
-            if notice:
-                await self._send_reply(my_call, sender_full, notice)
-            return None
-
         self.log(f"RX from {sender_full}: {question}")
 
         # A question naming a callsign is answered from the registry, not by
@@ -665,6 +762,16 @@ class AIGateway(Extension):
         # it, and the packet header already says who is asking.
         answer = self._self_lookup(question, sender_base)
         if answer is None:
+            answer = await self._wx_lookup(question, sender_full)
+        if answer is None:
+            # Only now, with the free answers exhausted, does this cost money.
+            allowed, notice = self._allow_daily(cfg)
+            if not allowed:
+                self.warn(f"daily limit reached, refused {sender_full}"
+                          + (" (told)" if notice else ""))
+                if notice:
+                    await self._send_reply(my_call, sender_full, notice)
+                return None
             answer = await self._ask_ai(question, sender_full)
         if not answer:
             return None
