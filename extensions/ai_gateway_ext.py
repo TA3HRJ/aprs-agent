@@ -104,6 +104,52 @@ def _to_ascii(text: str) -> str:
     return re.sub(r" {2,}", " ", text).strip()
 
 
+# A callsign as it appears in a question: prefix, digit, suffix, optional SSID.
+# The same shape station_db uses to tell a callsign from an APRS object name -
+# TABOR and TAPIOLA start with a Turkish prefix and are neither.
+_CALL_IN_TEXT = re.compile(r"\b([A-Z0-9]{1,2}[0-9][A-Z]{1,4})(-[0-9]{1,2})?\b")
+
+
+def _ago(seconds: float) -> str:
+    """Plain age, because a position without one arrives in the present tense."""
+    s = int(max(0, seconds))
+    if s < 90:
+        return "%ds ago" % s
+    if s < 5400:
+        return "%dmin ago" % round(s / 60)
+    if s < 172800:
+        return "%dh ago" % round(s / 3600)
+    return "%dd ago" % round(s / 86400)
+
+
+def _station_answer(db, wanted: str, rec: "Optional[dict]") -> str:
+    """One line about one station, or a plain statement that we have nothing.
+
+    Everything a model could get wrong here is a fixed field: the age is
+    always printed, the source is always named as this station's own feed,
+    and aprs.fi is offered because it has the history we do not.
+    """
+    if not rec:
+        return ("%s is not in my records. It may not have been heard here. "
+                "Try aprs.fi" % wanted)
+    lat, lon = rec.get("lat"), rec.get("lon")
+    ago = rec.get("last_seen_ago_s")
+    bits = [wanted + ":"]
+    if lat is not None and lon is not None:
+        bits.append("%.3f,%.3f" % (lat, lon))
+        loc = (rec.get("locator") or "")[:6]
+        if loc:
+            bits.append("(%s)" % loc)
+    else:
+        bits.append("heard, no position")
+    if ago is not None:
+        bits.append(_ago(ago))
+    gate = rec.get("last_gate")
+    if gate:
+        bits.append("via " + str(gate))
+    return " ".join(bits) + ". My own feed only; full history: aprs.fi"
+
+
 def _split_message(text: str, max_parts: int) -> list[str]:
     if len(text) <= 64:
         return [text]
@@ -170,6 +216,7 @@ class AIGateway(Extension):
         self._day_count = 0
         self._day_told = False
         self._status_started = False
+        self._station_db = None        # set by set_station_db()
         self._provider = config.get("provider", "puter")
         self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(
             self._provider, _PROVIDER_URLS["puter"])
@@ -291,6 +338,9 @@ class AIGateway(Extension):
     def is_spawnable(self) -> bool:
         return False
 
+    def set_station_db(self, db) -> None:
+        self._station_db = db
+
     def set_own_writer(self, q: asyncio.Queue) -> None:
         self._own_writer = q
         if not self._status_started:
@@ -326,6 +376,41 @@ class AIGateway(Extension):
                 except Exception as e:
                     self.error(f"status packet failed: {type(e).__name__}: {e}")
             await asyncio.sleep(mins * 60)
+
+    def _self_lookup(self, question: str, sender_base: str) -> "Optional[str]":
+        """Answer about the sender's own station, or hand back to the model.
+
+        Returns None when the question is not one of these, so everything else
+        follows the ordinary path.
+
+        Only the sender's own base callsign is served. A different one gets a
+        flat refusal rather than a lookup: the data is public and aprs.fi
+        serves it, but a service that answers "where is XX1YYY" on request is
+        a different object from a map somebody chose to open, and the people
+        most interested in that difference are not the ones it would help.
+        """
+        db = self._station_db
+        if db is None or not sender_base:
+            return None
+        text = question.upper()
+        if not any(w in text for w in ("WHERE", "LOCAT", "LAST HEARD", "HEARD",
+                                       "NEREDE", "KONUM", "SON DUYUL")):
+            return None
+        found = _CALL_IN_TEXT.findall(text)
+        if not found:
+            return None
+        for base, ssid in found:
+            if base == sender_base:
+                wanted = base + (ssid or "")
+                try:
+                    rec = db.get_one(wanted) or db.get_one(base)
+                except Exception as e:
+                    self.error(f"registry lookup failed: {e}")
+                    return None
+                self.log(f"self-lookup: {sender_base} asked about {wanted}")
+                return _station_answer(db, wanted, rec)
+        return ("I only look up your own callsign. For other stations, "
+                "aprs.fi or findu.com.")
 
     async def _ask_ai(self, question: str, sender: str = "") -> str:
         cfg = self._config
@@ -574,7 +659,13 @@ class AIGateway(Extension):
 
         self.log(f"RX from {sender_full}: {question}")
 
-        answer = await self._ask_ai(question, sender_full)
+        # A question naming a callsign is answered from the registry, not by
+        # the model — but only about the sender's own. All the risk in this
+        # feature is third-party lookup; asking about yourself carries none of
+        # it, and the packet header already says who is asking.
+        answer = self._self_lookup(question, sender_base)
+        if answer is None:
+            answer = await self._ask_ai(question, sender_full)
         if not answer:
             return None
 

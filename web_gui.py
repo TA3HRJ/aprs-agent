@@ -787,7 +787,11 @@ class AgentManager:
                     # extension addressable by the whole world, so its
                     # whitelist has to be closeable without a restart.
                     if cls is AIGateway:
-                        ExtensionRegistry.register(cls(cfg, self.config_path))
+                        ext = cls(cfg, self.config_path)
+                        # Its own registry, for answering a sender about their
+                        # own callsign. Nothing else reads it.
+                        ext.set_station_db(self._station_db)
+                        ExtensionRegistry.register(ext)
                     else:
                         ExtensionRegistry.register(cls(cfg))
                 except Exception as e:

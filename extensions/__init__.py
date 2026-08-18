@@ -47,6 +47,16 @@ class Extension(ABC):
         """
         return False
 
+    def set_station_db(self, db) -> None:
+        """Hand the extension the live station registry, if it wants one.
+
+        Default is to ignore it. Only the AI gateway uses this, and only to
+        answer a sender about their own callsign — the data is already public
+        and already in this process, and refusing to read it just sent people
+        to aprs.fi for a fact we were sitting on.
+        """
+        return None
+
     def set_own_writer(self, queue: asyncio.Queue) -> None:
         """
         Called once at startup to give the extension a queue for sending

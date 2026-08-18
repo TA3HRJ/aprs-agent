@@ -500,7 +500,7 @@ good outcome to have on record.
 
 ---
 
-## G · "Where is my other radio" — drafted, deliberately not started
+## G · "Where is my other radio" — ✅ SHIPPED in v3.2.75
 
 The first night of public use produced this, and it is the one question the
 gateway is uniquely placed to answer and does not:
@@ -577,7 +577,18 @@ the scope cannot drift without a code change.
 **Explicitly not in scope:** proximity search, movement history, notifications,
 third-party lookup.
 
-### Why it is parked
+### What shipped
+
+Exactly the safe half, and nothing beyond it. A question naming the sender's
+own base callsign is answered from the registry by a template with no model
+call at all; another operator's callsign gets a flat refusal; anything else
+follows the ordinary path to the model. `tools/check_selflookup.py` holds all
+four of those, plus the rule that a position never travels without its age.
+
+Proximity search, movement history, notifications and third-party lookup
+remain out of scope, and the check is what keeps them out.
+
+### Why it was parked
 
 Not for technical reasons. The service is in the middle of a public argument
 about whether it belongs on the air at all; adding a capability that looks like
