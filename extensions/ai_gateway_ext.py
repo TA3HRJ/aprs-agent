@@ -144,13 +144,21 @@ class AIGateway(Extension):
     # sender's retries, short enough that asking again later is answered.
     _DEDUP_TTL_S = 600.0
 
+    # How many times one answer may be replayed to a sender who keeps asking.
+    # Two covers a path that dropped the reply twice; beyond that the sender is
+    # stuck rather than unlucky, and a shared channel should not carry the
+    # difference.
+    _MAX_REPLAYS = 2
+
     def __init__(self, config: dict, config_path: str = ""):
         self._config = config
         self._config_path = config_path
         self._cfg_read_at = 0.0
         self._cfg_mtime = 0.0
         self._validate()
-        self._processed: dict[str, float] = {}   # key -> expiry
+        # key -> (expiry, answer, replays left). The answer is kept so a
+        # retry is served from cache rather than met with silence.
+        self._processed: dict[str, tuple] = {}
         self._own_writer: Optional[asyncio.Queue] = None
         self._msg_counter = 0
         # Token bucket per sender: a burst of questions costs nothing, and the
@@ -485,12 +493,27 @@ class AIGateway(Extension):
         # was answered once.
         now_ts = time.time()
         if self._processed:
-            for k, exp in [(k, e) for k, e in self._processed.items() if e <= now_ts]:
+            for k in [k for k, v in self._processed.items() if v[0] <= now_ts]:
                 del self._processed[k]
         dedup_key = f"{sender_full}:{msg_id or raw_msg}"
-        if dedup_key in self._processed:
+        seen = self._processed.get(dedup_key)
+        if seen is not None:
+            # Asking again almost always means the answer never arrived — an
+            # igate did not gate it back, or the path dropped it. Staying
+            # silent turns a delivery failure into a permanent one, so the
+            # cached answer goes out again. No AI call; the cost is one more
+            # transmission on a path that already failed once.
+            exp, cached, left = seen
+            if cached and left > 0 and self._own_writer:
+                self._processed[dedup_key] = (exp, cached, left - 1)
+                self.log(f"replaying answer to {sender_full} ({left - 1} left)")
+                for i, part in enumerate(_split_message(
+                        cached, 1 + int(cfg.get("extra_sms", 0)))):
+                    await self._send_reply(my_call, sender_full, part)
+                    if i:
+                        await asyncio.sleep(5)
             return None
-        self._processed[dedup_key] = now_ts + self._DEDUP_TTL_S
+        self._processed[dedup_key] = (now_ts + self._DEDUP_TTL_S, "", self._MAX_REPLAYS)
 
         # Ack immediately -- it means "your message was received", not
         # "answered", so it shouldn't wait on the AI call or the whitelist
@@ -556,6 +579,10 @@ class AIGateway(Extension):
             return None
 
         self.log(f"AI response: {answer}")
+        # Kept so a retry can be served without asking again.
+        prev = self._processed.get(dedup_key)
+        if prev is not None:
+            self._processed[dedup_key] = (prev[0], answer, prev[2])
 
         parts = _split_message(answer, 1 + int(cfg.get("extra_sms", 0)))
 
