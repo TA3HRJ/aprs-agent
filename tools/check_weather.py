@@ -41,6 +41,7 @@ CFG = {
     "extra_sms": 3,
     "rate_burst": 0,
     "rate_refill_s": 0,
+    "wx_radius_km": 100,        # pinned: the default is an operator's choice
 }
 
 # The sender, with a position. Anonymised, as every fixture here is.
@@ -84,7 +85,7 @@ async def run() -> int:
         ("nearby",        "TA1ABC-7", "what is the weather?",       FakeDB(),   "template"),
         ("turkish",       "TA1ABC-7", "hava durumu nasil?",         FakeDB(),   "template"),
         ("by grid",       "TA9XYZ-9", "weather in KM38ok?",         FakeDB(),   "template"),
-        ("too far",       "TA1ABC-7", "weather?",                   FakeDB(NEAR, 240.0), "refused"),
+        ("too far",       "TA1ABC-7", "weather?",                   FakeDB(NEAR, 180.0), "refused"),
         ("no position",   "TA9XYZ-9", "what is the weather here?",  FakeDB(),   "refused"),
         ("not weather",   "TA1ABC-7", "What is SWR?",               FakeDB(),   "model"),
     ]

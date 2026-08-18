@@ -406,6 +406,16 @@ rate_notice    = "Too many questions - please wait {m} min, then ask again"
 daily_limit    = 0
 daily_notice   = "Daily question limit reached on this gateway - try tomorrow"
 
+# Weather questions are answered from the nearest APRS weather station this
+# agent has heard — not from the model, and not from a forecast service. This
+# is how far away that station may be. APRS weather coverage is dense in some
+# countries and almost absent in others, so the useful value is local: raise
+# it if you get "no weather station in my records", lower it if the answers
+# come from too far to mean anything. The reply always states the distance
+# and the age of the reading, so nothing arrives sounding more current than
+# it is.
+wx_radius_km   = 250
+
 # One key per provider — switching "provider" above recalls that provider's
 # own key automatically (required even on a provider's free tier)
 [extensions.ai_gateway.api_keys]

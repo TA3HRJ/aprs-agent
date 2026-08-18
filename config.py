@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.76"
+VERSION = "3.2.77"
 
 # ── Secret handling for the HTTP API ────────────────────────────────────────
 # print_config()'s masking below is for human eyes: it keeps the first and last
@@ -264,6 +264,12 @@ DEFAULTS: dict[str, Any] = {
             # because per-sender limits do nothing against many strangers
             # asking once each.
             "daily_limit": 0,
+            # How far away a weather reading may come from and still count as
+            # "here". Coverage is regional: on this instance 235 stations sat
+            # within 100 km and none of them measured weather, while the
+            # nearest that did was 213 km off. The answer always names the
+            # distance, so a reader can judge a far one for themselves.
+            "wx_radius_km": 250,
             # An APRS status packet naming who operates this gateway.
             # The addressee is not a callsign and identifies software,
             # not a station — but somebody who meets it on aprs.fi

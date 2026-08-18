@@ -153,7 +153,12 @@ def _station_answer(db, wanted: str, rec: "Optional[dict]") -> str:
 # A 4- or 6-character Maidenhead locator, standing alone in a question.
 _GRID_IN_TEXT = re.compile(r"\b([A-R]{2}[0-9]{2}(?:[A-X]{2})?)\b")
 
-_WX_RADIUS_KM = 100.0        # beyond this, somebody else's weather
+# Beyond this it is somebody else's weather. Overridable per instance as
+# wx_radius_km: measured on the live registry, 235 stations sat within
+# 100 km of this operator and not one of them measured weather; the
+# nearest that did was 213 km away. Dense in some countries, empty in
+# others - only the operator knows which one they are in.
+_WX_RADIUS_KM = 250.0
 
 
 def _grid_to_latlon(grid: str):
@@ -427,8 +432,8 @@ class AIGateway(Extension):
                     self.error(f"status packet failed: {type(e).__name__}: {e}")
             await asyncio.sleep(mins * 60)
 
-    async def _wx_lookup(self, question: str,
-                         sender_full: str) -> "Optional[str]":
+    async def _wx_lookup(self, question: str, sender_full: str,
+                         cfg: dict) -> "Optional[str]":
         """Nearest weather station to the sender, or to a grid they name.
 
         Returns None when the question is not about weather, so everything
@@ -440,6 +445,7 @@ class AIGateway(Extension):
         db = self._station_db
         if db is None:
             return None
+        radius = float(cfg.get("wx_radius_km") or _WX_RADIUS_KM)
         text = question.upper()
         if not any(w in text for w in ("WEATHER", "WX ", " WX", "TEMP", "FORECAST",
                                        "HAVA DURUMU", "HAVA NASIL", "SICAKLIK",
@@ -469,14 +475,14 @@ class AIGateway(Extension):
         # earned the hard way twice.
         try:
             hit = await asyncio.get_event_loop().run_in_executor(
-                None, db.nearest_wx, origin[0], origin[1], _WX_RADIUS_KM)
+                None, db.nearest_wx, origin[0], origin[1], radius)
         except Exception as e:
             self.error(f"wx scan failed: {e}")
             return None
 
         if hit is None:
             return ("No APRS weather station within %.0fkm of %s in my records. "
-                    "Try a weather service." % (_WX_RADIUS_KM, origin_note))
+                    "Try a weather service." % (radius, origin_note))
         rec, dist_km = hit
         self.log("wx lookup: %s -> %s at %.0fkm"
                  % (sender_full, rec.get("callsign"), dist_km))
@@ -762,7 +768,7 @@ class AIGateway(Extension):
         # it, and the packet header already says who is asking.
         answer = self._self_lookup(question, sender_base)
         if answer is None:
-            answer = await self._wx_lookup(question, sender_full)
+            answer = await self._wx_lookup(question, sender_full, cfg)
         if answer is None:
             # Only now, with the free answers exhausted, does this cost money.
             allowed, notice = self._allow_daily(cfg)
