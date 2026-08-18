@@ -2442,6 +2442,55 @@ there.
 
 ---
 
+## F-2026-08-18-01 — a ceiling meant for the bill was silencing the free answers
+
+The AI gateway's `daily_limit` sat in front of every reply. Its own docstring
+says why it exists: "one viral post away from a bill they did not agree to."
+
+Once the registry lookups landed, that placement was wrong in both directions.
+Every template answer — a position from memory, a weather reading already
+ingested — spent a unit of somebody's API budget while making no API call at
+all. And once the ceiling was reached the gateway refused to tell its own
+sender where its own sender was, which it can do offline, for free, from data
+already in RAM.
+
+**Verdict: file's fault, and mine.** Nothing reasoned badly. The check was
+written when every answer cost money, that stopped being true, and it was not
+moved. The class is worth naming: *a guard placed correctly for one code path
+does not follow that path when a cheaper one is added beside it.* The same
+question applies to the rate limiter and it comes out the other way — that one
+is about RF airtime, which a template answer costs exactly as much as a model
+answer does. Rate limit stays in front; the ceiling now guards `_ask_ai` alone.
+
+`tools/check_weather.py` asserts an exhausted quota still answers.
+
+---
+
+## F-2026-08-18-02 — the radius was a guess, and the measurement inverted it
+
+`wx_radius_km` shipped at 100 km. It sounded like the distance past which a
+temperature stops describing where you are, and as a statement about weather
+that is roughly true.
+
+It is not a statement about weather. It is a statement about APRS weather
+station density, which is a different thing entirely and varies by country.
+Measured against the live registry afterwards: **235 stations within 100 km of
+this instance's own operator, none of them measuring weather; nearest that did,
+213 km.** At the shipped value this gateway would have refused every weather
+question ever put to it, in the one region it was built for, and the logs would
+have shown a working feature answering honestly.
+
+**Verdict: file's fault.** No model was involved — this was a plausible
+constant written without measuring the thing it constrains. It is the same
+error as F-2026-08-16-01 one layer up: a number that looks like a physical
+threshold but is actually a property of our own coverage.
+
+The number is now the operator's. What makes a far reading safe to send is not
+the ceiling but the disclosure — the reply names the distance and the age, so
+a 213 km answer can be judged rather than believed.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

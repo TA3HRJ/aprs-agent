@@ -500,6 +500,44 @@ good outcome to have on record.
 
 ---
 
+## H · "What is the weather" — ✅ SHIPPED in v3.2.76 / v3.2.77
+
+Same shape as §G and shipped with the same template method. The gateway held
+live readings from thousands of APRS weather stations and answered every
+weather question by pointing people at a forecast service.
+
+Answered from `station_db.nearest_wx()`, not the model, because a reading is
+only meaningful with two numbers a model reliably drops when it summarises:
+**how far away it was taken and how old it is.** Both are template fields, so
+neither can go missing. A city name is refused rather than geocoded — there
+is no gazetteer here, and the wrong Izmir is worse than no answer.
+
+`tools/check_weather.py` holds distance present, age present, nothing
+reported past the radius, no city guessed, and a spent daily quota still
+answering.
+
+### Three things the build turned up
+
+**The daily ceiling was gating the whole service, not the bill.** Its own
+docstring says it exists so nobody wakes to an API invoice. A template answer
+sends no invoice, and with the check in front of everything an exhausted
+ceiling silenced answers that cost nothing. It now guards only `_ask_ai`.
+
+**The radius had to be measured, not guessed.** Shipped at 100 km; the live
+registry then showed 235 stations within 100 km of this operator and *not one
+of them measuring weather*, with the nearest that did at 213 km. At 100 km
+this instance would have refused every weather question in the region it was
+built for. Now `wx_radius_km`, default 250.
+
+**Weather does not survive a restart.** SQLite carries 24 station columns and
+none of them start `wx` — readings live in memory only. After each deploy the
+registry has no weather at all until every station sends its next *weather*
+packet, which is not the same as its next beacon: 396 s after restart TA3ONK-13
+had beaconed and still carried nothing, while K5WNG was back in 54 s. Not
+filed as a fault — live weather arguably should not be persisted — but it
+means the first weather question after a restart can honestly answer "none in
+my records" while a station 200 km away is transmitting one.
+
 ## G · "Where is my other radio" — ✅ SHIPPED in v3.2.75
 
 The first night of public use produced this, and it is the one question the
