@@ -378,6 +378,53 @@ collect: the cause distribution is one line.
 The bundle currently contradicts itself, and the fix unblocks the calibration
 that has been waiting since July.
 
+### Start here — measured red, 2026-08-21 (v3.2.80 on the VPS)
+
+The check is written and failing against live data. Reproduce it on the VPS,
+where the admin API lives:
+
+```
+cd /opt/aprs-agent && python3 tools/check_prop_bundle.py --max 12
+```
+
+Exit code 1. **43 problems across 12 anomalous links**, by assertion:
+
+| assertion | links failing |
+|---|---|
+| `at_flag` carries no `sigma_km` | 12 of 12 |
+| `at_flag` carries no `threshold_km` | 12 of 12 |
+| `gate_baseline.samples` exceeds `at_flag.samples` | 12 of 12 |
+| published multiplier divides by an EMA below the 300 km floor | 7 of 12 |
+
+**Done = 0 problems**, same command.
+
+**What this run added to the finding.** F-2026-08-16-01 was written from one
+link, where `gate_baseline` had exactly one sample more than `at_flag` and a
+single EMA step explained it. Across twelve links the drift ranges from **1 to
+21 samples**:
+
+```
+extra samples between flag and read:  1(x3)  3  4(x3)  5(x2)  6  20  21
+```
+
+So the single-step arithmetic in the finding was the mild case. On a busy gate
+the published baseline is not one event stale, it is twenty — and the busier
+the gate, the further the number drifts from the one the decision actually
+used. That strengthens the item rather than changing it: it is still a
+circle, just a wider one.
+
+Real denominators seen in the multiplier, all under the 300 km floor:
+**46.9, 65.4, 117.3, 168.7 km**.
+
+**Why a fresh session:** this edits `station_db.py`'s hot path and the mistake
+it invites is invisible — a wrong baseline looks exactly like a right one. The
+check is the mitigation and it did not exist when this was scheduled; it
+catches all three classes above, against live data, in one command.
+
+**Scope for that session:** the head only — F-2026-08-16-01 plus the recording
+half of F-16. That is what starts F-03's measurement clock. F-09, F-22 and
+F-23 are presentation, independent, and can wait again.
+
 | finding | change |
 |---|---|
 | **F-16** | record the gate's `samples`, `mean`, `sigma` and threshold **as they stood at flag time**, on the link. Show both that and the current baseline |
