@@ -1133,10 +1133,12 @@ class StationDB:
             # "judged against this gate's own history" is wrong exactly on
             # the links this finding is about, and it is what the popup and
             # the line weight have been drawing since v3.2.15.
-            judged = ("gate baseline" if gate_bar >= self.PROP_MIN_KM
+            gate_decided = gate_bar >= self.PROP_MIN_KM
+            judged = ("gate baseline" if gate_decided
                       else "300 km floor — this gate's own bar is lower")
         else:
             gate_bar = None
+            gate_decided = False
             threshold = self.PROP_MIN_KM
             judged = "300 km floor alone"
         self._prop_anomalous += 1
@@ -1172,6 +1174,11 @@ class StationDB:
                 # that history decide anything", and they are not the same
                 # question on a low-EMA gate.
                 "judged_by": judged,
+                # The same fact as a flag. judged_by is prose for a reader;
+                # the map matched on a substring of it for one version, which
+                # is a UI that silently reverts to the wrong state the day
+                # somebody rewords the sentence.
+                "gate_decided": gate_decided,
             },
             "s_lat": round(lat, 4), "s_lon": round(lon, 4),
             "g_lat": round(g.lat, 4), "g_lon": round(g.lon, 4),
@@ -1324,6 +1331,7 @@ class StationDB:
             out["sigma_km"] = at.get("sigma_km")
             out["gate_bar_km"] = at.get("gate_bar_km")
             out["judged_by"] = at.get("judged_by")
+            out["gate_decided"] = at.get("gate_decided")
         else:
             out["ema_km"] = at.get("ema_km")
             out["ema_alpha"] = self._PROP_ALPHA

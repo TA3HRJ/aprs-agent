@@ -2445,7 +2445,7 @@ function renderProp(links,hist){
            // Established by sample count is not the same as judged by that
            // history: 3x an EMA of 0.1 km is 0.3 km, so the floor is what
            // actually bound. Drawn as the weaker claim it is.
-           if(a.judged_by&&a.judged_by.indexOf('own bar is lower')>=0)
+           if(a.established&&a.gate_decided===false)
              return '<br><span class="prop-young">'+t('prop_judged_floor_est')
                     .replace('{n}',a.samples)
                     .replace('{b}',a.gate_bar_km==null?'?':a.gate_bar_km)+'</span>';
@@ -2492,7 +2492,7 @@ function renderProp(links,hist){
     // The second is the majority and much the weaker claim, so it is drawn as
     // the weaker line rather than identically.
     const est=!!(l.at_flag&&l.at_flag.established
-                 &&!(l.at_flag.judged_by||'').match(/own bar is lower/));
+                 &&l.at_flag.gate_decided!==false);
     const vis=L.polyline(coords,{color:col,weight:est?3:2,
                                  opacity:est?0.85:0.35,
                                  dashArray:est?'6 6':'2 8',

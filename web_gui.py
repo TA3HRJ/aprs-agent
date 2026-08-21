@@ -2716,7 +2716,11 @@ def _prop_vs_baseline(link: dict, base: dict, params: dict) -> dict:
     # printed as corroboration: "3x that figure, which here would be 0 km, so
     # this link clears that bar". Measured on the live feed, this is not the
     # rare case (F-2026-08-16-01b).
-    gate_decided = established and bar is not None and float(bar) >= floor
+    # Off the link when it is there; recomputed only for links recorded
+    # before the flag existed.
+    gate_decided = at.get("gate_decided")
+    if gate_decided is None:
+        gate_decided = established and bar is not None and float(bar) >= floor
     if gate_decided:
         reading = (
             "this gate has {n} samples and its own history set the bar at "

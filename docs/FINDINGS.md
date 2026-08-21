@@ -2355,6 +2355,36 @@ preference.
 correctly, labelled the physical path unverified, and only trusted the one
 number the file presented as authoritative.
 
+**✅ Fixed in v3.2.81, 2026-08-22.** All three changes shipped together, plus
+one the fix uncovered (F-2026-08-22-01 below).
+
+`at_flag` now carries `sigma_km`, `threshold_km`, `gate_bar_km` and
+`times_threshold`. `gate_baseline` in the bundle is built from those and from
+nothing else — it never touches the current gate statistics — and the live
+figure is published beside it as `gate_baseline_now`, named for what it is.
+The popup divides by the threshold, which folds the 300 km floor in and so can
+never approach zero.
+
+**The measured drift was worse than this entry recorded.** Written from one
+link where the gap was a single sample, and one EMA step explained it exactly.
+Across twelve links on 2026-08-21 the gap ran **1 to 21 samples**, and on
+2026-08-22 **1 to 29** — the busier the gate, the further the published
+baseline sits from the one the decision used. Same circle, wider.
+
+**What made the fix safe to make was the check, not the reasoning.** A wrong
+baseline looks exactly like a right one, and the fix touches `station_db.py`'s
+hot path. `tools/check_prop_bundle.py` was written first and failing, and it
+caught two things the code review would not have:
+
+1. the check's own multiplier assertion was a **proxy** — it read `at_flag.ema_km`
+   and assumed that was the denominator, so the fix would have had to move the
+   goalposts to pass. It now reads the published multiplier and its named
+   denominator instead, which is strictly more than it asserted before.
+2. assertion 2 has a blind spot: on a quiet gate the flag-time and export-time
+   sample counts are equal, so a bundle that silently went back to the live
+   baseline would pass **by luck**. The flag-time block must now declare
+   `read_at: "flag time"`.
+
 ---
 
 ## Closed
@@ -2599,6 +2629,78 @@ cost of the only diagnostic history there is.
 
 Going the other way: at 41 lines/minute the same 4 GB ring now holds **months**
 of diagnostics, which is what this finding was about.
+
+---
+
+## F-2026-08-22-01 — a gate can be "established" and still be judged by the floor
+
+Found by building the test for F-2026-08-16-01, not by a reading. Reconstructing
+the EA5URX case offline printed this:
+
+```
+samples 40, ema 0.1 km, gate_bar 0.3 km, threshold 300.0 km
+judged_by: "gate baseline"
+```
+
+The gate has 40 samples, so it is established. Its own bar is
+`max(3 × 0.1, 0.1 + 4 × 0.0)` = **0.3 km** — below the 300 km floor. So the
+floor is what actually stopped everything shorter; the gate's history decided
+nothing. The link was nevertheless labelled *"judged against this gate's own
+history"*, drawn with the heavy line reserved for the strong claim, and its
+`established: true` fed the bundle's confident wording.
+
+**The label was wrong exactly on the links this finding set out to study.**
+Every case in F-2026-08-16-01 is a low-EMA gate; that is what produced the
+four-digit multiplier in the first place. So the field that was supposed to
+tell a reader how much to trust the flag was at its least trustworthy where it
+mattered most.
+
+`samples` answers *does this gate have a history*. It was being read as
+*did that history decide anything*, and on a low-EMA gate those are different
+questions.
+
+| change | state |
+|---|---|
+| `judged_by` gets a third state: gate baseline / floor, gate's own bar is lower / floor alone | ✅ v3.2.81 |
+| the popup and the line weight follow `judged_by`, not `established` | ✅ v3.2.81 |
+| the bundle's `reading` splits into the same three cases — the "would it still be flagged if established" counterfactual belongs to young gates only, and on an established low-EMA gate it printed *"3x that figure, which here would be 0 km, so this link clears that bar"*, which reads as corroboration and is arithmetic on a near-zero number | ✅ v3.2.81 |
+| **the opening alert at `web_gui.py` filters on `established`** — by the same reasoning these links were flagged by the floor alone and should not raise a notification either | **OPEN** |
+
+The open row is deliberately not in v3.2.81. It changes what puts a
+notification on somebody's phone, which is a detection change and needs its own
+evidence — how many current openings are built out of these links — not a
+same-day guess made while fixing something else.
+
+**Nobody's fault but the code's**, and no model was involved. The value here is
+the method: the finding fell out of writing a test that reconstructs the exact
+case from the log, which is cheaper than another export round.
+
+---
+
+## F-2026-08-22-02 — the check would have passed by examining nothing
+
+`tools/check_prop_bundle.py` reads the live ring buffer. The ring is in memory.
+The deploy that ships a fix **restarts the service**, so the command used to
+prove the fix ran against an empty buffer:
+
+```
+no anomalous links right now — nothing to check
+EXIT=0
+```
+
+A clean exit from an examination that never happened. Caught by predicting it
+rather than by seeing it, half an hour before the deploy — and it is the same
+defect as the one the whole package is about: a number that looks like a
+verdict and is an artefact of how it was produced.
+
+Fixed before deploying: an empty buffer, or a run where no link's evidence
+could be fetched, now exits 1 and says why. Confirmed live — the first run
+after the v3.2.81 deploy printed exactly that failure.
+
+A second artefact of the same kind, not a defect but worth writing down: the
+red this package worked from was **"43 problems across 12 links"**, and that
+figure is stable because `--max 12` caps the sample, not because the same links
+persist. The pool on 2026-08-22 was 33. Read the cap, not the constancy.
 
 ---
 
