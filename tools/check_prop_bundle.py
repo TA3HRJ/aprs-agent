@@ -86,8 +86,15 @@ def main(argv: list[str]) -> int:
 
     links = prop.get("links", [])
     if not links:
-        print("no anomalous links right now — nothing to check")
-        return 0
+        # Not a pass. The ring buffer lives in memory, so a restart empties it
+        # and the very command used to prove a deploy would print a clean bill
+        # of health having examined nothing. On the live feed it refills at
+        # roughly 25 anomalous links an hour; wait, then run it again.
+        print("NOTHING CHECKED: no anomalous links in the buffer. A check "
+              "that examined nothing has verified nothing — this is a "
+              "failure, not a pass. After a restart the ring refills at "
+              "roughly 25 links an hour.")
+        return 1
 
     problems: list[str] = []
     ratios: list[tuple[float, str]] = []
@@ -178,6 +185,11 @@ def main(argv: list[str]) -> int:
         ratios.sort(reverse=True)
         worst, who = ratios[0]
         print("largest published multiplier: %.0fx  (%s)" % (worst, who))
+
+    if not checked:
+        problems.append(
+            "no link's evidence could be fetched, so assertions 2 and 4 "
+            "never ran — a green here would mean nothing")
 
     for p in problems:
         print("FAIL  " + p)
