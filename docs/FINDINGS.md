@@ -2587,9 +2587,18 @@ that was the point of the original mechanism and it survives.
 that an error still reaches journald and that an unwritable path degrades to
 Live-Log-only instead of stopping the agent.
 
-**Still open:** the 4 GB already on disk is stale packet data. Nothing reads
-it and it ages out on its own; `journalctl --vacuum-size=` returns the space
-immediately.
+**Decided: left alone.** The 4 GB already on disk is stale packet data. Disk
+is not the issue — 4% of a filesystem at 33%. The measurable cost is query
+time: immediately after the fix, *"what did the agent do in the last 24
+hours"* took **114.6 s and returned 4,741,402 lines**, which is why a journal
+grep timed out during the investigation itself. But every one of those lines
+predates the fix, so time-filtered queries stop touching them within a day and
+the problem expires on its own. Only unfiltered queries, or ones reaching back
+past 2026-08-21, stay slow. Vacuuming would buy one day of patience at the
+cost of the only diagnostic history there is.
+
+Going the other way: at 41 lines/minute the same 4 GB ring now holds **months**
+of diagnostics, which is what this finding was about.
 
 ---
 
