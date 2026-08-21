@@ -2491,6 +2491,54 @@ a 213 km answer can be judged rather than believed.
 
 ---
 
+## F-2026-08-21-01 — the gateway signed itself with the asker's callsign
+
+First test after the badge deploy, on the live public service:
+
+```
+RX from TA3HRJ-10: Test
+TX to TA3HRJ-10: Test received. 73 de TA3HRJ-10 gateway.
+```
+
+TA3HRJ-10 is the station that **asked**. The service took the sender's
+callsign out of the packet header and signed itself with it, using DE, on the
+air, days after the thing was announced publicly.
+
+The system prompt forbids this in as many words, and has since the identity
+work: *"You are not a station and have no callsign of your own. Never sign as
+another callsign, never use DE with one, and do not role-play a QSO."*
+
+**Verdict: model's fault, and therefore the file's problem anyway.** Nothing
+was missing from the prompt — it named the exact construct the model then
+produced. That is the whole finding: *a prohibition stated in prose is not a
+constraint.* §G and §H had already reached this conclusion from the other
+direction, by taking distance, age and position out of the model's hands and
+into a template. This is the same rule applied to something the model must
+**not** say rather than something it must say.
+
+`_strip_signature()` now cuts the sign-off before the answer is split into
+packets, and logs when it fires — which is also how the frequency finally
+gets measured, since the journal could not answer that (F-2026-08-21-02).
+
+Two edges the first version got wrong, both found by probing rather than
+reasoning:
+
+- an arbitrary `len(head) >= 15` threshold sent the live case down the wrong
+  branch and produced *"Test received. gateway"*
+- an answer that was **only** a sign-off excised to an empty string, hit an
+  `or text` fallback, and was returned with the callsign fully intact — the
+  single case where the entire transmission is a false identification
+
+There is no length judgement to make. Either something precedes the sign-off,
+or something follows it, or the answer was nothing but a sign-off and `73`
+says the same thing while claiming no callsign.
+
+`tools/check_signature.py` holds both directions: no sign-off reaches the
+air, and Turkish "de"/"da" — one of the commonest words in the language — is
+never mistaken for one.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

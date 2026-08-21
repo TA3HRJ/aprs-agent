@@ -205,6 +205,52 @@ def _wx_answer(rec: dict, dist_km: float) -> str:
         ", ".join(bits) or "no readings")
 
 
+# A ham sign-off with a callsign in it: "73 de TA1ABC-7", "de TA1ABC",
+# "73 TA1ABC". The callsign must be upper case and callsign-shaped, which is
+# what keeps this off the Turkish word "de" - "Ankara da guzel" has nothing
+# matching a callsign after it.
+_SIGNOFF_CUE = re.compile(
+    r"\b(?:73\s+de|73|de)\s+"
+    r"[A-Z0-9]{1,2}[0-9][A-Z]{1,4}(?:-[0-9]{1,2})?\b"
+)
+
+
+def _strip_signature(text: str) -> str:
+    """Remove a callsign sign-off from an answer before it goes on air.
+
+    Measured live. Asked "Test", the model replied:
+
+        Test received. 73 de TA3HRJ-10 gateway.
+
+    TA3HRJ-10 is the station that ASKED. The gateway signed itself with
+    somebody else's callsign, on the air, on a service that had just been
+    announced publicly.
+
+    The system prompt forbids this in as many words - "you are not a station
+    and have no callsign of your own, never sign as another callsign, never
+    use DE with one". It said so, and the model did it anyway. That is the
+    lesson §G and §H already taught twice: where an answer must not contain
+    something, do not ask the model nicely, take it out afterwards.
+
+    The sign-off is cut rather than snipped out, because it is a terminal
+    construct - the "gateway." trailing after it in the live case is noise
+    too. Whatever came before it is the answer.
+
+    An answer that is nothing but a sign-off becomes "73", which is a real
+    thing to say on the air and claims no callsign. That case matters more
+    than it looks: it is the one where the entire transmission would have
+    been a false identification.
+    """
+    m = _SIGNOFF_CUE.search(text)
+    if not m:
+        return text
+    head = text[:m.start()].rstrip(" ,.;:-\t")
+    if head:
+        return head + ("" if head[-1] in ".!?" else ".")
+    tail = text[m.end():].strip(" ,.;:-\t")
+    return tail or "73"
+
+
 def _split_message(text: str, max_parts: int) -> list[str]:
     if len(text) <= 64:
         return [text]
@@ -793,6 +839,15 @@ class AIGateway(Extension):
             return None
 
         self.log(f"AI response: {answer}")
+
+        # Last thing before it becomes a transmission. The prompt forbids a
+        # callsign sign-off; this is what makes that true. Warned rather than
+        # marked broken - the module worked, the model misbehaved, and the
+        # warning is also how we find out how often it does.
+        cleaned = _strip_signature(answer)
+        if cleaned != answer:
+            self.warn(f"stripped a callsign sign-off: {answer!r} -> {cleaned!r}")
+            answer = cleaned
         # Kept so a retry can be served without asking again.
         prev = self._processed.get(dedup_key)
         if prev is not None:
