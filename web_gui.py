@@ -2695,39 +2695,99 @@ def _prop_vs_baseline(link: dict, base: dict, params: dict) -> dict:
                         "cannot be placed against anything it has heard "
                         "before — see gate_baseline for why"}
     ratio = km / ema
-    # The rule an established gate is held to (station_db.silence/prop scan):
-    # flagged only at or beyond 3x the mean, or mean + 4 sigma.
+    # The counterfactual, and it belongs to YOUNG gates only: what this gate's
+    # own average would have said had it been trusted. 3x the mean is the rule
+    # an established gate is held to (station_db._ingest_prop_link).
     est_threshold = 3.0 * ema
     would_survive = km >= est_threshold
-    return {
-        "comparable": True,
-        "gate_figure_km": round(ema, 1),
-        "link_km": km,
-        "times_gate_figure": round(ratio, 2),
-        "established_threshold_km": round(est_threshold, 1),
-        "would_flag_if_gate_established": would_survive,
-        "gate_established": bool(base.get("established")),
-        "reading": (
-            "this link is {r:.2f}x the figure this gate has produced so far "
-            "({e:.0f} km). An established gate is only flagged at or beyond "
-            "3x that figure, which here would be {t:.0f} km, so this link "
-            "{verdict}. {caveat}"
+    # The bar the decision actually used, off the link. Unlike the figures
+    # above it cannot approach zero — the 300 km floor is folded into it — so
+    # it is the ratio this bundle and the popup quote.
+    thr = at.get("threshold_km")
+    bar = at.get("gate_bar_km")
+    times_thr = at.get("times_threshold")
+    established = bool(base.get("established"))
+    floor = float(params.get("min_km", 300.0))
+    # Three cases, because two of them were being read out in one sentence and
+    # that sentence was false in the third. A gate can be established by sample
+    # count while the bar its own history sets sits UNDER the floor — then
+    # "would it still be flagged if the gate were established" is not a
+    # hypothetical at all, it is arithmetic against a near-zero number, and it
+    # printed as corroboration: "3x that figure, which here would be 0 km, so
+    # this link clears that bar". Measured on the live feed, this is not the
+    # rare case (F-2026-08-16-01b).
+    gate_decided = established and bar is not None and float(bar) >= floor
+    if gate_decided:
+        reading = (
+            "this gate has {n} samples and its own history set the bar at "
+            "{b:.0f} km. The link cleared it by {x}x — {km:.0f} km against "
+            "{b:.0f} km. That is the comparison the decision actually made."
+        ).format(n=base.get("samples", 0), b=float(bar), x=times_thr, km=km)
+    elif established:
+        reading = (
+            "this gate has {n} samples, so it counts as established — but the "
+            "bar its own history sets is {b}, below the {f:.0f} km floor, so "
+            "the floor is what this link had to clear, and it did by {x}x. "
+            "The gate's history decided nothing here. Its average is {e:.1f} "
+            "km, and the {r:.0f}x that average this link represents measures "
+            "how near zero that average is, not how far the signal went — the "
+            "gate next door would have produced a different number for the "
+            "same distance."
+        ).format(n=base.get("samples", 0),
+                 b=("%.1f km" % float(bar)) if bar is not None
+                   else "not recorded for this link",
+                 f=floor, x=times_thr, e=ema, r=ratio)
+    else:
+        reading = (
+            "{bar}this link is {r:.2f}x the figure this gate has produced so "
+            "far ({e:.0f} km). An established gate is only flagged at or "
+            "beyond 3x that figure, which here would be {t:.0f} km, so this "
+            "link {verdict}. The gate is NOT established ({n} of {need} "
+            "samples), so the figure is itself weak — but it is the only "
+            "thing measured about this gate, and reading it as no information "
+            "at all is how a 12x outlier and a link shorter than its own gate "
+            "average come to be described identically."
         ).format(
+            bar=("it cleared the {f:.0f} km floor, which is what judged it, "
+                 "by {x}x. Against the gate's own figure instead, ".format(
+                     f=floor, x=times_thr) if times_thr else ""),
             r=ratio, e=ema, t=est_threshold,
             verdict=("clears that bar and would still be flagged"
                      if would_survive else
                      "does NOT reach it and would not have been flagged"),
-            caveat=("The gate is established, so that comparison stands."
-                    if base.get("established") else
-                    "The gate is NOT established ({n} of {need} samples), so "
-                    "the figure is itself weak — but it is the only thing "
-                    "measured about this gate, and reading it as no "
-                    "information at all is how a 12x outlier and a link "
-                    "shorter than its own gate average come to be described "
-                    "identically.").format(
-                        n=base.get("samples", 0),
-                        need=params.get("gate_min_samples", 20)),
-        ),
+            n=base.get("samples", 0),
+            need=params.get("gate_min_samples", 20))
+    return {
+        "comparable": True,
+        # What judged it.
+        "threshold_km": thr,
+        "times_threshold": times_thr,
+        "gate_bar_km": bar,
+        "gate_history_decided": gate_decided,
+        "link_km": km,
+        "gate_established": established,
+        # The gate's own average, and the ratio to it. Present because it is
+        # the only thing measured about a young gate — NOT as a headline.
+        "gate_figure_km": round(ema, 1),
+        "times_gate_figure": round(ratio, 2),
+        # The counterfactual applies to a young gate and nothing else. On an
+        # established one the real bar is known, so the question is not open
+        # and a number here would only be read as a second opinion.
+        "established_threshold_km": (None if established
+                                     else round(est_threshold, 1)),
+        "would_flag_if_gate_established": (None if established
+                                           else would_survive),
+        "ratio_note": (
+            "quote times_threshold, not times_gate_figure. They answer "
+            "different questions and can differ by three orders of magnitude: "
+            "the first is how far past the bar the decision used this link "
+            "sits, and its denominator can never fall below the {f:.0f} km "
+            "floor. The second divides by what this gate usually hears, which "
+            "on a gate that mostly hears its neighbours is a number near zero "
+            "— one measured link read 5382x that way, and 2696x against the "
+            "gate next door for the same distance."
+        ).format(f=floor),
+        "reading": reading,
     }
 
 
@@ -2794,8 +2854,16 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
             "station": cfg.get("callsign", ""),
         },
         "link": link,
-        # The number the distance was judged against.
-        "gate_baseline": db.gate_baseline(gate),
+        # The number the distance was judged against, AS IT STOOD AT THE FLAG.
+        # This name carried the live figure until now, and the live figure
+        # includes the event being judged plus everything that arrived after
+        # it — 1 to 29 samples on the measured feed (F-2026-08-16-01).
+        "gate_baseline": db.gate_baseline_at_flag(link),
+        # The same gate as of this export, named for what it is. Both are
+        # published because the pair is the finding: a baseline that has moved
+        # a long way since the flag is itself worth seeing, and hiding it would
+        # trade one silent substitution for another (F-16).
+        "gate_baseline_now": db.gate_baseline(gate),
         # The two numbers above, RELATED. They were both already in this file
         # and never in the same sentence, and five independent readings proved
         # what that costs: a link at 0.7x its gate's own average and one at
@@ -2805,7 +2873,7 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
         # two lines away, unrelated. So the relation is computed here rather
         # than left as arithmetic the reader is trusted to do — four of four,
         # then five of five, did not do it.
-        "vs_gate_baseline": _prop_vs_baseline(link, db.gate_baseline(gate),
+        "vs_gate_baseline": _prop_vs_baseline(link, db.gate_baseline_at_flag(link),
                                               db.prop_detection_params()),
         # The third question every outside reading has had to answer with
         # "unverified": whether the two stations are really where they say.
@@ -2841,9 +2909,11 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
             "transmitting away from home.",
             "The gate baseline is a smoothed average that the link itself "
             "then updates, so a permanently unusual gate slowly becomes its "
-            "own normal and stops being flagged. It is also read at export "
-            "time, not at flag time, so on a busy gate the figure shown here "
-            "may have moved since the decision was taken.",
+            "own normal and stops being flagged. gate_baseline is the figure "
+            "as it stood when the flag was raised; gate_baseline_now is the "
+            "same gate at export time and will usually differ, because the "
+            "judged event and everything after it are folded into it. Judge "
+            "the link by the first and read the second as what happened next.",
             "Read vs_gate_baseline before concluding from `established: "
             "false` that nothing is known. On the live feed 78% of flagged "
             "links do not reach twice their own gate's figure and 7% are "

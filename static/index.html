@@ -922,7 +922,9 @@ const S={en:{
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
-  prop_judged_gate:"Judged against this gate's own history — {n} samples, {r}× its usual reach",
+  prop_judged_gate:"Judged against this gate's own history — {n} samples, {r}× the {t} km bar it had to clear",
+  prop_judged_gate_old:"Judged against this gate's own history — {n} samples",
+  prop_judged_floor_est:"Judged by the 300 km floor — this gate has {n} samples, but its own bar ({b} km) sits below the floor, so its history decided nothing here",
   prop_judged_floor:"Judged by the 300 km floor alone — this gate has only {n} samples, so it has no usual reach yet",
   ev_render_err:"The evidence arrived but the page could not show it",
   ev_copy:"Copy",
@@ -1066,7 +1068,9 @@ const S={en:{
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
   sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
-  prop_judged_gate:"Gate'in kendi geçmişine göre değerlendirildi — {n} örnek, olağanının {r} katı",
+  prop_judged_gate:"Gate'in kendi geçmişine göre değerlendirildi — {n} örnek, aşması gereken {t} km eşiğinin {r} katı",
+  prop_judged_gate_old:"Gate'in kendi geçmişine göre değerlendirildi — {n} örnek",
+  prop_judged_floor_est:"300 km tabanıyla değerlendirildi — bu gate'in {n} örneği var ama kendi eşiği ({b} km) tabanın altında kaldığı için geçmişi burada bir şey belirlemedi",
   prop_judged_floor:"Yalnızca 300 km tabanıyla değerlendirildi — bu gate'in {n} örneği var, henüz bir olağanı yok",
   ev_render_err:"Veri geldi ama sayfa gösteremedi",
   ev_copy:"Kopyala",
@@ -2438,10 +2442,30 @@ function renderProp(links,hist){
         // would not have been flagged had their gate been established.
         +(function(){
            const a=l.at_flag; if(!a)return '';
-           if(a.established)
+           // Established by sample count is not the same as judged by that
+           // history: 3x an EMA of 0.1 km is 0.3 km, so the floor is what
+           // actually bound. Drawn as the weaker claim it is.
+           if(a.judged_by&&a.judged_by.indexOf('own bar is lower')>=0)
+             return '<br><span class="prop-young">'+t('prop_judged_floor_est')
+                    .replace('{n}',a.samples)
+                    .replace('{b}',a.gate_bar_km==null?'?':a.gate_bar_km)+'</span>';
+           if(a.established){
+             // The multiplier comes off the link, already divided by the bar
+             // the decision used. It used to be computed here as km/ema_km,
+             // and an EMA hugs zero on a gate that mostly hears the stations
+             // beside it: one link printed 5382x where the gate next door
+             // would have printed 2696x for the same distance. threshold_km
+             // is floored at 300, so it cannot do that.
+             if(a.times_threshold==null||a.threshold_km==null)
+               // A link replayed from history, recorded before the bar was
+               // kept. Say less rather than reviving the old ratio.
+               return '<br><span class="prop-est">'+t('prop_judged_gate_old')
+                      .replace('{n}',a.samples)+'</span>';
              return '<br><span class="prop-est">'+t('prop_judged_gate')
                     .replace('{n}',a.samples)
-                    .replace('{r}',a.ema_km?(l.km/a.ema_km).toFixed(1):'?')+'</span>';
+                    .replace('{r}',a.times_threshold)
+                    .replace('{t}',Math.round(a.threshold_km))+'</span>';
+           }
            return '<br><span class="prop-young">'+t('prop_judged_floor')
                     .replace('{n}',a.samples)+'</span>';
          })()
@@ -2467,7 +2491,8 @@ function renderProp(links,hist){
     // Judged against the gate's own history, or only against the 300 km floor?
     // The second is the majority and much the weaker claim, so it is drawn as
     // the weaker line rather than identically.
-    const est=!!(l.at_flag&&l.at_flag.established);
+    const est=!!(l.at_flag&&l.at_flag.established
+                 &&!(l.at_flag.judged_by||'').match(/own bar is lower/));
     const vis=L.polyline(coords,{color:col,weight:est?3:2,
                                  opacity:est?0.85:0.35,
                                  dashArray:est?'6 6':'2 8',

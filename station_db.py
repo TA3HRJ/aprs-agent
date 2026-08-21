@@ -1107,10 +1107,38 @@ class StationDB:
         # is the defence against a single bogus sender).
         if dist < self.PROP_MIN_KM:
             return
-        if count >= self.PROP_MIN_SAMPLES:
-            sigma = math.sqrt(max(var, 0.0))
-            if dist < max(3 * mean, mean + 4 * sigma):
+        # The bar this distance actually had to clear, computed once and
+        # recorded on the link rather than left to be recomputed later from
+        # numbers that have moved (F-16, F-2026-08-16-01).
+        #
+        # The floor is folded into the established branch deliberately. It
+        # changes no decision — dist >= PROP_MIN_KM is already guaranteed two
+        # lines up, so `dist < max(floor, X)` and `dist < X` select exactly the
+        # same links — but it makes threshold_km the ONE number the distance
+        # had to beat, and one that can never fall below 300 km. That is what
+        # makes it safe to divide by, which the EMA never was: a gate hearing
+        # its neighbours has an EMA near zero and published 5382x for a link
+        # its neighbour would have called 2696x (F-2026-08-16-01b).
+        sigma = math.sqrt(max(var, 0.0))
+        established = count >= self.PROP_MIN_SAMPLES
+        if established:
+            gate_bar = max(3 * mean, mean + 4 * sigma)
+            threshold = max(self.PROP_MIN_KM, gate_bar)
+            if dist < threshold:
                 return
+            # Which of the two constraints actually bound. On a gate that
+            # mostly hears its neighbours, 3x an EMA of 0.1 km is 0.3 km — so
+            # a link is 'established' by sample count while the number that
+            # truly stopped everything shorter was the floor. Calling that
+            # "judged against this gate's own history" is wrong exactly on
+            # the links this finding is about, and it is what the popup and
+            # the line weight have been drawing since v3.2.15.
+            judged = ("gate baseline" if gate_bar >= self.PROP_MIN_KM
+                      else "300 km floor — this gate's own bar is lower")
+        else:
+            gate_bar = None
+            threshold = self.PROP_MIN_KM
+            judged = "300 km floor alone"
         self._prop_anomalous += 1
         # The baseline AS IT STOOD when this flag was raised (F-16). Reading it
         # at export time instead produced two confident, opposite verdicts on
@@ -1124,13 +1152,26 @@ class StationDB:
             "at_flag": {
                 "samples": int(count),
                 "ema_km": round(mean, 1) if count else None,
-                "established": bool(count >= self.PROP_MIN_SAMPLES),
-                # What actually decided it. Below PROP_MIN_SAMPLES only the
-                # absolute floor is consulted, and saying so on the link means
-                # a reader never has to infer it from a sample count.
-                "judged_by": ("gate baseline"
-                              if count >= self.PROP_MIN_SAMPLES
-                              else "300 km floor alone"),
+                # The other two thirds of the decision. Shipped in v3.2.34
+                # carrying only the count and the mean, which left the bundle
+                # unable to show what the distance was compared against — so
+                # the export-time baseline got read as the flag-time one, and
+                # an outside reader computed a confident verdict from a circle.
+                "sigma_km": round(sigma, 1) if count else None,
+                # The gate's OWN bar, and the bar that actually applied. They
+                # differ whenever the gate's bar sits under the 300 km floor,
+                # which is most of the interesting cases.
+                "gate_bar_km": round(gate_bar, 1) if gate_bar is not None else None,
+                "threshold_km": round(threshold, 1),
+                # Computed here, not in the popup. The client used to divide
+                # by ema_km, which is a denominator that can approach zero.
+                "times_threshold": round(dist / threshold, 1),
+                "established": bool(established),
+                # What actually decided it — three states, not two. `samples`
+                # answers "does this gate have a history"; this answers "did
+                # that history decide anything", and they are not the same
+                # question on a low-EMA gate.
+                "judged_by": judged,
             },
             "s_lat": round(lat, 4), "s_lon": round(lon, 4),
             "g_lat": round(g.lat, 4), "g_lon": round(g.lon, 4),
@@ -1201,7 +1242,7 @@ class StationDB:
             # figure is still given — it is the only thing known about the
             # gate — but under a name that cannot be mistaken for a statistic,
             # with the weight the first packet still carries stated outright.
-            weight = (1.0 - self._PROP_ALPHA) ** max(int(count) - 1, 0)
+            weight, note = self._young_gate_note(count)
             return {
                 "gate": gate,
                 "samples": int(count),
@@ -1210,18 +1251,7 @@ class StationDB:
                 "ema_alpha": self._PROP_ALPHA,
                 "first_sample_weight": round(weight, 3),
                 "threshold_km": self.PROP_MIN_KM,
-                "note": (
-                    "no mean and no standard deviation are offered: this gate "
-                    "has {n} of the {need} measured links one would need. "
-                    "ema_km is an exponential moving average seeded with the "
-                    "gate's FIRST measured distance and updated at "
-                    "ema_alpha, so {pct}% of it is still that first "
-                    "observation — read it as 'roughly what this gate first "
-                    "heard', not as this gate's normal, and do not compute "
-                    "how far a link sits above or below it. This link was "
-                    "judged by the {floor} km floor alone."
-                ).format(n=int(count), need=self.PROP_MIN_SAMPLES,
-                         pct=round(weight * 100), floor=self.PROP_MIN_KM),
+                "note": note,
             }
         return {
             "gate": gate,
@@ -1232,6 +1262,85 @@ class StationDB:
             # The threshold this link had to beat.
             "threshold_km": round(max(3 * mean, mean + 4 * sigma), 1),
         }
+
+    def _young_gate_note(self, count: float) -> tuple[float, str]:
+        """The warning that goes with an unestablished gate's figure.
+
+        One wording, used by both the live baseline and the flag-time one:
+        two texts saying almost the same thing about the same gate is how a
+        reader ends up believing they are two facts.
+        """
+        weight = (1.0 - self._PROP_ALPHA) ** max(int(count) - 1, 0)
+        return weight, (
+            "no mean and no standard deviation are offered: this gate "
+            "has {n} of the {need} measured links one would need. "
+            "ema_km is an exponential moving average seeded with the "
+            "gate's FIRST measured distance and updated at "
+            "ema_alpha, so {pct}% of it is still that first "
+            "observation — read it as 'roughly what this gate first "
+            "heard', not as this gate's normal, and do not compute "
+            "how far a link sits above or below it. This link was "
+            "judged by the {floor} km floor alone."
+        ).format(n=int(count), need=self.PROP_MIN_SAMPLES,
+                 pct=round(weight * 100), floor=self.PROP_MIN_KM)
+
+    def gate_baseline_at_flag(self, link: dict[str, Any]) -> dict[str, Any]:
+        """The gate's baseline AS IT STOOD when this link was flagged.
+
+        This is the block a link has to be judged by, and it is the one the
+        bundle publishes as `gate_baseline`. Until now that name carried the
+        LIVE figure, read at export time — so the "gate's own history" offered
+        against an event included the event itself, and every sample that
+        arrived after it. Measured on the live feed: between 1 and 29 extra
+        samples, the busier the gate the worse. An outside reader computed a
+        threshold, a margin and a confident verdict from that circle and was
+        not being careless; the file handed it one (F-2026-08-16-01).
+
+        Everything here comes off the link. Nothing is read from the current
+        gate statistics, which is the whole point.
+        """
+        at = dict(link.get("at_flag") or {})
+        gate = link.get("gate", "")
+        if not at:
+            return {
+                "gate": gate, "recorded": False,
+                "note": "this link predates flag-time recording, so what the "
+                        "decision compared against cannot be reconstructed. "
+                        "gate_baseline_now is the CURRENT figure and is not "
+                        "what judged this link.",
+            }
+        count = int(at.get("samples") or 0)
+        established = bool(at.get("established"))
+        out: dict[str, Any] = {
+            "gate": gate,
+            "recorded": True,
+            "read_at": "flag time",
+            "samples": count,
+            "established": established,
+            "threshold_km": at.get("threshold_km"),
+        }
+        if established:
+            out["mean_km"] = at.get("ema_km")
+            out["sigma_km"] = at.get("sigma_km")
+            out["gate_bar_km"] = at.get("gate_bar_km")
+            out["judged_by"] = at.get("judged_by")
+        else:
+            out["ema_km"] = at.get("ema_km")
+            out["ema_alpha"] = self._PROP_ALPHA
+            weight, note = self._young_gate_note(count)
+            out["first_sample_weight"] = round(weight, 3)
+            out["note"] = note
+        if at.get("threshold_km") is None:
+            # v3.2.34 .. v3.2.80 recorded the count and the mean but not the
+            # bar. Say so rather than reconstructing it from today's numbers,
+            # which is the mistake this whole block exists to stop.
+            out["threshold_km"] = None
+            out["note"] = (
+                "recorded before the threshold was kept on the link, so the "
+                "bar this distance had to clear is not known for this event. "
+                "The samples and the mean below ARE the flag-time ones."
+            )
+        return out
 
     def prop_detection_params(self) -> dict[str, Any]:
         """The rule that selected an anomalous link, for an outside reader."""

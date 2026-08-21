@@ -9,10 +9,23 @@ what merely under-informs them.**
 
 ---
 
-## OPEN RIGHT NOW — end of 2026-08-14
+## WHERE THIS STANDS — 2026-08-21
 
-**Deployed: v3.2.31**, and GitHub is level with it: badge, download and demo all
-read 3.2.31.
+**Deployed: v3.2.80** on the VPS. The next package is **§B · Propagation
+evidence**: go straight to its **Start here** block, which carries the command,
+the measured red, the definition of done and the scope for that session.
+Nothing else in this file needs reading first.
+
+Everything from the next heading down to §B is history — kept for the
+reasoning, not for the status. It stopped being current at v3.2.31.
+
+---
+
+## OPEN AS OF 2026-08-14 — superseded, kept for the reasoning
+
+**Deployed at the time: v3.2.31**, and GitHub was level with it: badge, download
+and demo all read 3.2.31. The stop below was lifted; work resumed and shipped
+through v3.2.80.
 
 ### ✅ Closed in the evening — v3.2.26 … v3.2.31
 
@@ -455,7 +468,12 @@ grouping starts trusting gates.
 senders inside the 30-minute window, against how many produced a recorded
 opening? The gap between those two numbers is the size of the finding.
 
-**The check is already written and already failing.** `tools/check_prop_bundle.py`
+**The earlier run, 2026-08-17 — superseded by the measured red at the top of
+§B.** Kept because it is where the check earned its place, not as the baseline
+to work from: it sampled 7 links where the 2026-08-21 run sampled 12, and its
+numbers below (6 of 7 links, largest multiplier 23x, drift 1–8 samples) are the
+narrower picture. **Use the 2026-08-21 figures — 43 problems across 12 links,
+drift 1–21 — as the red this package has to clear.** `tools/check_prop_bundle.py`
 asserts the three things this package has to make true, and run against the
 live bundle on 2026-08-17 it reported every one of them broken:
 

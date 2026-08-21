@@ -21,11 +21,33 @@ Three assertions, in the order they matter:
   3. at_flag carries the sigma and the threshold, not just the mean, so the
      bundle can show what the decision actually compared against
 
-It also reports the multiplier the popup would print. The denominator is an
-EMA that hugs zero on gates which mostly hear stations beside them, so the
-same 539 km read 5382x against one gate and would have read 2696x against its
-neighbour. A ratio whose denominator can approach zero is not a measure of
-anything.
+  4. the multiplier the bundle publishes divides by that threshold, and the
+     threshold is at or above the 300 km floor
+
+Assertion 4 was written the other way round on 2026-08-17: it read at_flag's
+ema_km and failed if THAT was below the floor, because the popup at the time
+divided by it. That was a proxy for the real question, and it is worth being
+plain about why it changed while the fix was being written — moving a check's
+goalposts to make it pass is the one edit that can make this file worthless.
+
+What it asserts now is strictly more. Before: one number the popup happened to
+use was in range. Now: the bundle publishes its own multiplier at all
+(times_threshold), its denominator is named (threshold_km), that denominator
+clears the floor, and the published figure actually equals km/denominator. A
+client computing km/ema_km again would fail the first of those, because the
+bundle would carry no multiplier of its own to match.
+
+The reason the denominator moved: an EMA hugs zero on gates which mostly hear
+stations beside them, so the same 539 km read 5382x against one gate and would
+have read 2696x against its neighbour. A ratio whose denominator can approach
+zero is not a measure of anything. threshold_km folds the 300 km floor in, so
+it cannot.
+
+Assertion 2 has a blind spot worth knowing: on a quiet gate the flag-time and
+export-time sample counts are equal, and a bundle that had silently gone back
+to publishing the live baseline would pass it by luck. So the flag-time block
+must also say so — read_at — and the live one must still be published beside
+it under its own name.
 
 Usage:
     python tools/check_prop_bundle.py [--base http://127.0.0.1:8080] [--max 15]
@@ -91,16 +113,32 @@ def main(argv: list[str]) -> int:
                     "what the distance was compared against"
                     % (call, gate, field))
 
-        # what the popup would print
-        ema = flag.get("ema_km")
-        if ema:
-            ratios.append((km / float(ema), "%s -> %s" % (call, gate)))
-            if float(ema) < PROP_MIN_KM:
+        # ── 4 · the multiplier the bundle publishes, and what it divides by
+        mult, den = flag.get("times_threshold"), flag.get("threshold_km")
+        if mult is None:
+            problems.append(
+                "%s -> %s: at_flag publishes no times_threshold, so the "
+                "multiplier shown to a reader is computed client-side from "
+                "whatever field is to hand — which is how it came to divide "
+                "by the ema" % (call, gate))
+        elif den is None:
+            problems.append(
+                "%s -> %s: a multiplier of %sx is published with no "
+                "threshold_km to say what it divided by"
+                % (call, gate, mult))
+        else:
+            ratios.append((float(mult), "%s -> %s" % (call, gate)))
+            if float(den) < PROP_MIN_KM:
                 problems.append(
-                    "%s -> %s: the published multiplier divides %.1f km by an "
-                    "ema of %.1f km — a denominator below the %.0f km floor "
-                    "cannot bound the result (%.0fx here)"
-                    % (call, gate, km, float(ema), PROP_MIN_KM, km / float(ema)))
+                    "%s -> %s: the published multiplier divides %.1f km by "
+                    "%.1f km — a denominator below the %.0f km floor cannot "
+                    "bound the result (%sx here)"
+                    % (call, gate, km, float(den), PROP_MIN_KM, mult))
+            elif abs(km / float(den) - float(mult)) > 0.06:
+                problems.append(
+                    "%s -> %s: publishes %sx, but %.1f / %.1f = %.2f. The "
+                    "figure and the denominator beside it do not agree"
+                    % (call, gate, mult, km, float(den), km / float(den)))
 
         # ── 2 · the baseline must predate the event ────────────────────────
         q = urllib.parse.urlencode({"call": call, "gate": gate})
@@ -120,6 +158,19 @@ def main(argv: list[str]) -> int:
                 "The extra %d arrived after the flag, so the baseline offered "
                 "as this gate's own history includes the event it is judging"
                 % (call, gate, base_n, flag_n, base_n - flag_n))
+        # A quiet gate passes the count test whether the block is flag-time or
+        # live, so the block has to say which it is.
+        if base.get("read_at") != "flag time":
+            problems.append(
+                "%s -> %s: gate_baseline does not declare read_at: 'flag "
+                "time'. On a quiet gate the sample counts match either way, "
+                "so without this the name still cannot be trusted"
+                % (call, gate))
+        if not ev.get("gate_baseline_now"):
+            problems.append(
+                "%s -> %s: the current baseline is not published beside the "
+                "flag-time one, so how far the gate has moved since is not "
+                "visible" % (call, gate))
 
     print("checked %d of %d anomalous links against %s"
           % (checked, len(links), args.base))
