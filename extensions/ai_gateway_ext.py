@@ -625,6 +625,10 @@ class AIGateway(Extension):
             return _to_ascii(answer)
         except Exception as e:
             self.error(f"AI query failed: {type(e).__name__}: {e}")
+            # Swallowed on purpose - the sender gets silence rather than a
+            # stack trace - but silence is exactly what hid this for a day.
+            # Type name only: a client's message can carry the request URL.
+            self.mark_broken(f"AI query failed: {type(e).__name__}")
             return ""
 
     def _next_msg_id(self) -> str:
@@ -754,6 +758,7 @@ class AIGateway(Extension):
 
         allowed, notice = self._allow_rate(sender_base, cfg)
         if not allowed:
+            self.mark_working()
             self.warn(f"rate-limited {sender_full}"
                       + (" (told)" if notice else " (already told)"))
             if notice:
@@ -773,6 +778,7 @@ class AIGateway(Extension):
             # Only now, with the free answers exhausted, does this cost money.
             allowed, notice = self._allow_daily(cfg)
             if not allowed:
+                self.mark_working()
                 self.warn(f"daily limit reached, refused {sender_full}"
                           + (" (told)" if notice else ""))
                 if notice:
@@ -780,6 +786,10 @@ class AIGateway(Extension):
                 return None
             answer = await self._ask_ai(question, sender_full)
         if not answer:
+            # Asked, and came back empty. Whatever the cause, this station was
+            # left waiting, and that is the thing the badge has to be able to
+            # say out loud.
+            self.mark_broken("asked, but produced no answer")
             return None
 
         self.log(f"AI response: {answer}")
@@ -796,4 +806,5 @@ class AIGateway(Extension):
             if i < len(parts) - 1:
                 await asyncio.sleep(5)
 
+        self.mark_working()
         return None

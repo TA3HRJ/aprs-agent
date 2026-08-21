@@ -189,6 +189,7 @@ body.public .stat-bar .cell.diag{display:none!important}
 .mod-status .mb.on{color:var(--fg2)}
 .mod-status .mb.on .dot{background:#57e389}
 .mod-status .mb.warn .dot{background:#f5c211}
+.mod-status .mb.bad .dot{background:#f66151}
 /* Active silence events */
 .alert-panel{max-height:132px;overflow-y:auto;border-bottom:1px solid var(--border2);background:rgba(224,27,36,.07)}
 /* Sits above the alert list and deliberately does not look like it: an alert
@@ -997,7 +998,7 @@ const S={en:{
   sta_ftype_all:"All Types",sta_ftype_repeater:"🔁 Repeater",sta_ftype_weather:"🌤 Weather",sta_ftype_digi:"📡 Digi",sta_ftype_igate:"🛰 IGate",sta_ftype_mobile:"🚗 Mobile",sta_ftype_echolink:"🔗 EchoLink",sta_ftype_unknown:"❓ Unknown",
   sta_fonline_all:"All Status",sta_fonline_on:"🟢 Online",sta_fonline_off:"🔴 Offline",sta_fonline_db:"⬜ DB Only",
   mod_title:"Active modules",
-  mod_ai:"AI",mod_ai_off:"AI Gateway is off — no automatic AI calls anywhere in the app",mod_ai_on:"AI Gateway is on — Silence Map / Propagation / Station AI can call it",
+  mod_ai:"AI",mod_ai_off:"AI Gateway is off — no automatic AI calls anywhere in the app",mod_ai_ok:"AI Gateway is on and answering — the last request it handled went through",mod_ai_idle:"AI Gateway is on, but nothing has asked it anything since the agent started — switched on is not the same as working",mod_ai_error:"AI Gateway is on but the last request it handled failed — questions sent to it may be going unanswered",
   mod_station_ai:"Station AI",mod_repeater_monitor:"Repeater Monitor",mod_full_feed:"World Feed",mod_ext_server:"Ext. Server",
   mod_telegram:"Telegram",mod_whatsapp:"WhatsApp",mod_twitter:"Twitter",mod_bluesky:"Bluesky",mod_smtp:"SMTP",mod_imap:"IMAP"
 },tr:{
@@ -1142,7 +1143,7 @@ const S={en:{
   sta_ftype_all:"Tüm Türler",sta_ftype_repeater:"🔁 Röle",sta_ftype_weather:"🌤 Hava İstasyonu",sta_ftype_digi:"📡 Digi",sta_ftype_igate:"🛰 IGate",sta_ftype_mobile:"🚗 Mobil",sta_ftype_echolink:"🔗 EchoLink",sta_ftype_unknown:"❓ Bilinmiyor",
   sta_fonline_all:"Tüm Durumlar",sta_fonline_on:"🟢 Çevrimiçi",sta_fonline_off:"🔴 Çevrimdışı",sta_fonline_db:"⬜ Yalnızca DB",
   mod_title:"Aktif modüller",
-  mod_ai:"AI",mod_ai_off:"AI Gateway kapalı — uygulamada hiçbir otomatik AI çağrısı yapılmaz",mod_ai_on:"AI Gateway açık — Sessizlik Haritası / Propagasyon / İstasyon AI onu çağırabilir",
+  mod_ai:"AI",mod_ai_off:"AI Gateway kapalı — uygulamada hiçbir otomatik AI çağrısı yapılmaz",mod_ai_ok:"AI Gateway açık ve cevap veriyor — işlediği son istek başarıyla tamamlandı",mod_ai_idle:"AI Gateway açık, ancak ajan başladığından beri ona hiçbir şey sorulmadı — açık olmak çalışmakla aynı şey değil",mod_ai_error:"AI Gateway açık ama işlediği son istek başarısız oldu — ona gönderilen sorular cevapsız kalıyor olabilir",
   mod_station_ai:"İstasyon AI",mod_repeater_monitor:"Röle İzleyici",mod_full_feed:"Dünya Akışı",mod_ext_server:"Ext. Sunucu",
   mod_telegram:"Telegram",mod_whatsapp:"WhatsApp",mod_twitter:"Twitter",mod_bluesky:"Bluesky",mod_smtp:"SMTP",mod_imap:"IMAP"
 }};
@@ -1184,15 +1185,23 @@ function applyLang(){
 // "active" dict) — a compact, read-only badge row shown on both admin and
 // public views. Deliberately NOT part of the "Running" action bar: that bar
 // carries Start/Stop/Save commands and is hidden entirely on public.
-let lastActive=null;
-function renderModStatus(active){
+let lastActive=null,lastHealth=null;
+// "on" and "working" are different claims. The dot used to make the first
+// and be read as the second — see NEXT.md §F. Four states now, and "idle"
+// is the honest one: a gateway nobody has messaged since the restart is
+// neither proven working nor broken.
+function renderModStatus(active,health){
   if(active)lastActive=active;
+  if(health)lastHealth=health;
   const a=lastActive;
   const el=$('mod-status');
   if(!el)return;
   if(!a){el.hidden=true;return}
+  // off | idle | ok | error — falls back to the old on/off reading if an
+  // older agent is serving /api/info without a health block.
+  const aiState=(lastHealth&&lastHealth.ai)||(a.ai?'idle':'off');
   const rows=[
-    ['ai',a.ai,a.ai?t('mod_ai_on'):t('mod_ai_off'),true],
+    ['ai',a.ai,t('mod_ai_'+aiState),true,aiState],
     ['station_ai',a.station_ai,'',false],
     ['repeater_monitor',a.repeater_monitor,'',false],
     ['full_feed',a.full_feed,'',false],
@@ -1205,8 +1214,10 @@ function renderModStatus(active){
     ['imap',a.imap,'',false]
   ];
   el.title=t('mod_title');
-  el.innerHTML=rows.filter(([k,on,ti,always])=>on||always).map(([k,on,ti])=>
-    '<span class="mb'+(on?' on':'')+'" title="'+ti+'"><span class="dot"></span>'+t('mod_'+k)+'</span>'
+  el.innerHTML=rows.filter(([k,on,ti,always])=>on||always).map(([k,on,ti,al,st])=>
+    '<span class="mb'+(on?' on':'')
+      +(st==='idle'?' warn':'')+(st==='error'?' bad':'')
+      +'" title="'+ti+'"><span class="dot"></span>'+t('mod_'+k)+'</span>'
   ).join('');
   el.hidden=false;
 }
@@ -2626,7 +2637,7 @@ async function api(m,p,b,signal){
 async function startAgent(){const cs=$('f-callsign').value.trim();if(!cs||cs==='N0CALL'){alert(t('no_callsign'));return}$('btn-start').disabled=true;await api('POST','/api/start')}
 async function stopAgent(){$('btn-stop').disabled=true;await api('POST','/api/stop')}
 async function saveCfg(){try{const r=await api('POST','/api/config',getCfg());addLog('[web] '+(r.ok?t('save_ok'):t('save_err'))+'\n');if(r.ok&&agentRunning)addLog('[web] '+t('save_restart_hint')+'\n');refreshModStatus()}catch(e){addLog('[web] '+t('save_err')+'\n')}}
-async function refreshModStatus(){try{const info=await api('GET','/api/info');renderModStatus(info.active)}catch(e){}}
+async function refreshModStatus(){try{const info=await api('GET','/api/info');renderModStatus(info.active,info.health)}catch(e){}}
 async function reloadCfg(){try{const p=$('hdr-cfg').value.trim();if(p)await api('POST','/api/config-path',{path:p});const c=await api('GET','/api/config');loadCfg(c);addLog('[web] '+t('reload_ok')+'\n')}catch(e){addLog('[web] '+t('save_err')+'\n')}}
 // Status updates arrive via WebSocket "stats" messages every 2s — no polling needed.
 
@@ -2725,7 +2736,7 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden)chec
     $('about-ver').textContent='APRS-Agent v'+info.version;
     // Quota watch — the admin app reports lifetime AI analysis calls
     if(typeof info.ai_calls==='number'){$('about-ai-n').textContent=info.ai_calls;$('about-ai').hidden=false}
-    renderModStatus(info.active);
+    renderModStatus(info.active,info.health);
     if(window.PUBLIC){
       const title=(info.public_title||'').trim();
       const cs=(info.callsign||'').trim();

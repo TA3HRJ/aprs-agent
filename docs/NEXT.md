@@ -685,7 +685,7 @@ decision on a bar that is already full.
 
 ---
 
-## F · "AI: active" while the gateway could answer nothing — 2026-08-15
+## F · "AI: active" while the gateway could answer nothing — ✅ BUILT 2026-08-18
 
 The AI Gateway raised an exception on every message it received for most of a
 day. `/api/info` reported `active.ai: true` the whole time, the badge row on
@@ -712,6 +712,44 @@ the third time that distinction has cost something on this project.
 The badge does not need to become a health monitor. It needs to stop saying
 one thing when it knows another. A third state — configured, not yet
 exercised — is probably the whole fix.
+
+### What was built
+
+Four states where there were two, and the missing one is `idle`:
+
+| state | dot | means |
+|---|---|---|
+| `off` | grey | not enabled, or no provider configured |
+| `idle` | yellow | configured, and nothing has asked it anything since the agent started |
+| `ok` | green | the last thing asked of it was carried out |
+| `error` | red | the last thing asked of it failed |
+
+`idle` is the honest default and the whole point: a gateway nobody has
+messaged since the restart is neither proven working nor broken, and the old
+badge asserted the first.
+
+**The state lives on the `Extension` base class, not in the gateway.** The
+severed constructor was one possible cause; anything raising inside `handle()`
+was hidden the same way, and `ExtensionRegistry.broadcast()` already catches
+every one of those in a single place. It marks the extension there, so this
+covers extensions that have not been written yet.
+
+**The provider path needed marking separately.** `_ask_ai` catches its own
+exception and returns `""`, the sender gets silence instead of a stack trace,
+and `handle()` returns None. That is a second route to exactly the §F failure
+and a likelier one than a severed constructor — a dead API key produces it.
+
+**A limiter refusing is `ok`, not `error`,** and `tools/check_health.py`
+asserts it. A badge that cries wolf when a rate limiter does its job gets
+ignored, and an ignored badge is the state this started in.
+
+`active.ai` stays a plain bool. It means *configured*, four other readers
+depend on exactly that, and widening it would change what they think they are
+being told. The new claim went in its own `health` block beside it.
+
+The failure reason is admin-only — it is written by whatever threw and an
+HTTP client's message can carry the request URL. The state itself is public:
+somebody messaging this gateway is entitled to know it is broken.
 
 **Related:** the fault itself was self-inflicted (a constructor's tail severed
 by an insertion, v3.2.52) and now has a guard: `tools/check_unreachable.py`.

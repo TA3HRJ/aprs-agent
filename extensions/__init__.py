@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import time
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -64,6 +65,43 @@ class Extension(ABC):
         Used by the Fixed Beacon extension.
         """
         pass
+
+    # ── Did it work? ──────────────────────────────────────────────────
+    # Class attributes, so an extension needs no constructor to have a
+    # sane starting state; marking creates instance attributes.
+    #
+    # Kept deliberately small. The badge that reads this does not need to
+    # become a monitor - it needs to stop saying "active" about a module
+    # that has been raising on every message since breakfast.
+    _health = "idle"          # idle | ok | error
+    _health_note = ""         # operator-facing reason; never leaves /api/info
+    _health_at = 0.0          # when the state last changed
+
+    def mark_working(self) -> None:
+        """The last thing asked of this extension was carried out.
+
+        A refusal counts: a rate limiter turning somebody away is the module
+        doing its job, and reporting that as a fault would train the operator
+        to ignore the badge.
+        """
+        self._health = "ok"
+        self._health_note = ""
+        self._health_at = time.time()
+
+    def mark_broken(self, why: str) -> None:
+        """The last thing asked of this extension failed.
+
+        Truncated, because the reason is written by whatever threw - an HTTP
+        client's message can carry a URL, and this ends up in an API response.
+        """
+        self._health = "error"
+        self._health_note = str(why)[:160]
+        self._health_at = time.time()
+
+    @property
+    def health(self) -> dict:
+        return {"state": self._health, "note": self._health_note,
+                "at": self._health_at}
 
     def log(self, msg: str) -> None:
         self._emit(f"\033[32m[{self.name}]\033[0m {msg}")
@@ -122,6 +160,10 @@ class ExtensionRegistry:
                     result = await ext.handle(line)
                 except Exception as e:
                     ext.error(f"unhandled exception in handle(): {e}")
+                    # The one place every extension's failure passes through.
+                    # v3.2.52 raised here on every message for most of a day
+                    # and the interface reported the module active throughout.
+                    ext.mark_broken(f"{type(e).__name__}: {e}")
                     result = None
 
                 if result:

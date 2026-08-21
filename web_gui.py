@@ -1966,6 +1966,22 @@ async def info(request: web.Request) -> web.Response:
     # able to be called right now", independent of any single feature toggle.
     ai_ok = bool(ai_cfg.get("enabled")
                 and (ai_cfg.get("provider") or ai_cfg.get("base_url")))
+    # "Switched on" and "working" are different claims, and reporting the
+    # first as the second cost a day of silent failure (§F). ai_ok answers
+    # the first; this answers the second, and answers "nothing has asked it
+    # yet" rather than guessing.
+    ai_health = {"state": "off", "note": "", "at": 0.0}
+    if ai_ok:
+        ai_health["state"] = "idle"
+        try:
+            from extensions import ExtensionRegistry
+            for ext in ExtensionRegistry._extensions:
+                if ext.name == "ai-gateway":
+                    ai_health = dict(ext.health)
+                    break
+        except Exception:
+            pass        # never let a status read break the status endpoint
+
     data = {
         "version": cfg_module.VERSION,
         "running": mgr.running,
@@ -1979,6 +1995,10 @@ async def info(request: web.Request) -> web.Response:
         # this is sensitive (no keys/paths), so it's exposed on the public
         # app too. Kept separate from the "Running" action bar, which the
         # public page hides entirely (it carries Start/Stop/Save commands).
+        # Left a plain bool: it means "configured", the loops below depend
+        # on exactly that, and widening it here would change what four other
+        # readers think they are being told.
+        "health": {"ai": ai_health["state"]},
         "active": {
             "ai": ai_ok,
             "station_ai": bool(sai_cfg.get("enabled")) and ai_ok,
@@ -2001,6 +2021,11 @@ async def info(request: web.Request) -> web.Response:
         data["config_path"] = mgr.config_path
         # Lifetime AI analysis calls (quota watch) — operator info too
         data["ai_calls"] = mgr._ai_calls
+        # The reason is written by whatever threw and can carry a request
+        # URL, so it stops at the admin app. The state itself is public:
+        # somebody messaging this gateway is entitled to know it is broken.
+        data["health_note"] = {"ai": ai_health["note"],
+                               "at": ai_health["at"]}
     return web.json_response(data)
 
 
