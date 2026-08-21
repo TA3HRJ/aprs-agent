@@ -2539,6 +2539,60 @@ never mistaken for one.
 
 ---
 
+## F-2026-08-21-02 — the packet feed ate the journal, and the evidence with it
+
+Trying to measure how often the model signs with a false callsign
+(F-2026-08-21-01), the answer came back: six responses, all recent. Widening
+the window from 3 days to 14 returned the same six. The journal did not go
+back further.
+
+Asked the server rather than guessing again:
+
+```
+journal lines, last hour    : 319,051
+of those, [logger]          : 310,328   (97.3%)
+bytes, last hour            : ~47 MB
+journalctl --disk-usage     : 4.0 G
+oldest entry, WHOLE journal : 16 hours
+last boot                   : two weeks earlier
+```
+
+`/var/log/journal` exists and `journald.conf` is entirely stock. **Nobody
+configured a limit** — journald's default `SystemMaxUse` is min(10% of the
+filesystem, 4 GB), the ring hit it, and in World Mode the packet feed refills
+it faster than anything else can survive. Every operational line the agent
+writes is evicted inside a day.
+
+**Verdict: file's fault, and self-inflicted with a straight face.** The
+mechanism is deliberate. `Extension._emit()` writes to the real stderr *as
+well as* the Web GUI queue, and its comment says exactly why: so a
+server-side operator could confirm from `journalctl` that an extension had
+actually initialised. That fix is what makes `journalctl` useless for the
+same purpose. Nothing reasoned badly — a decision that was right for
+occasional status lines was applied to a firehose.
+
+The class is worth naming, and it is the second time in one day: *a mechanism
+sized for one call site behaves differently at another with 10,000× the
+volume.* F-2026-08-18-01 was the same shape — a daily ceiling written when
+every answer cost money, still counting once answers were free.
+
+Fixed by separating volume from severity rather than by raising a limit.
+`Extension.feed()` is a new channel for per-packet output: Live Log yes,
+journald never, plus an optional rotating `log_file`, because the raw feed is
+genuinely used for diagnosis and deleting it outright was the worse trade.
+Startup, warnings and errors are untouched and still reach the journal —
+that was the point of the original mechanism and it survives.
+
+`tools/check_feedlog.py` defends the boundary in both directions, including
+that an error still reaches journald and that an unwritable path degrades to
+Live-Log-only instead of stopping the agent.
+
+**Still open:** the 4 GB already on disk is stale packet data. Nothing reads
+it and it ages out on its own; `journalctl --vacuum-size=` returns the space
+immediately.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
