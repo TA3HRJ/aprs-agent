@@ -208,7 +208,21 @@ log_comments = true
 filter_by_message_type = ["!", "/", "@", "_"]   # only log these APRS types (empty = all)
 exclude_by_message_type = []                     # always exclude these types
 keyword_filter = []                              # only log packets containing these words
+
+# Packet lines always go to the Web GUI Live Log. They do NOT go to the
+# process stderr that systemd/journald captures: on a World Mode instance the
+# feed measured 97% of the entire system journal and ~47 MB an hour, which
+# filled journald's default 4 GB ring in 16 hours and evicted every
+# diagnostic line the agent had written. Set log_file to keep a copy you can
+# grep; it rotates on its own terms. Empty = Live Log only.
+log_file    = ""                                 # e.g. "/var/log/aprs/packets.log"
+log_max_mb  = 50                                 # rotate at this size
+log_backups = 3                                  # keep this many rotated files
 ```
+
+Startup lines, warnings and errors from every extension still go to the
+journal — that is what `journalctl -u aprs-agent` is for, and keeping the
+packet feed out of it is what makes those lines survive long enough to read.
 
 ### Fixed Beacon
 

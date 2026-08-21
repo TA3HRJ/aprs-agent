@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.79"
+VERSION = "3.2.80"
 
 # ── Secret handling for the HTTP API ────────────────────────────────────────
 # print_config()'s masking below is for human eyes: it keeps the first and last
@@ -186,6 +186,14 @@ DEFAULTS: dict[str, Any] = {
             ],
             "exclude_by_message_type": [],
             "keyword_filter": [],
+            # Packet lines go to the Web GUI Live Log and, if a path is set
+            # here, to this file. They no longer go to the process stderr
+            # that journald captures: in World Mode the feed was 97% of the
+            # system journal, ~47 MB an hour, and it evicted every
+            # diagnostic line within a day. Empty = Live Log only.
+            "log_file": "",
+            "log_max_mb": 50,
+            "log_backups": 3,
         },
         "fixed_beacon": {
             "enabled": False,

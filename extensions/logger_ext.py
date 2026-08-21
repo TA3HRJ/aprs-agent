@@ -9,6 +9,9 @@ Developed by TA3HRJ & TA3PKS
 from __future__ import annotations
 
 
+import logging
+import logging.handlers
+import os
 from typing import Optional
 
 
@@ -46,6 +49,38 @@ class Logger(Extension):
 
     def __init__(self, config: dict):
         self._config = config
+        self._file: Optional[logging.Logger] = None
+        path = str(config.get("log_file", "") or "").strip()
+        if path:
+            try:
+                d = os.path.dirname(os.path.abspath(path))
+                if d:
+                    os.makedirs(d, exist_ok=True)
+                # Rotates on its own terms instead of competing with every
+                # other service for room in the system journal.
+                h = logging.handlers.RotatingFileHandler(
+                    path, maxBytes=int(config.get("log_max_mb", 50)) * 1024 * 1024,
+                    backupCount=int(config.get("log_backups", 3)),
+                    encoding="utf-8",
+                )
+                h.setFormatter(logging.Formatter(
+                    "%(asctime)s %(message)s", "%Y-%m-%dT%H:%M:%S"))
+                lg = logging.getLogger("aprs.packetfeed")
+                lg.setLevel(logging.INFO)
+                lg.propagate = False        # never climb back into stderr
+                lg.handlers = [h]
+                self._file = lg
+            except Exception as e:
+                self.error(f"packet log file unusable ({path}): {e}")
+
+    def _record(self, line: str) -> None:
+        """One packet. Live Log always, file if configured, journald never."""
+        self.feed(line)
+        if self._file is not None:
+            try:
+                self._file.info(line)
+            except Exception:
+                pass        # a full disk must not stop the agent
 
     @property
     def name(self) -> str:
@@ -61,7 +96,7 @@ class Logger(Extension):
         # Handle APRS-IS server comment lines (start with '#')
         if line.startswith("#"):
             if cfg.get("log_comments", True):
-                self.log(line)
+                self._record(line)
             return None
 
         # Keyword filter mode: only log if a keyword is found
@@ -69,7 +104,7 @@ class Logger(Extension):
         if keyword_filter:
             lower_line = line.lower()
             if any(k.lower() in lower_line for k in keyword_filter):
-                self.log(line)
+                self._record(line)
             return None
 
         # Type filter mode: log based on APRS data type identifier
@@ -86,6 +121,6 @@ class Logger(Extension):
                         f"data type '{data_type}' is in both filter and exclude lists"
                     )
                 return None
-            self.log(line)
+            self._record(line)
 
         return None

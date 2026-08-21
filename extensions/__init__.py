@@ -103,6 +103,20 @@ class Extension(ABC):
         return {"state": self._health, "note": self._health_note,
                 "at": self._health_at}
 
+    def feed(self, msg: str) -> None:
+        """A per-packet line: Live Log yes, journald no.
+
+        Everything else an extension prints - startup, warnings, errors - is
+        occasional and belongs in the journal. The packet feed is not: in
+        World Mode it measured 310,328 of 319,051 journal lines an hour, ~47
+        MB, which pushed journald's default 4 GB ring over in 16 hours and
+        took every diagnostic line with it.
+
+        Deliberately not log(): the distinction is volume, not severity, and
+        it has to be visible at the call site.
+        """
+        print(f"\033[32m[{self.name}]\033[0m {msg}", file=sys.stderr)
+
     def log(self, msg: str) -> None:
         self._emit(f"\033[32m[{self.name}]\033[0m {msg}")
 
