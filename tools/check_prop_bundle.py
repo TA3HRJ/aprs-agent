@@ -148,13 +148,29 @@ def main(argv: list[str]) -> int:
                     % (call, gate, mult, km, float(den), km / float(den)))
 
         # ── 2 · the baseline must predate the event ────────────────────────
-        q = urllib.parse.urlencode({"call": call, "gate": gate})
+        # ts matters. The same sender->gate pair is flagged again every time
+        # the sender beacons from the same spot — 19 records for one pair on
+        # the live feed — and without a timestamp the evidence endpoint
+        # answers with the most RECENT one. This check then compared link A's
+        # at_flag against link B's baseline and called it drift. Invisible
+        # while gate_baseline was read live, because it was larger either way.
+        q = urllib.parse.urlencode({"call": call, "gate": gate,
+                                    "ts": link.get("ts", 0)})
         try:
             ev = _get(args.base, "/api/prop/evidence?" + q)
         except Exception as e:
             problems.append("%s -> %s: evidence fetch failed: %s" % (call, gate, e))
             continue
         checked += 1
+
+        got = ev.get("link") or {}
+        if got.get("ts") and link.get("ts") and got["ts"] != link["ts"]:
+            problems.append(
+                "%s -> %s: asked for the link at ts %s and the bundle "
+                "answered with the one at %s, so every assertion below "
+                "compares two different events"
+                % (call, gate, link.get("ts"), got.get("ts")))
+            continue
 
         base = ev.get("gate_baseline") or {}
         flag_n = flag.get("samples")

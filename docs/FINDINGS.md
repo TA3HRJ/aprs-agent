@@ -2700,7 +2700,50 @@ after the v3.2.81 deploy printed exactly that failure.
 A second artefact of the same kind, not a defect but worth writing down: the
 red this package worked from was **"43 problems across 12 links"**, and that
 figure is stable because `--max 12` caps the sample, not because the same links
-persist. The pool on 2026-08-22 was 33. Read the cap, not the constancy.
+persist. The pool was 33 on 2026-08-21 and 93 on the 22nd. Read the cap, not
+the constancy.
+
+---
+
+## F-2026-08-22-03 — the check was holding one link's decision against another link's baseline
+
+Surfaced by fixing F-2026-08-16-01. With the baseline now recorded per link,
+the check still reported drift on three of twelve — 3357 samples against 3258.
+It was not drift.
+
+`/api/prop/evidence` matches on `call` + `gate`, and takes the most RECENT
+record when no `ts` is given. The check never sent one. **Sender→gate pairs
+repeat**, because the same station beacons from the same spot and is flagged
+again each time:
+
+```
+W0ZC-15    -> RA4NHY-1    19 records
+XE2BNC-1   -> KF6NYM-15    7 records, all at an identical 373.9 km
+CQ0PMJ-3   -> ED1ZAX-3     3
+```
+
+So link A's `at_flag` was being compared with link B's `gate_baseline`, and the
+difference was read as the event contaminating its own history. **The defect
+was invisible for as long as the bug it was hunting existed**: while
+`gate_baseline` was read live it was larger than `at_flag` either way, so the
+assertion fired for the right reason by accident.
+
+Fixed: the check sends `ts`, and refuses to run any assertion if the bundle
+answers with a different timestamp than the one asked for — a mismatch is now
+its own named failure rather than a wrong number. Negative control run: with
+the `ts` removed and that guard kept, it reports exactly the three pairs above
+and exits 1.
+
+**Two things fall out of this that are not about the check.**
+
+The repeat counts are measured evidence for F-2026-08-12-09's open item — the
+repeat count for a sender→gate pair. Nineteen records of one pair at one
+distance is not nineteen findings, and the map draws the same line nineteen
+times.
+
+`XE2BNC-1 → KF6NYM-15` is a calibration case for F-2026-08-12-03: 373.9 km
+against a gate whose own bar sits at 300–366 km, flagged, which lifts the bar,
+which it then clears again. A gate oscillating around its own threshold.
 
 ---
 

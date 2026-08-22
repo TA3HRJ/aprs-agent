@@ -391,25 +391,71 @@ collect: the cause distribution is one line.
 The bundle currently contradicts itself, and the fix unblocks the calibration
 that has been waiting since July.
 
-### Start here — measured red, 2026-08-21 (v3.2.80 on the VPS)
+### ✅ The head is done — v3.2.81 / v3.2.82, 2026-08-22
 
-The check is written and failing against live data. Reproduce it on the VPS,
-where the admin API lives:
+`python3 tools/check_prop_bundle.py --max 12` on the VPS: **0 problems, exit 0**,
+against 12 of 93 live anomalous links. It read 43 problems across 12 links the
+night before.
+
+| assertion | was | now |
+|---|---|---|
+| `at_flag` carries `sigma_km` | 12 of 12 failing | pass |
+| `at_flag` carries `threshold_km` | 12 of 12 failing | pass |
+| `gate_baseline.samples` exceeds `at_flag.samples` | 12 of 12 failing | pass |
+| the published multiplier's denominator clears the 300 km floor | 7 of 12 failing | pass |
+
+**What shipped:** F-2026-08-16-01, F-2026-08-16-01b and F-16's recording half,
+plus two findings the work produced — see F-2026-08-22-01 and -02 in
+[FINDINGS.md](FINDINGS.md).
+
+**One live bundle, as it now reads** (XE2BNC-1 → KF6NYM-15, 373.9 km):
+
+| | samples | threshold |
+|---|---|---|
+| `gate_baseline` — at flag | 3265 | **327.4 km** → cleared by 1.1x |
+| `gate_baseline_now` — at export | 3360 | **474.4 km** |
+
+A reader given only the second would conclude this link should never have been
+flagged: 374 is short of 474. That is the circle, and it is now two named
+blocks instead of one ambiguous name.
+
+**Three things worth carrying forward.**
+
+1. **The check would have passed by examining nothing.** The ring buffer is in
+   memory; the deploy restarts the service and empties it, and the old check
+   exited 0 on an empty list. Fixed before deploying, and the first live run
+   after the deploy printed exactly that failure.
+2. **The check was comparing two different events.** `/api/prop/evidence`
+   without a `ts` answers with the most RECENT link for a sender→gate pair, and
+   pairs repeat — **W0ZC-15 → RA4NHY-1 appears 19 times**, XE2BNC-1 →
+   KF6NYM-15 seven, all at an identical distance. So link A's `at_flag` was
+   being held against link B's baseline. Invisible while the baseline was read
+   live, because it was larger either way. The check now sends the timestamp
+   and refuses to run if the bundle answers with a different one.
+3. **"43 problems / 12 links" was never a stable number.** `--max 12` caps the
+   sample; the pool was 33 on the 21st and 93 on the 22nd. Read the cap.
+
+### What is left in B
+
+F-09, F-22 and F-23 — presentation, independent, unchanged by this. F-03 now
+has the field it needs and starts its measurement clock here: it wants a few
+days of data before the absolute-floor branch can be judged.
+
+**One new OPEN item, from F-2026-08-22-01:** the opening alert filters on
+`at_flag.established`, and a gate can be established by sample count while the
+bar its own history sets is 0.3 km — under the floor. By the same reasoning
+those links were flagged by the floor alone and should not raise a
+notification. Deliberately not done here: it changes what puts a notification
+on somebody's phone, and that needs its own evidence.
+
+<details>
+<summary>The red this replaced, 2026-08-21 (v3.2.80)</summary>
 
 ```
 cd /opt/aprs-agent && python3 tools/check_prop_bundle.py --max 12
 ```
 
-Exit code 1. **43 problems across 12 anomalous links**, by assertion:
-
-| assertion | links failing |
-|---|---|
-| `at_flag` carries no `sigma_km` | 12 of 12 |
-| `at_flag` carries no `threshold_km` | 12 of 12 |
-| `gate_baseline.samples` exceeds `at_flag.samples` | 12 of 12 |
-| published multiplier divides by an EMA below the 300 km floor | 7 of 12 |
-
-**Done = 0 problems**, same command.
+Exit code 1. **43 problems across 12 anomalous links.**
 
 **What this run added to the finding.** F-2026-08-16-01 was written from one
 link, where `gate_baseline` had exactly one sample more than `at_flag` and a
@@ -429,12 +475,9 @@ circle, just a wider one.
 Real denominators seen in the multiplier, all under the 300 km floor:
 **46.9, 65.4, 117.3, 168.7 km**.
 
-**Why a fresh session:** this edits `station_db.py`'s hot path and the mistake
-it invites is invisible — a wrong baseline looks exactly like a right one. The
-check is the mitigation and it did not exist when this was scheduled; it
-catches all three classes above, against live data, in one command.
+</details>
 
-**Scope for that session:** the head only — F-2026-08-16-01 plus the recording
+**Scope for that session (done):** the head only — F-2026-08-16-01 plus the recording
 half of F-16. That is what starts F-03's measurement clock. F-09, F-22 and
 F-23 are presentation, independent, and can wait again.
 
