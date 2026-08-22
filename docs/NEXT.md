@@ -743,6 +743,106 @@ Nothing is lost by waiting — the answer it gives today is honest.
 
 **Order:** after B. Revisit when the discussion has cooled.
 
+## I · Per-gate range mapping — DRAFT, operator's idea 2026-08-22, nothing agreed
+
+**The question as asked:** can each igate's range be mapped from the cumulative
+signal data, RX and TX?
+
+**Answer: RX yes, and the measurement is already happening. TX no, and that is
+not an effort question — the data does not exist in the feed.**
+
+### RX · the boxes are already being ticked, then thrown away
+
+Every `qAR`/`qAO` packet is one measured RF path: the sender's in-packet
+position to the gate's known position. On the live feed that is roughly
+**23,000 measurements an hour across 7,877 gates**. All of it collapses into
+three numbers per gate and the rest is discarded:
+
+```python
+self._gate_stats[gate] = [count, ema_mean, ema_var]
+```
+
+The only missing ingredient is **direction**. Distance is computed
+(`_haversine_km`); bearing is computed nowhere. So this is not new data
+collection — it is keeping a dimension of a measurement already being taken.
+
+Shape, if it goes ahead: per gate, 12 sectors of 30° or 16 of 22.5°, each
+carrying a sample count, a maximum, and a high percentile. The percentile
+matters more than the maximum — one misconfigured GPS sets a maximum forever,
+which is the whole reason `PROP_MAX_KM` exists.
+
+Two known traps, both already paid for once:
+
+- it must not walk the registry on the event loop (v3.1.2, then v3.2.10 again)
+- it must survive a restart the way `export_gate_stats` does, or the map is
+  empty every time the service is deployed — the same in-memory lesson that
+  F-2026-08-22-02 just cost us
+
+### TX · not in APRS-IS, and not in this agent
+
+APRS-IS records only who **heard** a packet; that is what the `qAR,GATE`
+construct means. What an igate transmits to RF never enters the feed. Nor can
+this agent measure its own: `fixed_beacon` sends over TCP to APRS-IS, and there
+is no transmitter in the system.
+
+Any "TX range" drawn from what we have would be a guess wearing the clothes of
+a measurement — the exact failure class Package B was spent removing.
+
+**But there is real TX data, for a different device.** A digipeated packet
+carries the digi's callsign in its path (`WIDE1-1*`). When a gate hears that
+re-transmission, the **digi → gate** leg is a genuine transmit path. Those
+packets are currently excluded outright (`digipeated` → no `rf_direct`,
+`packet_parser.py`), because the link engine wanted one clean RF leg. So:
+TX range is impossible for igates and available-but-unused for digipeaters.
+Worth deciding deliberately rather than by omission.
+
+### The hard part is not the data — it is what an empty sector means
+
+A gate's map is shaped by **where stations happen to be**, not by where it can
+hear. No stations to the south means no measurement to the south, which is not
+the same as no coverage. That is F-2026-08-16-01's mistake in a new costume:
+the absence of data read as a fact about the world.
+
+So it has to be in the design before the first line is written:
+
+- a measured sector is drawn; an unmeasured one is drawn as **visibly
+  unmeasured**, not as zero range
+- every sector carries its own sample count
+- one sector with three samples and one with nine hundred must not look alike
+
+### What it would feed
+
+A range rose is a strong detector for a **misplaced gate**: uniform 400 km in
+every direction is far more likely a wrong position than a remarkable aerial.
+That is exactly what F-23 wants (a gate's anomalous fraction) and what makes
+F-22's grouping safe. If this is built, it should be built knowing it serves
+those two.
+
+### Where it would live
+
+**Not a new tab.** The natural home is the station detail panel when the opened
+station is a gate, plus an optional map overlay for a single selected gate.
+
+### Why this is on the list at all
+
+"Not on this list" says no new features, and that rule is right. The argument
+for this one is that it adds no new surface and no new collection: it keeps a
+dimension of an existing measurement, renders it inside an existing panel, and
+its first customer is an open finding about gates whose positions cannot be
+trusted. If that argument does not hold, this belongs below the line instead —
+that is the operator's call, not a decision to be made by writing the code.
+
+**Priority as drafted:** after the rest of B. F-03's measurement clock started
+2026-08-22 and wants a few days of data before the floor branch can be judged,
+and this fits that window without competing with anything.
+
+**Open before anything is built:** sector count (12 or 16); percentile or
+maximum; whether anomalous links are excluded from the envelope (a tropo
+opening is not a gate's normal reach) or drawn as a separate ring; and whether
+the digipeater TX leg is in scope or explicitly out.
+
+---
+
 ## Not on this list
 
 - **New features.** The surface is already wide: map, silence, propagation,
