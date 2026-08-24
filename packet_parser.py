@@ -474,6 +474,19 @@ def _ddmm_to_decimal(deg_str: str, mm_str: str, hemisphere: str) -> float:
     return round(decimal, 5)
 
 
+def _on_earth(lat: float, lon: float) -> bool:
+    """Latitude stops at 90, longitude at 180. Anything else is not a place.
+
+    APRS sends positions as DDMM.mm, and the pattern that reads them matches
+    the digit shape, not the range: a corrupt "9305.58N" decodes cleanly to
+    93.093 and nothing downstream asks again. One such packet was measured at
+    4646 km, flagged as an anomalous RF link, published as evidence and
+    folded into its gate's distance baseline - every step correct arithmetic
+    on a point that does not exist.
+    """
+    return -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0
+
+
 def classify_symbol(table: str, symbol: str) -> str:
     """Return station type string for an APRS symbol table+code pair.
 
@@ -640,9 +653,15 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
         lon = _ddmm_to_decimal(pm.group(5), pm.group(6), pm.group(7))
         tbl = pm.group(4)
         sym = pm.group(8)
-        result["lat"] = lat
-        result["lon"] = lon
-        result["locator"] = _latlon_to_locator(lat, lon)
+        if _on_earth(lat, lon):
+            result["lat"] = lat
+            result["lon"] = lon
+            result["locator"] = _latlon_to_locator(lat, lon)
+        else:
+            # Keep the packet, drop the geometry. The symbol and comment are
+            # still true; the position is not, and a distance measured to it
+            # would be arithmetic on garbage.
+            result["position_invalid"] = True
         result["symbol_table"] = tbl
         result["symbol"] = sym
         result["station_type"] = classify_symbol(tbl, sym)
@@ -658,9 +677,12 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
         comp = _decode_compressed(info)
         if comp:
             tbl, sym, lat, lon = comp
-            result["lat"] = lat
-            result["lon"] = lon
-            result["locator"] = _latlon_to_locator(lat, lon)
+            if _on_earth(lat, lon):
+                result["lat"] = lat
+                result["lon"] = lon
+                result["locator"] = _latlon_to_locator(lat, lon)
+            else:
+                result["position_invalid"] = True
             result["symbol_table"] = tbl
             result["symbol"] = sym
             result["station_type"] = classify_symbol(tbl, sym)

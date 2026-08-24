@@ -23,6 +23,9 @@ Three assertions, in the order they matter:
 
   4. the multiplier the bundle publishes divides by that threshold, and the
      threshold is at or above the 300 km floor
+  5. neither end of a published link is off the Earth. Latitude stops at 90
+     and longitude at 180, and a position outside that is not a place a
+     distance can be measured to
 
 Assertion 4 was written the other way round on 2026-08-17: it read at_flag's
 ema_km and failed if THAT was below the floor, because the popup at the time
@@ -171,6 +174,29 @@ def main(argv: list[str]) -> int:
                 "compares two different events"
                 % (call, gate, link.get("ts"), got.get("ts")))
             continue
+
+        # ── 5 · both ends have to be on the planet ─────────────────────
+        # DG2MMB-12 -> DB0OAL arrived with the sender at lat 93.093, lon
+        # 986.8757. Everything else in that bundle was correct: the threshold
+        # arithmetic checked out to the decimal, the baseline was flag-time
+        # and properly labelled, the multiplier divided by the threshold. It
+        # was a well-formed report about a distance that does not exist.
+        #
+        # The detection rule already claims to exclude "GPS garbage", but only
+        # by an upper distance bound - this link came in at 4646 km against a
+        # 5000 km ceiling, so it was let through by luck rather than by any
+        # test. Range is not validity.
+        for who, la, lo in (("sender", got.get("s_lat"), got.get("s_lon")),
+                            ("gate", got.get("g_lat"), got.get("g_lon"))):
+            if la is None or lo is None:
+                continue
+            if abs(float(la)) > 90 or abs(float(lo)) > 180:
+                problems.append(
+                    "%s -> %s: the %s's published position is %.4f, %.4f, "
+                    "which is not on Earth - latitude stops at 90 and "
+                    "longitude at 180. Every distance derived from it, "
+                    "including this link's %.1f km, is arithmetic on garbage"
+                    % (call, gate, who, float(la), float(lo), km))
 
         base = ev.get("gate_baseline") or {}
         flag_n = flag.get("samples")

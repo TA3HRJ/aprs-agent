@@ -2747,6 +2747,82 @@ which it then clears again. A gate oscillating around its own threshold.
 
 ---
 
+## F-2026-08-24-01 — 4646 km measured to a point that does not exist
+
+An evidence bundle for DG2MMB-12 -> DB0OAL, exported at v3.2.83, reported an
+anomalous RF link of 4646.2 km. **Every part of the bundle's own machinery was
+sound.** Package B's head had landed and it showed: `at_flag` carried `sigma_km`
+and `threshold_km`, `gate_baseline` was flag-time and said so, its sample count
+equalled `at_flag`'s rather than exceeding it, `gate_baseline_now` sat in its
+own block, and the multiplier divided by the threshold rather than the EMA. The
+threshold arithmetic reproduces to the decimal:
+
+```
+max(3 x 317.8, 317.8 + 4 x 1019.6) = max(953.4, 4396.2) = 4396.2
+4646.2 / 4396.2 = 1.057   ->  published as 1.1x
+```
+
+The sender's reported position was **lat 93.093, lon 986.8757**.
+
+Latitude stops at 90 and longitude at 180. This is not a position that is
+wrong; it is not a position. Reproduced from the parser in one line each:
+
+```
+_ddmm_to_decimal("93",  "05.58", "N")  -> 93.093
+_ddmm_to_decimal("986", "52.54", "E")  -> 986.87567
+```
+
+APRS sends positions as `DDMM.mm` / `DDDMM.mm`. `_RE_POS_UNCOMP` matches the
+digit *shape* and nothing ever asks whether the degrees are in range, so a
+corrupt packet decoded cleanly and the locator, the haversine, the gate's
+distance baseline and the map all worked on it.
+
+**Verdict: file's fault, twice over.**
+
+**First**, `detection.excluded` claims to drop "GPS garbage" — but only by an
+upper distance bound. This link measured 4646 km against a 5000 km ceiling, so
+nothing tested it. It was excluded by luck, and luck ran out. *Range is not
+validity*, and the test belongs where the number is born rather than four
+layers downstream.
+
+**Second, and worse: the bundle offered a false ambiguity about it.**
+`position_corroboration` reported
+
+> "either the position is wrong, or the operator is transmitting away from
+> home, and this evidence cannot separate those"
+
+That sentence is correct in general and wrong here. An operator away from home
+is still on Earth. The check ran a callsign-prefix comparison against a
+coordinate it should have refused to accept, and then described the result in
+the careful, balanced language reserved for genuinely ambiguous cases. A reader
+handed that would weigh two possibilities where there is only one. This is the
+same defect class as F-2026-08-16-01: not a missing fact, but a confident
+statement built on an input nobody validated.
+
+Fixed at the parser. `_on_earth()` gates both the uncompressed and the
+compressed path; an out-of-range position sets `position_invalid` and the
+lat/lon/locator fields are simply absent. The rest of the packet is kept — the
+symbol, the comment and any weather in it were never in doubt, and a station
+with no position is something the registry already handles.
+
+`tools/check_coords.py` holds the live failure, both boundaries (90 and 180 are
+real places, 90.001 is not), the compressed path, and — the direction this
+fails if someone tightens it too far — that an ordinary position is untouched.
+`tools/check_prop_bundle.py` gains a fifth assertion: no published link may
+have an endpoint off the Earth.
+
+**Still open — the poisoned baseline.** DB0OAL's own figures show the damage
+already done: mean 317.8 km and sigma 1019.6 km at flag time, and nine samples
+later mean 1518.6 km, sigma 2167.5 km. For an EMA at alpha = 0.05 to move that
+far in nine steps, the arriving samples must average about **3565 km** — so
+this was not one bad packet but a stream. The parser fix stops new ones; it
+does not un-teach a gate that has already learned garbage as its normal, and a
+gate whose sigma is 3.2x its mean will not flag the next real opening. Whether
+affected baselines should be reset, and how such a gate is identified, is a
+question for §D rather than something to decide here.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
