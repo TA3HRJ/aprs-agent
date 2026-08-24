@@ -1649,16 +1649,22 @@ class StationDB:
                 r.last_seen    = d["last_seen"] or r.first_seen
                 r.packet_count = d["packet_count"] or 0
                 # A position is checked wherever it enters, not only at the
-                # parser. 47 rows in the live database predate that rule and
-                # would otherwise be reloaded on every start, complete with
-                # the malformed locators they produced on the way in.
-                if (d["lat"] is not None and d["lon"] is not None
-                        and _on_earth(float(d["lat"]), float(d["lon"]))):
+                # parser: rows written before that rule existed would
+                # otherwise be reloaded on every start, complete with the
+                # malformed locators they produced on the way in.
+                #
+                # Three cases, not two. A row with no position is not a row
+                # with a bad one — conflating them made the first version of
+                # this report 28,086 where the truth was 47, and blanked the
+                # locator of every position-less station, which the repeater
+                # database can supply without any lat/lon being parsed.
+                r.locator = d["locator"] or ""
+                if d["lat"] is None or d["lon"] is None:
+                    pass                        # never had one
+                elif _on_earth(float(d["lat"]), float(d["lon"])):
                     r.lat, r.lon = d["lat"], d["lon"]
-                    r.locator    = d["locator"] or ""
                 else:
-                    r.lat, r.lon = None, None
-                    r.locator    = ""
+                    r.locator = ""              # derived from the bad fix
                     dropped += 1
                 r.symbol       = d["symbol"] or ""
                 r.symbol_table = d["symbol_table"] or ""

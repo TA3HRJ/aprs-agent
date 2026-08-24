@@ -2822,6 +2822,28 @@ applies the same test, imported from the parser rather than copied, drops the
 position while keeping the station, and reports the count through `web_gui`
 instead of teaching a pure library to print.
 
+**And the first version of that report was itself false**, which is worth
+recording rather than quietly correcting. Shipped as v3.2.85, the live load
+announced:
+
+```
+[station-db] dropped 28086 stored position(s) that were not on Earth
+```
+
+A direct query of the same database counts **47**. The other ~28,000 are
+stations that never carried a position at all: the branch treated *absent* and
+*impossible* as one case and then asserted the second about both. It also
+blanked `locator` for every one of them, and a locator can arrive from the
+repeater database with no lat/lon ever parsed — so it did discard something,
+just not the thing it named.
+
+There are three cases, not two. A number stated to an operator with confidence,
+produced by counting the wrong set, is the same defect as the one this whole
+finding is about — made while fixing it, and caught only because the live
+figure disagreed with a query run ten minutes earlier. `check_coords.py` now
+holds the distinction: a position-less row must not be counted, and must keep
+its locator.
+
 **Still open — the poisoned baseline.** DB0OAL's own figures show the damage
 already done: mean 317.8 km and sigma 1019.6 km at flag time, and nine samples
 later mean 1518.6 km, sigma 2167.5 km. For an EMA at alpha = 0.05 to move that

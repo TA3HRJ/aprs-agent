@@ -152,6 +152,28 @@ def main() -> int:
           % ("stored row", (rec or {}).get("lat"), (rec or {}).get("locator"),
              getattr(db2, "load_dropped_positions", None)))
 
+    # A row with no position is not a row with a bad one. Conflating them made
+    # the first live report say 28,086 where the truth was 47, and blanked the
+    # locator of every position-less station along the way.
+    con = sqlite3.connect(tmp)
+    con.execute("update stations set lat=NULL, lon=NULL, locator='KM38nk' "
+                "where callsign=?", ("TA1ABC-12",))
+    con.commit()
+    con.close()
+    db3 = StationDB()
+    db3.load_sqlite(tmp)
+    rec3 = db3.get_one("TA1ABC-12") or {}
+    if getattr(db3, "load_dropped_positions", 0) != 0:
+        problems.append("no position: counted as dropped (%s) — 'absent' is "
+                        "not 'impossible', and the operator is told a number"
+                        % getattr(db3, "load_dropped_positions", None))
+    if rec3.get("locator") != "KM38nk":
+        problems.append("no position: blanked a locator (%r) that did not "
+                        "come from a bad coordinate" % rec3.get("locator"))
+    print("  %-19s locator=%r dusurulen=%s"
+          % ("no position at all", rec3.get("locator"),
+             getattr(db3, "load_dropped_positions", None)))
+
     print()
     for p in problems:
         print("FAIL  " + p)
