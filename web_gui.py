@@ -482,6 +482,12 @@ class AgentManager:
             if n:
                 print(f"[station-db] Restored {n} stations from "
                       f"{self._sta_db_path}", file=sys.__stderr__)
+            bad = getattr(self._station_db, "load_dropped_positions", 0)
+            if bad:
+                # Written before positions were validated anywhere. Saying it
+                # out loud is how anyone learns the stored data had them.
+                print(f"[station-db] dropped {bad} stored position(s) that "
+                      f"were not on Earth", file=sys.__stderr__)
         except Exception as e:
             print(f"[station-db] SQLite load failed: {e}", file=sys.__stderr__)
         # Lifelong uptime: seconds accumulated by every previous run. The

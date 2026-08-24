@@ -21,6 +21,7 @@ from typing import Any, Optional
 from packet_parser import (
     OFFLINE_THRESHOLD,
     STATION_ICON,
+    _on_earth,
     classify_symbol,
     parse_packet,
 )
@@ -892,6 +893,7 @@ class StationDB:
 
     def __init__(self) -> None:
         self._stations: dict[str, StationRecord] = {}
+        self.load_dropped_positions = 0
         # base_call → list of DB records for fast lookup
         self._repeater_index: dict[str, list[dict]] = {}
         # Maidenhead fields (first two chars, e.g. "KM") that silence detection
@@ -1636,6 +1638,7 @@ class StationDB:
             cur = con.execute(
                 "SELECT " + ",".join(self._SQL_COLS) + " FROM stations")
             n = 0
+            dropped = 0
             for row in cur:
                 d = dict(zip(self._SQL_COLS, row))
                 cs = d["callsign"]
@@ -1645,8 +1648,18 @@ class StationDB:
                 r.first_seen   = d["first_seen"] or time.time()
                 r.last_seen    = d["last_seen"] or r.first_seen
                 r.packet_count = d["packet_count"] or 0
-                r.lat, r.lon   = d["lat"], d["lon"]
-                r.locator      = d["locator"] or ""
+                # A position is checked wherever it enters, not only at the
+                # parser. 47 rows in the live database predate that rule and
+                # would otherwise be reloaded on every start, complete with
+                # the malformed locators they produced on the way in.
+                if (d["lat"] is not None and d["lon"] is not None
+                        and _on_earth(float(d["lat"]), float(d["lon"]))):
+                    r.lat, r.lon = d["lat"], d["lon"]
+                    r.locator    = d["locator"] or ""
+                else:
+                    r.lat, r.lon = None, None
+                    r.locator    = ""
+                    dropped += 1
                 r.symbol       = d["symbol"] or ""
                 r.symbol_table = d["symbol_table"] or ""
                 r.symbol_overlay = d["symbol_overlay"] or ""
@@ -1671,6 +1684,9 @@ class StationDB:
                     pass
                 self._stations[cs] = r
                 n += 1
+            # Read by the caller, which does the logging. This module has no
+            # print statements and this count is not a reason to start.
+            self.load_dropped_positions = dropped
             return n
         except sqlite3.Error:
             return 0

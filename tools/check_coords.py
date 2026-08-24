@@ -30,6 +30,11 @@ What this holds:
      and throwing the whole packet away would lose facts we do have
   5. an ordinary position is untouched, which is the way this check fails if
      somebody makes the test too strict
+  6. SQLite is a second front door. Fixing the parser stops new bad positions
+     arriving and does nothing about the ones already written — the live
+     database held 47 of them, reloaded into memory on every start, complete
+     with the malformed locators they produced on the way in ("3M-84Od",
+     "[O91qm"). A validity rule enforced at one entrance is not enforced
 
 Callsigns here are anonymised, as every fixture in this directory is.
 
@@ -107,6 +112,45 @@ def main() -> int:
         if _on_earth(la, lo) != want:
             problems.append("_on_earth(%s, %s) said %s"
                             % (la, lo, not want))
+
+    # 6 — the second front door
+    import sqlite3
+    import tempfile
+    import os
+    from station_db import StationDB
+
+    tmp = os.path.join(tempfile.mkdtemp(prefix="aprs-coords-"), "s.db")
+    db = StationDB()
+    db.ingest(HDR + "!3826.00N/02706.00E>rig")
+    db.save_sqlite(tmp)
+    # Write a row the way the old code could have: straight past validation.
+    con = sqlite3.connect(tmp)
+    con.execute("update stations set lat=93.093, lon=986.8757, "
+                "locator='3M-84Od' where callsign=?", ("TA1ABC-12",))
+    con.commit()
+    con.close()
+
+    db2 = StationDB()
+    db2.load_sqlite(tmp)
+    rec = db2.get_one("TA1ABC-12")
+    if rec is None:
+        problems.append("stored row: the whole station was thrown away; only "
+                        "the position was in doubt")
+    else:
+        if rec.get("lat") is not None or rec.get("lon") is not None:
+            problems.append("stored row: reloaded lat=%s lon=%s from SQLite — "
+                            "the parser guard does not cover this door"
+                            % (rec.get("lat"), rec.get("lon")))
+        if rec.get("locator"):
+            problems.append("stored row: kept the malformed locator %r"
+                            % rec.get("locator"))
+    if getattr(db2, "load_dropped_positions", 0) != 1:
+        problems.append("stored row: dropped silently, count=%r — nobody "
+                        "learns the stored data had them"
+                        % getattr(db2, "load_dropped_positions", None))
+    print("  %-19s konum=%s locator=%r dusurulen=%s"
+          % ("stored row", (rec or {}).get("lat"), (rec or {}).get("locator"),
+             getattr(db2, "load_dropped_positions", None)))
 
     print()
     for p in problems:

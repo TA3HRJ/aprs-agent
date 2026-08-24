@@ -2811,6 +2811,17 @@ fails if someone tightens it too far — that an ordinary position is untouched.
 `tools/check_prop_bundle.py` gains a fifth assertion: no published link may
 have an endpoint off the Earth.
 
+**SQLite was a second front door.** Fixing the parser stops new impossible
+positions arriving and does nothing about the ones already written: the live
+database held **47 stations** whose coordinates are not on Earth, reloaded on
+every start. Their stored locators show what they went through on the way in —
+`3M-84Od`, `[O91qm`, `jK44rc`, `AR-85Pw` — strings `_latlon_to_locator`
+produced from out-of-range input, which no Maidenhead grid can contain. A
+validity rule enforced at one entrance is not enforced. `load_sqlite()` now
+applies the same test, imported from the parser rather than copied, drops the
+position while keeping the station, and reports the count through `web_gui`
+instead of teaching a pure library to print.
+
 **Still open — the poisoned baseline.** DB0OAL's own figures show the damage
 already done: mean 317.8 km and sigma 1019.6 km at flag time, and nine samples
 later mean 1518.6 km, sigma 2167.5 km. For an EMA at alpha = 0.05 to move that
