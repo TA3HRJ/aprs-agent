@@ -110,7 +110,31 @@ def main(argv: list[str]) -> int:
             "%d of %d links carry no at_flag, so nothing records what the "
             "decision used" % (len(missing), len(links)))
 
-    for link in links[:args.max]:
+    # Which links to spend the sample on. Taking the first --max was leaving
+    # the ts assertion untested by luck: it only fires when a sender->gate pair
+    # repeats inside the endpoint's 300 s tolerance, and on 2026-08-22 the top
+    # twelve held no such pair, so the check went green over a live fault. Put
+    # the repeating pairs first — they are the only links that exercise it, and
+    # they are also where a wrong baseline does the most damage.
+    seen: dict[tuple[str, str], list[int]] = {}
+    for l in links:
+        seen.setdefault((l.get("call", ""), l.get("gate", "")), []).append(
+            int(l.get("ts", 0) or 0))
+
+    def _repeats(l: dict) -> bool:
+        """True if another record of this pair sits inside the tolerance."""
+        ts = int(l.get("ts", 0) or 0)
+        return any(o != ts and abs(o - ts) <= 300
+                   for o in seen.get((l.get("call", ""), l.get("gate", "")), ()))
+
+    hot = [l for l in links if _repeats(l)]
+    cold = [l for l in links if not _repeats(l)]
+    sample = (hot + cold)[:args.max]
+    print("sample: %d of %d links, %d of them from pairs that repeat inside "
+          "the 300 s tolerance (those are what test the ts assertion)"
+          % (len(sample), len(links), sum(1 for l in sample if _repeats(l))))
+
+    for link in sample:
         flag = link.get("at_flag") or {}
         call, gate = link.get("call", ""), link.get("gate", "")
         km = float(link.get("km") or 0)
