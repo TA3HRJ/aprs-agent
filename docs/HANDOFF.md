@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.86
+# Handoff — state at v3.2.87
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,32 +11,44 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.86** |
-| repo HEAD | `beea580`, clean, master and tag pushed |
+| running | **v3.2.87** |
+| repo HEAD | `9f57418`, clean, master and tag `v3.2.87` pushed |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
 Moving a tag is allowed and the updater copes: `git push origin --delete <tag>`
 then re-tag. Doc-only commits do not need a tag.
 
+`aprs-update.sh` only deploys tags matching `vX.Y.Z` exactly, installs against
+`requirements-lock-linux.txt` as constraints, restarts, then polls
+`/api/status` for up to 90 s and reports `Deploy OK: <tag> calisiyor` or fails
+loudly.
+
+**The repo on the VPS belongs to `aprs`, not root.** Run git there as
+`sudo -u aprs git -C /opt/aprs-agent …` rather than adding a `safe.directory`
+exception for root.
+
 ---
 
 ## The guard rail
 
-Ten checks in `tools/`, each one born from a live failure. Run them all before
-tagging:
+Eleven checks in `tools/`, each one born from a live failure. Run them all
+before tagging:
 
 ```
 for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Nine run offline. **`check_prop_bundle.py` needs a live admin API**, which is
-localhost-only in production, so it runs on the VPS:
+Ten run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+admin API, which is what this file used to say. `/api/prop` and
+`/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
 ```
-cd /opt/aprs-agent && python3 tools/check_prop_bundle.py --max 12
+python tools/check_prop_bundle.py --base https://map.aprsagent.com --max 12
 ```
+
+or on the VPS against `http://127.0.0.1:8080`, which is the default.
 
 | check | what it defends |
 |---|---|
@@ -49,49 +61,84 @@ cd /opt/aprs-agent && python3 tools/check_prop_bundle.py --max 12
 | `check_signature` | no callsign sign-off reaches the air; Turkish "de"/"da" survives |
 | `check_feedlog` | packets never reach journald, errors always do |
 | `check_coords` | no position off the Earth enters, by either door |
+| `check_prop_ts` | the evidence bundle answers with the link that was asked for, at both doors |
 | `check_prop_bundle` | the evidence bundle cannot judge an event with numbers that event wrote |
 
 ---
 
 ## What is open, in order
 
-### 1. Rest of Package B — F-09, F-22, F-23
-Presentation only, independent of each other, unchanged by the head that
-shipped. See `NEXT.md` §B.
+### 1. A meaningful green from `check_prop_bundle`
+The only thing left over from v3.2.87. The deploy restarts the service and
+empties the in-memory link ring, which refills at a measured **~32 links an
+hour**. Nine minutes after the deploy it read:
 
-### 2. F-03 — the absolute-floor branch
-**Its measurement clock started when B's head shipped.** The field it needs now
-exists; it wants a few days of data before the question can be answered with
-numbers rather than judgement. Nothing to do but wait, then count.
+```
+sample: 5 of 5 links, 0 of them from pairs that repeat inside the 300 s tolerance
+0 problems
+```
 
-### 3. New OPEN from F-2026-08-22-01
-The opening alert filters on `at_flag.established`, and a gate can be
-established by sample count while its baseline is still meaningless.
+**That is not a pass.** Exit 0 with no repeating pair in the sample means the
+`ts` assertion never ran — see F-2026-08-25-02. What closes this item is
+`12 of them from pairs that repeat` **and** `0 problems`, together. The fix
+itself is already proven offline by `check_prop_ts`; this run confirms nothing
+unexpected in live data.
 
-### 4. §D — silence threshold calibration
+### 2. F-2026-08-25-03 — a gate in the open Atlantic
+`SV1TNT-10` publishes 55.27 N, 41.09 W: a Greek callsign 500 km south of
+Greenland, carrying 17 of 200 records in one window. It passes assertion 5
+(on the Earth), clears the 5000 km ceiling by 16 km, and `check_prop_bundle`
+reports 0 problems on it. Gate positions are unchecked —
+`_prop_position_corroboration` runs on the sender only, while baselines are
+kept per gate. **This is F-23's live example and it blocks F-22.**
+
+### 3. Rest of Package B — F-09, F-22, F-23
+Presentation, independent of each other. See `NEXT.md` §B. Two measurements
+they were waiting on now exist, both from 2026-08-25 over a 7.4 h window of
+200 links:
+
+- **F-22's cheap pre-check:** 16 of 112 gates carried 2+ distinct senders.
+- **F-09's repeat count:** 200 records are 128 distinct pairs, 112 gates, 95
+  senders — 36% of records are repeats.
+
+**F-22 and F-23 still must ship together**, and item 2 is why.
+
+### 4. The README's F-03 sentence
+It states *"76% of flags come from the floor alone and 87% of those would not
+have been flagged had their gate been established."* The first clause is now
+the wrong way round (F-2026-08-25-04): re-measured on 2026-08-25 it is 24%, as
+gate baselines matured. The second clause was **not** re-measured and stands.
+Public text, so house rule applies — draft first. Consider whether a figure
+that moves with gate maturity should be quoted as a constant at all.
+
+### 5. §D — silence threshold calibration
 `min_silent = 3`, `min_ratio = 0.5`, never measured against anything.
 
-### 5. §E — non-independent stations in a silence cell (F-25)
+### 6. §E — non-independent stations in a silence cell (F-25)
 Feeds §D; no point before it.
 
-### 6. §I — per-gate range mapping
+### 7. §I — per-gate range mapping
 **DRAFT, operator's idea, nothing agreed.** RX is measurable and already being
 measured; TX is not, and that is a data-availability fact, not an effort one.
+
+### Closed since the last handoff
+- **F-03 answered again** (F-2026-08-25-04). The split flipped from 24/76 to
+  76/24 as baselines matured. The 87% noise figure is untouched — the
+  counterfactual needs `at_flag.gate_bar_km`, which is `null` for exactly the
+  population it applies to.
+- **F-2026-08-22-01 measured, and it is small.** Only 2 of 152 established
+  gates have an own bar under 10 km; none under 1 km. The feared
+  "established by count, bar still meaningless" case is rare on live data.
+  Deprioritise unless it grows.
+- **The floor is not manufacturing flags.** Of 200 links, 73 were floor-decided
+  on gates whose own bar runs to a median of 177 km and a max of 293 km — all
+  under 300, so those links would have cleared the gate's own standard too.
+  There the floor is the stricter test.
 
 ### Not scheduled
 - `active.ai` badge is done (§F, v3.2.78)
 - §C is fully struck through
 - MaxMind GeoLite2 key would add a country breakdown to `/stats`; nobody asked
-
----
-
-## Verification still owed
-
-**Run `check_prop_bundle.py` on the VPS once the ring has refilled.** The
-deploy restarts the service and empties the in-memory link ring, which refills
-at roughly 25 links an hour. The fifth assertion (no endpoint off the Earth)
-has never been exercised against live data — it was written and shipped in the
-same hour as the fix that should make it pass.
 
 ---
 
@@ -105,12 +152,25 @@ packet. A gate whose sigma is 3.2x its mean will not flag the next real
 opening. Whether affected baselines should be reset, and how such a gate is
 identified, belongs to §D.
 
+**Should `check_prop_bundle` fail when it cannot exercise the `ts` assertion?**
+Today it reports the condition and exits 0. Making it fatal is the complete fix
+and would turn the hour after every deploy red, which trains a reader to ignore
+the colour. Alert fatigue against a silent hole — the operator's call, recorded
+in F-2026-08-25-02 rather than settled inside someone else's fix.
+
 ---
 
 ## Traps this project has already paid for
 
 Each of these cost real time. They are in `FINDINGS.md` in full; this is the
 short form.
+
+**A check can go green by being asked an easy question.** `check_prop_bundle`
+exited 0 on 2026-08-22 and 1 on 2026-08-25 with no detector code changing
+between them — the sample decided it. Measured side by side on one process in
+one minute: 0 problems by first-N sampling, 6 by repeat-pair-first. A green
+that is wrong costs more than a red that is noisy, because it closes the
+question.
 
 **Read how a number was produced before reading it as a finding.** "43 problems
 / 12 links" held for days because `--max 12` capped the sample — the pool was 33
@@ -119,6 +179,11 @@ one night and 93 the next. Same shape as the bundle artefact trap.
 **A check that returns green having examined nothing is the same defect class
 as the bug it hunts.** `check_prop_bundle` would have passed by reading an
 empty ring after a deploy restart. An empty run is now a failure.
+
+**Prove a new check fails before trusting that it passes.** `check_prop_ts` was
+run against the reverted code first: 39 problems from the ring logic, 1 from
+the stored-event door. A check that has only been seen to pass has not been
+seen to work.
 
 **Ask the server.** Three rounds of client-side guessing lost to one read of
 the Apache log. The journal is now usable again for this — the packet feed no
@@ -132,7 +197,8 @@ say this. Do not re-argue it in the prompt.
 
 **A validity rule enforced at one entrance is not enforced.** The parser and
 `load_sqlite` are both doors. So are `_emit` and `feed`. So was the daily
-quota, which guarded free answers as if they cost money.
+quota, which guarded free answers as if they cost money. So were the ring and
+the stored-event path in `get_prop_evidence` (v3.2.87).
 
 **Write patch scripts to a file, not through a heredoc.** Backslash levels get
 eaten; `\b` has arrived as a literal backspace more than once and the regex
