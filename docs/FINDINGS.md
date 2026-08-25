@@ -2856,6 +2856,203 @@ question for §D rather than something to decide here.
 
 ---
 
+## F-2026-08-25-01 — the check was taught to ask; the server was never taught to answer
+
+Sibling of F-2026-08-22-03, and the half of it that did not ship.
+
+That finding established that `/api/prop/evidence` answers with the most recent
+record for a `call`+`gate` pair, and fixed it by teaching **the check** to send
+a `ts` and refuse every assertion if the bundle answered with a different one.
+The server side was never touched. It still matched on
+`abs(l["ts"] - want_ts) <= 300` while walking the ring **newest-first**, so for
+any pair beaconing faster than five minutes it could not return the record it
+was asked for — it returned the newest one inside the tolerance.
+
+**How it surfaced.** `check_prop_bundle.py --max 12` exited 0 on 2026-08-22 and
+1 on 2026-08-25 with no detector code changing in between. Nothing had
+regressed; see F-2026-08-25-02 for why the sample decided it.
+
+Measured on the live feed, 2026-08-25:
+
+```
+SV6NMP-9 -> SV1TNT-10: asked for ts 1787652150, answered 1787652439  (+289 s)
+SV6NMP-9 -> SV1TNT-10: asked for ts 1787652166, answered 1787652439  (+273 s)
+SV6NMP-9 -> SV1TNT-10: asked for ts 1787652181, answered 1787652439  (+258 s)
+```
+
+Six consecutive requests, one answer. That pair beacons about every 15 s, which
+puts roughly twenty records inside a 300 s window; the newest wins every time.
+
+**Verdict: file's fault.** The consequence is exactly the one §B exists to
+remove — the reader is handed one link's `at_flag` beside another link's
+`gate_baseline` and cannot see that they belong to different events. F-16 and
+F-2026-08-16-01 closed that circle at the recording end. This is the same
+circle re-entering through the retrieval end.
+
+**Fixed in v3.2.87.** Exact `ts` wins outright. The tolerance stays, because a
+`ts` taken from a stored event is rounded to the event rather than the link and
+that is a fair thing to want — but it now resolves to the **nearest** record,
+never the newest. Nearest is what the tolerance always meant; newest is what
+made it wrong.
+
+**The stored-event path was a second door**, and got the same rule. Its window
+is ±3600 s, twelve times the ring's tolerance, so a repeated pair is *likelier*
+there, not less; it had been taking the first match in the list. A validity
+rule enforced at one entrance is not enforced — the third time this project has
+written that sentence (F-2026-08-24-01, the daily quota, and now this).
+
+`tools/check_prop_ts.py` is new and holds it offline: it builds the burst
+itself, twenty records at 15 s spanning 285 s against the 300 s tolerance, and
+drives the real handler. Proven in both directions before it was trusted — 0
+problems against the fix, **39 against the pre-fix ring logic** (nineteen of
+twenty records plus the nearest-versus-newest case), and 1 against the pre-fix
+stored-event path from assertion 5 alone. A check that has only been seen to
+pass has not been seen to work.
+
+---
+
+## F-2026-08-25-02 — a check whose sample is chosen by luck reports the weather, not the code
+
+F-2026-08-22-02 recorded that `check_prop_bundle` would have passed by
+examining nothing, and made an empty ring a failure. This is the same defect
+one level in: the run was not empty, it was **unrepresentative**, and that was
+enough.
+
+The `ts` assertion can only fire when a sender→gate pair repeats inside the
+endpoint's 300 s tolerance. `--max` takes the first N links. On 2026-08-22 the
+top twelve held no such pair, so the check reported 0 problems over a fault
+that was live at the time and had been since v3.2.81.
+
+Measured side by side on 2026-08-25 — same process, same minute, one via the
+admin API on the VPS and one via the public view:
+
+| sampling | result |
+|---|---|
+| first `--max` links | **0 problems, exit 0** |
+| repeat-pairs first | **6 problems, exit 1** |
+
+**Verdict: our fault, and the more expensive kind** — a green that is wrong
+costs more than a red that is noisy, because it closes the question. HANDOFF
+listed this check as verification still owed; run in its old form that morning
+it would have been ticked off.
+
+**Fixed in v3.2.87.** Links whose pair repeats inside the tolerance are sampled
+first, and the run prints how many of the sample came from them. A window that
+genuinely contains none is now visible as such rather than passing silently.
+They are also where a wrong baseline does the most damage: a pair flagged
+nineteen times is nineteen chances to publish another event's history.
+
+**Left undecided, deliberately.** The check still exits 0 when the sample
+contains no repeating pair — the condition is reported, not fatal. Making it
+fatal is the complete fix and would turn the hour after every deploy red, which
+trains a reader to ignore the colour. That trade is the operator's to make, not
+a thing to settle inside a fix for something else. The first live run after the
+v3.2.87 deploy printed exactly this state:
+
+```
+sample: 1 of 1 links, 0 of them from pairs that repeat inside the 300 s tolerance
+0 problems
+```
+
+Correct, honest, and worth nothing as a verification — which is now legible
+from the output alone.
+
+---
+
+## F-2026-08-25-03 — a gate in the open Atlantic, and it passes every test we have
+
+F-2026-08-24-01 taught the parser that latitude stops at 90 and longitude at
+180, and gave `check_prop_bundle` a fifth assertion: no published link may have
+an endpoint off the Earth. Run across all 400 endpoints of a 200-link sample on
+2026-08-25, that assertion **passes**.
+
+The worst link in the same sample:
+
+```
+SV6NMP-9  38.4232 N,  22.4882 E   (Greece)
+SV1TNT-10 55.2734 N, -41.0935 W   (open North Atlantic)
+                                   4984.0 km, 17 records in a 7.4 h window
+```
+
+55 N, 41 W is about 500 km south of Greenland's southern tip. There is no land
+there. Both callsigns are `SV` — Greece — and Greece is roughly 1,000 km
+across.
+
+**It clears every guard this project has built.** The position is on the Earth,
+so assertion 5 passes. The link is 4984 km against the 5000 km GPS-garbage
+ceiling, so `detection.excluded` lets it through — by 16 km, which is the same
+kind of luck F-2026-08-24-01 said had run out. `check_prop_bundle` reports 0
+problems on it.
+
+**Verdict: file's fault, and a gap rather than a bug.** *Range is not validity*
+was the lesson of the 24th; this adds *and neither is being on the planet*. The
+one independent fact available about a self-reported coordinate — the area its
+callsign prefix is allocated to — is already computed by
+`_prop_position_corroboration`, but only for the **sender**. Baselines are kept
+per gate, gates are what the propagation detector reasons about, and a gate's
+position is unchecked.
+
+This is F-23's live example, arriving before F-23 was written. A gate producing
+17 of 200 records in one window is precisely the "anomalous fraction" that
+finding proposes to carry, and it reads today as 17 separate discoveries. It is
+also why NEXT.md's rule that **F-22 must not ship without F-23** is right: group
+openings by receiving gate while this gate is trusted and it will manufacture
+apparent openings out of everything it hears.
+
+Not fixed. Recorded so that the next reading of a long link starts by asking
+where the gate claims to be.
+
+---
+
+## F-2026-08-25-04 — F-03's split has flipped, and the README still carries the old one
+
+F-2026-08-15-46 answered F-03 on 200 live anomalous links:
+
+| | 2026-08-15 | 2026-08-25 |
+|---|---|---|
+| flagged by the gate's **own** threshold | 48 (24%) | **152 (76%)** |
+| flagged by the **300 km floor alone** | 152 (76%) | **48 (24%)** |
+
+Same sample size, same endpoint, ten days apart. Gate baselines have been
+persisting since v3.2.34; on 2026-08-15 only 53.9% of gates had crossed the 20
+samples their own threshold needs. More of them have now, and the split moved
+with it. The two figures being an exact swap is arithmetic — both samples are
+200 — not a second finding.
+
+Today's 200 break down further:
+
+| what decided the flag | links |
+|---|---|
+| the gate's own baseline | 79 |
+| the 300 km floor, gate established but its own bar lower | 73 |
+| the 300 km floor alone, gate not established | 48 |
+
+**The floor is not manufacturing those 73.** Their gates' own bars run to a
+median of 177 km and a maximum of 293 km — all below 300 — so every one of
+those links, being ≥300 km by definition, would have cleared the gate's own
+standard too. There the floor is the *stricter* test.
+
+**The 48 are repetition, not discovery.** They come from 12 distinct gates, and
+17 of them are the single pair in F-2026-08-25-03.
+
+**What this does NOT re-measure, and an earlier draft of this entry got wrong.**
+F-2026-08-15-46's other figure — that 87% of young-gate flags would not clear 3×
+if their gate were established — is untouched here. That counterfactual needs
+the gate's would-be bar, and `at_flag.gate_bar_km` is `null` for exactly the
+population it applies to. So the noise rate within young gates stands as last
+measured; only the split between the two branches has moved. Claiming otherwise
+would be the F-16 denominator mistake in a new coat: answering a question with
+a number that cannot address it.
+
+**Product consequence, not yet acted on.** The README states *"76% of flags
+come from the floor alone and 87% of those would not have been flagged had
+their gate been established."* The first clause is now the wrong way round. The
+second is still the best available reading. Per house rule the correction is a
+draft first — it is public text, and a number that moves with gate maturity
+should probably not be quoted as a constant at all.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
