@@ -2824,11 +2824,33 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
 
     db = mgr._station_db
     link = None
-    for l in reversed(list(db._prop_links)):
-        if l.get("call") == call and l.get("gate") == gate:
-            if not want_ts or abs(l.get("ts", 0) - want_ts) <= 300:
-                link = dict(l)
-                break
+    ring = [l for l in list(db._prop_links)
+            if l.get("call") == call and l.get("gate") == gate]
+
+    # The exact link asked for, before anything else. A sender beaconing every
+    # 15 s puts twenty records for the same pair inside the 300 s tolerance
+    # below, and the ring was walked newest-first — so a tolerance match
+    # answered with a LATER link than the one requested, carrying a later
+    # baseline, and every assertion the reader made compared two different
+    # events. That is the circle this bundle exists to close, arriving through
+    # the door the fix was not applied to: v3.2.81 taught check_prop_bundle to
+    # send the timestamp and refuse on a mismatch, and stopped there. Measured
+    # on the live feed 2026-08-25: SV6NMP-9 -> SV1TNT-10 answered ts+289 s for
+    # six consecutive requests.
+    if want_ts:
+        link = next((dict(l) for l in reversed(ring)
+                     if int(l.get("ts", 0) or 0) == want_ts), None)
+
+    # Fallback, for a ts that came from a stored event rather than from the
+    # ring: those are rounded to the event, not to the link. NEAREST within the
+    # tolerance, never newest — newest is what produced the bug above.
+    if link is None and ring:
+        if not want_ts:
+            link = dict(ring[-1])
+        else:
+            near = min(ring, key=lambda l: abs(int(l.get("ts", 0) or 0) - want_ts))
+            if abs(int(near.get("ts", 0) or 0) - want_ts) <= 300:
+                link = dict(near)
 
     loop = asyncio.get_event_loop()
     event = await loop.run_in_executor(
@@ -2837,9 +2859,17 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
 
     if link is None and event:
         # Scrubbed to a past opening: the link is no longer in the live ring
-        # buffer, but the stored event still carries it.
-        link = next((dict(l) for l in event["links"]
-                     if l.get("call") == call and l.get("gate") == gate), None)
+        # buffer, but the stored event still carries it. Same rule as the ring,
+        # because this is the second door: an event's link list can hold the
+        # same pair more than once — the ±3600 s event window is twelve times
+        # the ring's tolerance — and taking the first match is the newest-wins
+        # bug wearing a different hat.
+        stored = [l for l in event["links"]
+                  if l.get("call") == call and l.get("gate") == gate]
+        if stored:
+            if want_ts:
+                stored.sort(key=lambda l: abs(int(l.get("ts", 0) or 0) - want_ts))
+            link = dict(stored[0])
     if link is None:
         return web.json_response(
             {"error": f"no propagation link found for {call} via {gate}"},
