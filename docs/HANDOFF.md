@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.89
+# Handoff — state at v3.2.90
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.89** |
-| repo HEAD | `12dc9cf`, clean, master and tag `v3.2.89` pushed |
+| running | **v3.2.90** |
+| repo HEAD | `e19b52c`, clean, master and tag `v3.2.90` pushed |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -147,9 +147,20 @@ unchanged.
    excluded. Excluded from the grouping only — the link stays on the map, the
    same treatment F-2026-08-15-46 gives a position-contradicting link.
 
-   **The other half of `VE2SIL-1` remains open.** A gate still flags
-   *everything* while young, because the floor decides alone until 20 samples,
-   and this rule needs an established mean. Nothing addresses that yet.
+   **The other half of `VE2SIL-1` shipped in v3.2.90** — see F-2026-08-26-04.
+   `PROP_GEOMETRY_MIN_SAMPLES = 5`, separate from `PROP_MIN_SAMPLES`, because
+   "does this distance repeat" is a question about spread and converges far
+   faster than "how far does this gate hear". Measured over 1,106 young gates:
+   bar 5 catches 6 (0.54%), all under `cv` 0.006, two with sigma exactly zero;
+   the nearest gate not caught sits at 0.10. `at_flag` carries
+   `fixed_geometry` so the map stops drawing nineteen identical lines as
+   nineteen discoveries.
+
+   **It removes no additional stored openings** — still 3 of 246 — and that is
+   stated rather than dressed up. Its value is prospective.
+
+   **Item 1 is now closed.** What began as F-23 produced three shipped changes
+   and two decisions; nothing on it is outstanding.
 2. ~~**§D — reset a deaf gate's baseline, or only report it?**~~ **Answered
    2026-08-26: report only, and do not build a reset.** See F-2026-08-26-02.
    All 25 would flag their *average* link if reset — median 6.8× the floor —
@@ -214,6 +225,20 @@ measured; TX is not, and that is a data-availability fact, not an effort one.
 - `active.ai` badge is done (§F, v3.2.78)
 - §C is fully struck through
 - MaxMind GeoLite2 key would add a country breakdown to `/stats`; nobody asked
+
+---
+
+## Verification still owed
+
+**How much of the live anomaly list carries `fixed_geometry`.** Not
+takeable at deploy time — the ring held 6 links fifteen minutes after
+v3.2.90 went out, and a percentage from that would be the
+F-2026-08-25-02 trap with the paint still wet. Run once the ring has
+refilled (~32 links an hour):
+
+```
+curl -s http://127.0.0.1:8080/api/prop | python3 -c "import sys,json; d=json.load(sys.stdin); ls=d['links']; n=sum(1 for l in ls if (l.get('at_flag') or {}).get('fixed_geometry')); print(n, 'of', len(ls))"
+```
 
 ---
 

@@ -3444,6 +3444,98 @@ half remains open.
 
 ---
 
+## F-2026-08-26-04 — five identical readings answer a different question than twenty
+
+The other half of `VE2SIL-1`, and the noisy one. Shipped in v3.2.90.
+
+F-2026-08-26-03 stopped a gate's repeated distance from supplying its own
+second sender, but the test needed an established mean — 20 samples — and the
+damage happens before that. Until a gate reaches 20 samples the 300 km floor
+decides alone, so a misplaced young gate flags **everything it carries**:
+
+```
+VE2SIL-1    10 flags of 10 links, samples 10-19
+RA4NHY-1    19 identical records at 1170.6 km ± 0.35
+```
+
+`RA4NHY-1` is the one worth pausing on. F-2026-08-22-03 recorded that pair
+repeating 19 times four days ago, as an observation about the evidence
+endpoint. The mechanism was sitting in the gate's own baseline the whole time:
+nineteen samples, all the same distance, sub-metre spread. The symptom was
+logged before the cause was visible, which is the ordinary way round and worth
+noticing when it happens.
+
+### Why the sample bar can be lower here
+
+`PROP_MIN_SAMPLES = 20` exists to trust a **level** — how far this gate
+normally hears. This test asks about **spread** — does the distance repeat —
+and that converges far faster. Five identical readings settle it; twenty are
+needed only for the mean.
+
+So `PROP_GEOMETRY_MIN_SAMPLES = 5`, separate from `PROP_MIN_SAMPLES` and used
+by nothing else.
+
+### The threshold was measured, not chosen
+
+Across 1,106 young gates on the live feed:
+
+| bar | young gates caught |
+|---|---|
+| 3 | 8 |
+| **5** | **6 (0.54%)** |
+| 10 | 3 |
+
+The six at 5 are unambiguous — every one under `cv` 0.006, two with a sigma of
+exactly zero:
+
+```
+N3VPD-2    n=19  mean=3839.5  sigma=5.78  cv=0.0015
+NT5R-4     n= 8  mean=1717.0  sigma=9.85  cv=0.0057
+BG6JDU     n= 8  mean=1176.3  sigma=0.00  cv=0.0000
+RA4NHY-1   n=19  mean=1170.6  sigma=0.35  cv=0.0003
+K4KPN-15   n=13  mean=1018.3  sigma=0.00  cv=0.0000
+CE3RHA-7   n= 6  mean=1009.0  sigma=0.30  cv=0.0003
+```
+
+And the boundary holds. The nearest young gate *not* caught is `G5ATT-7` at
+`cv` 0.10, and `KF6NYM-11` — mean 3838.9 km, sigma 531.9 — is correctly left
+alone despite a mean higher than four of the six. **Spread is what separates a
+gate that is somewhere strange from a gate that is not where it says it is**,
+and it does that job at eight samples as well as at eight hundred.
+
+Lowering the bar to 3 adds two gates on evidence too thin to call a repetition
+— one station beaconing three times from one spot. Raising it to 10 loses
+three genuinely fixed gates carrying 6 to 8 samples.
+
+### What it does not buy, stated plainly
+
+Replayed against the live database, the lower bar removes **no additional
+stored openings** — still 3 of 246, the same 6 links. The six young gates it
+catches did not appear in the last 14 days of events.
+
+So its value is prospective: the repetition it stops joining future groupings,
+and the marking below. That is what the evidence supports, and inflating it
+into an opening count would be the same move F-2026-08-25-04 had to correct.
+
+**A measurement still owed.** How much of the live anomaly list carries the
+mark could not be taken — the ring held 6 links fifteen minutes after the
+deploy, and reporting 0% from that would be the F-2026-08-25-02 trap with the
+paint still wet. Worth taking once the ring has refilled.
+
+### The link is marked, not removed
+
+`at_flag` now carries `fixed_geometry`. The map was drawing nineteen identical
+lines as nineteen discoveries; now it can say what they are. The link itself
+stays — remove it from the inference, not from the record, which is the third
+time this thread has landed on the same principle.
+
+It is evaluated against the baseline *including* the link being judged, rather
+than the flag-time convention the fields beside it follow. Deliberate: the
+grouping pass reads the same live state a moment later, and the mark agreeing
+with the decision matters more here than matching a convention.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
