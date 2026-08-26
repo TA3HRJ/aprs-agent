@@ -2,8 +2,8 @@
 
 The body for the GitHub release. Built 2026-08-26 on the pinned 32-bit
 environment (`docs/RELEASE-HOWTO.md`); the artefact is
-`aprs-agent-v3.2.97.zip`, 89.9 MB, sha256
-`0BB41E3EE1E6965CF345BDBB1C5C4512F15F1D5D5E5EC653C77FEE68844E51A7`.
+`aprs-agent-v3.2.97.zip`, 58.1 MiB, sha256
+`4BE998EE45269FD13A474057CE9034B06495CFA777E0E53EC8498EA8FB4D9D3A`.
 
 Suggested release name:
 
@@ -18,6 +18,27 @@ Asset, to match every previous release: `aprs-agent-v3.2.97.zip`
 Thirty versions since v3.2.67, and almost all of them are the same shape: a
 number the software stated confidently, checked against the feed, and found to
 be answering a different question than the one it appeared to answer.
+
+**Two things about the download before the changes themselves.**
+
+This build moves from **CPython 3.8 to 3.13**, which the previous release did
+not have: v3.2.67 shipped `python38.dll` and OpenSSL **1.1.1**, both of which
+reached end of life before it was published — Python 3.8 in October 2024,
+OpenSSL 1.1.1 in September 2023. Every AI, Telegram and WhatsApp call this
+software makes goes over that TLS stack. v3.2.97 ships CPython 3.13 and
+OpenSSL 3.
+
+And it is **smaller than v3.2.67 anyway** — 58 MiB against 59 — because the
+frozen Desktop GUI is no longer bundled here. It has its own release line and
+its current build is
+[v2.8.3-desktop-final](https://github.com/TA3HRJ/aprs-agent/releases/tag/v2.8.3-desktop-final);
+that is where Desktop users should go. This archive carries the CLI and the
+Web GUI, which is the one to use.
+
+One small loss worth naming: yarl's compiled URL quoter is not published as a
+32-bit wheel for this Python, so URL encoding runs its pure-Python path. It
+costs 0.21 µs per URL — about five million a second — on a path that runs once
+per HTTP request and never during APRS ingest.
 
 ### The evidence bundle answers the link you asked about
 
