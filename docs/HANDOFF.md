@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.94
+# Handoff — state at v3.2.95
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,10 +11,16 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.94** |
-| repo HEAD | `ab820bd`, clean, master and tag `v3.2.94` pushed |
+| running | **v3.2.95** |
+| repo HEAD | `6c65f94`, clean, master and tag `v3.2.95` pushed |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
+
+**Doc-only commits do not reach the VPS**, because `aprs-update.sh` deploys
+tags and nothing else. That is right for `docs/`, which nobody reads there —
+but `README.md`, `HELP.html` and `aprsconfig.toml.template` ship with the app,
+so a correction to those should be carried by the next tag rather than left
+sitting on master. v3.2.95 exists partly to do that.
 
 Moving a tag is allowed and the updater copes: `git push origin --delete <tag>`
 then re-tag. Doc-only commits do not need a tag.
@@ -27,6 +33,20 @@ loudly.
 **The repo on the VPS belongs to `aprs`, not root.** Run git there as
 `sudo -u aprs git -C /opt/aprs-agent …` rather than adding a `safe.directory`
 exception for root.
+
+
+### Consistency, last audited 2026-08-26 at v3.2.95
+
+Versions aligned across local, GitHub, the VPS and the running API. Every
+hardcoded `3.2.x` string in the source is a historical provenance comment and
+correct as written — do not "fix" them. `DEFAULTS` and
+`aprsconfig.toml.template` agree on all 112 keys. `README.md`, `HELP.html`,
+`aprsconfig.toml.template`, `config.py`, `station_db.py` and `web_gui.py` were
+verified byte-for-byte identical between `git show HEAD:` and the VPS.
+
+**Two figures still unmeasured**, both in the README's Silence Map row and both
+predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
+36 cells"* (F-41) and the *"under 35 %"* novelty threshold.
 
 ---
 
