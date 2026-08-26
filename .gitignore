@@ -56,3 +56,8 @@ test_*.toml
 
 # -- Station persistence database (local data, per-installation)
 aprs_stations.db
+
+# Release artefacts. Built by hand on the pinned 32-bit environment (see
+# docs/RELEASE-HOWTO.md) and uploaded to GitHub Releases, not committed —
+# v3.2.97's zip is 90 MB.
+aprs-agent-v*.zip
