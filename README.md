@@ -73,8 +73,8 @@ between versions, see the
 
 No Python installation required for the pre-built Windows executable.
 
-The Desktop GUI (`aprs-agent-gui.exe`) is published separately as a final build —
-see [Desktop GUI — feature freeze](#desktop-gui--feature-freeze).
+The Desktop GUI (`aprs-agent-gui.exe`) is published on its own release line and
+is not in this zip — see [Desktop GUI — feature freeze](#desktop-gui--feature-freeze).
 
 ---
 
@@ -108,6 +108,11 @@ docker run -d --name aprs-agent \
 ## Desktop GUI — feature freeze
 
 The Desktop GUI (`gui.py` / `aprs-agent-gui.exe`) is **feature-frozen as of v2.8.0**.
+The **feature level** is what is frozen, not the build: the Desktop line still
+takes fixes, and its counter moves when it does. It stands at **v2.8.3** — v2.8.1
+a config-save fix, v2.8.2 a Telegram/IMAP polling fix, v2.8.3 a config crash and
+patched dependencies. The About window says which is which: *Desktop v2.8.3 ·
+core 3.2.97*.
 
 **It is not abandoned and it is not broken.** It remains fully functional:
 configuration editor, Start/Stop, system tray, EN/TR toggle, live log, live stats
@@ -123,6 +128,13 @@ with AI assessment, the public monitoring view, and anything added after v2.8.0.
 installable PWA — while the tkinter desktop app is Windows-only. Maintaining two
 interfaces in parallel doubled the work for features (maps, live pushes) that the
 browser does better. Development continues in the Web GUI.
+
+**Where to get it:** the Desktop build is published on its own release line and
+is **not** included in the main `aprs-agent-vX.Y.Z.zip`, which carries the CLI and
+the Web GUI. Download it from the newest
+[`*-desktop-final`](https://github.com/TA3HRJ/aprs-agent/releases) release —
+currently
+[v2.8.3-desktop-final](https://github.com/TA3HRJ/aprs-agent/releases/tag/v2.8.3-desktop-final).
 
 **If you use the Desktop GUI:** keep using it, or switch to `aprs-agent-web.exe`
 and open `http://localhost:8080` — the configuration file is identical and both
