@@ -12,7 +12,7 @@ first. If it disagrees with either of those, they win.
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
 | running | **v3.2.97** |
-| repo HEAD | `a75d422`, clean, master and tag `v3.2.97` pushed |
+| repo HEAD | `25ca0b1`, clean, master and tag `v3.2.97` pushed and released |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -29,6 +29,11 @@ then re-tag. Doc-only commits do not need a tag.
 `requirements-lock-linux.txt` as constraints, restarts, then polls
 `/api/status` for up to 90 s and reports `Deploy OK: <tag> calisiyor` or fails
 loudly.
+
+**The working copy holds no build output.** `build/`, `build313/`, `dist/` and
+`dist313/` were 461 MB of stale artefacts — the newest thirty versions old —
+and were deleted 2026-08-26. `pyinstaller aprs_agent.spec --noconfirm`
+regenerates them. Release zips are gitignored.
 
 **The repo on the VPS belongs to `aprs`, not root.** Run git there as
 `sudo -u aprs git -C /opt/aprs-agent …` rather than adding a `safe.directory`
@@ -47,6 +52,53 @@ verified byte-for-byte identical between `git show HEAD:` and the VPS.
 **Two figures still unmeasured**, both in the README's Silence Map row and both
 predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
 36 cells"* (F-41) and the *"under 35 %"* novelty threshold.
+
+---
+
+## Releasing to Windows
+
+**Published 2026-08-27: [v3.2.97](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.97)**
+— the first Windows release since v3.2.67, thirty versions earlier, because
+the process was written down nowhere. It is written down now:
+**`docs/RELEASE-HOWTO.md`**, with the last release's body in
+`docs/RELEASE-v3.2.97-draft.md`.
+
+There is no CI for it. `docker.yml` builds and smoke-tests the container and
+nothing else.
+
+**This machine can now build one**, which it could not before:
+
+| | |
+|---|---|
+| interpreter | `C:\Python313-32\python.exe` — 32-bit, matching the pin |
+| dependencies | `requirements-build-win32.txt`, every version resolved exactly |
+| publisher | `gh` CLI, logged in as TA3HRJ, token in the OS keyring |
+
+`gh` lives under `%LOCALAPPDATA%\Microsoft\WinGet\Packages\GitHub.cli_*\bin\`.
+The bare name works in a fresh terminal but not in a shell that predates the
+install.
+
+**Three things about the archive that cost time to learn:**
+
+1. **Zip the target folders *and* four files from the repo root** —
+   `README.md`, `LICENSE`, `HELP.html`, `aprsconfig.toml.template`. Zipping
+   `dist/` alone looks complete and ships **without the licence**
+   (F-2026-08-27-01).
+2. **The Desktop GUI does not belong in the main zip.** It has its own release
+   line, currently `v2.8.3-desktop-final`. Dropping it took v3.2.97 from 90.0
+   to 58.1 MiB — *smaller* than v3.2.67 despite a CPython 3.8 → 3.13 move.
+   The README now says where to get it; it did not before, which was a
+   breakage this change created.
+3. **Diff the archive against the last published one before publishing.**
+   `gh release download <prev> --pattern "*.zip"`, then compare listings. On
+   v3.2.97 that caught the missing licence and explained the entire size
+   change. It is not optional, and it is not the operator's job — the operator
+   had to say so.
+
+**Known and accepted:** yarl's compiled URL quoter has no 32-bit wheel for
+CPython 3.13, so encoding runs pure Python — 0.21 µs per URL, once per HTTP
+request, never during APRS ingest. A real regression against v3.2.67 whose
+cost is below anything this application can notice. Named rather than hidden.
 
 ---
 
@@ -487,6 +539,14 @@ records a mangled encoding writing over a real bot token. `check_unreachable`
 caught it, because a BOM makes the file unparseable, which is the guard rail
 earning its place on a fault nobody was hunting. Use the editor, or `git
 checkout --` to undo.
+
+**Edit prose with the editor, not with a shell one-liner.** Writing
+`GitHub.cli_*\bin\` through a heredoc put a literal 0x08 byte in `HANDOFF.md`.
+Worse was the repair: a PowerShell attempt whose `AddRange` calls failed while
+`WriteAllBytes` ran anyway **truncated the file to two bytes**. It came back
+from git because it had been committed; the uncommitted section did not. Three
+separate attempts to fix one invisible byte, and the tool that had no shell in
+the path fixed it first time.
 
 **Write patch scripts to a file, not through a heredoc.** Backslash levels get
 eaten; `\b` has arrived as a literal backspace more than once and the regex
