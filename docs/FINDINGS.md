@@ -3576,6 +3576,81 @@ now holds the case, so it cannot come back a third time.
 
 ---
 
+## F-2026-08-26-06 — F-22 measured: grouping by gate would produce nothing, and the gap is a grid artefact
+
+F-22 proposed grouping openings by receiving gate as well as by midpoint
+field, on the reasoning that *the current rule cannot see the strongest
+evidence there is — one gate hearing several distant unrelated senders*. It
+was held back until a gate's trustworthiness could be measured, which arrived
+in v3.2.88–90. Measured now. **Do not implement it.**
+
+### The gap exists and is 1.1%
+
+180 anomalous links over 7.74 hours, opening rule evaluated both ways inside
+the same 30-minute window:
+
+| | links | |
+|---|---|---|
+| both rules agree | 10 | 5.6% |
+| field yes, gate no | 111 | 61.7% |
+| **gate yes, field no** | **2** | **1.1%** |
+| neither | 57 | 31.7% |
+
+### And it produces no openings at all
+
+Both gap links came from one gate, and both were flagged by the 300 km floor
+alone:
+
+```
+LU8EB-1  -> LW7EEA-1  435.9 km  field=FF  established=False  '300 km floor alone'
+CX1AA-2  -> LW7EEA-1  625.0 km  field=GF  established=False  '300 km floor alone'
+```
+
+`LW7EEA-1` had 12 samples. The opening loop already drops links whose gate is
+not established — the operator's decision, taken with F-43 attached, because
+on a freshly restarted process every gate is young and an opening built from
+those would be announcing the restart rather than the ionosphere.
+
+So: **additional openings gate grouping would produce: 0.** The field rule
+found 13 in the same ring.
+
+**The two filters compose, and that is the whole answer.** Gate grouping only
+diverges from field grouping when one gate's senders lie far apart in
+different directions — which happens most at gates with few samples, scattered
+distant traffic and no established baseline. Those are exactly the links the
+established filter already removes. The case F-22 was designed to catch and
+the case the detector already declines to trust are the same case.
+
+### The gap is a grid artefact, not the geometry F-22 imagined
+
+The two fields are `FF` and `GF` — **adjacent**. The midpoints did not land
+1,600 km apart; they landed either side of a Maidenhead boundary. A field is
+20° × 10°, roughly 1600 × 1100 km, and two links sharing a gate have midpoints
+separated by half the distance between their senders. For those to fall in
+different fields the senders must be ~2,000 km apart *or* the midpoints must
+straddle a grid line. Here it was the second.
+
+That reframes the residual: what the field rule occasionally loses is not
+"one gate hearing several senders" but **an opening cut in half by a grid
+line**. If that is ever worth fixing, the fix is neighbouring-field grouping,
+not gate grouping — and it would be a different finding with its own
+measurement.
+
+### What stays
+
+`context.at_this_gate` (v3.2.91) keeps reporting the gate grouping beside the
+field one on every bundle. It costs nothing, it is what made this measurable
+in one command instead of a hand analysis, and it lets the decision be
+revisited on a different window without shipping anything.
+
+**A caveat on the sample.** One 7.74-hour ring on the worldwide feed. The gap
+being 1.1% is a measurement; the gap producing zero openings rests on both its
+links sharing one young gate, which is a small basis for a general claim even
+though the composing argument above holds independently of it. Re-run
+`measure_f22.py` on a later window before treating zero as permanent.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

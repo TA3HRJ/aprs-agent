@@ -172,25 +172,30 @@ unchanged.
    is an **accidental quarantine** holding close to the right set. Its fault is
    the mechanism, not the outcome — which is what decision 1 above addresses.
 
-### 2. F-22 — group openings by receiving gate, or not
-**The only thing left in Package B.** F-09 and F-23 shipped in v3.2.91; F-22
-is reported and deliberately not acted on.
+### 2. ~~F-22 — group openings by receiving gate~~ — MEASURED, NOT DOING IT
+**Package B is closed.** F-09 and F-23 shipped in v3.2.91; F-22 was measured
+on 2026-08-26 and declined. See F-2026-08-26-06.
 
-`context.at_this_gate` now asks the opening rule of the receiving gate beside
-the midpoint-field grouping, so the two can be compared on live bundles before
-either is trusted. Detection is unchanged.
+180 links over 7.74 hours, the opening rule evaluated both ways: the gap where
+gate grouping sees something the field rule misses is **2 links, 1.1%** — and
+both were flagged by the 300 km floor alone, at a gate with 12 samples. The
+opening loop already drops links whose gate is not established, so **the
+additional openings gate grouping would produce is zero**, against 13 the
+field rule found in the same ring.
 
-**Why it stopped there.** Grouping by gate means trusting gates, and until
-v3.2.88–90 nothing measured whether a gate deserved it. That instrument now
-exists (F-2026-08-26-01/03/04), so the decision is finally takeable — it was
-not before. What it needs first is a count from live bundles: how often
-`at_this_gate.rule_met` is true while `in_field.rule_met` is false. That gap is
-the size of the finding, and it is now one field away instead of a hand
-analysis.
+The two filters compose: gate grouping only diverges where one gate's senders
+lie far apart in different directions, which happens at young gates with
+scattered distant traffic — exactly the links already excluded. The case F-22
+wanted to catch and the case the detector already declines to trust are the
+same case.
 
-Earlier pre-checks, 2026-08-25 over a 7.4 h window of 200 links: 16 of 112
-gates carried 2+ distinct senders; 200 records were 128 distinct pairs, 112
-gates, 95 senders, so 36% of records are repeats.
+**And the gap is a grid artefact.** The two fields were `FF` and `GF`,
+adjacent: the midpoints straddled a Maidenhead boundary rather than lying
+1,600 km apart. If that is ever worth fixing the answer is neighbouring-field
+grouping, not gate grouping, and it needs its own finding.
+
+`context.at_this_gate` keeps reporting both groupings on every bundle, so this
+can be revisited on a later window with `measure_f22.py` and no code change.
 
 ### 3. The README's F-03 sentence
 It states *"76% of flags come from the floor alone and 87% of those would not
