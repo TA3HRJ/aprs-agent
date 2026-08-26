@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.88
+# Handoff — state at v3.2.89
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.88** |
-| repo HEAD | `dafbead`, clean, master and tag `v3.2.88` pushed |
+| running | **v3.2.89** |
+| repo HEAD | `12dc9cf`, clean, master and tag `v3.2.89` pushed |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -32,7 +32,7 @@ exception for root.
 
 ## The guard rail
 
-Twelve checks in `tools/`, each one born from a live failure. Run them all
+Thirteen checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -40,7 +40,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Eleven run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Twelve run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -63,6 +63,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_coords` | no position off the Earth enters, by either door |
 | `check_prop_ts` | the evidence bundle answers with the link that was asked for, at both doors |
 | `check_deaf_gate` | a gate that can no longer flag is reported, not left to go quiet |
+| `check_fixed_geometry` | a gate's own repeated distance cannot supply its own second sender |
 | `check_prop_bundle` | the evidence bundle cannot judge an event with numbers that event wrote |
 
 ---
@@ -137,9 +138,18 @@ unchanged.
 
 **Two decisions remain, both the operator's:**
 
-1. **Refuse to build an opening on a gate with the fixed-distance signature.**
-   This *does* change detection, so it wants its own evidence and its own
-   threshold. `fixed_distance` is already reported and decides nothing.
+1. ~~**Refuse to build an opening on a gate with the fixed-distance
+   signature.**~~ **Shipped in v3.2.89** — see F-2026-08-26-03. The test is on
+   the link rather than the gate: excluded only when it sits on the gate's own
+   repeated value, `|km − mean| ≤ max(3σ, 1% of mean)`, so a signature gate
+   measuring something *different* still counts. Replayed against the live
+   database: 246 stored openings, **3 no longer reported (1.2%)**, 6 links
+   excluded. Excluded from the grouping only — the link stays on the map, the
+   same treatment F-2026-08-15-46 gives a position-contradicting link.
+
+   **The other half of `VE2SIL-1` remains open.** A gate still flags
+   *everything* while young, because the floor decides alone until 20 samples,
+   and this rule needs an established mean. Nothing addresses that yet.
 2. ~~**§D — reset a deaf gate's baseline, or only report it?**~~ **Answered
    2026-08-26: report only, and do not build a reset.** See F-2026-08-26-02.
    All 25 would flag their *average* link if reset — median 6.8× the floor —

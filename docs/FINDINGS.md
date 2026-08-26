@@ -3346,6 +3346,104 @@ carrying links — so what it can no longer flag is close to nothing.
 
 ---
 
+## F-2026-08-26-03 — one fixed error, three times, is not two senders
+
+The principled version of what gate deafness was doing by accident
+(F-2026-08-26-02). Shipped in v3.2.89, and the first change in this thread that
+alters detection.
+
+### The shape
+
+Some gates measure the same large distance every time, because the error is a
+fixed coordinate rather than anything in the traffic:
+
+```
+KC3WJU-2    793 links at 1250.5 km ± 0.4 km
+LU9DCE      514 links at 1694.9 km, sigma exactly 0.0
+```
+
+Against the population: the median established gate's mean reach is **20.6 km**
+and p90 is 84.1 km. No propagation mechanism produces 793 identical
+long-distance measurements, and no busy gate does either. It is one geometry,
+repeated.
+
+### Why repetition is the dangerous part
+
+An opening is *two or more distinct senders in one Maidenhead field within 30
+minutes*. A repeated link supplies its own second sender. Audited over 14 days
+of stored events, **3 of 246 openings existed only because of one** — and one
+of the three is unambiguous:
+
+```
+K4OZS-10 -> KC3WJU-2  1250.3 km
+K4OZS-10 -> KC3WJU-2  1250.3 km
+K4OZS-10 -> KC3WJU-2  1250.3 km
+N8NOE-15 -> K2GB-10    864.4 km
+```
+
+The second sender was real. The first was one fixed error, three times. That
+opening was announced: a notification, an AI assessment, a line on the map.
+
+1.2% of openings, roughly one every five days on the world feed. Small, and
+each one spends real credibility.
+
+### The rule is on the link, not the gate
+
+A gate with this signature that suddenly measures a **different** distance has
+made a real observation — and on such a gate it is the *only* observation worth
+having. So a link is excluded only when it sits on the gate's own repeated
+value: `|km − mean| ≤ max(3σ, 1% of mean)`.
+
+Measured against the same 14 days, the blunt whole-gate rule and this one
+remove **the same 3 openings**. The narrower rule therefore costs nothing today
+and cannot silence a real observation tomorrow, which is the only basis on
+which the narrower one is worth the extra code.
+
+The 1% floor exists because a sigma near zero is a *real value* here, not a
+degenerate one — `LU9DCE` genuinely reads 0.0 — and `3σ` alone would make the
+band razor-thin. On a 1250 km baseline the floor is still ±12.5 km, far tighter
+than any genuine change in path length.
+
+### Excluded from the grouping, not from the record
+
+The link stays on the map under its own class. This is the same treatment a
+position-contradicting link has had since F-2026-08-15-46, for the same reason:
+**remove it from the inference, not from the observation.** A reader who wants
+to know why a region did not open should still be able to see everything that
+was heard there.
+
+`prop_detection_params` now names both exclusions, so a bundle reader is told
+what the rule dropped rather than left to notice an absence.
+
+### Verification
+
+Replayed through the real code against the live database: 246 stored openings,
+**3 no longer reported, 6 individual links excluded** — matching the
+independent audit exactly.
+
+`tools/check_fixed_geometry.py` holds six assertions, including both live
+shapes, the band edges either side of 12.5 km, and the four directions this
+fails if someone widens it: an ordinary gate (mean 20.6 km), a real DX gate
+with honest spread (`cv` 0.50), a young gate whose mean is still moving, and
+the 1000 km condition itself. Proven against two reverted variants before being
+trusted — the blunt whole-gate rule (3 problems) and the missing zero-sigma
+floor (1).
+
+### What this does not claim
+
+It identifies a broken **pair**, not a guilty end: the gate's position may be
+wrong, or its single correspondent's may be. For the decision at hand — whether
+this link can serve as evidence of an opening — that distinction does not
+matter, and asserting more would repeat the mistake corrected in
+F-2026-08-25-03.
+
+It also does not fix the other half of the `VE2SIL-1` problem. A gate still
+flags *everything* while it is young, because the floor decides alone until 20
+samples. This rule needs an established mean, so it cannot help there. That
+half remains open.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
