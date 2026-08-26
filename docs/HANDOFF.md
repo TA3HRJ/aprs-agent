@@ -210,13 +210,16 @@ floor-only population it describes.
 Two omissions closed in the same edit: deaf gates (25 of 7,316) and the
 fixed-geometry exclusion.
 
-**Still stale, and not in the approved scope — the Silence Map row.** It says
-*"APRS Object packets (event advisories that expire by design) are never
-counted as silence sensors"*, which is now only half the rule: v3.2.93 excludes
-the same thing arriving as a **station** (557 NWS weather broadcasts,
-F-2026-08-26-07). And the row does not mention that the cell ratio counts
-**operators** at both ends since v3.2.94 (F-2026-08-26-08). Both are
-product-facing, so both want a draft first.
+**The Silence Map row was corrected the same day.** Both exclusion forms are
+named now, the ratio's change of units is stated with `ratio_callsigns` beside
+it, and one wrong claim was removed: the row said the raw threshold result *"is
+still what gets stored"*. It is not — `silence_history` has no `threshold_met`
+column and stores only alerting cells, which is what made §D's sweep run
+against the live registry instead.
+
+**Two figures in that row were NOT re-measured** and both predate the v3.2.93
+weather exclusion, which changed cell composition: *"23 of 36 cells"* (F-41)
+and the *"under 35 %"* novelty threshold. Flagged rather than quietly left.
 
 ### 4. ~~§E — non-independent stations in a silence cell (F-25)~~ — CLOSED v3.2.94
 **Before §D, not after it** — this file had the two the wrong way round until
