@@ -187,6 +187,18 @@ exclude_by_message_type = []
 # Leave empty [] to use the type filter above instead.
 keyword_filter = []
 
+# Packet lines always go to the Web GUI Live Log. They do NOT go to the
+# process stderr that systemd/journald captures: on a World Mode instance the
+# feed measured 97% of the entire system journal and ~47 MB an hour, which
+# filled journald's default 4 GB ring in 16 hours and evicted every diagnostic
+# line the agent had written. Set log_file to keep a copy you can grep; it
+# rotates on its own terms. Empty = Live Log only.
+log_file = ""
+
+# Rotate the file above at this size, and keep this many rotated copies.
+log_max_mb = 50
+log_backups = 3
+
 
 # --- Fixed Beacon ---
 # Periodically sends your station's fixed position to the APRS network.
@@ -298,6 +310,11 @@ access_token = ""
 
 # Custom string for webhook verification (must match Meta config)
 verify_token = ""
+
+# Meta's app secret, used to verify the HMAC signature on every incoming
+# webhook. Without it the endpoint accepts anything that reaches the URL,
+# and the URL is public by necessity.
+app_secret = ""
 
 # Default WhatsApp recipient phone number (with country code)
 recipient_phone = ""
@@ -421,6 +438,15 @@ rate_notice = "Too many questions - please wait {m} min, then ask again"
 # your gateway. Set this to whatever you are willing to pay for in a day.
 daily_limit = 0
 daily_notice = "Daily question limit reached on this gateway - try tomorrow"
+
+# Weather questions are answered from the nearest APRS weather station this
+# agent has heard - not from the model, and not from a forecast service. This
+# is how far away that station may be. APRS weather coverage is dense in some
+# countries and almost absent in others, so the useful value is local: raise
+# it if you get "no weather station in my records", lower it if the answers
+# come from too far to mean anything. The reply always states the distance and
+# the age of the reading, so nothing arrives sounding more current than it is.
+wx_radius_km = 250
 
 # One API key per provider, so switching "provider" above recalls that
 # provider's own key automatically instead of overwriting a single field.

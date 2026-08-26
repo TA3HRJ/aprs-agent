@@ -440,8 +440,8 @@
     <p>
       Her istasyonun kendi beacon aralığına göre bir "normal" temposu öğrenilir.
       Bir Maidenhead karesinde (4 karakter, örn. <code>KM38</code>) normalde aktif
-      istasyonların büyük kısmı aynı anda beklenenden çok daha uzun süre sessiz
-      kalırsa, bu bölge <strong>olası elektrik kesintisi</strong> olarak işaretlenir.
+      istasyonların büyük kısmı (aynı operatörün birden çok telsizi tek
+      sayılır) aynı anda beklenenden çok daha uzun süre sessiz kalırsa, bu bölge <strong>olası elektrik kesintisi</strong> olarak işaretlenir.
       Eğer sessiz kalan tüm istasyonlar tek bir igate üzerinden geliyorsa ve o
       igate de sessizse, sebep <strong>igate arızası</strong> olarak ayırt edilir.
     </p>
@@ -451,10 +451,13 @@
       bildirimlerinde görünür). Aynı hücre 3 saat içinde tekrar susup tekrar
       alarm verirse (kararsız/"flapping" bölge), yeni bir AI çağrısı yapılmaz —
       önceki değerlendirme yeniden kullanılır; bu, geniş alan izlemede AI
-      kullanımını gereksiz yere katlamaz. APRS <strong>Object paketleri</strong>
-      (olay/uyarı nesneleri — örn. acil durum servislerinin yangın uyarıları)
-      tasarım gereği süresi dolduğunda kaybolduğundan, sessizlik sensörü olarak
-      hiçbir zaman sayılmazlar.
+      kullanımını gereksiz yere katlamaz. Olay/uyarı yayınları, hangi biçimde geldiklerine bakılmaksızın sessizlik
+      sensörü olarak sayılmaz. APRS <strong>Object paketleri</strong>
+      (örn. acil durum servislerinin yangın uyarıları) tasarım gereği
+      süresi dolunca kaybolur; hava servisi uyarıları ise
+      <strong>normal istasyon</strong> olarak gelir — uyarı yürürlükteyken
+      yayın yapar, aradaki günlerde susar. Sessizlik tespiti tempoya
+      dayanır, bu yayınların ise bir temposu yoktur.
     </p>
     <table>
       <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
@@ -531,7 +534,9 @@
       iki bağımsız istasyon aynı bölgede aynı anda uyduramaz. Ayrıca
       internet kaynaklı paketler (<code>TCPIP</code>), digipeat'li paketler,
       Object'ler, 3000 m üzerindeki balonlar (görüş hattı geometrisi,
-      propagasyon değil) ve 5000 km üzeri veri hataları hiç sayılmaz.
+      propagasyon değil) ve 5000 km üzeri veri hataları hiç sayılmaz. Ayrıca her seferinde
+      aynı mesafeyi ölçen bir gate'in tekrarlanan linki açılma kuralına
+      girmez — bu propagasyon değil, sabit bir konum hatasıdır.
     </div>
     <p>
       Tespit her zaman açıktır ve haritada dünya çapında görünür. Ancak
@@ -1225,7 +1230,8 @@
     <div class="card-title">🔴 Silence Detection</div>
     <p>
       Each station's "normal" beacon cadence is learned automatically. When
-      most of the normally-active stations in a Maidenhead cell (4
+      most of the normally-active stations (several radios of one
+      operator count once) in a Maidenhead cell (4
       characters, e.g. <code>KM38</code>) fall silent for far longer than
       expected at the same time, that cell is flagged as a <strong>possible
       power outage</strong>. If every silent station in the cell shares one
@@ -1237,10 +1243,13 @@
       assessment (shown in map popups and in Telegram/email notifications).
       If the same cell clears and re-alerts again within 3 hours (a flapping
       region), no new AI call is made — the previous assessment is reused, so
-      wide-area monitoring doesn't multiply AI usage unnecessarily. APRS
-      <strong>Object packets</strong> (event/advisory objects — e.g. fire
+      wide-area monitoring doesn't multiply AI usage unnecessarily. Event advisories are never counted as silence sensors, whichever form
+      they arrive in. APRS <strong>Object packets</strong> (e.g. fire
       warnings from emergency services) expire by design when the event
-      closes, so they are never counted as silence sensors.
+      closes; weather-service warnings arrive as ordinary
+      <strong>stations</strong> instead, transmitting while a warning is
+      in force and silent for the days between. Silence detection rests on
+      cadence, and neither has one.
     </p>
     <table>
       <tr><th>Field</th><th>Description</th><th>Status</th></tr>
@@ -1318,7 +1327,10 @@
       in the same area at the same time cannot. Internet-origin packets
       (<code>TCPIP</code>), digipeated packets, Objects, balloons above
       3000 m (line-of-sight geometry, not propagation) and links over
-      5000 km (data errors) are never counted at all.
+      5000 km (data errors) are never counted at all. A link sitting on the
+      repeated distance of a gate that measures the same value every time is
+      kept out of the opening rule as well: that is a fixed coordinate error,
+      not propagation.
     </div>
     <p>
       Detection is always on and the map always shows every opening
