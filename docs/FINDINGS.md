@@ -3879,6 +3879,108 @@ today's — is what turned an apparent live defect into a confirmation.
 
 ---
 
+## F-2026-08-26-09 — §D measured: leave both thresholds alone, and here is what holds them up
+
+F-04 asked whether `min_silent = 3` and `min_ratio = 0.5` are right, having
+never been measured against anything. Measured 2026-08-26. **Leave them
+alone** — which `NEXT.md` said in advance would be a perfectly good outcome,
+and is.
+
+No code change. What follows is the reasoning, because the *reason* they are
+right turns out to matter more than the verdict.
+
+### F-04's premise was wrong, and that had to be fixed first
+
+> *"Fourteen days of `silence_history` are available now, so this needs no
+> preparation."*
+
+`record_silence_history` stores `[c for c in silence_cells() if c["alert"]]`.
+All **21,786** stored rows carry `alert = True`. History holds only the cells
+that alerted, so it cannot say what the thresholds **rejected** — which is the
+entire question.
+
+Measured against the live registry instead: 204,678 stations, **2,125
+candidate cells** with the thresholds opened to `min_silent=1, min_ratio=0.0`.
+`silence_cells()` takes both as parameters, so the sweep is direct.
+
+### `min_ratio = 0.5` sits on a quantisation spike
+
+The ratio distribution is not smooth:
+
+```
+0.3  ###### 99
+0.4  ##     30
+0.5  ####### 66      <- spike
+0.6  #       1       <- near-void
+0.7  #      14
+1.0  ######## 106
+```
+
+This is arithmetic, not physics. With few operators the ratio takes small
+integer fractions: `1/2` and `2/4` both land on 0.50, while 0.60 needs exactly
+`3/5`. **53 of the 66 cells at 0.50 are one operator of two.**
+
+So the threshold is a cliff rather than a point on a continuum:
+
+| `min_ratio` | `threshold_met` | `alert` |
+|---|---|---|
+| 0.49 | 26 | 9 |
+| **0.50** | **26** | **9** |
+| 0.51 | 17 | 5 |
+| 0.60 | 17 | 5 |
+
+A hair's move from 0.50 to 0.51 costs 44% of alerts; everything from 0.51 to
+0.60 is the same decision. `min_ratio` is not a dial, it is **a switch that
+admits or excludes "exactly half"**.
+
+### But the fragility is benign, and that is the finding
+
+The four alerts a move to 0.51 would remove are not the weak `1/2` cells:
+
+```
+FF96   3/6  operators silent, 2 independent gates
+KM87   6/12 operators silent, 2 independent gates
+PH57   3/6  operators silent
+PN26   7/14 operators silent
+```
+
+**Half of a populated cell**, not one operator of two. Losing those would be a
+real loss. Meanwhile the 53 `1/2` cells never reach an alert at all — they do
+not clear `min_silent = 3` on callsigns, or `few_sites` demotes them for
+having fewer than three operators.
+
+And lowering to 0.40 would admit `3/7`, `5/11`, `4/10` — under half the cell,
+a materially weaker claim.
+
+So 0.5 is the boundary between *"at least half this cell's operators"* and
+*"fewer than half"*, which is a meaningful line to draw about a region.
+
+### `min_silent = 3` is doing its documented job
+
+At `(3, 0.5)`: 2,125 cells → **26 clear the thresholds** → **9 alert**. The
+qualifiers reject 17 of 26, by `few_sites` (9) and `no_local_path` (7).
+
+Nine of the 26 admitted have fewer than three *operators* — `min_silent`
+counts callsigns and `few_sites` requires the same number of operators. That
+is not a defect: `threshold_met` is deliberately the raw result so the
+narrowing hides nothing, and the narrowing is published beside it. The
+pre-filter admits, the qualifier disqualifies, and both are visible.
+
+### The one thing worth carrying forward
+
+**The three gates are coupled, and `min_ratio = 0.5` is only safe because the
+other two exist.** Fifty-three cells of a single silent operator sit exactly on
+it, held back by `min_silent = 3` and `few_sites` rather than by the ratio.
+
+Anyone who later loosens `min_silent`, or reworks `few_sites`, releases that
+mass through a threshold that looks untouched. **Do not change one of the
+three without re-running this sweep.**
+
+That is the answer §D was actually worth asking for. The verdict — leave them
+alone — was available by guessing; the coupling was not.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

@@ -256,17 +256,30 @@ alert is actually qualified on.
 
 **§E is closed.**
 
-### 5. §D — silence threshold calibration — **NOW UNBLOCKED**
-`min_silent = 3`, `min_ratio = 0.5`, never measured against anything.
+### 5. ~~§D — silence threshold calibration~~ — MEASURED, LEAVE THEM ALONE
+Answered 2026-08-26, see F-2026-08-26-09. No code change, and the reason is
+worth more than the verdict.
 
-§E cleared the way in two steps, and both mattered: v3.2.93 took NWS weather
-broadcasts out of the population (3,640 cell-snapshots stopped having 3+
-silent stations), and v3.2.94 put both ends of the ratio in operators. Before
-those, calibrating `min_ratio` would have fitted a threshold to a mixture of
-expired storm warnings and one operator's SSIDs.
+**F-04's premise was wrong first.** `silence_history` stores only alerting
+cells — all 21,786 rows carry `alert = True` — so fourteen days of it cannot
+say what the thresholds rejected. Measured against the live registry instead:
+204,678 stations, 2,125 candidate cells, `silence_cells()` swept directly
+since it takes both thresholds as parameters.
 
-Start by re-reading the distribution: `ratio` and `ratio_callsigns` are both
-published now, so the same cells can be seen either way.
+**`min_ratio = 0.5` sits on a quantisation spike.** 53 of the 66 cells at
+exactly 0.50 are one operator of two, because `1/2` and `2/4` both land there
+while 0.60 needs exactly `3/5`. Moving to 0.51 costs 44% of alerts and 0.51
+through 0.60 are identical — it is a switch, not a dial.
+
+**The fragility is benign.** The four alerts a move to 0.51 removes are `3/6`,
+`6/12`, `3/6`, `7/14` — half of a populated cell. The 53 weak ones never reach
+an alert: `min_silent = 3` or `few_sites` stops them first.
+
+**Carry this forward.** The three gates are coupled. `min_ratio = 0.5` is safe
+only because `min_silent = 3` and `few_sites` hold back the mass sitting on
+it. **Do not change one of the three without re-running the sweep** — a
+loosened `min_silent` releases 53 single-operator cells through a threshold
+that looks untouched.
 
 ### 6. §I — per-gate range mapping
 **DRAFT, operator's idea, nothing agreed.** RX is measurable and already being

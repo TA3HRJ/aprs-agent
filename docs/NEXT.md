@@ -596,10 +596,18 @@ already excluded — so what they actually are is worth one query.
 
 ---
 
-## D · Silence threshold calibration — whenever
+## D · Silence threshold calibration — ✅ MEASURED 2026-08-26, no change
 
-**F-04.** `min_silent = 3` and `min_ratio = 0.5` have never been measured
-against anything. Fourteen days of `silence_history` are available now, so this
+**F-04. Answered: leave both alone — F-2026-08-26-09.** And the premise below
+is wrong: `silence_history` stores only ALERTING cells, so it cannot say what
+the thresholds rejected. The sweep was run against the live registry instead.
+The useful result is not the verdict but the coupling: `min_ratio = 0.5` sits
+on a quantisation spike of 53 single-operator cells, held back by
+`min_silent = 3` and `few_sites` rather than by the ratio — so none of the
+three can be changed without re-running the sweep.
+
+~~`min_silent = 3` and `min_ratio = 0.5` have never been measured
+against anything.~~ Fourteen days of `silence_history` are available now, so this
 needs no preparation — only someone's attention. It is an analysis, not a code
 change, and its answer may well be "leave them alone", which is a perfectly
 good outcome to have on record.
