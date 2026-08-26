@@ -2693,6 +2693,59 @@ def _prop_position_corroboration(link: dict) -> dict:
                       "direction, ambiguous in the negative"}
 
 
+def _prop_opening_status(event: dict | None, ctx: dict) -> dict:
+    """Which of the three situations `opening: null` used to cover (F-09).
+
+    Six outside readings treated a null `opening` as "this was not an
+    opening". Two of those three states do not support that: the rule can be
+    met right now with nothing written — the episode was already active, or
+    the link was excluded from the grouping — and a link older than the ring
+    simply cannot be answered either way. Only the third is the absence a
+    reader was inferring.
+    """
+    if event:
+        return {
+            "state": "recorded",
+            "reading": ("this link belongs to a stored opening event: two or "
+                        "more distinct senders in one field within 30 "
+                        "minutes. The event travels in `opening`"),
+        }
+    fld = ctx.get("in_field") or {}
+    if fld.get("rule_met"):
+        return {
+            "state": "rule_met_not_recorded",
+            "reading": ("two or more distinct senders are in this field "
+                        "inside the window, but no event was written. That "
+                        "happens when the episode was already open, or when "
+                        "a link was excluded from the grouping — a "
+                        "contradicted position, or a gate's own repeated "
+                        "geometry. This is NOT evidence that nothing "
+                        "happened here"),
+        }
+    if not ctx.get("field"):
+        return {
+            "state": "unknown",
+            "reading": ("this link carries no usable pair of positions, so "
+                        "no field could be computed and the rule could not "
+                        "be evaluated either way"),
+        }
+    if (ctx.get("buffer") or {}).get("anomalous_links_held", 0) == 0:
+        return {
+            "state": "unknown",
+            "reading": ("the anomalous-link buffer is empty — usually a "
+                        "recent restart — so the absence of other senders "
+                        "here is a fact about this process, not about the "
+                        "band"),
+        }
+    return {
+        "state": "single_sender",
+        "reading": ("no second distinct sender appears in this field inside "
+                    "the window, in what this process still holds. One long "
+                    "link is not an opening: a single misconfigured GPS can "
+                    "fake any distance"),
+    }
+
+
 def _prop_vs_baseline(link: dict, base: dict, params: dict) -> dict:
     """Put the link's distance and the gate's own figure in one statement.
 
@@ -2895,6 +2948,13 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
         summary = db.prop_summary(max_links=0)
     except Exception:
         summary = {}
+    # The counts F-09, F-22 and F-23 all want, read once. A failure here must
+    # not cost the reader the rest of the bundle, so it degrades to empty and
+    # _prop_opening_status reports "unknown" rather than inventing an absence.
+    try:
+        ctx = db.prop_link_context(link)
+    except Exception as e:
+        ctx = {"error": f"context unavailable: {e}"}
     try:
         cfg = mgr.get_config()
     except (Exception, SystemExit):
@@ -2938,6 +2998,15 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
         # means the link was anomalous on its own but never met the
         # two-distinct-senders rule — which is not an opening.
         "opening": event,
+        # `opening: null` was one word for three different situations, and a
+        # reader could not tell them apart: nothing else was heard here, or
+        # the rule is met right now and no event was written, or the link
+        # simply predates what this process still holds. `state` names which
+        # (F-09), and `context` carries the counts it was decided from —
+        # including the same question asked of the receiving gate (F-22) and
+        # the gate's own anomalous share (F-23).
+        "opening_status": _prop_opening_status(event, ctx),
+        "context": ctx,
         "detection": db.prop_detection_params(),
         "calibration": {
             "links_measured": summary.get("total_links", 0),
@@ -2959,6 +3028,19 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
             "One long link is not an opening. The opening rule needs two or "
             "more distinct senders in the same field within 30 minutes, "
             "because a single misconfigured GPS can fake any distance.",
+            "An absent `opening` is not the same as a negative finding. Read "
+            "`opening_status.state`: only `single_sender` is the absence it "
+            "looks like. `rule_met_not_recorded` means the rule IS met and no "
+            "event was written, and `unknown` means this process cannot "
+            "answer — usually a restart emptied the buffer these counts come "
+            "from.",
+            "`context.at_this_gate` groups by the receiving gate instead of "
+            "by the midpoint field. One gate hearing several unrelated "
+            "distant senders is stronger evidence than two links sharing a "
+            "midpoint, and the field rule cannot see it. It is reported here "
+            "and acted on nowhere: a gate that is not where it says it is "
+            "would otherwise manufacture openings out of everything it "
+            "hears.",
             "Distance is computed from positions the stations transmitted "
             "themselves. A wrong position produces a wrong distance, and the "
             "station will not know it. position_corroboration checks each "

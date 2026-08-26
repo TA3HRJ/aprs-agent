@@ -1330,6 +1330,114 @@ class StationDB:
         band = max(3 * sigma, 0.01 * mean)
         return abs(float(km) - mean) <= band
 
+    # The opening rule's window, and the buffer's own horizon. Both matter to
+    # a reader: "no other sender in this field" means nothing without saying
+    # how far back that was looked for.
+    PROP_OPENING_WINDOW_S = 1800
+
+    def prop_link_context(self, link: dict[str, Any]) -> dict[str, Any]:
+        """Everything around one link that the link alone cannot say.
+
+        Three findings want the same few counts, so they are computed once:
+
+        **F-09** — `opening: null` conflates three different situations. A
+        reader cannot tell "no other sender was heard here" from "the rule was
+        met but nothing was recorded". The field counts below separate them.
+
+        **F-22** — the opening rule groups by the midpoint of the two
+        positions, which cannot see the strongest evidence there is: one gate
+        hearing several distant unrelated senders. Grouping by the receiving
+        gate is reported here beside the field grouping, so the two can be
+        compared before either is trusted.
+
+        **F-23** — a gate with four anomalies in six measured links is a
+        candidate for being misplaced, and reads today as four separate
+        discoveries. Its anomalous share travels with the link.
+
+        All of it is read from the in-memory ring, which holds the last 500
+        anomalous links and roughly seven hours on the live feed. That horizon
+        is reported rather than assumed: a count of zero over an unstated
+        window is not a fact.
+        """
+        from packet_parser import _latlon_to_locator
+
+        ts = int(link.get("ts", 0) or 0)
+        call, gate = link.get("call", ""), link.get("gate", "")
+        base = str(call).split("-")[0]
+        win = self.PROP_OPENING_WINDOW_S
+        ring = list(self._prop_links)
+
+        field = ""
+        if link.get("s_lat") is not None and link.get("g_lat") is not None:
+            field = _latlon_to_locator(
+                (link["s_lat"] + link["g_lat"]) / 2,
+                (link["s_lon"] + link["g_lon"]) / 2)[:2]
+
+        def _field(l):
+            if l.get("s_lat") is None or l.get("g_lat") is None:
+                return ""
+            return _latlon_to_locator((l["s_lat"] + l["g_lat"]) / 2,
+                                      (l["s_lon"] + l["g_lon"]) / 2)[:2]
+
+        near = [l for l in ring if abs(int(l.get("ts", 0) or 0) - ts) <= win]
+        in_field = [l for l in near if field and _field(l) == field]
+        at_gate = [l for l in near if l.get("gate") == gate]
+        pair = [l for l in ring
+                if l.get("call") == call and l.get("gate") == gate]
+
+        f_senders = sorted({str(l.get("call", "")).split("-")[0]
+                            for l in in_field})
+        g_senders = sorted({str(l.get("call", "")).split("-")[0]
+                            for l in at_gate})
+
+        st = self._gate_stats.get(gate)
+        gate_links = int(st[0]) if st else 0
+        gate_anom = len([l for l in ring if l.get("gate") == gate])
+
+        kms = [round(float(l.get("km", 0)), 1) for l in pair]
+        return {
+            "buffer": {
+                "anomalous_links_held": len(ring),
+                "window_s": win,
+                "note": ("counts below come from the in-memory ring of recent "
+                         "anomalous links, which a restart empties; a zero "
+                         "here means 'not in this buffer', not 'never'"),
+            },
+            "field": field,
+            # F-09
+            "in_field": {
+                "anomalous_links": len(in_field),
+                "distinct_senders": f_senders,
+                "rule_met": len(f_senders) >= 2,
+            },
+            # F-22 — the same question asked of the receiving gate instead
+            "at_this_gate": {
+                "anomalous_links": len(at_gate),
+                "distinct_senders": g_senders,
+                "rule_met": len(g_senders) >= 2,
+                "note": ("one gate hearing several unrelated distant senders "
+                         "is stronger evidence than two links sharing a "
+                         "midpoint, and the field rule cannot see it. "
+                         "Reported, not acted on"),
+            },
+            # F-09 — the repeat count for this pair
+            "this_pair": {
+                "records_held": len(pair),
+                "distinct_distances_km": sorted(set(kms)),
+                "note": ("the same station beaconing from the same spot is "
+                         "flagged again every time; one distance repeated is "
+                         "one finding, not several"),
+            },
+            # F-23
+            "gate_anomalous_share": {
+                "links_measured_lifetime": gate_links,
+                "anomalous_in_buffer": gate_anom,
+                "note": ("a gate whose links are nearly all anomalous is a "
+                         "candidate for being misplaced rather than a "
+                         "candidate for being remarkable"),
+            },
+        }
+
     def export_gate_stats(self) -> dict[str, list]:
         """Gate baselines worth carrying across a restart."""
         return {g: [round(v[0], 3), round(v[1], 3), round(v[2], 3)]
