@@ -1,8 +1,9 @@
 # Release draft — v3.2.97
 
-**Not published.** This is the body for the GitHub release, written here
-because the release itself has to be built on the documented environment and
-this machine is not it. See the build note at the end.
+The body for the GitHub release. Built 2026-08-26 on the pinned 32-bit
+environment (`docs/RELEASE-HOWTO.md`); the artefact is
+`aprs-agent-v3.2.97.zip`, 89.9 MB, sha256
+`0BB41E3EE1E6965CF345BDBB1C5C4512F15F1D5D5E5EC653C77FEE68844E51A7`.
 
 Suggested release name:
 
@@ -110,34 +111,3 @@ The guard rail is now **seventeen checks**, sixteen of which run offline. Each
 one was written from a live failure and verified to fail against the broken
 code before being trusted — several of them caught faults in the same session
 that produced them.
-
----
-
-## Build note — why this is a draft
-
-The release environment is pinned in `requirements-build-win32.txt`:
-
-```
-Interpreter: CPython 3.13.9, 32-bit  (C:\Python313-32\python.exe)
-```
-
-with exact versions, including `cryptography==45.0.7` chosen because it is the
-newest release carrying a **win32 wheel** inside atproto's cap. That file
-exists so a build can be reproduced instead of drifting with whatever PyPI
-serves that day.
-
-This machine has 64-bit CPython 3.13.15 and no PyInstaller, and its installed
-dependencies resolved to different versions (atproto 0.0.71, cryptography
-50.0.0). Building here would ship a 64-bit binary where every previous release
-was 32-bit, from an unpinned dependency set — the exact drift that file was
-written to prevent.
-
-To build and publish, on the documented environment:
-
-```
-C:\Python313-32\python.exe -m pip install -r requirements-build-win32.txt
-C:\Python313-32\python.exe -m PyInstaller aprs_agent.spec --noconfirm
-```
-
-then zip `dist/` as `aprs-agent-v3.2.97.zip` and attach it to a release tagged
-`v3.2.97`, matching the naming of every release since v3.2.38.
