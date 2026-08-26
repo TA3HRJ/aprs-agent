@@ -3773,6 +3773,112 @@ rule required.
 
 ---
 
+## F-2026-08-26-08 — the ratio counted callsigns while the alert beside it counted operators
+
+§E's denominator, decided and shipped in v3.2.94. It closes the question F-25
+opened in v3.2.25 and did not finish.
+
+### Two units in one cell
+
+`few_sites` has qualified alerts on **operators** since v3.2.25 — three SSIDs
+of one base callsign are three radios in one shack on one power strip and
+cannot fail independently. One line above it, the ratio went on dividing
+**callsigns by callsigns**.
+
+So a reader was told *"80% of this square fell silent"* about two operators,
+one of whom was still transmitting.
+
+### Measured before deciding
+
+Over 20,423 stored cell-snapshots, with the v3.2.93 weather exclusion applied
+first so the population was not the contaminated one:
+
+| | |
+|---|---|
+| hold more callsigns than operators | **9,047 (44.30%)** |
+| on those, mean silent count | 5.96 callsigns → **4.24 operators** |
+
+Live at the time, 13 of 17 cells had `silent ≠ sites`. The plainest:
+
+```
+HD53  silent=3 sites=1  ['PU3AAG-D', 'PU3AAG-N', 'PU3AAG-Y']
+NK94  silent=6 sites=3  ['E23JWE-N','E25VZX-10','HS7TRE-C','HS7TRE-D','HS7TRE-E','HS7TRE-F']
+```
+
+`HD53` counted three witnesses. It had one operator's D-Star, DMR and Fusion
+ports.
+
+### It is not a discount, and that had to be asserted
+
+The textbook case falls: three radios of one operator, in a cell of three
+operators, go from `3/5 = 0.60` — which clears `min_ratio = 0.5` — to
+`1/3 = 0.33`, which does not.
+
+But it also **rises**. Two operators in a cell, both silent, is 100% of that
+cell's operators however many callsigns sit around them: `0.40` by the old
+measure, `1.00` by the new one. Measured live across 17 cells the day it
+shipped: **down 4, up 7, unchanged 6.**
+
+`ML88` is the case worth keeping: `0.80 → 1.00`, two sites of two. The old
+figure understated it.
+
+`tools/check_silence_ratio.py` asserts the upward direction explicitly,
+because a rewrite that can only lower the number has replaced the measure with
+a discount and would pass every other assertion in the file.
+
+### What it did not do, stated plainly
+
+On the live snapshot the day it shipped, `threshold_met` went 17 → 17 and
+`alert` went 2 → 2. **It changed no alert.** Its value is that the published
+ratio now means what it says, and that `min_ratio` can be calibrated in §D
+against the unit the alert is actually qualified on. Claiming an alert
+improvement from this would be the move F-2026-08-25-04 had to correct.
+
+### What was deliberately left alone
+
+`threshold_met` keeps its raw callsign count. It is what the narrower
+definition is measured against, and the entry has carried both since v3.2.25
+precisely so the narrowing hides nothing.
+
+`ratio_callsigns` is published beside the new ratio for the same reason:
+fourteen days of stored snapshots were computed with the old figure and mean
+what they were computed with. `baseline_sites` names the denominator, because
+a ratio published without what it divided by is the defect F-2026-08-16-01b
+names on the propagation side.
+
+The denominator is accumulated as a set of base callsigns during the walk the
+detector already makes — one string split and one set add per station. The
+co-location grouping two blocks below is confined to the silent set because it
+cannot afford the whole cell; this can, and the comment there says so.
+
+### A measurement error worth recording
+
+Re-deriving the history to answer this, I filtered the v3.2.93 weather
+broadcasts out of stored snapshots and then asked how many had alerted with
+fewer than three operators. The answer was 2,449 — apparently a live defect in
+the `few_sites` demotion.
+
+2,333 of them predated v3.2.25. The remaining **116 were all padded**: a
+weather product supplied the third operator at the time they fired.
+
+```
+DM73  as stored     : ['ABQFFS', 'KJ7AZ-11', 'KJ7AZ-3', 'W5JXT-D']
+      owners then   : ABQFFS, KJ7AZ, W5JXT = 3   -> alert
+      after v3.2.93 : KJ7AZ, W5JXT = 2           -> demoted
+```
+
+`ABQFFS` is an Albuquerque flood statement. **The alert threshold was being
+cleared by an expired weather product.** So the 116 are not a demotion failure
+at all — they are independent evidence for the exclusion shipped an hour
+earlier, arriving through a mistake in how I filtered.
+
+The lesson is the applying-a-new-rule-retroactively one: a filter applied to
+history answers *"what would this look like now"*, never *"what happened
+then"*. Checking the code at the tag deployed on the day — identical to
+today's — is what turned an apparent live defect into a confirmation.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

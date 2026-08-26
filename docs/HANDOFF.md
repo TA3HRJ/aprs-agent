@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.93
+# Handoff — state at v3.2.94
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.93** |
-| repo HEAD | `5ceb42f`, clean, master and tag `v3.2.93` pushed |
+| running | **v3.2.94** |
+| repo HEAD | `ab820bd`, clean, master and tag `v3.2.94` pushed |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -32,7 +32,7 @@ exception for root.
 
 ## The guard rail
 
-Fifteen checks in `tools/`, each one born from a live failure. Run them all
+Sixteen checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -40,7 +40,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Fourteen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Fifteen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -66,6 +66,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_fixed_geometry` | a gate's own repeated distance cannot supply its own second sender |
 | `check_opening_state` | an absent opening never reads as a negative finding |
 | `check_event_broadcast` | a weather warning is never counted as a station that fell silent |
+| `check_silence_ratio` | the ratio counts operators, and can rise as well as fall |
 | `check_prop_bundle` | the evidence bundle cannot judge an event with numbers that event wrote |
 
 ---
@@ -206,7 +207,7 @@ gate baselines matured. The second clause was **not** re-measured and stands.
 Public text, so house rule applies — draft first. Consider whether a figure
 that moves with gate maturity should be quoted as a constant at all.
 
-### 4. §E — non-independent stations in a silence cell (F-25)
+### 4. ~~§E — non-independent stations in a silence cell (F-25)~~ — CLOSED v3.2.94
 **Before §D, not after it** — this file had the two the wrong way round until
 2026-08-26, and the sentence "feeds §D; no point before it" left "it"
 ambiguous. `NEXT.md`'s own heading settles it: *"E — new, and it feeds D"*.
@@ -240,15 +241,32 @@ position. Excluded now, matched on the `NWS-WARN` addressee.
 That removed **3,640 cell-snapshots from having 3+ silent stations** (16.6% of
 all of them), which is why it had to land before §D.
 
-**The denominator decision is still open**, and now sits on a cleaner
-population. Re-measure `silent` vs `sites` before deciding — the 14-of-20
-figure above predates this exclusion.
+**✅ The denominator decision was made in v3.2.94** — see F-2026-08-26-08.
+Both ends of the ratio count operators now, matching `few_sites`, which had
+qualified alerts that way since v3.2.25 while the ratio beside it still
+divided callsigns by callsigns. Re-measured on the cleaned population: 44.3%
+of 20,423 cell-snapshots hold more callsigns than operators, and on those the
+silent count falls 5.96 → 4.24.
 
-### 5. §D — silence threshold calibration
+It is not a discount — live the day it shipped, ratios moved **down 4, up 7,
+unchanged 6**. `ML88` went 0.80 → 1.00 because both operators in it were
+silent. And it changed **no alert**: `threshold_met` 17 → 17, `alert` 2 → 2.
+What it bought is that `min_ratio` can now be calibrated against the unit the
+alert is actually qualified on.
+
+**§E is closed.**
+
+### 5. §D — silence threshold calibration — **NOW UNBLOCKED**
 `min_silent = 3`, `min_ratio = 0.5`, never measured against anything.
-**Do not start this before §E.** Calibrating a ratio whose denominator is
-still under review measures the wrong thing — the F-16 denominator mistake in
-a new place.
+
+§E cleared the way in two steps, and both mattered: v3.2.93 took NWS weather
+broadcasts out of the population (3,640 cell-snapshots stopped having 3+
+silent stations), and v3.2.94 put both ends of the ratio in operators. Before
+those, calibrating `min_ratio` would have fitted a threshold to a mixture of
+expired storm warnings and one operator's SSIDs.
+
+Start by re-reading the distribution: `ratio` and `ratio_callsigns` are both
+published now, so the same cells can be seen either way.
 
 ### 6. §I — per-gate range mapping
 **DRAFT, operator's idea, nothing agreed.** RX is measurable and already being
