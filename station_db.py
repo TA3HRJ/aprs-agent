@@ -405,7 +405,12 @@ def parse_hazard(parsed: dict[str, Any]) -> Optional[dict[str, Any]]:
         "issued": issued,                  # DDHHMM in UTC, as transmitted
         "product": product,                # SVR_STORM, FLASH_FLOOD, TORNADO…
         "areas": ",".join(a for a in areas.split(",") if a),
-        "lat": parsed.get("lat"), "lon": parsed.get("lon"),
+        # Deliberately absent here. A warning arrives as a MESSAGE and carries
+        # no position — the first live rows landed with an empty cell, which
+        # broke the only join this table exists for. The position comes from
+        # the station's own separate beacon, so the caller supplies it from
+        # the record (F-2026-08-26-11).
+        "lat": None, "lon": None,
     }
 
 
@@ -1155,10 +1160,10 @@ class StationDB:
             rec.self_beacon = True
         if not own:
             self._ingest_prop_link(parsed, rec)
-            self._note_hazard(parsed)
+            self._note_hazard(parsed, rec)
         return rec
 
-    def _note_hazard(self, parsed: dict[str, Any]) -> None:
+    def _note_hazard(self, parsed: dict[str, Any], rec: "StationRecord") -> None:
         """Note a weather-service warning for the periodic writer. O(1).
 
         Called from ingest, so it does no I/O and no parsing beyond one regex
@@ -1171,6 +1176,12 @@ class StationDB:
         key = (h["callsign"], h["issued"])
         if key in self._hazards_pending:
             return
+        # The warning packet carries no position; the station's own beacon
+        # does. Without this the row lands with an empty cell and the join
+        # against silence cells — the only reason this table exists — matches
+        # nothing. Caught on the first four live rows (F-2026-08-26-11).
+        if h.get("lat") is None:
+            h["lat"], h["lon"] = rec.lat, rec.lon
         h["ts"] = int(parsed.get("ts") or time.time())
         self._hazards_pending[key] = h
 

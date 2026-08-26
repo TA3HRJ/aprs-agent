@@ -21,9 +21,11 @@ when something does read it, the rows are worth reading.
 Assertions:
 
   1. a warning is parsed into its parts - issued time, product, FIPS areas
-  2. it is read from the LIVE packet, not the station record. update_from_
-     parsed sets `comment` only while the field is empty, so a record's
-     comment is its FIRST warning; a table fed from there records history that
+  2. the CONTENT comes from the live packet and the POSITION from the station
+     record, because a warning is a message and carries no coordinates.
+     Content cannot come from the record either: update_from_parsed sets
+     `comment` only while the field is empty, so a record's comment is its
+     FIRST warning and a table fed from there records history that has
      already scrolled past
   3. a warning that beacons for an hour is noted ONCE, on (callsign, issued)
   4. a new product from the same office IS a new row - the callsign repeats
@@ -73,6 +75,10 @@ def main() -> int:
             problems.append("parse_hazard %s is %r, expected %r"
                             % (field, h.get(field), want))
 
+    # The office beacons its position separately, which is the only place a
+    # warning's coordinates can come from.
+    db.ingest("CTPSVR>APRS,TCPIP*,qAC,T2SERVER:!4048.00N/07754.00W&NWS")
+
     # ── 3 · a warning that beacons for an hour is one row ──────────────────
     for _ in range(50):
         db.ingest(WARN)
@@ -108,10 +114,19 @@ def main() -> int:
             % len(db._hazards_pending))
 
     # ── 7 · what gets written, and the cell that makes it joinable ─────────
+    # The positions are NOT planted here. A warning arrives as a message and
+    # carries none; it has to reach the row from the station's own beacon, via
+    # the record. The first four live rows landed with an empty cell precisely
+    # because this fixture used to plant them by hand — a check asked an easy
+    # question and passed (F-2026-08-26-11).
     with tempfile.TemporaryDirectory() as d:
         p = str(Path(d) / "t.sqlite")
-        for r in rows:                       # plant a position, as a real one has
-            r["lat"], r["lon"] = 40.8, -77.9
+        for r in rows:
+            if r.get("lat") is None:
+                problems.append(
+                    "%s reached the writer with no position, so its row will "
+                    "carry an empty cell and the join this table exists for "
+                    "will match nothing" % r.get("callsign"))
         n = station_db_module.record_hazards(p, rows)
         if n != 2:
             problems.append("record_hazards wrote %d rows, expected 2" % n)
