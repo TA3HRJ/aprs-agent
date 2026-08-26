@@ -205,11 +205,37 @@ gate baselines matured. The second clause was **not** re-measured and stands.
 Public text, so house rule applies — draft first. Consider whether a figure
 that moves with gate maturity should be quoted as a constant at all.
 
-### 4. §D — silence threshold calibration
-`min_silent = 3`, `min_ratio = 0.5`, never measured against anything.
+### 4. §E — non-independent stations in a silence cell (F-25)
+**Before §D, not after it** — this file had the two the wrong way round until
+2026-08-26, and the sentence "feeds §D; no point before it" left "it"
+ambiguous. `NEXT.md`'s own heading settles it: *"E — new, and it feeds D"*.
 
-### 5. §E — non-independent stations in a silence cell (F-25)
-Feeds §D; no point before it.
+The reporting half shipped in v3.2.25: cells carry `sites`,
+`sites_colocated`, `independent_gates`, `self_gated` and `few_sites`.
+
+**What is still open is one decision** — should the ratio count sites rather
+than callsigns? Today `station_db.py:2282` reads
+
+```
+ratio = c["silent"] / c["baseline"]
+```
+
+and both ends count callsigns. Measured live on 2026-08-26, 20 cells:
+**14 have `silent` != `sites`**, so the decision moves the ratio on most of
+them. `HD53` reports 3 silent callsigns from **1 site**; `NK94` 6 from 3. Of
+the three cells alerting at the time, `OM65` had 4 sites but
+`independent_gates = 1` — four sites behind one path, which is F-25's original
+EN03 case still live.
+
+**Check first, before any code** (`NEXT.md` §E): the co-located `…SVR`/`…SVS`
+pairs arriving through one gateway look like one upstream feed rather than
+separate radios. Already confirmed they are not APRS Objects. One query.
+
+### 5. §D — silence threshold calibration
+`min_silent = 3`, `min_ratio = 0.5`, never measured against anything.
+**Do not start this before §E.** Calibrating a ratio whose denominator is
+still under review measures the wrong thing — the F-16 denominator mistake in
+a new place.
 
 ### 6. §I — per-gate range mapping
 **DRAFT, operator's idea, nothing agreed.** RX is measurable and already being
