@@ -140,10 +140,15 @@ unchanged.
 1. **Refuse to build an opening on a gate with the fixed-distance signature.**
    This *does* change detection, so it wants its own evidence and its own
    threshold. `fixed_distance` is already reported and decides nothing.
-2. **§D — reset a deaf gate's baseline, or only report it?** Now decidable
-   against 25 named cases rather than a hypothetical, and the split matters:
-   the 7 fixed-distance ones cannot recover on their own, the other 18 can.
-   Note DB0OAL, which prompted the original worry, healed without help.
+2. ~~**§D — reset a deaf gate's baseline, or only report it?**~~ **Answered
+   2026-08-26: report only, and do not build a reset.** See F-2026-08-26-02.
+   All 25 would flag their *average* link if reset — median 6.8× the floor —
+   so a reset inverts the failure from silent-and-wrong to noisy-and-wrong,
+   and noisy reaches the map and the notify channel. Every deaf gate sits at
+   p98.96 or above of gate mean reach, where the median gate hears **20.6 km**;
+   22 of the 45 gates with a mean past 1,000 km are already deaf. The deafness
+   is an **accidental quarantine** holding close to the right set. Its fault is
+   the mechanism, not the outcome — which is what decision 1 above addresses.
 
 ### 2. Rest of Package B — F-09, F-22, F-23
 Presentation, independent of each other. See `NEXT.md` §B. Two measurements

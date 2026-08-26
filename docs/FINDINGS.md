@@ -3261,6 +3261,91 @@ hypothetical.
 
 ---
 
+## F-2026-08-26-02 — do not reset a deaf gate: the deafness is the quarantine
+
+Answers the §D question left open by F-2026-08-26-01 — reset a deaf gate's
+baseline, or only report it? **Report only.** The reporting shipped in v3.2.88;
+nothing further should be built, and this entry exists to stop it being built
+later by someone who reads "25 gates can no longer flag" as a bug report.
+
+### What a reset would actually do
+
+A reset makes the gate young again: under `PROP_MIN_SAMPLES` its own bar is
+never consulted and the 300 km floor decides alone. So the question is simply
+whether its typical link clears 300 km.
+
+**All 25 of 25 do.** Median 6.8× the floor, lowest 1.4× (`SR9NRA`), highest
+16.6× (`SV1TNT-10`). Every one of them would go from flagging *nothing* to
+flagging essentially *everything it carries*.
+
+`SV1TNT-10` is the case that makes it concrete. It sits in the open Atlantic
+and every link it measures returns ~4984 km to that phantom position. Reset it
+and all of them are anomalies again — the 17-records-in-one-window flood that
+started this whole thread. **The reset does not repair the gate; it inverts the
+failure from silent-and-wrong to noisy-and-wrong, and noisy is worse**, because
+noisy reaches the map and the notification channel.
+
+### These are not gates whose trust should be restored
+
+Distribution of mean reach across 7,317 established gates — what an igate
+normally hears:
+
+| | km |
+|---|---|
+| p10 | 3.1 |
+| p25 | 8.2 |
+| **p50** | **20.6** |
+| p75 | 46.3 |
+| p90 | 84.1 |
+| p99 | 425.1 |
+| p99.9 | 2640.1 |
+
+**Every deaf gate sits at p98.96 or above**, 18 of them past p99.7. A gate
+whose *normal* is 1,926 km is not measuring terrestrial VHF; the median gate
+hears 20.6 km, two orders of magnitude away. Only 96 of 7,317 gates (1.31%)
+have a mean reach past the 300 km floor at all, and 45 (0.62%) past 1,000 km.
+
+**Of those 45, 22 are already deaf.** So roughly half the population of
+implausibly far-reaching gates has already been taken out of service — by its
+own baseline, silently, with nobody deciding it.
+
+### That is the actual finding
+
+The deafness is not the disease. It is an **accidental quarantine**, and on
+this evidence it is quarantining close to the right set. Resetting would
+release exactly the population that should not be released.
+
+What is wrong with it is not the outcome but the mechanism: it is accidental,
+undocumented until v3.2.88, and it arrives late — a gate must reach 20 samples
+before its own bar is consulted, and until then the floor makes it flag
+*everything*. `VE2SIL-1` flagged 10 of the 10 links it carried, then went
+permanently silent on the sample that made it established. Both halves of that
+are wrong for the same reason, and a reset fixes neither.
+
+**The principled version of what deafness does by accident is to exclude a gate
+whose baseline shows the fixed-distance signature, explicitly and from the
+start.** That is the open decision from F-2026-08-26-01, it changes detection,
+and it is where this effort belongs — not in a reset.
+
+### And a reset is not reversible
+
+`prop_gate_stats` is the persisted record of what every gate normally hears,
+rebuilt over months. Resetting on a diagnosis that has been in existence for
+one day would destroy real history for any gate the rule caught wrongly, with
+nothing to restore it from. The two writes are not symmetric: reporting can be
+withdrawn, a reset cannot.
+
+**Counter-evidence considered.** DB0OAL, the gate that prompted the original
+worry, healed unaided over ~1,900 samples once the parser stopped feeding it
+impossible positions (F-2026-08-26-01). That is the genuinely transient case,
+and it argues the same way: where there is real traffic the EMA already does
+what a reset would do, more slowly and without discarding anything.
+
+Where there is *not* enough traffic to heal, the gate is by definition barely
+carrying links — so what it can no longer flag is close to nothing.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
