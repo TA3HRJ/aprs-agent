@@ -30,9 +30,14 @@ Assertions:
   3. an ordinary gate is never touched, however long the link
   4. a gate with a large mean but honest spread is never touched: spread is
      what separates a real DX gate from a fixed error
-  5. a young gate is never touched - under PROP_MIN_SAMPLES there is no
-     established geometry to compare against, and the mean is still moving
-  6. the band survives a sigma of exactly zero, which is a real value here
+  5. a YOUNG gate with the signature IS caught, from
+     PROP_GEOMETRY_MIN_SAMPLES upward. This is the half a 20-sample bar would
+     miss, and it is the noisy half: until 20 samples the floor decides alone,
+     so a misplaced young gate flags everything it carries. RA4NHY-1 produced
+     19 identical records at 1170.6 km +/- 0.35 that way
+  6. a gate under that bar is still never touched - three readings are not a
+     repetition
+  7. the band survives a sigma of exactly zero, which is a real value here
      and would otherwise make the test razor-thin
 
 Exit code 1 if any assertion fails.
@@ -114,12 +119,31 @@ def main() -> int:
             "excluded. That spread is a real DX gate; silencing it removes "
             "exactly the openings this detector exists for")
 
-    # 5 - a young gate has no established geometry
-    if f(YOUNG, 1900.0):
+    # 5 - the young half, which is the noisy one
+    if not f(YOUNG, 1900.0):
         problems.append(
-            "a gate with 12 samples is judged by a mean that is still moving. "
-            "Under PROP_MIN_SAMPLES there is no established geometry to "
-            "compare a link against")
+            "a gate with 12 samples averaging 1900 km at sigma 3.0 is not "
+            "caught. Until 20 samples the 300 km floor decides alone, so a "
+            "misplaced young gate flags EVERY link it carries — RA4NHY-1 "
+            "produced 19 identical records at 1170.6 km this way. Waiting for "
+            "an established mean leaves exactly the noisy half untouched")
+    # the two live shapes with the fewest samples, from F-2026-08-26-04
+    db._gate_stats["TA4ABC-10"] = [6.0, 1009.0, 0.30 ** 2]   # CE3RHA-7
+    db._gate_stats["TA5ABC-10"] = [8.0, 1176.3, 0.0]         # BG6JDU
+    for g, km in (("TA4ABC-10", 1009.0), ("TA5ABC-10", 1176.3)):
+        if not f(g, km):
+            problems.append(
+                "%s has %d samples at a coefficient of variation under 0.001 "
+                "and is not caught. These are the live shapes the sample bar "
+                "was chosen to include" % (g, int(db._gate_stats[g][0])))
+
+    # 6 - but three readings are not a repetition
+    db._gate_stats["TA6ABC-10"] = [3.0, 1900.0, 0.0]
+    if f("TA6ABC-10", 1900.0):
+        problems.append(
+            "a gate with 3 samples is treated as having an established "
+            "geometry. One station beaconing three times from one spot is not "
+            "evidence that this gate always measures the same distance")
 
     # 6 - and the guard that matters if someone widens this later
     if f(ORDINARY, 20.6):
@@ -127,8 +151,9 @@ def main() -> int:
             "an ordinary gate's own mean is excluded, so the rule has lost "
             "its 1000 km condition and now fires on every gate on the feed")
 
-    print("checked 5 planted baselines, including the two live shapes "
-          "(sigma 0.4 and sigma 0.0)")
+    print("checked %d planted baselines against a %d-sample geometry bar, "
+          "including the live shapes with sigma 0.4, 0.0 and 0.30"
+          % (len(db._gate_stats), db.PROP_GEOMETRY_MIN_SAMPLES))
     for p in problems:
         print("FAIL  " + p)
     print("%d problem%s" % (len(problems), "" if len(problems) == 1 else "s"))

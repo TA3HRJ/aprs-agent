@@ -875,6 +875,18 @@ class StationDB:
     PROP_MAX_ALT_M = 3000
     # Gate baselines firm up after this many measured links.
     PROP_MIN_SAMPLES = 20
+    # …but "does this gate always measure the SAME distance" converges much
+    # faster than "how far does this gate normally hear", because it is a
+    # question about spread rather than about a level. Five identical readings
+    # already answer it; twenty are needed only to trust a mean.
+    #
+    # Measured over 1106 young gates on the live feed: a threshold of 5 catches
+    # 6 of them (0.54%), every one with a coefficient of variation under 0.006
+    # and two with a sigma of exactly zero. The nearest gate NOT caught sits at
+    # 0.10. Lowering it to 3 adds two gates on evidence too thin to call a
+    # repetition; raising it to 10 loses three genuinely fixed ones with 6-8
+    # samples. See F-2026-08-26-04.
+    PROP_GEOMETRY_MIN_SAMPLES = 5
     # EMA smoothing for per-gate distance statistics.
     _PROP_ALPHA = 0.05
 
@@ -1189,6 +1201,17 @@ class StationDB:
                 # is a UI that silently reverts to the wrong state the day
                 # somebody rewords the sentence.
                 "gate_decided": gate_decided,
+                # Whether this link is the gate's own repeated distance rather
+                # than an observation. Carried so the map is not silently
+                # drawing nineteen identical lines as nineteen discoveries,
+                # and so the bundle says why the grouping ignored it. The
+                # link stays: remove it from the inference, not the record.
+                #
+                # Evaluated against the baseline as it stands INCLUDING this
+                # link, which is the same state the grouping pass will read a
+                # moment later — the two agree, which matters more here than
+                # matching the flag-time convention of the fields above.
+                "fixed_geometry": self.fixed_geometry_link(gate, dist),
             },
             "s_lat": round(lat, 4), "s_lon": round(lon, 4),
             "g_lat": round(g.lat, 4), "g_lon": round(g.lon, 4),
@@ -1288,11 +1311,17 @@ class StationDB:
         otherwise make it razor-thin — on a 1250 km baseline that is still
         ±12.5 km, far tighter than any genuine change in path length.
 
-        Returns False for any gate too young to have a trustworthy mean: under
-        `PROP_MIN_SAMPLES` there is no established geometry to compare against.
+        The sample bar is `PROP_GEOMETRY_MIN_SAMPLES`, not `PROP_MIN_SAMPLES`.
+        A young gate is exactly where this matters most: until it reaches 20
+        samples the 300 km floor decides alone, so a misplaced one flags
+        *everything* it carries — `VE2SIL-1` flagged 10 of 10, `RA4NHY-1`
+        produced 19 identical records at 1170.6 km ± 0.35 — and then goes
+        permanently silent the moment its own bar is consulted. Waiting for 20
+        samples would leave the noisy half of that untouched, and the constant
+        above records why five is enough to answer this particular question.
         """
         st = self._gate_stats.get(gate)
-        if not st or st[0] < self.PROP_MIN_SAMPLES:
+        if not st or st[0] < self.PROP_GEOMETRY_MIN_SAMPLES:
             return False
         mean = st[1]
         sigma = math.sqrt(max(st[2], 0.0))
