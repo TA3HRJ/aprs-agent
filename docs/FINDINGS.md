@@ -4127,6 +4127,88 @@ F-2026-08-26-05.
 
 ---
 
+## F-2026-08-26-12 — §I measured: a per-gate reach map would be 57 gates and a lot of lines
+
+§I proposed mapping each gate's coverage area. It was a draft with nothing
+agreed, and the operator raised the objection before any code was written:
+beacons tend to enter the internet through the same gate every time, igates
+are few, so a "range map" may be a handful of spokes rather than a disc.
+
+**Measured. The objection holds, and by a wide margin. §I is closed.**
+
+### The data
+
+`stations.last_gate` gives, for every positioned station, the gate it last
+arrived through — per gate, exactly the azimuth-and-distance sample a reach
+map would be drawn from. 176,133 stations carried both.
+
+First hard limit before any geometry: **33,101 gates are named, and only
+13,157 have a position of their own.** A map needs a centre; 60 % of gates
+cannot be one.
+
+### What the honest population looks like
+
+After dropping T2 backbone servers (F-2026-08-14-41 — *a backbone server is not
+a gate*) and any gate whose span exceeds 800 km, which is not terrestrial RF:
+
+| | gates | |
+|---|---|---|
+| left after exclusions | 8,839 | |
+| **one 30° sector only** | **5,027** | **56.9 %** |
+| two sectors or fewer | 6,833 | 77.3 % |
+| half the compass or more | 356 | 4.0 % |
+| nearly all round (≥10/12) | 25 | 0.3 % |
+
+**Gates that could carry an honest map — ≥6 sectors and ≥20 stations: 57.**
+Fifty-seven of 8,839, **0.6 %**, on a feed carrying 204,000 stations.
+
+The median gate has **2 stations in 1 sector**. For three gates in four, a
+"range map" is one or two lines.
+
+### The exclusion that matters most, and why it is not optional
+
+The best-looking gates by station count were not gates:
+
+```
+T2SPAIN2    498 stations  12/12 sectors   1.0 – 19953 km
+T2POLC      331           12/12           1.5 – 16747 km
+T2TROITSK   175           12/12           0.5 – 15156 km
+```
+
+Full circles spanning half the planet, because they are internet aggregation
+points. A naive reach map would have drawn its most impressive output for its
+least meaningful subjects. Name-matching caught only 6 of them; the 800 km
+span test caught **1,433**.
+
+### And the 57 are not a general capability either
+
+`OE5DXL-14`, `OE5DRO-10`, `OE3OSB-3`, `OE2XZR-10` (Austria), `DO6GZ-2/-16/-17`,
+`DO1AKW-15` (Germany), `TF3GS`, `TF3IRA-1` (Iceland). Well-instrumented
+LoRa-APRS regions, clustered, not a worldwide property. A feature that works
+in three countries has to be described that way, and this project already
+carries one of those in the Turkey Repeaters DB.
+
+### The caveat runs against the conclusion, and still does not save it
+
+`last_gate` holds only the LAST gate, so a station heard by three gates counts
+once. **The true sector coverage is therefore higher than measured** — the
+bias favours §I, not the objection. But even a threefold correction leaves
+about 2 %, which is still not a capability, and the measured 0.6 % is what the
+data actually says.
+
+### What was already delivered, and what was not
+
+§I's own note said *"RX is measurable and already being measured; TX is not,
+and that is a data-availability fact, not an effort one."* That is right, and
+the measurement sharpens it: the RX half exists as a **scalar** —
+`prop_gate_stats` carries what each gate normally hears, and the propagation
+detector has judged against it since v3.2.34.
+
+**What the data cannot support is direction.** The number is there; the map is
+not. Closing §I costs nothing that was ever working.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

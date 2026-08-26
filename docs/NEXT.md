@@ -751,7 +751,14 @@ Nothing is lost by waiting — the answer it gives today is honest.
 
 **Order:** after B. Revisit when the discussion has cooled.
 
-## I · Per-gate range mapping — DRAFT, operator's idea 2026-08-22, nothing agreed
+## I · Per-gate range mapping — ❌ MEASURED AND DECLINED 2026-08-26
+
+**F-2026-08-26-12.** The operator's objection was raised before any code and
+the data confirmed it: 56.9 % of honest gates cover a single 30° sector,
+77.3 % cover two or fewer, and only **57 of 8,839** could carry a real map.
+60 % of named gates have no position and cannot be a centre at all. The RX
+half already exists as a scalar in `prop_gate_stats`; what the data cannot
+support is direction. Kept below for the reasoning.
 
 **The question as asked:** can each igate's range be mapped from the cumulative
 signal data, RX and TX?

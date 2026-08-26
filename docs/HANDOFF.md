@@ -353,9 +353,24 @@ not, `cause` can carry the warning the way it already carries a quake.
 **Coverage is US-only** (FIPS), 12 of 72 silence fields. Describe it the way
 the Turkey Repeaters DB is described, not as a general capability.
 
-### 7. §I — per-gate range mapping
-**DRAFT, operator's idea, nothing agreed.** RX is measurable and already being
-measured; TX is not, and that is a data-availability fact, not an effort one.
+### 7. ~~§I — per-gate range mapping~~ — MEASURED AND CLOSED 2026-08-26
+The operator's own objection, raised before any code and then confirmed by the
+data: beacons enter the internet through the same gate every time and igates
+are few, so a reach map would be spokes rather than a disc. See
+F-2026-08-26-12.
+
+Of 33,101 named gates only 13,157 have a position, so 60 % cannot even be a
+centre. Of the 8,839 left after dropping backbone servers and spans beyond
+800 km, **56.9 % cover a single 30° sector and 77.3 % cover two or fewer**.
+Gates that could carry an honest map — ≥6 sectors and ≥20 stations — number
+**57**, or 0.6 %, and cluster in three well-instrumented LoRa regions.
+
+`last_gate` attribution UNDERSTATES coverage, so the bias favoured §I and it
+still failed.
+
+**Nothing was lost.** §I's RX half already exists as a scalar:
+`prop_gate_stats` carries what each gate normally hears and the detector has
+judged against it since v3.2.34. What the data cannot support is *direction*.
 
 ### Closed since the last handoff
 - **v3.2.87 verified on the live feed**, 2026-08-26 06:22, 7.4 h after the
