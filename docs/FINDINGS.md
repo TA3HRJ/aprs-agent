@@ -4278,14 +4278,58 @@ replacement: OpenSSL 1.1 → 3, libffi 7 → 8, aiohttp's `_helpers`/`_websocket
 restructured into `_http_writer` and `_websocket/mask`, mypyc's hash prefix
 changed, tcl data churn.
 
-**One had no replacement and that is correct:** `yarl/_quoting_c`. yarl
-1.24.5's win32 wheel ships only the `.pyx` source and the pure-Python fallback,
-so there is no compiled accelerator to bundle. Verified working on the
-fallback path — `a b` → `a%20b`, `ç` → `%C3%A7`.
+**One has no replacement, and calling that "correct" was the wrong word.**
+
+`yarl/_quoting_c.cp38-win32.pyd` shipped in all three targets of v3.2.67. **No
+`_quoting_c` ships in v3.2.97 at all.** yarl's URL percent-encoder therefore
+runs its pure-Python path where the previous release ran compiled C. That is a
+**regression**, not a non-issue, and the first draft of this entry described
+the cause while skipping the effect.
+
+The cause: the pinned `yarl==1.24.5` installs as a **pure-Python wheel** on
+this environment — `Root-Is-Purelib: true`, `Tag: py3-none-any`, zero `.pyd`
+in its RECORD. There is nothing compiled for PyInstaller to collect, so no
+change to the spec or the build would recover it. Recovering it means a yarl
+version that publishes a cp313-win32 binary wheel.
+
+**Whether it matters, measured rather than assumed.** On the 32-bit build,
+pure-Python `URL()` construction:
+
+| | |
+|---|---|
+| plain API URL | 0.22 µs |
+| with query string | 0.19 µs |
+| needing escapes | 0.20 µs |
+| a Web GUI request path | 0.22 µs |
+
+About 0.21 µs per URL, or 4.5–5.3 million a second. yarl sits on outbound HTTP
+(a few calls a minute) and on Web GUI request routing (once per request). It
+is not on the APRS ingest path at all. So the loss is real and its cost is
+below anything this application can notice — which is the sentence the first
+draft should have contained instead of "and that is correct".
 
 And the new archive was checked for what must *not* be in it: no loose `.py`
 sources, no real `aprsconfig.toml`, no station database, no logs, no `docs/`.
 A shipped config would have carried API keys.
+
+### Documentation audited at the same time
+
+Every cross-reference checked mechanically, because a wrong pointer in a
+findings log fails nothing and is believed by the next reader. **71 distinct
+`F-2026-*` ids are referenced across the docs and all 71 resolve to a heading**
+— no invented findings. Every `check_*.py` on disk has a row in HANDOFF's
+guard-rail table and every row has a file. Every constant the docs quote was
+compared against the code: `PROP_MIN_SAMPLES` 20, `PROP_GEOMETRY_MIN_SAMPLES`
+5, `PROP_MIN_KM` 300, `PROP_MAX_KM` 5000, `min_silent` 3, `min_ratio` 0.5 —
+all six agree. `config.VERSION`, the HANDOFF title and its "running" row all
+read 3.2.97, and each of v3.2.88 … v3.2.97 is described somewhere.
+
+And the LICENSE, which this entry is partly about: it names **TA3PKS (Burak)**
+for the Rust implementation and the extension system, **TA3EKM (Arda Yalın
+Özkan)** for the bidirectional AI Gateway, and **TA3HRJ (Erhan)** for the
+concept, the Python port and the work since, under
+`Copyright (c) 2024–2026 TA3HRJ (Erhan)`. All three, with their repository
+links, and now — unlike the first attempt — inside the shipped archive.
 
 ---
 
