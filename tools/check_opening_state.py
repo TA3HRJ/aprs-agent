@@ -98,6 +98,25 @@ def main() -> int:
         problems.append("an empty buffer reads as '%s', expected 'unknown'"
                         % st["state"])
 
+    # ── 4b · a buffer holding only the subject is still no observation ─────
+    # Caught on the first live bundle after v3.2.91: ten minutes past a
+    # restart the ring held exactly one link, the one being asked about, and
+    # the state read single_sender. An empty-buffer guard that only fires at
+    # zero misses the case that actually occurs.
+    db5 = station_db_module.StationDB()
+    lone = _link(1000, "TA1ABC-9")
+    db5._prop_links.append(lone)
+    st = state(None, db5.prop_link_context(lone))
+    if st["state"] == "single_sender":
+        problems.append(
+            "a buffer whose ONLY entry is the link being asked about reads as "
+            "'single_sender'. There is no second observation to be absent — "
+            "this is the false absence one notch up, and it is the state a "
+            "freshly restarted process spends its first minutes in")
+    if st["state"] != "unknown":
+        problems.append("a buffer holding only the subject reads as '%s', "
+                        "expected 'unknown'" % st["state"])
+
     # ── 5 · no positions, no field, no answer ──────────────────────────────
     db4 = station_db_module.StationDB()
     c = {"ts": 1000, "call": "TA1ABC-9", "gate": GATE, "km": 500.0}

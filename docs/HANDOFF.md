@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.90
+# Handoff — state at v3.2.91
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.90** |
-| repo HEAD | `e19b52c`, clean, master and tag `v3.2.90` pushed |
+| running | **v3.2.91** |
+| repo HEAD | `5ed4250`, clean, master and tag `v3.2.91` pushed |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -32,7 +32,7 @@ exception for root.
 
 ## The guard rail
 
-Thirteen checks in `tools/`, each one born from a live failure. Run them all
+Fourteen checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -40,7 +40,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Twelve run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Thirteen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -64,6 +64,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_prop_ts` | the evidence bundle answers with the link that was asked for, at both doors |
 | `check_deaf_gate` | a gate that can no longer flag is reported, not left to go quiet |
 | `check_fixed_geometry` | a gate's own repeated distance cannot supply its own second sender |
+| `check_opening_state` | an absent opening never reads as a negative finding |
 | `check_prop_bundle` | the evidence bundle cannot judge an event with numbers that event wrote |
 
 ---
@@ -171,16 +172,25 @@ unchanged.
    is an **accidental quarantine** holding close to the right set. Its fault is
    the mechanism, not the outcome — which is what decision 1 above addresses.
 
-### 2. Rest of Package B — F-09, F-22, F-23
-Presentation, independent of each other. See `NEXT.md` §B. Two measurements
-they were waiting on now exist, both from 2026-08-25 over a 7.4 h window of
-200 links:
+### 2. F-22 — group openings by receiving gate, or not
+**The only thing left in Package B.** F-09 and F-23 shipped in v3.2.91; F-22
+is reported and deliberately not acted on.
 
-- **F-22's cheap pre-check:** 16 of 112 gates carried 2+ distinct senders.
-- **F-09's repeat count:** 200 records are 128 distinct pairs, 112 gates, 95
-  senders — 36% of records are repeats.
+`context.at_this_gate` now asks the opening rule of the receiving gate beside
+the midpoint-field grouping, so the two can be compared on live bundles before
+either is trusted. Detection is unchanged.
 
-**F-22 and F-23 still must ship together**, and item 1 is why.
+**Why it stopped there.** Grouping by gate means trusting gates, and until
+v3.2.88–90 nothing measured whether a gate deserved it. That instrument now
+exists (F-2026-08-26-01/03/04), so the decision is finally takeable — it was
+not before. What it needs first is a count from live bundles: how often
+`at_this_gate.rule_met` is true while `in_field.rule_met` is false. That gap is
+the size of the finding, and it is now one field away instead of a hand
+analysis.
+
+Earlier pre-checks, 2026-08-25 over a 7.4 h window of 200 links: 16 of 112
+gates carried 2+ distinct senders; 200 records were 128 distinct pairs, 112
+gates, 95 senders, so 36% of records are repeats.
 
 ### 3. The README's F-03 sentence
 It states *"76% of flags come from the floor alone and 87% of those would not
@@ -300,6 +310,15 @@ say this. Do not re-argue it in the prompt.
 `load_sqlite` are both doors. So are `_emit` and `feed`. So was the daily
 quota, which guarded free answers as if they cost money. So were the ring and
 the stored-event path in `get_prop_evidence` (v3.2.87).
+
+**Never edit a source file with PowerShell `Get-Content` / `Set-Content`.**
+That pair uses the console's default codepage, not UTF-8. Used once on
+`config.py` for a one-line version bump it added a BOM and turned 13 lines of
+box-drawing and em-dashes into mojibake — in the file whose own comment
+records a mangled encoding writing over a real bot token. `check_unreachable`
+caught it, because a BOM makes the file unparseable, which is the guard rail
+earning its place on a fault nobody was hunting. Use the editor, or `git
+checkout --` to undo.
 
 **Write patch scripts to a file, not through a heredoc.** Backslash levels get
 eaten; `\b` has arrived as a literal backspace more than once and the regex

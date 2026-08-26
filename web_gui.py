@@ -2729,13 +2729,22 @@ def _prop_opening_status(event: dict | None, ctx: dict) -> dict:
                         "no field could be computed and the rule could not "
                         "be evaluated either way"),
         }
-    if (ctx.get("buffer") or {}).get("anomalous_links_held", 0) == 0:
+    # `<= 1`, not `== 0`. Caught on the first live bundle after v3.2.91: ten
+    # minutes past a restart the ring held exactly one link — the one being
+    # asked about — and the state read `single_sender`. "No second sender
+    # appeared here" from a buffer whose only entry is the subject is the
+    # false absence this whole finding is about, arriving one notch up.
+    #
+    # The bar is not a tuned threshold: it is "the buffer contains nothing
+    # besides the link in question", which is the point at which the process
+    # has made no other observation at all.
+    if (ctx.get("buffer") or {}).get("anomalous_links_held", 0) <= 1:
         return {
             "state": "unknown",
-            "reading": ("the anomalous-link buffer is empty — usually a "
-                        "recent restart — so the absence of other senders "
-                        "here is a fact about this process, not about the "
-                        "band"),
+            "reading": ("the anomalous-link buffer holds nothing besides this "
+                        "link — usually a recent restart, which empties it — "
+                        "so the absence of other senders here is a fact about "
+                        "this process and not about the band"),
         }
     return {
         "state": "single_sender",
