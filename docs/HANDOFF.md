@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.96
+# Handoff — state at v3.2.97
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.96** |
-| repo HEAD | `4fa0f0f`, clean, master and tag `v3.2.96` pushed |
+| running | **v3.2.97** |
+| repo HEAD | `a75d422`, clean, master and tag `v3.2.97` pushed |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -317,7 +317,11 @@ loosened `min_silent` releases 53 single-operator cells through a threshold
 that looks untouched.
 
 ### 6. Hazard correlation — ⏳ COLLECTING, measure on or after **2026-09-09**
-The table shipped in v3.2.96 and is filling. **Nothing reads it and no
+The table shipped in v3.2.96 and is filling. **Its first four rows carried no
+cell** and were therefore unjoinable — an NWS warning is a message and has no
+coordinates; the position had to come from the station record. Fixed in
+v3.2.97 (F-2026-08-26-11). Those four rows cannot be repaired and age out with
+the retention window; **the fourteen days start from v3.2.97, not v3.2.96.** **Nothing reads it and no
 detection depends on it** — that is deliberate, so the collection costs
 nothing if the answer turns out to be no.
 
@@ -429,6 +433,12 @@ question.
 **Read how a number was produced before reading it as a finding.** "43 problems
 / 12 links" held for days because `--max 12` capped the sample — the pool was 33
 one night and 93 the next. Same shape as the bundle artefact trap.
+
+**A check can plant the input it should have demanded.**
+`check_hazard_record` asserted that rows carry a Maidenhead cell, and passed,
+because the fixture set `r["lat"], r["lon"]` by hand first — testing the
+arithmetic and never the supply. The first four live rows had no position at
+all. Written the same day as the trap below, by the same hand.
 
 **A check that returns green having examined nothing is the same defect class
 as the bug it hunts.** `check_prop_bundle` would have passed by reading an

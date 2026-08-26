@@ -4065,6 +4065,68 @@ and must be described that way rather than as a general capability.
 
 ---
 
+## F-2026-08-26-11 — the table shipped, and the first four rows were unjoinable
+
+Twelve minutes after v3.2.96 went out, the hazard table wrote what it was built
+to write:
+
+```
+ILXFLS  270545z  FLOOD        cell=""  ILC017,ILC057,ILC125
+PAHFLS  280400z  FLOOD        cell=""  ILC059,ILC185,ILC193,INC051,INC129
+PAHFFW  261700z  FLASH_FLOOD  cell=""  MOC223
+INDFLS  270215z  FLOOD        cell=""  ILC023,ILC033,INC153,INC167
+```
+
+Callsign, issue time, product and FIPS counties all correct. **The one field
+the table exists for was empty.**
+
+An NWS warning arrives as a **message**. It carries no coordinates — the
+office beacons its position in a separate packet. `parse_hazard` read
+`parsed["lat"]` off a packet that never has it, so every row landed with no
+cell, and `h.cell = s.cell` — the entire reason for collecting fourteen days
+of this — would have matched nothing at the end of them.
+
+Fixed in v3.2.97: the position comes from the station record, which is where
+it lives. `parse_hazard` now returns `lat`/`lon` as `None` *explicitly* and
+says why, so the next reader does not restore the bug by tidying away an
+omission that looks accidental.
+
+### How the check missed it, which is the part worth keeping
+
+`check_hazard_record` asserted that rows carry a Maidenhead cell. It passed.
+It passed because assertion 7 planted the coordinates by hand first:
+
+```python
+for r in rows:                       # plant a position, as a real one has
+    r["lat"], r["lon"] = 40.8, -77.9
+```
+
+That comment — *"as a real one has"* — is the whole error. It tested the
+arithmetic that turns a position into a cell, and never the supply of the
+position. **A check asked an easy question and passed**, in a file written
+after F-2026-08-25-02 recorded exactly that failure mode, by the same author,
+the same day.
+
+The fixture now beacons the office's position the way the feed does, and
+asserts the row reaches the writer *with* a position. Verified against the
+pre-fix code: 3 problems, naming both the missing supply and the empty cell.
+
+### What it cost, and what it did not
+
+Four rows, unrepairable — they carry no position anywhere and age out with the
+retention window. Nothing else: no detection depends on this table and nothing
+reads it. The deliberate decision in F-2026-08-26-10 to ship a table that
+*decides nothing* is what made a bug in it cost four rows instead of a
+fortnight of wrong correlations.
+
+**And the twelve minutes are the finding.** The defect was invisible to the
+check, invisible to review, and obvious in the first four live rows. Watching
+what a change actually writes, immediately after shipping it, has now caught
+two faults in one day — this and the `single_sender` boundary in
+F-2026-08-26-05.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
