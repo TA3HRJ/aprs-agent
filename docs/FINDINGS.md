@@ -3002,6 +3002,92 @@ apparent openings out of everything it hears.
 Not fixed. Recorded so that the next reading of a long link starts by asking
 where the gate claims to be.
 
+### Correction, 2026-08-26 — two of the three claims above are wrong
+
+Written from inference rather than from the function, and the function says
+otherwise. Kept per the rule at the top of this file.
+
+**Wrong: "`_prop_position_corroboration` runs on the sender only."** It checks
+both ends and always has:
+
+```python
+gate = station_db_module.position_corroboration(
+    link.get("gate"), link.get("g_lat"), link.get("g_lon"))
+```
+
+Run against the gate in question it returns exactly what it should:
+
+```
+SV1TNT-10 -> consistent: False, region: Greece,
+             'position falls OUTSIDE the area this prefix is allocated to'
+```
+
+So the bundle was not silent about this gate. The verdict would have been
+`contradicted`, and per F-2026-08-15-46 a contradicted link is already dropped
+before the opening grouping — which also makes the claim that this gate
+"blocks F-22" weaker than stated. It cannot manufacture an opening.
+
+**Wrong, and this is the useful correction: the gap is not that gates are
+unchecked, it is *where* the check sits.** `position_corroboration` runs at
+export time and at the grouping stage. The detector in `station_db._prop_check`
+never consults it, and the per-gate baseline is updated **before any validity
+test at all** — the EMA write is the first thing in the block, above even
+`if dist < PROP_MIN_KM: return`. The only positional sanity the detector
+applies to a gate is a Null Island test, which 55 N 41 W passes.
+
+So every link measured to a phantom gate position teaches that gate's distance
+baseline. The comment beside the update states the intent plainly:
+
+> "The link still updates the baseline afterwards, so a permanently
+> misconfigured 'DX' station gradually becomes that gate's normal and stops
+> alerting."
+
+That is deliberate self-healing for a misconfigured **sender**. For a
+misconfigured **gate** it inverts: every link through it is inflated, the
+baseline climbs, and real openings at that gate become undetectable. Same
+failure as the poisoned DB0OAL baseline in the open question at the end of
+F-2026-08-24-01, arriving through the gate's own position rather than its
+senders'.
+
+**And the prefix test is the wrong instrument for gates anyway.** Measured over
+a fresh 174-link pool, 90 distinct gates:
+
+| test | gates caught |
+|---|---|
+| position contradicts own callsign prefix | **2** |
+| every link through the gate flagged, AND baseline under 20 samples | **7** |
+
+Both prefix hits are almost certainly legitimate: `SA3MHZ-10` and `SM0JLZ-2`,
+Swedish callsigns reporting from 38.2 N, 0.5 W — Alicante. Swedish operators
+wintering on the Costa Blanca is the single most ordinary explanation there is,
+and it is the exact ambiguity the corroboration note already describes. A test
+with a 2.3% hit rate whose every hit is a false positive is not a test.
+
+What separates SV1TNT-10 is not that its prefix disagrees — it is that the
+position is in the open ocean, and "is this on land" needs a landmask this
+project has no reason to carry.
+
+**F-23's own instrument does the job without any geography.** The anomalous
+fraction alone is not enough — it catches genuine consecutive openings at
+mature gates (`HS5AC-10` at samples 5979–5980, `IZ0FKE-8` at 1739–1740, both
+2 of 2). Paired with a young baseline it isolates the shape:
+
+```
+LB4CD-7     14 flags of 14 links   samples  6-19   max  333 km
+VE2SIL-1    10 flags of 10 links   samples 10-19   max 2044 km
+LZ2AB        8 flags of  8 links   samples  0- 7   max  388 km
+KE0TTZ-14    5 flags of  5 links   samples  4- 8   max  447 km
+```
+
+`LB4CD-7` is the clearest: fourteen consecutive links, every one flagged, none
+further than 333 km. A gate that hears nothing closer than the floor is either
+somewhere very strange or not where it says it is.
+
+**Still a candidate signal, not a verdict.** A genuinely new gate somewhere
+remote would look identical, and 51 of the 90 gates in this pool contributed a
+single flag each, so the population is thin. This gives F-23 a starting
+threshold and a measured base rate; it does not give it a rule.
+
 ---
 
 ## F-2026-08-25-04 — F-03's split has flipped, and the README still carries the old one

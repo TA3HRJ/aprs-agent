@@ -68,29 +68,48 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 
 ## What is open, in order
 
-### 1. A meaningful green from `check_prop_bundle`
-The only thing left over from v3.2.87. The deploy restarts the service and
-empties the in-memory link ring, which refills at a measured **~32 links an
-hour**. Nine minutes after the deploy it read:
+### 1. F-23 — the gate anomalous fraction, now with a measured base rate
+Promoted to the front because F-2026-08-25-03's correction (2026-08-26) turned
+it from an idea into the only instrument that works.
+
+The detector updates a gate's EMA baseline **before any validity test** — the
+write is the first thing in the block, above `if dist < PROP_MIN_KM: return` —
+and the only positional sanity it applies to a gate is a Null Island test. So a
+gate in the wrong place teaches its own baseline from links measured to a
+phantom position, its bar climbs, and real openings there stop being detectable.
+That is the poisoned-baseline failure arriving through the gate rather than the
+sender.
+
+`position_corroboration` **does** check the gate — that part of the finding was
+wrong — but it runs at export and grouping time, downstream of both the
+detector and the baseline. And as a gate test it does not work: over 174 links
+and 90 gates it caught 2, both Swedish callsigns reporting from Alicante, which
+is a Swede on holiday and not a fault.
+
+What separates the real cases, with no geography involved:
+
+| signal | gates of 90 |
+|---|---|
+| prefix contradicts position | 2 (both false positives) |
+| **every link flagged AND baseline under 20 samples** | **7** |
 
 ```
-sample: 5 of 5 links, 0 of them from pairs that repeat inside the 300 s tolerance
-0 problems
+LB4CD-7     14 flags of 14 links   samples  6-19   max  333 km
+VE2SIL-1    10 flags of 10 links   samples 10-19   max 2044 km
+LZ2AB        8 flags of  8 links   samples  0- 7   max  388 km
 ```
 
-**That is not a pass.** Exit 0 with no repeating pair in the sample means the
-`ts` assertion never ran — see F-2026-08-25-02. What closes this item is
-`12 of them from pairs that repeat` **and** `0 problems`, together. The fix
-itself is already proven offline by `check_prop_ts`; this run confirms nothing
-unexpected in live data.
+The fraction alone is not enough — it also catches genuine consecutive openings
+at mature gates (`HS5AC-10` at samples 5979–5980). Pair it with a young
+baseline. **Candidate signal, not a verdict:** a new gate somewhere genuinely
+remote looks the same, and 51 of the 90 gates contributed one flag each, so the
+population is thin. Start by widening the window, not by writing a rule.
 
-### 2. F-2026-08-25-03 — a gate in the open Atlantic
-`SV1TNT-10` publishes 55.27 N, 41.09 W: a Greek callsign 500 km south of
-Greenland, carrying 17 of 200 records in one window. It passes assertion 5
-(on the Earth), clears the 5000 km ceiling by 16 km, and `check_prop_bundle`
-reports 0 problems on it. Gate positions are unchecked —
-`_prop_position_corroboration` runs on the sender only, while baselines are
-kept per gate. **This is F-23's live example and it blocks F-22.**
+**F-22 still must not ship without this**, though the original reason was
+overstated: a contradicted link is already dropped before the opening grouping
+(F-2026-08-15-46), so a misplaced gate cannot manufacture an opening today. The
+reason to keep the order is that grouping by receiving gate starts trusting
+gates, and nothing yet measures whether a gate deserves it.
 
 ### 3. Rest of Package B — F-09, F-22, F-23
 Presentation, independent of each other. See `NEXT.md` §B. Two measurements
@@ -122,6 +141,13 @@ Feeds §D; no point before it.
 measured; TX is not, and that is a data-availability fact, not an effort one.
 
 ### Closed since the last handoff
+- **v3.2.87 verified on the live feed**, 2026-08-26 06:22, 7.4 h after the
+  deploy: `sample: 12 of 173 links, 6 of them from pairs that repeat` →
+  `0 problems`. Six repeat-pair links means the `ts` assertion actually ran;
+  the same code before the fix produced 6 failures out of 12. Note the bar
+  stated in the previous handoff — "12 of them from pairs that repeat" — was
+  over-specified: hot links are sampled first, so 6 is simply all the pool
+  held. The real bar is *some* repeat-pairs sampled **and** 0 problems.
 - **F-03 answered again** (F-2026-08-25-04). The split flipped from 24/76 to
   76/24 as baselines matured. The 87% noise figure is untouched — the
   counterfactual needs `at_flag.gate_bar_km`, which is `null` for exactly the
