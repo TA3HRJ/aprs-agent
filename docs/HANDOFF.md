@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.95
+# Handoff — state at v3.2.96
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.95** |
-| repo HEAD | `6c65f94`, clean, master and tag `v3.2.95` pushed |
+| running | **v3.2.96** |
+| repo HEAD | `4fa0f0f`, clean, master and tag `v3.2.96` pushed |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -52,7 +52,7 @@ predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
 
 ## The guard rail
 
-Sixteen checks in `tools/`, each one born from a live failure. Run them all
+Seventeen checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -60,7 +60,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Fifteen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Sixteen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -87,6 +87,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_opening_state` | an absent opening never reads as a negative finding |
 | `check_event_broadcast` | a weather warning is never counted as a station that fell silent |
 | `check_silence_ratio` | the ratio counts operators, and can rise as well as fall |
+| `check_hazard_record` | a warning that beacons for an hour is one row, read from the live packet |
 | `check_prop_bundle` | the evidence bundle cannot judge an event with numbers that event wrote |
 
 ---
@@ -315,27 +316,38 @@ it. **Do not change one of the three without re-running the sweep** — a
 loosened `min_silent` releases 53 single-operator cells through a threshold
 that looks untouched.
 
-### 6. Hazard correlation — record first, decide later (F-2026-08-26-10)
-**New, and cheap.** Silence cells correlate against USGS quakes only. The 557
-NWS severe-weather broadcasts v3.2.93 removed from the *sensor* set carry a
-timestamp, a product type and FIPS county codes — the same data is signal in
-the *correlation* role.
+### 6. Hazard correlation — ⏳ COLLECTING, measure on or after **2026-09-09**
+The table shipped in v3.2.96 and is filling. **Nothing reads it and no
+detection depends on it** — that is deliberate, so the collection costs
+nothing if the answer turns out to be no.
 
-Spatial gate measured and passed: 45 cells hold both a hazard broadcaster and
-a silence record, and 24.2 % of silence snapshots sit in a field that carries
-hazards. `EN03` (F-25's founding cell, 632 snapshots) and `DM94` (the cell that
-stopped alerting at v3.2.93) are both among them.
+**Why the wait.** The spatial gate was measured on 2026-08-26 and passed: 45
+cells hold both a hazard broadcaster and a silence record, 24.2 % of silence
+snapshots sit in a field that carries hazards, and `EN03` (F-25's founding
+cell) and `DM94` (the cell that stopped alerting at v3.2.93) are both among
+them. The **temporal** gate could not be tested at all: an NWS callsign is
+reused for every product from that office, so the registry holds one timestamp
+and no history. Fourteen days of `hazard_history` is what makes it answerable.
 
-**The temporal gate cannot be tested with what we retain** — an NWS callsign is
-reused per warning, so the registry holds only the latest. 24.2 % is a ceiling,
-not a hit rate; do not quote it as one.
+**24.2 % is a ceiling, not a hit rate.** Do not quote it as one — see
+F-2026-08-26-10.
 
-**Next step is a table, not a feature.** Record warnings as they arrive, like
-`prop_history`, pruned on the same window. No detection change, one insert per
-warning, and in fourteen days the question answers itself.
+**The measurement, when the table is ripe.** For each alerting silence
+snapshot, was a warning active in the same cell within a window of its
+`since`? Both tables carry `cell` and `ts`:
 
-Coverage would be US-only (FIPS) — patchy the way the Turkey Repeaters DB is,
-and must be described that way.
+```sql
+SELECT COUNT(*) FROM silence_history s
+  JOIN hazard_history h ON h.cell = s.cell
+ WHERE s.alert = 1 AND ABS(h.ts - s.ts) < 7200;
+```
+
+against `SELECT COUNT(*) FROM silence_history WHERE alert = 1` for the base
+rate. If the share is near zero the idea dies having cost one table; if it is
+not, `cause` can carry the warning the way it already carries a quake.
+
+**Coverage is US-only** (FIPS), 12 of 72 silence fields. Describe it the way
+the Turkey Repeaters DB is described, not as a general capability.
 
 ### 7. §I — per-gate range mapping
 **DRAFT, operator's idea, nothing agreed.** RX is measurable and already being
