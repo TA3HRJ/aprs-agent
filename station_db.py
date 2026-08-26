@@ -1264,6 +1264,43 @@ class StationDB:
         out.sort(key=lambda r: -r["bar_km"])
         return out
 
+    def fixed_geometry_link(self, gate: str, km: float) -> bool:
+        """Is this link the gate's own repeated distance, rather than a new one?
+
+        Some gates measure the same large distance every time, because the
+        error is in a fixed coordinate rather than in the traffic. `KC3WJU-2`
+        carries **793 links at 1250.5 km ± 0.4 km**; `LU9DCE` 514 at 1694.9 km
+        with a sigma of exactly zero. No propagation mechanism produces that,
+        and no busy gate does either — it is one geometry, repeated.
+
+        Such a link is not evidence of anything, and it is dangerous
+        specifically at the grouping stage: repeated, it supplies a "second
+        sender" and manufactures an opening. Audited over 14 days of stored
+        events, 3 of 245 openings existed only because of one (F-2026-08-26-03).
+
+        **The test is on the link, not only on the gate.** A gate with this
+        signature that suddenly measures a *different* distance has made a real
+        observation, and dropping that would silence the one thing worth
+        hearing from it. So the link is excluded only when it sits on the
+        gate's own repeated value.
+
+        The band is floored at 1% of the mean because a sigma near zero would
+        otherwise make it razor-thin — on a 1250 km baseline that is still
+        ±12.5 km, far tighter than any genuine change in path length.
+
+        Returns False for any gate too young to have a trustworthy mean: under
+        `PROP_MIN_SAMPLES` there is no established geometry to compare against.
+        """
+        st = self._gate_stats.get(gate)
+        if not st or st[0] < self.PROP_MIN_SAMPLES:
+            return False
+        mean = st[1]
+        sigma = math.sqrt(max(st[2], 0.0))
+        if not (mean >= 1000.0 and sigma < 0.1 * mean):
+            return False                     # no fixed-distance signature
+        band = max(3 * sigma, 0.01 * mean)
+        return abs(float(km) - mean) <= band
+
     def export_gate_stats(self) -> dict[str, list]:
         """Gate baselines worth carrying across a restart."""
         return {g: [round(v[0], 3), round(v[1], 3), round(v[2], 3)]
@@ -1445,7 +1482,16 @@ class StationDB:
             "opening_rule": ("2 or more DISTINCT senders in the same "
                              "Maidenhead field within 30 minutes; one long "
                              "link alone is never an opening, because a "
-                             "single misconfigured GPS can fake any distance"),
+                             "single misconfigured GPS can fake any distance. "
+                             "Two kinds of link are excluded from this "
+                             "grouping while remaining on the map: one whose "
+                             "own position contradicts its callsign "
+                             "allocation, and one sitting on the repeated "
+                             "distance of a gate that measures the same "
+                             "value every time (mean >= 1000 km with sigma "
+                             "under 10% of it) — that is a fixed coordinate "
+                             "error, and repeated it supplies its own second "
+                             "sender"),
             "excluded": ("internet-origin and digipeated packets, objects, "
                          "balloons above max_altitude_m, and links beyond "
                          "max_km (GPS garbage)"),

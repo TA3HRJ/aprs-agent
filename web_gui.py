@@ -1059,6 +1059,22 @@ class AgentManager:
                     f"from opening grouping: {bad} reports a position outside "
                     f"its own callsign allocation")
                 continue
+            # A gate that measures the same large distance every time is not
+            # reporting propagation, it is reporting one fixed coordinate
+            # error. Repeated, it supplies its own "second sender" and
+            # manufactures an opening: 3 of 245 stored events over 14 days
+            # existed only because of one, and one of those carried the same
+            # pair three times (F-2026-08-26-03). The test is on the link
+            # rather than the gate — a signature gate measuring a DIFFERENT
+            # distance has made a real observation.
+            if self._station_db.fixed_geometry_link(l.get("gate", ""),
+                                                    l.get("km", 0)):
+                self._log_both(
+                    f"[prop] {l['call']}->{l['gate']} {l['km']:.0f}km excluded "
+                    f"from opening grouping: this gate measures the same "
+                    f"distance every time, so the link is its own geometry "
+                    f"rather than evidence")
+                continue
             kept.append(l)
         recent = kept
         groups: dict[str, list] = {}
