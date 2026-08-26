@@ -199,13 +199,24 @@ grouping, not gate grouping, and it needs its own finding.
 `context.at_this_gate` keeps reporting both groupings on every bundle, so this
 can be revisited on a later window with `measure_f22.py` and no code change.
 
-### 3. The README's F-03 sentence
-It states *"76% of flags come from the floor alone and 87% of those would not
-have been flagged had their gate been established."* The first clause is now
-the wrong way round (F-2026-08-25-04): re-measured on 2026-08-25 it is 24%, as
-gate baselines matured. The second clause was **not** re-measured and stands.
-Public text, so house rule applies — draft first. Consider whether a figure
-that moves with gate maturity should be quoted as a constant at all.
+### 3. ~~The README's F-03 sentence~~ — CORRECTED 2026-08-26
+Drafted, approved and applied. The propagation paragraph now says the
+floor-only share **moves** — 76 % on 2026-08-15, 24 % on 2026-08-25 — and that
+this is why the popup names the test rather than the page naming a number. The
+companion 87 % figure was dropped rather than updated: measured once, and the
+counterfactual needs `at_flag.gate_bar_km`, which is `null` for exactly the
+floor-only population it describes.
+
+Two omissions closed in the same edit: deaf gates (25 of 7,316) and the
+fixed-geometry exclusion.
+
+**Still stale, and not in the approved scope — the Silence Map row.** It says
+*"APRS Object packets (event advisories that expire by design) are never
+counted as silence sensors"*, which is now only half the rule: v3.2.93 excludes
+the same thing arriving as a **station** (557 NWS weather broadcasts,
+F-2026-08-26-07). And the row does not mention that the cell ratio counts
+**operators** at both ends since v3.2.94 (F-2026-08-26-08). Both are
+product-facing, so both want a draft first.
 
 ### 4. ~~§E — non-independent stations in a silence cell (F-25)~~ — CLOSED v3.2.94
 **Before §D, not after it** — this file had the two the wrong way round until
