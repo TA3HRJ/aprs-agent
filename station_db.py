@@ -2294,9 +2294,14 @@ class StationDB:
             c = cells.setdefault(cell, {
                 "cell": cell, "baseline": 0, "silent": 0,
                 "silent_calls": [], "gate_of": {}, "first_silent": None,
-                "suspect_position": 0, "pos": {},
+                "suspect_position": 0, "pos": {}, "owners": set(),
             })
             c["baseline"] += 1
+            # The ratio's denominator in operators. A set add and a string
+            # split per station — unlike the co-location grouping two blocks
+            # down, which is why that one is confined to the silent set and
+            # this one is not.
+            c["owners"].add(_call_owner(r.callsign))
             threshold = max(3.0 * r.ema_interval_s, 900.0)
             gap = now - r.last_seen
             if gap > threshold:
@@ -2327,7 +2332,29 @@ class StationDB:
         # cells that qualified — a few dozen instead of a few thousand.
         staged = []
         for c in cells.values():
-            ratio = c["silent"] / c["baseline"] if c["baseline"] else 0.0
+            # F-2026-08-26-08. Both ends of the ratio count OPERATORS, not
+            # callsigns. Three SSIDs of one base callsign are three radios in
+            # one shack on one power strip; counting them as three observations
+            # of a regional event counts the same observation three times, and
+            # `few_sites` has qualified the alert on operators since v3.2.25
+            # while this line still divided callsigns by callsigns. Two units
+            # in one cell: a reader was told "80% of this square fell silent"
+            # about two operators, one of whom is still transmitting.
+            #
+            # Measured over 20,423 stored cell-snapshots: 44.3% hold more
+            # callsigns than operators, and on those the silent count falls
+            # 5.96 -> 4.24 on average.
+            n_sites = owner_sites(c["silent_calls"])
+            n_owners = len(c["owners"])
+            ratio = n_sites / n_owners if n_owners else 0.0
+            # The callsign figure every stored snapshot until now was written
+            # with. Published beside the new one rather than replaced, because
+            # fourteen days of history mean what they were computed with.
+            ratio_callsigns = (c["silent"] / c["baseline"]
+                               if c["baseline"] else 0.0)
+            # `threshold_met` keeps its callsign count deliberately: it is the
+            # RAW result, kept so the narrower definition hides nothing, and
+            # `few_sites` is where the operator count does its qualifying.
             threshold_met = c["silent"] >= min_silent and ratio >= min_ratio
             cause = "outage"
             shared_gate = ""
@@ -2365,7 +2392,8 @@ class StationDB:
                         # simply cannot see. Sharing a single gate is itself
                         # strong evidence of a shared path failing.
                         cause = "shared_gate"
-            staged.append((c, ratio, threshold_met, cause, shared_gate))
+            staged.append((c, ratio, ratio_callsigns, n_sites,
+                           threshold_met, cause, shared_gate))
 
         recur = (self._recurrence_stats(
                      history_path,
@@ -2373,7 +2401,8 @@ class StationDB:
                  if history_path else {})
 
         out = []
-        for c, ratio, threshold_met, cause, shared_gate in staged:
+        for (c, ratio, ratio_callsigns, n_sites,
+             threshold_met, cause, shared_gate) in staged:
             n, n_alert, peak, first_ts = persist.get(c["cell"], (0, 0, 0, 0))
             calls = sorted(c["silent_calls"])[:20]
             cell_recur = recur.get(c["cell"], {})
@@ -2393,7 +2422,6 @@ class StationDB:
                            and cell_recur and not novel)
             # F-25. How many separate parties the silent set actually
             # represents, and how much of the path is genuinely independent.
-            n_sites = owner_sites(c["silent_calls"])
             n_near = colocated_sites(c["silent_calls"], c["pos"])
             n_gates, n_selfed, n_backbone = gate_independence(
                 c["gate_of"], c["silent_calls"])
@@ -2426,7 +2454,16 @@ class StationDB:
                 "cell": c["cell"],
                 "baseline": c["baseline"],
                 "silent": c["silent"],
+                # Operators silent / operators in the cell (F-2026-08-26-08).
                 "ratio": round(ratio, 2),
+                # The denominator, named. A ratio published without what it
+                # divided by is how F-2026-08-16-01b happened on the
+                # propagation side; there is no reason to repeat it here.
+                "baseline_sites": len(c["owners"]),
+                # What every stored snapshot before v3.2.94 was written with,
+                # kept so fourteen days of history stay readable against the
+                # number they were computed from.
+                "ratio_callsigns": round(ratio_callsigns, 2),
                 "alert": alert,
                 # What alert used to mean, kept so nothing is hidden by the
                 # narrower definition and a reader can see both.
