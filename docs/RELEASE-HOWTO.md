@@ -38,8 +38,33 @@ breaks every 32-bit user silently:
 C:\Python313-32\python.exe -c "import platform; print(platform.architecture()[0])"
 ```
 
-Then zip `dist/` as `aprs-agent-vX.Y.Z.zip` — the naming every release since
-v3.2.38 uses. Previous zips ran about 62 MB.
+Then zip **the three target folders and four files from the repository root**
+as `aprs-agent-vX.Y.Z.zip`:
+
+```
+dist/aprs-agent  dist/aprs-agent-gui  dist/aprs-agent-web
+README.md  LICENSE  HELP.html  aprsconfig.toml.template
+```
+
+The four root files are easy to miss — zipping `dist/` alone produces an
+archive that looks complete and ships **without the licence text**, which is
+what happened on the first attempt at v3.2.97 (F-2026-08-27-01). MIT requires
+the licence to accompany the distribution.
+
+**Before publishing, diff the archive against the last published one.** Not by
+eye:
+
+```
+gh release download <previous-tag> --pattern "*.zip" --dir old
+```
+
+then compare the two file listings. It takes a minute and it is the only step
+that catches a missing file, an unexpected inclusion, or a size change that
+needs explaining. On v3.2.97 it caught the missing licence and explained a
+61.8 → 94.3 MB jump as a CPython 3.8 → 3.13 move, itemised.
+
+Check the new archive contains no `aprsconfig.toml` (it would carry API keys),
+no `*.db`, no loose `.py`.
 
 ---
 

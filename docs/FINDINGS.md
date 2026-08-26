@@ -4209,6 +4209,86 @@ not. Closing §I costs nothing that was ever working.
 
 ---
 
+## F-2026-08-27-01 — the release archive was missing its licence, and only the comparison found it
+
+v3.2.97 is the first Windows release since v3.2.67, thirty versions earlier.
+The artefact was built, smoke-tested, packaged and attached to a draft — and
+it was wrong in a way nothing up to that point could have caught.
+
+### What I did instead of checking
+
+Having built a 94 MB binary I had never shipped before, I wrote out three
+things for the operator to inspect before publishing: the notes, the size, the
+title. The operator's reply was the correction:
+
+> *"bu tür bir dev kontrolü yapmak için tam olarak sen varsın. eski uygun bir
+> release'i seçip indirip karşılaştırıp doğruysa taslağı taslak olmaktan
+> çıkarman lazım"*
+
+Right, and the reasoning is not about effort. A structural diff of two archives
+is something I can do exactly and a person cannot do by looking at a release
+page. Handing it over was not caution; it was moving a check to where it could
+not be performed.
+
+### What the comparison found
+
+`v3.2.67`'s archive carries four files at its root that mine did not:
+
+```
+README.md    42,819
+LICENSE       2,312
+HELP.html   100,750
+aprsconfig.toml.template
+```
+
+I had zipped `dist\aprs-agent`, `dist\aprs-agent-gui` and `dist\aprs-agent-web`
+and nothing else. **A distribution of MIT-licensed software was about to ship
+without its licence text**, and users would have extracted it with no manual
+and no annotated config to start from.
+
+Fixed before publishing; the archive now matches v3.2.67's structure exactly.
+
+### And the size difference, which I had recorded as unexplained
+
+61.8 MB → 94.3 MB, and F-2026-08-26 recorded it as unknown because the stale
+`dist/` that would have explained it had been deleted in the same session's
+cleanup. The published archive answered it immediately: **v3.2.67 was built on
+CPython 3.8** — every extension in it is `cp38-win32`.
+
+```
+python38.dll   ->  python313.dll        +5.5 MB × 3 targets
+(absent)       ->  PIL/_avif            +7.1 MB × 3
+pydantic_core  ->  cp313                +4.6 MB × 3
+each .exe                               +5.2 MB × 3
+```
+
+That is the whole difference, itemised. `requirements-build-win32.txt` pins
+3.13, so v3.2.67 predates its own build file — my build follows the pin and
+the old one does not. Nothing is wrong; the number just needed the other
+archive to read it against.
+
+**The lesson is narrower than "measure things".** I had called it unexplained
+while the explanation was one download away, from a public URL, in a file I
+had already been told existed.
+
+### Everything else reconciled
+
+161 files exist only in the old archive. Each was checked to a named
+replacement: OpenSSL 1.1 → 3, libffi 7 → 8, aiohttp's `_helpers`/`_websocket`
+restructured into `_http_writer` and `_websocket/mask`, mypyc's hash prefix
+changed, tcl data churn.
+
+**One had no replacement and that is correct:** `yarl/_quoting_c`. yarl
+1.24.5's win32 wheel ships only the `.pyx` source and the pure-Python fallback,
+so there is no compiled accelerator to bundle. Verified working on the
+fallback path — `a b` → `a%20b`, `ç` → `%C3%A7`.
+
+And the new archive was checked for what must *not* be in it: no loose `.py`
+sources, no real `aprsconfig.toml`, no station database, no logs, no `docs/`.
+A shipped config would have carried API keys.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
