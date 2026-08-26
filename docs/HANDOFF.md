@@ -315,7 +315,29 @@ it. **Do not change one of the three without re-running the sweep** — a
 loosened `min_silent` releases 53 single-operator cells through a threshold
 that looks untouched.
 
-### 6. §I — per-gate range mapping
+### 6. Hazard correlation — record first, decide later (F-2026-08-26-10)
+**New, and cheap.** Silence cells correlate against USGS quakes only. The 557
+NWS severe-weather broadcasts v3.2.93 removed from the *sensor* set carry a
+timestamp, a product type and FIPS county codes — the same data is signal in
+the *correlation* role.
+
+Spatial gate measured and passed: 45 cells hold both a hazard broadcaster and
+a silence record, and 24.2 % of silence snapshots sit in a field that carries
+hazards. `EN03` (F-25's founding cell, 632 snapshots) and `DM94` (the cell that
+stopped alerting at v3.2.93) are both among them.
+
+**The temporal gate cannot be tested with what we retain** — an NWS callsign is
+reused per warning, so the registry holds only the latest. 24.2 % is a ceiling,
+not a hit rate; do not quote it as one.
+
+**Next step is a table, not a feature.** Record warnings as they arrive, like
+`prop_history`, pruned on the same window. No detection change, one insert per
+warning, and in fourteen days the question answers itself.
+
+Coverage would be US-only (FIPS) — patchy the way the Turkey Repeaters DB is,
+and must be described that way.
+
+### 7. §I — per-gate range mapping
 **DRAFT, operator's idea, nothing agreed.** RX is measurable and already being
 measured; TX is not, and that is a data-availability fact, not an effort one.
 

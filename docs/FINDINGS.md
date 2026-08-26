@@ -3981,6 +3981,90 @@ alone — was available by guessing; the coupling was not.
 
 ---
 
+## F-2026-08-26-10 — the data we removed as a sensor is the correlation we were missing
+
+Prompted by the operator asking whether `leolost2605/emergency-alerts` — a
+Vala/GTK desktop app for GNOME, GPL-3.0 — has anything to give this project.
+
+**No code can be taken.** GPL-3.0 into an MIT project is not a licence
+question with a workaround; it would relicense everything. Nor is there
+technical overlap: Vala, Meson, Flatpak, a Linux desktop target. What it does
+have is one architectural idea — a pluggable *provider* abstraction for
+official alert feeds — and that idea turns out to point at something already
+sitting in our own database.
+
+### The observation
+
+Silence cells are correlated against **USGS earthquakes only** (500 km, 24 h).
+An earthquake is a rare reason for a region to go quiet. Severe weather,
+flooding and the power failures they cause are not.
+
+And v3.2.93 had just finished *removing* 557 NWS severe-weather broadcasts
+from the silence sensor set, because they have no beacon cadence to fall
+silent against (F-2026-08-26-07). Their traffic carries everything a
+correlation layer wants:
+
+```
+CTPSVR  :NWS-WARN :182230z,SVR_STORM,PAC023,PAC047,PAC083,PAC105,PAC123
+```
+
+A timestamp, a product type, and FIPS county codes. **The same data that was
+noise in the sensor role is signal in the correlation role** — and it is
+already arriving, already parsed, already positioned.
+
+### The spatial gate: passed
+
+| | |
+|---|---|
+| hazard broadcasters carrying a position | 548 |
+| distinct Maidenhead cells they sit in | 232 |
+| **cells with both a hazard broadcaster and a silence record** | **45** |
+| silence snapshots in a field that also carries hazards | **5,245 of 21,671 (24.2 %)** |
+
+Product mix: FLASH_FLOOD 174, SVR_STORM 104, SEVERE_WX 101, **TORNADO 51**,
+FLOOD 44, MARINE 34.
+
+Two of the 45 are the cells this whole thread was written from:
+
+```
+EN03   632 silence snapshots   hazards ABRSVR, UNRSVR, ABRSVS
+DM94   236 silence snapshots   hazards AMAFFW, AMAFFS, LUBSVR
+```
+
+`EN03` is F-25's founding cell. `DM94` is the cell that stopped alerting when
+v3.2.93 shipped. The offices whose *products* were polluting the sensor set
+issue the warnings for exactly those areas.
+
+### The temporal gate: cannot be tested with what we retain
+
+The measurement above uses the **current** warning footprint against fourteen
+days of silence. An NWS callsign is reused for every new warning from that
+office, so the registry holds one position and one timestamp per office — the
+latest. "A hazard broadcaster sits in cell X" is not "a warning was active
+while X was silent", and nothing stored can close that gap.
+
+**Stated rather than glossed**, because the tempting move is to report 24.2 %
+as if it were a hit rate. It is not. It is the ceiling: no correlation can
+exceed it, and the real figure is some unknown fraction of it.
+
+### What that makes the next step
+
+Not a feature. **Record hazard warnings as they arrive** — a small table like
+`prop_history`, event-driven, pruned on the same retention window. It changes
+no detection, costs one insert per warning, and in fourteen days the temporal
+question answers itself. If the answer is near zero the idea dies having cost
+a table; if it is not, `cause: "outage"` can become *"SVR_STORM, PAC023,
+20 minutes earlier"* the way a quake already does.
+
+### The honest limit on coverage
+
+FIPS codes are US-only and NINA is Germany-only, while this feed is worldwide.
+Only 12 of the 72 silence fields carry hazard broadcasters at all. Coverage
+would be patchy in exactly the way the Turkey Repeaters DB is — which is fine,
+and must be described that way rather than as a general capability.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
