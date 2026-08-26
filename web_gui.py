@@ -2604,7 +2604,7 @@ async def get_prop(request: web.Request) -> web.Response:
         data = mgr._station_db.prop_summary()
     except Exception:
         data = {"links": [], "total_links": 0, "anomalous": 0,
-                "gates": 0, "hist": []}
+                "gates": 0, "deaf_gates": 0, "deaf": [], "hist": []}
     return web.json_response(data)
 
 
@@ -2927,6 +2927,11 @@ async def get_prop_evidence(request: web.Request) -> web.Response:
             "links_measured": summary.get("total_links", 0),
             "anomalous": summary.get("anomalous", 0),
             "gates_with_baselines": summary.get("gates", 0),
+            # How many of those can no longer raise a flag at all: their own
+            # bar has climbed past the ceiling, so nothing clears it. A reader
+            # weighing "no opening was reported here" needs to know some of
+            # the gates were incapable of reporting one (F-2026-08-26-01).
+            "gates_that_can_no_longer_flag": summary.get("deaf_gates", 0),
             "distance_histogram": summary.get("hist", []),
         },
         "assessment": {

@@ -940,6 +940,10 @@ class StationDB:
         # So they persist now, through the same checkpoint that already saves
         # station records, cadence history and lifetime uptime.
         self._gate_stats: dict[str, list[float]] = {}
+        # Gates that can no longer flag anything, held as names only. See
+        # _update_gate_reach for why this is maintained here rather than
+        # computed on demand.
+        self._deaf_gates: set[str] = set()
         # Recent anomalous links for /api/prop and (later) the map layer
         self._prop_links: deque = deque(maxlen=500)
         # Calibration: global distance histogram + counters, so thresholds
@@ -1102,6 +1106,10 @@ class StationDB:
         st[0] = count + 1
         st[1] = (1 - a) * mean + a * dist
         st[2] = (1 - a) * var + a * (dist - mean) ** 2
+        # A gate can quietly lose the ability to flag anything at all, and
+        # this is the only place its numbers move — so it is where that gets
+        # noticed. O(1); see _update_gate_reach.
+        self._update_gate_reach(gate, st)
 
         # Anomaly: beyond the absolute floor AND well beyond this gate's own
         # normal — or the gate is too new to have a normal, in which case the
@@ -1192,6 +1200,70 @@ class StationDB:
     # exactly that. The ones worth keeping are the ones on their way to 20.
     _GATE_STATS_MIN_KEEP = 3
 
+    def _update_gate_reach(self, gate: str, st: list[float]) -> None:
+        """Track gates whose own bar has climbed past the detection ceiling.
+
+        A gate's bar is `max(3·mean, mean + 4·sigma)`. Once that passes
+        `PROP_MAX_KM` nothing can ever clear it, because a longer link is
+        discarded as GPS garbage before the comparison is reached. The gate
+        stops flagging and **no counter moves to say so** — it simply goes
+        quiet, which is indistinguishable from a quiet band.
+
+        Measured on the live feed 2026-08-26: 25 of 7316 established gates
+        were already there, and two were watched crossing over inside one
+        7.4 h window — flagging every link they carried while young, then
+        nothing at all from the sample that made them established. There is no
+        state in between (F-2026-08-26-01).
+
+        Maintained here, at O(1), because this is the only place the numbers
+        change. Deriving it on request would put a walk of 8000+ gates on the
+        event loop, which the house rule forbids and which would also be
+        wasted work: the answer only moves when a link arrives.
+        """
+        if st[0] < self.PROP_MIN_SAMPLES:
+            return
+        bar = max(3 * st[1], st[1] + 4 * math.sqrt(max(st[2], 0.0)))
+        if bar >= self.PROP_MAX_KM:
+            self._deaf_gates.add(gate)
+        else:
+            # Recoverable: a baseline poisoned by a transient stream of bad
+            # positions decays back out, which DB0OAL did over ~1900 samples.
+            self._deaf_gates.discard(gate)
+
+    def deaf_gates(self) -> list[dict[str, Any]]:
+        """The gates that can no longer flag, with the numbers that did it.
+
+        Walks the deaf set — 25 on the live feed — never the full registry.
+
+        `mean` and `sigma` travel with each one because they separate the two
+        ways a gate arrives here, and the two have opposite prognoses. A
+        transient stream of bad positions decays out on its own. A gate whose
+        **own** position is wrong never recovers, because every link returns
+        the same wrong distance and an EMA cannot decay an error its input
+        keeps re-supplying — that case shows a large mean with almost no
+        spread (`SV1TNT-10`: mean 4979.4 km, sigma 4.7 km).
+
+        `fixed_distance` reports that signature. It changes no decision here.
+        """
+        out: list[dict[str, Any]] = []
+        for g in self._deaf_gates:
+            st = self._gate_stats.get(g)
+            if not st:
+                continue
+            sigma = math.sqrt(max(st[2], 0.0))
+            out.append({
+                "gate": g,
+                "samples": int(st[0]),
+                "mean_km": round(st[1], 1),
+                "sigma_km": round(sigma, 1),
+                "bar_km": round(max(3 * st[1], st[1] + 4 * sigma), 1),
+                "ceiling_km": self.PROP_MAX_KM,
+                "fixed_distance": bool(st[1] >= 1000.0
+                                       and sigma < 0.1 * st[1]),
+            })
+        out.sort(key=lambda r: -r["bar_km"])
+        return out
+
     def export_gate_stats(self) -> dict[str, list]:
         """Gate baselines worth carrying across a restart."""
         return {g: [round(v[0], 3), round(v[1], 3), round(v[2], 3)]
@@ -1214,6 +1286,13 @@ class StationDB:
                     n += 1
             except (TypeError, ValueError):
                 continue
+        # Rebuild the deaf set from what was just restored. One walk, at
+        # startup, off any request path. Without it a gate that was already
+        # deaf before the restart stays unreported until its next packet —
+        # and the gates most worth reporting are the quietest ones.
+        self._deaf_gates.clear()
+        for g, v in self._gate_stats.items():
+            self._update_gate_reach(g, v)
         return n
 
     def gate_baseline(self, gate: str) -> dict[str, Any]:
@@ -1381,6 +1460,11 @@ class StationDB:
             "total_links": self._prop_total,
             "anomalous": self._prop_anomalous,
             "gates": len(self._gate_stats),
+            # Gates that have stopped being able to flag. Reported rather than
+            # left to be inferred from an absence, because that is what an
+            # absence looks like from outside: nothing (F-2026-08-26-01).
+            "deaf_gates": len(self._deaf_gates),
+            "deaf": self.deaf_gates(),
             "hist": [{"lt": ub, "n": n} for ub, n
                      in zip(self._PROP_BUCKETS, self._prop_hist)],
         }
