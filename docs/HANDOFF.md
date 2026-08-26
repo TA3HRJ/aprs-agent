@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.92
+# Handoff — state at v3.2.93
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.92** |
-| repo HEAD | `3c252ad`, clean, master and tag `v3.2.92` pushed |
+| running | **v3.2.93** |
+| repo HEAD | `5ceb42f`, clean, master and tag `v3.2.93` pushed |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -32,7 +32,7 @@ exception for root.
 
 ## The guard rail
 
-Fourteen checks in `tools/`, each one born from a live failure. Run them all
+Fifteen checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -40,7 +40,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Thirteen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Fourteen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -65,6 +65,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_deaf_gate` | a gate that can no longer flag is reported, not left to go quiet |
 | `check_fixed_geometry` | a gate's own repeated distance cannot supply its own second sender |
 | `check_opening_state` | an absent opening never reads as a negative finding |
+| `check_event_broadcast` | a weather warning is never counted as a station that fell silent |
 | `check_prop_bundle` | the evidence bundle cannot judge an event with numbers that event wrote |
 
 ---
@@ -227,9 +228,21 @@ the three cells alerting at the time, `OM65` had 4 sites but
 `independent_gates = 1` — four sites behind one path, which is F-25's original
 EN03 case still live.
 
-**Check first, before any code** (`NEXT.md` §E): the co-located `…SVR`/`…SVS`
-pairs arriving through one gateway look like one upstream feed rather than
-separate radios. Already confirmed they are not APRS Objects. One query.
+**✅ The check-first ran on 2026-08-26 and answered something bigger** — see
+F-2026-08-26-07, shipped in v3.2.93. The `…SVR`/`…SVS` stations are **NWS
+severe-weather broadcasts**, 557 of them, arriving as ordinary stations rather
+than objects. They have no beacon cadence to fall silent against, so their
+silence is fair weather reported as a regional outage. `EN03`, the cell F-25
+was written from, was six expired warnings from three weather offices — the
+"two pairs a hundred metres apart" are each office's SVR and SVS sharing one
+position. Excluded now, matched on the `NWS-WARN` addressee.
+
+That removed **3,640 cell-snapshots from having 3+ silent stations** (16.6% of
+all of them), which is why it had to land before §D.
+
+**The denominator decision is still open**, and now sits on a cleaner
+population. Re-measure `silent` vs `sites` before deciding — the 14-of-20
+figure above predates this exclusion.
 
 ### 5. §D — silence threshold calibration
 `min_silent = 3`, `min_ratio = 0.5`, never measured against anything.

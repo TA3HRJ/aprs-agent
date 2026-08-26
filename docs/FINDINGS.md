@@ -3651,6 +3651,128 @@ though the composing argument above holds independently of it. Re-run
 
 ---
 
+## F-2026-08-26-07 — a weather warning is not a station that fell silent
+
+§E's *check first, before any code* asked one narrow question — are the
+co-located `…SVR`/`…SVS` pairs four radios or one upstream feed? The answer
+made the question obsolete. Shipped in v3.2.93.
+
+### What they are
+
+The NWS APRS gateway broadcasts severe-weather products as **ordinary
+stations**, not objects: 557 of them in the live registry, one per
+weather-service office per product. Their traffic is a message addressed to
+`NWS-WARN`:
+
+```
+TBWSVR  :NWS-WARN :171915z,SVR_STORM,FLC053{R00AA
+CTPSVR  :NWS-WARN :182230z,SVR_STORM,PAC023,PAC047,PAC083{G30AA
+ABQFFW  :NWS-WARN :...,FLASH_FLOOD,...
+```
+
+`TBW` is Tampa Bay, `CTP` State College, `ABQ` Albuquerque. `SVR` is a severe
+thunderstorm warning, `SVS` a severe weather statement, `FFW` a flash flood
+warning. Symbol `\T` — thunderstorm — on 209 of the 219 `SVR`/`SVS` ones.
+
+### Why counting them is wrong, not merely weak
+
+Silence detection rests entirely on **cadence**: a station is silent when the
+gap since its last packet exceeds 3× its own smoothed beacon interval. These
+have no such interval to exceed. They transmit while a warning is in force and
+say nothing for the days between.
+
+**Their silence is fair weather, reported to an operator as a regional radio
+outage.**
+
+The object exclusion one line above in `silence_cells` already carries exactly
+the right intent — *event advisory object — expires by design* — and misses
+these only because they arrive as stations rather than objects. A validity
+rule enforced at one entrance is not enforced; the fourth time this project
+has written that sentence.
+
+### F-25's founding case was this, not co-location
+
+`EN03` — the cell F-25 was written from — appears in the stored history as:
+
+```
+EN03  6 stations, all weather products:
+      ABRSVR, ABRSVS, FSDSVR, FSDSVS, UNRSVR
+```
+
+Aberdeen, Sioux Falls and Rapid City. And the *"two pairs sit roughly a
+hundred metres apart"* that F-25 read as co-located sites are each office's
+`SVR` and `SVS` **sharing one position, because they are one office**. The
+proximity observation was correct and the inference from it was not: these are
+not two sites behind one path, they are three offices' expired warnings.
+
+### Measured
+
+Over 14 days of stored snapshots:
+
+| | |
+|---|---|
+| cell-snapshots touched | **4,073 of 21,865 (18.63%)** |
+| emptied entirely | 1,442 (6.60%) |
+| silent-station entries removed | 11,571 |
+| **had 3+ silent, now under `min_silent = 3`** | **3,640** |
+
+Live at deploy: cells fell 20 → 17, and `DM94` stopped alerting — it had 5
+silent stations of which `LUBSVR` and `LUBSVS` were warnings.
+
+**That last row is why this had to land before §D.** Calibrating `min_silent`
+and `min_ratio` against a population where 16.6% of candidates are expired
+weather warnings would have calibrated against noise, and the calibration
+would have looked entirely reasonable.
+
+### The rule matched on the addressee, and why not on the callsign
+
+The tempting test is **"no digit in the base callsign"** — which this project's
+own README already states as the way to tell a service addressee from an
+allocated callsign, and which is true of all 557. It was measured and
+rejected.
+
+2,215 positioned stations in the registry carry no digit, and roughly half are
+**real transmitters using tactical names**:
+
+```
+SADDLE     I#   South Saddle Mountain Digipeater
+HOGBAK-10  L&   N1AF Hogback Mountain LoRa-APRS 433.
+EUGENE     /_   PHG7380/W2,ORn-N,EUGENE 13.7V
+KYIV-1     /r   Free radio repeater 446.225/434.850
+OTISMA     /#   Digi I-Gate WX3in1v1
+```
+
+A mountain digipeater going quiet is precisely the news this detector exists
+for. The digit rule would silence all of them.
+
+Nor does the callsign suffix work: `TA8SVS` ends in `SVS` and is an operator
+in Turkey, symbol `%`, comment *"Op.Volkan"*.
+
+**The digit rule does survive as an independent check**, and it is worth
+recording as one: of the 557 caught by the addressee test, **zero** carry a
+digit in the base callsign. Two rules derived differently agreeing on the
+whole set is the cheapest corroboration available.
+
+`tools/check_event_broadcast.py` holds both directions, and the second is the
+one that matters: it fails if someone replaces this with the digit rule,
+naming each real transmitter that would be silenced. Verified that way before
+being trusted — 7 problems.
+
+### Left open
+
+The ~1,097 positioned tactical-named stations that are *not* weather products
+remain in the population. Whether an irregular beacon cadence should weaken a
+station as a silence sensor — whatever it is called — is a larger design
+question than §E's denominator, and deserves its own finding. The system
+already measures the thing it would need: `ema_interval_s`.
+
+Also unaffected: 440 no-digit stations with no position at all (`NTSGTE`,
+`WLNK-1`, `AIS`, `EMAIL-2`). They contribute **0%** to silence cells already,
+because a station needs a position to be placed in a Maidenhead square. No
+rule required.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
