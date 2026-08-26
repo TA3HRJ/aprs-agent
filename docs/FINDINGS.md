@@ -3139,6 +3139,128 @@ should probably not be quoted as a constant at all.
 
 ---
 
+## F-2026-08-26-01 — the poisoned baseline heals itself, unless the gate is the thing that is wrong
+
+Answers the open question left at the end of F-2026-08-24-01, and hands F-23
+an instrument that needs no window at all.
+
+The question was whether a gate whose baseline has learned garbage should be
+reset, and how such a gate would be identified. Both halves turn out to be
+answerable from `meta.prop_gate_stats`, which persists `[samples, mean, var]`
+for every gate — **8,422 of them, 7,316 established**. No polling, no waiting
+for the ring to refill.
+
+### DB0OAL recovered on its own
+
+The question recorded it at mean 1518.6 km, sigma 2167.5 km, nine samples after
+the flag, and asked whether that gate would ever flag a real opening again.
+Measured 2026-08-26:
+
+```
+DB0OAL   samples=1935   mean=96.8 km   sigma=37.1 km   own bar=290.5 km
+```
+
+Below the 300 km floor. The EMA at alpha = 0.05 washed it out over roughly
+1,900 samples once the parser stopped feeding it impossible positions. **No
+reset was needed and none should be written.** The worry was real and
+self-limiting.
+
+### But it does not heal when the gate's own position is the fault
+
+`SV1TNT-10`, the gate from F-2026-08-25-03, sitting at 55.27 N / 41.09 W:
+
+```
+SV1TNT-10   samples=77   mean=4979.4 km   sigma=4.7 km   own bar=14938.1 km
+```
+
+Its mean is 16 km under the 5000 km ceiling and its sigma is **4.7 km**. Every
+link it measures returns almost exactly the same wrong distance, because the
+error is not in the traffic — it is in the fixed coordinate everything is
+measured *to*. An EMA cannot decay an error its input keeps re-supplying.
+
+**That is the distinction the open question was missing.** A baseline poisoned
+by transient bad senders recovers. A baseline poisoned by the gate's own
+position never does, because the poison is systematic.
+
+### The consequence has a name: the gate goes permanently deaf
+
+A gate's bar is `max(3·mean, mean + 4·sigma)`. Once that exceeds the 5000 km
+ceiling, no link can ever clear it — anything longer is discarded as GPS
+garbage *before* the comparison. The gate stops flagging, silently, forever.
+
+**25 of 7,316 established gates (0.34%) are already there.** Two of them were
+watched crossing over inside one 7.4 h window:
+
+| gate | in the anomaly pool | now | |
+|---|---|---|---|
+| `VE2SIL-1` | 10 flags of 10 links, samples 10–19 | samples 23, bar 5778 km | **deaf** |
+| `LB4CD-7` | 14 flags of 14 links, samples 6–19 | samples 21, bar 1001 km | silent — it hears nothing past 334 km |
+
+Both flagged *everything* while young, because the floor decided; the moment
+they crossed 20 samples their own bar was already above anything they would
+ever hear. There is no state in between. A gate goes from flagging every link
+to flagging none, and nothing reports it.
+
+### The instrument: a high mean with almost no spread
+
+A gate in the wrong place measures the *same* wrong distance every time. Real
+DX has spread. Of the 45 established gates with a mean at or above 1,000 km,
+**13 have a sigma under 10% of that mean** and 32 have honest variance:
+
+```
+LU9DCE      n=514   mean=1694.9   sigma=  0.0   cv=0.000
+KC3WJU-2    n=793   mean=1250.5   sigma=  0.4   cv=0.000
+CE4PLU-12   n=111   mean=1390.2   sigma=  0.0   cv=0.000
+SV1TNT-10   n= 77   mean=4979.4   sigma=  4.7   cv=0.001
+KG7OKR-10   n= 96   mean=3162.7   sigma=  2.6   cv=0.001
+KH2SR       n= 32   mean=3104.3   sigma=  2.9   cv=0.001
+```
+
+against, for contrast:
+
+```
+WA7GMX-8    n=299   mean=2019.6   sigma=1012.7  cv=0.50
+W7BMH-7     n= 35   mean=2286.8   sigma= 824.3  cv=0.36
+```
+
+`KC3WJU-2` is the one to read twice: **793 links, all at 1250.5 km ± 0.4 km.**
+No propagation mechanism produces that. Neither does a busy gate. It is one
+fixed geometry, repeated, and 1250 km is far past terrestrial VHF — so one of
+the two positions in it is wrong.
+
+**The rule identifies a broken pair, not a guilty end.** `mean ≥ 1000 km AND
+sigma < 0.1·mean` says the baseline is built from a fixed impossible distance;
+it does not say whether the gate or its single correspondent is misplaced. For
+the purpose it is needed for — deciding whether this gate's baseline can be
+trusted — that is enough, and claiming more would repeat the mistake corrected
+in F-2026-08-25-03.
+
+### Why this replaces the plan to widen the window
+
+The correction to F-2026-08-25-03 proposed collecting anomalies over days to
+see whether "7 suspicious gates of 90" was real or sampling noise. It is not
+needed. `prop_gate_stats` already holds every gate's lifetime count and spread,
+so the population is 7,316 rather than 90 and the measurement is immediate.
+`prop_history` cannot substitute for it either — checked, and it stores only
+**opening events**: 271 rows over 14.0 days carrying 666 links, roughly 8% of
+anomalies, and biased against exactly these cases since a contradicted link is
+dropped before grouping.
+
+**A cross-check that fell out of the same read.** 6,537 of 7,316 established
+gates (89.4%) have an own bar *below* the 300 km floor. That is the same shape
+F-2026-08-25-04 measured from the live pool, from an independent direction and
+a population 36× larger.
+
+**Not fixed, and one decision is not ours.** Nothing here changes detection.
+What it supports: reporting a deaf gate rather than letting it go quiet
+unnoticed, and refusing to build an opening on a gate whose baseline matches
+the fixed-distance signature. Whether a deaf gate's baseline should be reset —
+now knowing that only the systematically-poisoned ones stay broken — is the
+§D question, and it now has 25 named cases to be decided against instead of a
+hypothetical.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

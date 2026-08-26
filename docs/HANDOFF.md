@@ -100,10 +100,26 @@ LZ2AB        8 flags of  8 links   samples  0- 7   max  388 km
 ```
 
 The fraction alone is not enough — it also catches genuine consecutive openings
-at mature gates (`HS5AC-10` at samples 5979–5980). Pair it with a young
-baseline. **Candidate signal, not a verdict:** a new gate somewhere genuinely
-remote looks the same, and 51 of the 90 gates contributed one flag each, so the
-population is thin. Start by widening the window, not by writing a rule.
+at mature gates (`HS5AC-10` at samples 5979–5980).
+
+**Superseded the same day by F-2026-08-26-01, which is the better instrument.**
+Do not widen the window as suggested above — it is unnecessary.
+`meta.prop_gate_stats` persists `[samples, mean, var]` for all **8,422** gates,
+so the population is 7,316 established rather than 90, and available instantly:
+
+```
+mean >= 1000 km AND sigma < 0.1 * mean   ->  13 gates
+```
+
+`KC3WJU-2` carries 793 links at 1250.5 km ± 0.4 km; `LU9DCE` 514 at 1694.9 km
+with a sigma of exactly 0.0. No propagation produces that. Honest DX gates in
+the same mean range have cv 0.1–0.5.
+
+**And 25 of 7,316 established gates are permanently deaf** — their own bar has
+climbed past the 5000 km ceiling, so no link can ever clear it. They stop
+flagging silently and nothing reports it. `VE2SIL-1` and `LB4CD-7` were watched
+crossing over inside one window: flagging every link while young, flagging
+nothing the moment they became established.
 
 **F-22 still must not ship without this**, though the original reason was
 overstated: a contradicted link is already dropped before the opening grouping
@@ -170,13 +186,14 @@ measured; TX is not, and that is a data-availability fact, not an effort one.
 
 ## Open question, deliberately not decided
 
-**A poisoned gate baseline is not repaired by fixing the parser.** DB0OAL shows
-mean 317.8 km and sigma 1019.6 km at flag time, and nine samples later mean
-1518.6 km, sigma 2167.5 km. For an EMA at alpha = 0.05 to move that far in nine
-steps the arrivals must average about 3565 km, so it was a stream, not one
-packet. A gate whose sigma is 3.2x its mean will not flag the next real
-opening. Whether affected baselines should be reset, and how such a gate is
-identified, belongs to §D.
+**~~A poisoned gate baseline is not repaired by fixing the parser.~~ Answered
+2026-08-26 — see F-2026-08-26-01.** DB0OAL healed on its own: mean 96.8 km,
+sigma 37.1 km, own bar 290.5 km, back under the floor after ~1,900 samples of
+EMA decay. **No reset should be written.** What does *not* heal is a gate whose
+own position is wrong, because the error is systematic — `SV1TNT-10` sits at
+mean 4979.4 km with a sigma of 4.7 km and can never flag again. The §D question
+that remains is narrower: whether the 25 permanently-deaf gates should be reset
+or merely reported.
 
 **Should `check_prop_bundle` fail when it cannot exercise the `ts` assertion?**
 Today it reports the condition and exits 0. Making it fatal is the complete fix
