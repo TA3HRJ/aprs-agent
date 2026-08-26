@@ -3261,6 +3261,23 @@ async def _persist_loop(mgr: "AgentManager") -> None:
             except Exception as e:
                 print(f"[station-db] history snapshot failed: {e}",
                       file=sys.__stderr__)
+            # Weather-service warnings seen since the last flush. Recorded and
+            # read by nothing: a silence cell can only be correlated against a
+            # warning that was ACTIVE at the time, and the registry cannot say
+            # that — an NWS callsign is reused for every product from that
+            # office, so it holds one timestamp and no history. Fourteen days
+            # of this table is what makes the question answerable
+            # (F-2026-08-26-10). Off the event loop like its neighbour, and a
+            # failure here must not cost the silence snapshot above.
+            try:
+                rows = mgr._station_db.take_hazards()
+                if rows:
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, station_db_module.record_hazards,
+                        mgr._sta_db_path, rows)
+            except Exception as e:
+                print(f"[station-db] hazard record failed: {e}",
+                      file=sys.__stderr__)
 
 
 async def on_startup(app: web.Application) -> None:

@@ -21,6 +21,7 @@ from typing import Any, Optional
 from packet_parser import (
     OFFLINE_THRESHOLD,
     STATION_ICON,
+    _latlon_to_locator,
     _on_earth,
     classify_symbol,
     parse_packet,
@@ -373,6 +374,90 @@ def is_event_broadcast(rec) -> bool:
     sharing one position.
     """
     return bool(_NWS_PRODUCT_RE.search(getattr(rec, "comment", "") or ""))
+
+
+# The payload of an NWS product, past the addressee:
+#   :NWS-WARN :182230z,SVR_STORM,PAC023,PAC047,PAC083{G30AA
+#            issued ^^^^^^^  ^^^^^^^^^ product   ^^^^^^ FIPS areas
+_NWS_BODY_RE = re.compile(
+    r":\s*NWS-WARN\s*:\s*(\d{6})z\s*,\s*([A-Z_]+)\s*,?\s*([A-Z0-9,]*)",
+    re.IGNORECASE)
+
+
+def parse_hazard(parsed: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """One weather-service warning, from the packet that carries it.
+
+    Read from the LIVE packet rather than from the station record, and that
+    distinction is the whole reason this function exists. `update_from_parsed`
+    sets `comment` only when the field is still empty, so a station's stored
+    comment is its FIRST warning, not its current one — the registry showed
+    day-13 and day-17 products on 2026-08-26. A table fed from there would
+    record history that had already scrolled past.
+
+    Returns None for anything that is not an NWS product.
+    """
+    m = _NWS_BODY_RE.search(str(parsed.get("comment") or ""))
+    if not m:
+        return None
+    issued, product, areas = m.group(1), m.group(2).upper(), m.group(3)
+    return {
+        "callsign": parsed.get("callsign", ""),
+        "issued": issued,                  # DDHHMM in UTC, as transmitted
+        "product": product,                # SVR_STORM, FLASH_FLOOD, TORNADO…
+        "areas": ",".join(a for a in areas.split(",") if a),
+        "lat": parsed.get("lat"), "lon": parsed.get("lon"),
+    }
+
+
+def record_hazards(path: str, rows: list[dict[str, Any]]) -> int:
+    """Append hazard warnings, one row per (callsign, issued).
+
+    Event-driven and deduplicated on the pair, because a warning beacons for
+    as long as it is in force — a row per packet would store the same warning
+    hundreds of times. Pruned on the same retention window as the other
+    histories.
+
+    This stores and decides nothing. It exists because the question it will
+    answer cannot be asked yet: a silence cell can only be correlated against
+    a warning that was ACTIVE at the time, and an NWS callsign is reused for
+    every new product from that office, so the registry holds one timestamp
+    per office and no history at all (F-2026-08-26-10). Fourteen days of this
+    table makes the question answerable; until then nothing reads it.
+    """
+    if not rows:
+        return 0
+    con = sqlite3.connect(path)
+    try:
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS hazard_history ("
+            "ts INTEGER, callsign TEXT, issued TEXT, product TEXT, "
+            "areas TEXT, lat REAL, lon REAL, cell TEXT, "
+            "PRIMARY KEY (callsign, issued))")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_hazard_cell_ts "
+                    "ON hazard_history (cell, ts)")
+        n = 0
+        for r in rows:
+            cell = ""
+            if r.get("lat") is not None and r.get("lon") is not None:
+                try:
+                    cell = _latlon_to_locator(float(r["lat"]),
+                                              float(r["lon"]))[:4].upper()
+                except Exception:
+                    cell = ""
+            cur = con.execute(
+                "INSERT OR IGNORE INTO hazard_history VALUES (?,?,?,?,?,?,?,?)",
+                (int(r.get("ts") or time.time()), r.get("callsign", ""),
+                 r.get("issued", ""), r.get("product", ""),
+                 r.get("areas", ""), r.get("lat"), r.get("lon"), cell))
+            n += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        con.execute("DELETE FROM hazard_history WHERE ts < ?",
+                    (int(time.time()) - StationDB._HISTORY_RETENTION_S,))
+        con.commit()
+        return n
+    except sqlite3.Error:
+        return 0
+    finally:
+        con.close()
 
 
 def save_meta(path: str, key: str, value: str) -> None:
@@ -1000,6 +1085,12 @@ class StationDB:
         # _update_gate_reach for why this is maintained here rather than
         # computed on demand.
         self._deaf_gates: set[str] = set()
+        # Weather-service warnings seen since the last flush, keyed on
+        # (callsign, issued) so a warning that beacons for an hour is noted
+        # once. Written by the periodic task, never from ingest — see
+        # record_hazards. Bounded by the number of offices with an active
+        # product, which measured 557 across the whole feed.
+        self._hazards_pending: dict[tuple, dict[str, Any]] = {}
         # Recent anomalous links for /api/prop and (later) the map layer
         self._prop_links: deque = deque(maxlen=500)
         # Calibration: global distance histogram + counters, so thresholds
@@ -1064,7 +1155,30 @@ class StationDB:
             rec.self_beacon = True
         if not own:
             self._ingest_prop_link(parsed, rec)
+            self._note_hazard(parsed)
         return rec
+
+    def _note_hazard(self, parsed: dict[str, Any]) -> None:
+        """Note a weather-service warning for the periodic writer. O(1).
+
+        Called from ingest, so it does no I/O and no parsing beyond one regex
+        on packets that carry a comment at all. The pair (callsign, issued)
+        collapses a warning that beacons for an hour into one entry.
+        """
+        h = parse_hazard(parsed)
+        if not h:
+            return
+        key = (h["callsign"], h["issued"])
+        if key in self._hazards_pending:
+            return
+        h["ts"] = int(parsed.get("ts") or time.time())
+        self._hazards_pending[key] = h
+
+    def take_hazards(self) -> list[dict[str, Any]]:
+        """Hand the pending warnings to the writer and clear the buffer."""
+        rows = list(self._hazards_pending.values())
+        self._hazards_pending.clear()
+        return rows
 
     def _matches_feed(self, callsign: str) -> bool:
         """Can the current feed hear this station at all?"""
