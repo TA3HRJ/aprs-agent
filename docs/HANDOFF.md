@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.91
+# Handoff — state at v3.2.92
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.91** |
-| repo HEAD | `5ed4250`, clean, master and tag `v3.2.91` pushed |
+| running | **v3.2.92** |
+| repo HEAD | `3c252ad`, clean, master and tag `v3.2.92` pushed |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 

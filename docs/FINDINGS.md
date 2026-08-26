@@ -3536,6 +3536,46 @@ with the decision matters more here than matching a convention.
 
 ---
 
+## F-2026-08-26-05 — the fix for a false absence contained one, and the first live bundle showed it
+
+F-09 shipped in v3.2.91: `opening: null` became four named states, so a reader
+could tell "nothing was heard here" from "the rule is met and nothing was
+written" from "this process cannot answer".
+
+The fourth state, `unknown`, guarded the restart case — the counts come from
+an in-memory ring a restart empties, so a fresh process must not report an
+absence it cannot know. It fired when the buffer held **zero** links.
+
+**The first live bundle fetched after the deploy, ten minutes later:**
+
+```
+opening_status.state : single_sender
+buffer               : 1 links, window 1800 s
+in_field             : anomalous_links 1, distinct_senders ['N2EDX']
+```
+
+One link in the ring — the link being asked about. `single_sender` reads as
+"no second distinct sender appears in this field", which is true and worthless:
+there was no second observation to be absent.
+
+**The case that actually occurs is one, not zero**, because a bundle is
+normally fetched for a link that is itself in the ring. So the false absence
+this finding exists to remove came back at the boundary, inside its own fix.
+
+Corrected in v3.2.92 to `<= 1`. Deliberately not a tuned threshold — it is
+*the buffer contains nothing besides the link in question*, the point at which
+the process has made no other observation at all. Verified live in the same
+scenario: the state now reads `unknown` with the reason beside it.
+
+**What this is worth recording for.** The defect was invisible offline. Every
+planted fixture in `check_opening_state` had either a populated buffer or an
+empty one, because those are the cases a person thinks of; the real world
+served the third within ten minutes. Shipping it and looking at one live
+bundle cost less than the test-writing that missed it would have. The check
+now holds the case, so it cannot come back a third time.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
