@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.87
+# Handoff — state at v3.2.88
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.87** |
-| repo HEAD | `9f57418`, clean, master and tag `v3.2.87` pushed |
+| running | **v3.2.88** |
+| repo HEAD | `dafbead`, clean, master and tag `v3.2.88` pushed |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -32,7 +32,7 @@ exception for root.
 
 ## The guard rail
 
-Eleven checks in `tools/`, each one born from a live failure. Run them all
+Twelve checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -40,7 +40,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Ten run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Eleven run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -62,6 +62,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_feedlog` | packets never reach journald, errors always do |
 | `check_coords` | no position off the Earth enters, by either door |
 | `check_prop_ts` | the evidence bundle answers with the link that was asked for, at both doors |
+| `check_deaf_gate` | a gate that can no longer flag is reported, not left to go quiet |
 | `check_prop_bundle` | the evidence bundle cannot judge an event with numbers that event wrote |
 
 ---
@@ -127,7 +128,24 @@ overstated: a contradicted link is already dropped before the opening grouping
 reason to keep the order is that grouping by receiving gate starts trusting
 gates, and nothing yet measures whether a gate deserves it.
 
-### 3. Rest of Package B — F-09, F-22, F-23
+**✅ The reporting half shipped in v3.2.88.** `/api/prop` carries `deaf_gates`
+and `deaf`; the evidence bundle's calibration block carries
+`gates_that_can_no_longer_flag`. Live immediately after the deploy: ring empty,
+**25 reported, 7 of them fixed-distance** — the startup rebuild works, which is
+the case `check_deaf_gate`'s seventh assertion exists for. Detection is
+unchanged.
+
+**Two decisions remain, both the operator's:**
+
+1. **Refuse to build an opening on a gate with the fixed-distance signature.**
+   This *does* change detection, so it wants its own evidence and its own
+   threshold. `fixed_distance` is already reported and decides nothing.
+2. **§D — reset a deaf gate's baseline, or only report it?** Now decidable
+   against 25 named cases rather than a hypothetical, and the split matters:
+   the 7 fixed-distance ones cannot recover on their own, the other 18 can.
+   Note DB0OAL, which prompted the original worry, healed without help.
+
+### 2. Rest of Package B — F-09, F-22, F-23
 Presentation, independent of each other. See `NEXT.md` §B. Two measurements
 they were waiting on now exist, both from 2026-08-25 over a 7.4 h window of
 200 links:
@@ -136,9 +154,9 @@ they were waiting on now exist, both from 2026-08-25 over a 7.4 h window of
 - **F-09's repeat count:** 200 records are 128 distinct pairs, 112 gates, 95
   senders — 36% of records are repeats.
 
-**F-22 and F-23 still must ship together**, and item 2 is why.
+**F-22 and F-23 still must ship together**, and item 1 is why.
 
-### 4. The README's F-03 sentence
+### 3. The README's F-03 sentence
 It states *"76% of flags come from the floor alone and 87% of those would not
 have been flagged had their gate been established."* The first clause is now
 the wrong way round (F-2026-08-25-04): re-measured on 2026-08-25 it is 24%, as
@@ -146,13 +164,13 @@ gate baselines matured. The second clause was **not** re-measured and stands.
 Public text, so house rule applies — draft first. Consider whether a figure
 that moves with gate maturity should be quoted as a constant at all.
 
-### 5. §D — silence threshold calibration
+### 4. §D — silence threshold calibration
 `min_silent = 3`, `min_ratio = 0.5`, never measured against anything.
 
-### 6. §E — non-independent stations in a silence cell (F-25)
+### 5. §E — non-independent stations in a silence cell (F-25)
 Feeds §D; no point before it.
 
-### 7. §I — per-gate range mapping
+### 6. §I — per-gate range mapping
 **DRAFT, operator's idea, nothing agreed.** RX is measurable and already being
 measured; TX is not, and that is a data-availability fact, not an effort one.
 
