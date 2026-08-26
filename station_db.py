@@ -331,6 +331,50 @@ def suspect_position(rec) -> bool:
     return bool(_HOTSPOT_RE.search(rec.comment or ""))
 
 
+# The NWS APRS gateway broadcasts severe-weather products as ORDINARY
+# STATIONS, not as objects: `TBWSVR`, `CTPSVR`, `ABRSVS` and ~200 more, one
+# per weather-service office per product. Their traffic is a message addressed
+# to `NWS-WARN`:
+#
+#     TBWSVR  :NWS-WARN :171915z,SVR_STORM,FLC053{R00AA
+#     INDFLS  :NWS-WARN :130200z,FLOOD,INC015,INC181{D20AA
+#
+# Matched on the addressee rather than on the callsign. The tempting rule is
+# "no digit in the base callsign", which the README already states as the way
+# to tell a service addressee from an allocated callsign — and it is true of
+# every one of these. It was measured and rejected: 2,215 positioned stations
+# in the live registry carry no digit, and roughly half of them are REAL
+# transmitters using tactical names (`SADDLE` — South Saddle Mountain
+# digipeater, `HOGBAK-10`, `EUGENE`, `KYIV-1`). A mountain digipeater going
+# quiet is exactly the news this detector exists for. See F-2026-08-26-07.
+_NWS_PRODUCT_RE = re.compile(r":\s*NWS-WARN\s*:", re.IGNORECASE)
+
+
+def is_event_broadcast(rec) -> bool:
+    """True for a station whose transmissions are events, not a heartbeat.
+
+    Silence detection rests entirely on cadence: a station is silent when the
+    gap since its last packet exceeds 3x its own smoothed beacon interval. A
+    weather-warning broadcaster has no such interval to exceed. It transmits
+    while a severe thunderstorm warning is in force and says nothing for the
+    days or weeks between — so its "silence" is fair weather, reported as a
+    regional radio outage.
+
+    The object exclusion two lines above this one in `silence_cells` already
+    carries the right intent — *event advisory, expires by design* — and
+    misses these only because they arrive as stations. A validity rule
+    enforced at one entrance is not enforced.
+
+    Measured over 14 days of stored snapshots: 3,250 of 21,886 cell-snapshots
+    (14.9%) held at least one of these, and **503 consisted of nothing else**.
+    `EN03`, the cell F-25 was written from, is one of them — six silent
+    "stations", all of them expired warnings from three weather offices, and
+    the "two pairs a hundred metres apart" are each office's SVR and SVS
+    sharing one position.
+    """
+    return bool(_NWS_PRODUCT_RE.search(getattr(rec, "comment", "") or ""))
+
+
 def save_meta(path: str, key: str, value: str) -> None:
     """Store a small persistent counter/setting (e.g. lifelong uptime)."""
     con = sqlite3.connect(path)
@@ -2228,6 +2272,10 @@ class StationDB:
                 continue    # self-generated — never a silence sensor
             if r.is_object:
                 continue    # event advisory object — expires by design
+            if is_event_broadcast(r):
+                continue    # the same thing arriving as a station, not an
+                            # object: an NWS warning broadcast has no cadence
+                            # to fall silent against (F-2026-08-26-07)
             if r.station_type in self._MOBILE_TYPES:
                 continue    # moves under its own power — weak silence sensor
             if not self._matches_feed(r.callsign):
