@@ -251,6 +251,91 @@ def _strip_signature(text: str) -> str:
     return tail or "73"
 
 
+# A first-person claim to have RECEIVED the sender, and a report token, in one
+# sentence. Both halves are required. "RST = Readability, Signal, Tone" and
+# "599 is a typical CW report" are correct answers about reports and must
+# survive; "receiving you 5x9" is a measurement this service cannot have made.
+_RX_CLAIM = re.compile(
+    r"\b(?:receiv\w*|read\w*|copy\w*|hear\w*|get\w*)\s+(?:you|u)\b"
+    r"|\byou(?:'re|\s+are)\s+(?:coming\s+in\s+)?(?:loud|[0-9R])",
+    re.I,
+)
+_RX_REPORT = re.compile(
+    r"\b5\s*[x/by\s-]{1,4}\s*9\b|\b59\b|\b599\b|\bS9\b|\bR5\b|loud and clear",
+    re.I,
+)
+
+
+def _strip_signal_report(text: str) -> str:
+    """Remove an invented signal report before the answer goes on air.
+
+    Measured live. VK2AHB-7 sent "test.from VK" and the model replied:
+
+        OK VK2AHB-7, receiving you 5x9. Test acknowledged. 73.
+
+    This service has no receiver. VK2AHB-7 reached it from Australia through
+    somebody else's igate and the APRS-IS backbone, over TCP. "5x9" is a
+    measurement of a radio path that was never measured, sent to a station
+    whose operator may well be testing that exact path.
+
+    The system prompt already says "answer as a service" and "do not role-play
+    a QSO". It said so, and the model did it anyway - the same way it signed
+    with somebody else's callsign while the prompt forbade that in as many
+    words. So this follows _strip_signature: the rule lives in the code.
+
+    The offending SENTENCE is dropped rather than the token patched out,
+    because "receiving you 5x9" with the number removed is still a claim to
+    have received. Whatever else the answer said is kept.
+    """
+    parts = re.split(r"(?<=[.!?])\s+", text)
+    kept = [p for p in parts
+            if not (_RX_CLAIM.search(p) and _RX_REPORT.search(p))]
+    if len(kept) == len(parts):
+        return text
+    out = " ".join(kept).strip()
+    # Everything the answer said was the false report. Say the true thing
+    # instead of nothing: silence would read as a failed gateway.
+    return out or "Received. Internet-fed service, no signal report possible."
+
+
+# A test or ping, and nothing else. Kept deliberately tight: the message must
+# START with the word and be short, so "what is the SWR test procedure" is a
+# question and goes to the model like any other.
+_TEST_MSG = re.compile(r"^\s*(?:test|ping|deneme)\b", re.I)
+
+
+def _test_answer(question: str, sender_full: str, raw_line: str) -> "Optional[str]":
+    """Answer a test message from the packet itself, without asking the model.
+
+    A test is the commonest thing anyone sends a service callsign, and it is
+    the one question where every true fact is already in our hands: who sent
+    it, which igate put it on APRS-IS, and whether it touched RF at all. It is
+    also the question the model answered by inventing a signal report.
+
+    So it never reaches the model. What comes back is what the packet says,
+    and an explicit statement that no signal report is possible here - which
+    is the fact the tester actually needs.
+    """
+    if not _TEST_MSG.match(question) or len(question) > 32:
+        return None
+    gate, internet = "", False
+    try:
+        from packet_parser import parse_packet
+        p = parse_packet(raw_line)
+        gate = p.get("gate") or ""
+        # qAC/qAS mean the sender was connected to APRS-IS directly; no igate
+        # heard them, so naming one would be as invented as the 5x9 was.
+        internet = bool(p.get("tcpip")) or p.get("q_type") in ("C", "S")
+    except Exception:
+        pass
+    if internet or not gate:
+        where = "via APRS-IS"
+    else:
+        where = "gated by " + gate
+    return ("Test OK %s, %s. Internet-fed service - I cannot give a signal "
+            "report." % (sender_full, where))
+
+
 def _split_message(text: str, max_parts: int) -> list[str]:
     if len(text) <= 64:
         return [text]
@@ -817,7 +902,9 @@ class AIGateway(Extension):
         # the model — but only about the sender's own. All the risk in this
         # feature is third-party lookup; asking about yourself carries none of
         # it, and the packet header already says who is asking.
-        answer = self._self_lookup(question, sender_base)
+        answer = _test_answer(question, sender_full, line)
+        if answer is None:
+            answer = self._self_lookup(question, sender_base)
         if answer is None:
             answer = await self._wx_lookup(question, sender_full, cfg)
         if answer is None:
@@ -847,6 +934,11 @@ class AIGateway(Extension):
         cleaned = _strip_signature(answer)
         if cleaned != answer:
             self.warn(f"stripped a callsign sign-off: {answer!r} -> {cleaned!r}")
+            answer = cleaned
+        cleaned = _strip_signal_report(answer)
+        if cleaned != answer:
+            self.warn(f"stripped an invented signal report: "
+                      f"{answer!r} -> {cleaned!r}")
             answer = cleaned
         # Kept so a retry can be served without asking again.
         prev = self._processed.get(dedup_key)

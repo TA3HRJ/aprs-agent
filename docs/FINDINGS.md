@@ -4333,6 +4333,156 @@ links, and now — unlike the first attempt — inside the shipped archive.
 
 ---
 
+## F-2026-08-28-01 — the gate that called itself dormant had been shutting off a third of the notes
+
+**Source:** the operator, after DeepSeek republished its pricing table and
+asked whether our rule needed changing.
+
+`WebGUI._deepseek_peak_hour()` returned True for UTC 01:00-04:00 and
+06:00-10:00 and its own docstring said this:
+
+    this is dormant (never true in practice) until it actually starts,
+    at zero cost to check.
+
+There is no activation flag. There never was one. The function fired on the
+clock alone, from v3.0.7 (2026-08-04) onward, and this file has been carrying
+the proof since 2026-08-14 — the twelve-minute feed gap in F-35 lists
+`09:12:12 [station-ai] DeepSeek peak-pricing window - deferring batch` among
+the three lines the process emitted. It was quoted there as evidence about the
+feed and nobody read it as evidence about the gate.
+
+### What it actually cost, measured
+
+The cost is narrower than "AI assessment was off" and needs saying precisely:
+**detection, alerting, notification and every stored row continued normally.**
+What the window removed is the AI *note* attached to an episode when the
+episode opens.
+
+Measured on the live database, 14 days of retention:
+
+| | |
+|---|---|
+| silence episode openings | 1,110 |
+| openings inside the code's window | **359 (32.3 %)** |
+| openings inside the window as now published (Mon-Fri) | 270 (24.3 %) |
+| **openings suppressed by the missing weekday clause alone** | **89 (8.0 %)** |
+| propagation history rows inside the window | 77 of 238 (32.4 %) |
+
+Episode openings were taken as the first row per cell after a gap of more than
+two hours.
+
+### The second error: the published window is weekdays only
+
+DeepSeek's pricing page now reads *"Peak hours are 01:00 - 04:00 and 06:00 -
+10:00 UTC, Monday through Friday (all other hours are off-peak)"*, at a flat
+50 % off-peak discount. The code had no weekday test, so 14 hours a week were
+being blanked against a discount that does not exist on those days. Those are
+the 89 openings above: pure loss, nothing bought.
+
+### Why the answer is removal rather than a weekday fix
+
+Thirty days of DeepSeek billing: **$0.36**, over 5,683 requests and 2.19 M
+tokens on `deepseek-v4-flash`. The AI Gateway answers about five questions a
+day; the rest of that traffic is this background assessment. Running the peak
+hours at full rate costs cents a month. The gate was trading a third of the
+notes for that.
+
+v3.0.7's own reasoning was sound when written — background AI work is
+non-interactive and nothing breaks by skipping it, and it deliberately left
+the Gateway's radio replies alone because someone is waiting on those. What it
+got wrong was the price of the thing being skipped, which nobody had measured,
+and the belief that the code was not yet running.
+
+**Fixed in v3.2.98.** `_deepseek_peak_hour()`, `effective_ai_ok`, the
+`peak_skipped` parameter on `_prop_watch` and the station-ai deferral loop are
+all gone. `ai_gateway.enabled` remains the one master switch for auto-triggered
+AI calls, which is what it was always documented to be.
+
+### What this does not claim
+
+The 359 openings are not 359 wrong verdicts. An episode with no note is an
+episode a reader has to judge unaided — the alert, the cell, the ratio and the
+history row were all there. No number in this repository is wrong because of
+the gate, and none of the propagation or silence measurements recorded in this
+file were taken through it.
+
+---
+
+## F-2026-08-28-02 — the service with no receiver gave a signal report
+
+**Source:** the operator, reading fourteen days of DMWGPT's message traffic on
+aprs.fi.
+
+2026-08-28 09:04 UTC+2, VK2AHB-7 sent `test.from VK` from Australia. The reply
+that went on the air:
+
+    OK VK2AHB-7, receiving you 5x9. Test acknowledged. 73.
+
+DMWGPT has no receiver. That packet crossed the APRS-IS backbone over TCP and
+arrived through somebody else's igate. `5x9` is a report on a radio path that
+was never measured, sent to the one kind of person who would act on it: an
+operator testing that path.
+
+### This is the sign-off finding again, with a different sentence
+
+The system prompt already carries *"do not role-play a QSO - answer as a
+service"*, in those words, in the same block that forbids signing with another
+callsign. Both were ignored by the model, and the second one had already
+produced `73 de TA3HRJ-10 gateway` on 2026-08-21. The conclusion has now been
+reached three times and is not in doubt: **where an answer must not contain
+something, take it out in code.**
+
+The same window shows the softer version twice more, unfixed and now recorded:
+
+| date | reply | what is invented |
+|---|---|---|
+| 2026-08-27 | "All systems normal here." | a health claim, while the badge subsystem exists to know that |
+| 2026-08-17 | "This is APRS agent TG5ALY." | the SENDER's callsign, as its own identity, with no `de`/`73` cue for `_strip_signature` to catch |
+
+Neither is fixed here. They are named so they are not re-discovered.
+
+### The fix has two halves
+
+**`_strip_signal_report()`** drops any sentence that both claims to have
+received the sender and carries a report token. Both halves are required,
+which is what keeps it off the correct answers: *"RST = Readability, Signal,
+Tone"* and *"599 is a typical CW contest report"* explain reports without
+claiming one, and `"I hear you asking about SWR"` claims nothing. The sentence
+is cut rather than the number patched out - "receiving you" with the number
+removed is still a claim to have received. An answer that was nothing but the
+false report becomes *"Received. Internet-fed service, no signal report
+possible."*, because silence would read as a broken gateway.
+
+**`_test_answer()`** takes the test message away from the model entirely. A
+test is the commonest thing sent to a service callsign and the one question
+where every true fact is already in hand: `packet_parser.parse_packet()` gives
+the igate from the q-construct, and whether the sender touched RF at all. So
+the answer is built from the packet and states the thing the tester needs:
+
+    Test OK VK2AHB-7, gated by VK2RAG-1. Internet-fed service - I cannot
+    give a signal report.
+
+A sender who reached APRS-IS directly (`qAC`/`qAS`, or `TCPIP`) gets *"via
+APRS-IS"* and no igate named - naming a backbone server as the station that
+heard them would be the same invention in a different place (F-2026-08-14-41
+made that mistake once already, one level up).
+
+The trigger is deliberately tight - the message must START with
+`test`/`ping`/`deneme` and be 32 characters or less - so *"What is the SWR test
+procedure for a dipole?"* is a question and reaches the model like any other.
+
+### `check_signal_report.py`
+
+Fourteen assertions: five phrasings that must be stripped, five correct
+answers that must survive untouched, and the test path including the case
+where a question merely contains the word. **Seen failing before it was
+trusted:** with the strip made a no-op and `_test_answer` forced to `None` it
+reports 8 failures and exits 1; against the real code, all clear.
+
+**Shipped in v3.2.98.**
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

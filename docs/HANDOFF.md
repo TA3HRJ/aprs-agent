@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.97
+# Handoff — state at v3.2.98
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.97** |
-| repo HEAD | `25ca0b1`, clean, master and tag `v3.2.97` pushed and released |
+| running | **v3.2.98** |
+| repo HEAD | tag `v3.2.98` — the DeepSeek peak gate removed (F-2026-08-28-01) and the invented signal report stopped (F-2026-08-28-02) |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -104,7 +104,7 @@ cost is below anything this application can notice. Named rather than hidden.
 
 ## The guard rail
 
-Seventeen checks in `tools/`, each one born from a live failure. Run them all
+Eighteen checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -112,7 +112,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Sixteen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Seventeen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -131,6 +131,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_weather` | distance and age always present; no city guessed; a spent quota still answers |
 | `check_health` | the badge cannot claim "active" about a module that is failing |
 | `check_signature` | no callsign sign-off reaches the air; Turkish "de"/"da" survives |
+| `check_signal_report` | a service with no receiver never reports 5x9; a test is answered from the packet |
 | `check_feedlog` | packets never reach journald, errors always do |
 | `check_coords` | no position off the Earth enters, by either door |
 | `check_prop_ts` | the evidence bundle answers with the link that was asked for, at both doors |
