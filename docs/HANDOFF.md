@@ -57,6 +57,13 @@ predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
 
 ## Releasing to Windows
 
+**v3.2.98 is deployed to the VPS but NOT released to Windows.** The tag is on
+GitHub and `aprs-update.sh` took it, which is all the server needs; the latest
+GitHub *Release* is still v3.2.97. Both of v3.2.98's changes touch files that
+ship in the zip (`web_gui.py`, `extensions/ai_gateway_ext.py`), so downloaders
+are behind on them. Deferred deliberately on 2026-08-28 — "acelesi yok" — and
+recorded here so the next release does not start from the wrong baseline.
+
 **Published 2026-08-27: [v3.2.97](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.97)**
 — the first Windows release since v3.2.67, thirty versions earlier, because
 the process was written down nowhere. It is written down now:
@@ -119,6 +126,14 @@ admin API, which is what this file used to say. `/api/prop` and
 ```
 python tools/check_prop_bundle.py --base https://map.aprsagent.com --max 12
 ```
+
+Run it **at least an hour after a restart**. Immediately after the v3.2.98
+deploy it reported `NOTHING CHECKED: no anomalous links in the buffer` — the
+ring had been wiped and refills at roughly 25 links an hour. An hour later it
+examined 6 of 6 links with 0 problems, but **0 of them were repeating pairs
+inside the 300 s tolerance**, which is the material the timestamp assertion
+needs. A thin sample is not a failed check and it is not a full one either;
+it says so itself, which is F-2026-08-25-02 working as intended.
 
 or on the VPS against `http://127.0.0.1:8080`, which is the default.
 
