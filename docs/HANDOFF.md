@@ -149,13 +149,37 @@ admin API, which is what this file used to say. `/api/prop` and
 python tools/check_prop_bundle.py --base https://map.aprsagent.com --max 12
 ```
 
-Run it **at least an hour after a restart**. Immediately after the v3.2.98
-deploy it reported `NOTHING CHECKED: no anomalous links in the buffer` — the
-ring had been wiped and refills at roughly 25 links an hour. An hour later it
-examined 6 of 6 links with 0 problems, but **0 of them were repeating pairs
-inside the 300 s tolerance**, which is the material the timestamp assertion
-needs. A thin sample is not a failed check and it is not a full one either;
-it says so itself, which is F-2026-08-25-02 working as intended.
+**Run it on a warm ring, and read its first line before its last.** The link
+buffer is `deque(maxlen=500)` with no time window, so at the measured rate of
+**22 links an hour it holds about 23 hours** of history once full — but a
+restart empties it, and everything below follows from that.
+
+Measured 2026-08-31/09-01, sampling `/api/prop` every ten minutes for two
+hours from a cold start:
+
+| | |
+|---|---|
+| ring fill | 22 links at 1 h → 84 at 3.8 h, still climbing toward 500 |
+| pairs with more than one record | 9 of 50 (18 %) |
+| median gap between records of a pair | **904 s** — a beacon cadence, three times the tolerance |
+| gaps inside the 300 s tolerance | 1 of 20 (5 %) |
+| first repeating pair enters the ring | at **~1 hour** of fill, and stays |
+
+So the two runs that reported `0 of them from pairs that repeat inside the
+300 s tolerance` were both taken minutes after a restart — the v3.2.98 deploy
+and the v3.2.99/v3.2.100 restarts. **That line reports the state of the ring,
+not the state of the code**: it means the buffer is still cold, not that the
+timestamp assertion failed or that it was skipped by bad luck. Of thirteen
+samples the assertion would have run on the last seven consecutively; the six
+misses were the cold phase, in order, and not a one-in-three chance.
+
+`NOTHING CHECKED: no anomalous links in the buffer` is the harder version of
+the same message and does exit non-zero, which is F-2026-08-25-02 working as
+intended.
+
+The rule that follows: after a restart, wait for the ring rather than for the
+clock. One hour is about right, and the check's own first line is what
+confirms it.
 
 or on the VPS against `http://127.0.0.1:8080`, which is the default.
 
