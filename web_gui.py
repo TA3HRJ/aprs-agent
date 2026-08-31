@@ -564,6 +564,17 @@ class AgentManager:
                         self._sta_db_path, "prop_episodes", "{}")))
             except Exception:
                 pass
+            # Only for episodes that came back with them. A note describes one
+            # open episode; kept without it, it would be a verdict about
+            # something that is no longer happening.
+            try:
+                notes = json.loads(station_db_module.load_meta(
+                    self._sta_db_path, "silence_notes", "{}"))
+                self._silence_ai_notes.update(
+                    {k: v for k, v in notes.items()
+                     if k in self._silence_active and v})
+            except Exception:
+                pass
         # Gate baselines are restored unconditionally, with no grace window.
         # An episode is a claim about right now and goes stale; "what this gate
         # normally hears" is a property of an aerial on a hill. Without this,
@@ -707,6 +718,17 @@ class AgentManager:
             station_db_module.save_meta(
                 self._sta_db_path, "prop_episodes",
                 json.dumps(self._prop_active))
+            # The notes ride with the episodes they belong to. Without this
+            # the two halves were asymmetric: a restart restored the open
+            # episodes but not their notes, and since an episode that is
+            # already open never opens again, _assess_silence was never
+            # reached for it — the note stayed empty for the rest of its
+            # life. Measured live after a routine restart: 7 of 8 alerting
+            # cells with no note and no way to ever get one
+            # (F-2026-08-31-02).
+            station_db_module.save_meta(
+                self._sta_db_path, "silence_notes",
+                json.dumps(self._silence_ai_notes))
             station_db_module.save_meta(
                 self._sta_db_path, "episodes_checkpoint_ts", str(time.time()))
             station_db_module.save_meta(

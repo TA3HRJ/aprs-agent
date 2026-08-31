@@ -4591,6 +4591,88 @@ was found at all is that a human looked at a popup and asked a question.
 
 ---
 
+## F-2026-08-31-02 — the episode came back from the restart; its note did not
+
+**Source:** found while verifying F-2026-08-31-01's fix. The watch was alive
+again, and still 7 of 8 alerting cells had no note.
+
+The v3.2.99 restart at 12:04 was followed by three scans — 12:19, 12:24,
+12:29 — that between them produced **one** `ALERT` line, for `JP78`. Meanwhile
+`/api/silence` reported 8 alerting cells, 7 of them with `ai_note: ""`. The
+seven were not going to get one at the next scan either, or ever.
+
+### One checkpoint, two halves, only one of them symmetric
+
+```
+_silence_active     saved in _save_uptime  AND  restored in __init__
+_silence_ai_notes   saved nowhere               restored nowhere
+```
+
+`_silence_active` is restored inside a 30-minute grace window on
+`episodes_checkpoint_ts`, and that is right: an episode that was open before
+the restart is still open, and should not re-alert. But the note is written
+**only when an episode opens**:
+
+```python
+for cell, c in alerts.items():
+    if cell in self._silence_active:
+        continue                     # already alerted this episode
+    ...
+    note = await self._assess_silence(c, ai_cfg)
+```
+
+So a restored episode never opens again, `_assess_silence` is unreachable for
+it, and its note stays empty for the rest of that episode's life — however
+many days that is. `JP78` had a note because it was the one episode that
+actually opened after the restart.
+
+### Why this hid behind the bigger fault
+
+At the earlier 07:50 restart the same day, 13 of 13 alerting cells got notes
+within one scan, which read as proof that everything worked. It was not: the
+episodes restored at 07:50 came from `_silence_active` as the **dead** loop of
+F-2026-08-31-01 had left it, frozen at 2026-08-29 16:45. Thirty-nine hours on,
+almost none of those cells were still the alerting ones, so nearly every live
+cell counted as a new opening and was assessed. Both measurements are correct;
+they differ because one followed a restart of a working loop and the other did
+not.
+
+That is worth keeping as a caution about the instrument: **a restart after a
+long outage is the one case where this bug is invisible**, and that was the
+case we happened to measure first.
+
+### Fixed in v3.2.100
+
+`silence_notes` is written beside `silence_episodes` on the same 60-second
+checkpoint, and restored inside the same grace window — a note is a claim
+about a live episode and has to go stale with it.
+
+Restored notes are filtered twice: the episode must have come back too, and
+the note must be non-empty. A note without its episode is a verdict about
+something that is no longer happening, and an empty string restored as if it
+were an answer is worse than no restore at all.
+
+### What was deliberately not done
+
+**Propagation notes are left alone.** `_prop_note_cache` has the same shape,
+but a prop opening is built from a 30-minute link window and an episode ends
+as soon as a scan finds no anomalous links in its region — the exposure a
+restart creates is minutes, not days. Named here so the asymmetry is a
+decision rather than an oversight.
+
+### `check_notes_survive.py`
+
+Five assertions: the notes are written to the checkpoint from
+`_silence_ai_notes`; they are read back inside the same `ckpt … <= 1800`
+block; restored notes are filtered against `_silence_active`; empty notes are
+not restored; and the meta channel round-trips a notes dict intact through a
+real temporary database.
+
+**Seen failing before it was trusted:** with the save pointed at an empty dict
+and the restore reduced to `update(notes)`, it reports 3 failures and exits 1.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
