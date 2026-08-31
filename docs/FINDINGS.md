@@ -4483,6 +4483,114 @@ reports 8 failures and exits 1; against the real code, all clear.
 
 ---
 
+## F-2026-08-31-01 — the silence watch died, and for 39 hours nothing said so
+
+**Source:** the operator, looking at a KP23 popup on the map and asking why
+the new silence markings carried no AI note.
+
+They carried no note because the loop that writes notes had been dead since
+**2026-08-29 16:45:26**, and was found on **2026-08-31 07:40**. Thirty-nine
+hours. In that time no silence notification was sent, no propagation opening
+was recorded, and no assessment ran.
+
+### Why it looked like a missing note and nothing worse
+
+The map kept showing alerting cells throughout, which is what made this
+invisible. Silence cells are computed by `/api/silence` **on request** — they
+do not come from the watch loop. And `silence_history` kept filling, because
+a **separate** `_persist_loop` writes it every ten minutes; that loop was
+alive the whole time. It reads `mgr._silence_ai_notes`, a dict only the dead
+loop ever fills, so every row it wrote carried an empty note.
+
+The one table that told the truth was `prop_history`: **frozen at 2026-08-29
+14:00**, because the watch loop is its only writer.
+
+| symptom | what it actually meant |
+|---|---|
+| map still shows alerts | computed per request, independent of the loop |
+| `silence_history` fresh | written by `_persist_loop`, which was alive |
+| **`prop_history` 41 h stale** | **the watch loop, its only writer, was gone** |
+| `/api/silence` → `ai_note: ""` on 13 of 13 alerting cells | the notes dict was never being filled |
+
+### It was not hung, and it did not fail at the provider
+
+Both were checked before anything was changed, because both were plausible.
+
+**The provider is fine.** The exact call `_call_ai_api` makes was reproduced
+on the VPS with the live key: `finish_reason=stop`, valid parseable JSON,
+`{"cause": ..., "confidence": "high", "summary": ...}`. Nothing in the AI path
+was broken.
+
+**It was not blocked.** `py-spy dump` on the live process showed both event
+loops idle in `select` and every executor thread parked. Nothing was stuck
+inside our code — the coroutine was simply no longer there.
+
+### The two faults that made a silent death possible
+
+**1. The task's reference was thrown away.**
+
+```python
+asyncio.create_task(self._silence_watch_loop(config))
+```
+
+Nothing holds the returned Task. `"Task exception was never retrieved"` is
+emitted from `Task.__del__`, so if the object is never collected the exception
+is never reported at all — and three days of journal contained no traceback of
+any kind. The loop that survived, `_persist_loop`, was stored as
+`app["persist_task"]`. The difference between the two is the whole story.
+
+**2. The scan body was unguarded.**
+
+The `while True:` body held only two narrow `try` blocks — the quake cache
+warm and the `_prop_watch` call. Everything between them was bare:
+`silence_cells_cached()`, the deaf-feed hold, the alert loop, `_assess_silence`,
+the notification send and the digest. An exception in any of those left the
+loop for good.
+
+Confirmed structurally: `_silence_watch_loop` contains no `return`, no `break`
+and no `raise`, so it had no way to end except by raising.
+
+### The fix, in v3.2.99
+
+`_supervise(task, name)` keeps every long-lived loop in `self._loop_tasks` and
+attaches a done-callback that logs the death loudly, with the traceback, at
+failure time. **A clean exit is reported too** — none of these loops has a
+return path, so returning is as much a fault as raising. Cancellation stays
+quiet, because that is shutdown. Applied to all three background loops:
+`_silence_watch_loop`, `_monitor_loop` and `_ai_analysis_loop`, which all had
+the same shape.
+
+The scan body now sits inside one `except Exception` guard that logs and
+carries on, with the pacing `await asyncio.sleep(300)` **outside** it — so a
+failing scan waits its five minutes instead of spinning.
+
+**What the fix does not do:** it does not say what the original exception was.
+The task was already gone when the dump was taken, and the traceback was never
+written anywhere. The next occurrence will be named; this one cannot be.
+
+### `check_watch_survives.py`
+
+Seven assertions across the two faults: a raising loop is reported with its
+traceback, a returning loop is reported, a cancelled loop is not, the
+reference is held while running and released after, the scan body is one
+`except Exception` guard, and the pacing sleep is outside it. The structural
+half reads the AST rather than running the loop, which needs a live registry
+and feed.
+
+**Seen failing before it was trusted:** with `_supervise` returned to
+fire-and-forget and the guard narrowed to a non-matching exception type, it
+reports 4 failures and exits 1.
+
+### The lesson, which this repository has now paid for twice
+
+F-35 said: when the feed goes quiet, do not pass judgement — and report the
+quiet. This is that one level up. **The watch itself went quiet, and nothing
+watched the watch.** A subsystem that cannot say it has stopped is
+indistinguishable from one with nothing to report, and the only reason this
+was found at all is that a human looked at a popup and asked a question.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

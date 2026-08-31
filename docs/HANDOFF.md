@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.98
+# Handoff — state at v3.2.99
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.98** |
-| repo HEAD | tag `v3.2.98` — the DeepSeek peak gate removed (F-2026-08-28-01) and the invented signal report stopped (F-2026-08-28-02) |
+| running | **v3.2.99** |
+| repo HEAD | tag `v3.2.99` — the silence watch can no longer die in silence (F-2026-08-31-01) |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -57,12 +57,15 @@ predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
 
 ## Releasing to Windows
 
-**v3.2.98 is deployed to the VPS but NOT released to Windows.** The tag is on
-GitHub and `aprs-update.sh` took it, which is all the server needs; the latest
-GitHub *Release* is still v3.2.97. Both of v3.2.98's changes touch files that
-ship in the zip (`web_gui.py`, `extensions/ai_gateway_ext.py`), so downloaders
-are behind on them. Deferred deliberately on 2026-08-28 — "acelesi yok" — and
-recorded here so the next release does not start from the wrong baseline.
+**v3.2.98 and v3.2.99 are on the VPS but NOT released to Windows.** Their tags
+are on GitHub and `aprs-update.sh` took them, which is all the server needs;
+the latest GitHub *Release* is still v3.2.97. All three changes across those
+two tags touch files that ship in the zip (`web_gui.py`,
+`extensions/ai_gateway_ext.py`), so downloaders are behind on them — including
+the fix for a watch loop that can die in silence, which affects anyone running
+this at home as much as it affected the VPS. Deferred deliberately on
+2026-08-28 — "acelesi yok" — and recorded here so the next release does not
+start from the wrong baseline.
 
 **Published 2026-08-27: [v3.2.97](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.97)**
 — the first Windows release since v3.2.67, thirty versions earlier, because
@@ -111,7 +114,7 @@ cost is below anything this application can notice. Named rather than hidden.
 
 ## The guard rail
 
-Eighteen checks in `tools/`, each one born from a live failure. Run them all
+Nineteen checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -119,7 +122,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Seventeen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Eighteen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -147,6 +150,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_health` | the badge cannot claim "active" about a module that is failing |
 | `check_signature` | no callsign sign-off reaches the air; Turkish "de"/"da" survives |
 | `check_signal_report` | a service with no receiver never reports 5x9; a test is answered from the packet |
+| `check_watch_survives` | a background loop cannot die in silence, and one bad scan does not end the watch |
 | `check_feedlog` | packets never reach journald, errors always do |
 | `check_coords` | no position off the Earth enters, by either door |
 | `check_prop_ts` | the evidence bundle answers with the link that was asked for, at both doors |

@@ -25,6 +25,7 @@ import re
 import sys
 import threading
 import time
+import traceback
 import webbrowser
 from collections import OrderedDict, deque
 from pathlib import Path
@@ -461,6 +462,11 @@ class AgentManager:
         self._agent_loop: Optional[asyncio.AbstractEventLoop] = None
         self._stop_event: Optional[asyncio.Event] = None
         self._original_stderr = sys.stderr
+        # Strong references to the long-lived background loops. Without this
+        # the tasks are reachable from nothing and an exception inside one is
+        # reported only if and when the Task object is garbage collected —
+        # which on this VPS's CPython 3.10 it was not. See _supervise().
+        self._loop_tasks: Set["asyncio.Task"] = set()
         # Live stats shown in the browser (packet counter + last-heard stations)
         self._started_at: Optional[float] = None
         self._pkt_count = 0
@@ -733,6 +739,46 @@ class AgentManager:
         if sys.stderr is not sys.__stderr__:
             print(msg, file=sys.__stderr__)
 
+    def _supervise(self, task: "asyncio.Task", name: str) -> None:
+        """Hold a background loop's reference, and make its death audible.
+
+        `asyncio.create_task(...)` with the result thrown away is the shape
+        this file used for every background loop. Two things follow from it,
+        and both happened live (F-2026-08-31-01):
+
+        1. The task is reachable from nothing, so CPython may collect it
+           mid-flight. "Task exception was never retrieved" is emitted from
+           the Task's __del__, so if that never runs, the exception is never
+           reported at all.
+        2. Even when it is reported, it goes out at GC time rather than at
+           failure time, which is not when anyone is looking.
+
+        `_silence_watch_loop` died on 2026-08-29 and nothing said so for 39
+        hours. The map kept serving cells — they are computed per request —
+        so from outside, the only symptom was that silence alerts had stopped
+        carrying an AI note.
+
+        A loop reaching here at all is a fault: none of them has a return
+        path, so a clean exit is as wrong as a crash and is reported the same
+        way.
+        """
+        self._loop_tasks.add(task)
+
+        def _done(t: "asyncio.Task") -> None:
+            self._loop_tasks.discard(t)
+            if t.cancelled():
+                return                       # shutdown, not a fault
+            exc = t.exception()
+            if exc is not None:
+                self._log_both(f"[{name}] LOOP DIED: {type(exc).__name__}: {exc}")
+                self._log_both("".join(traceback.format_exception(
+                    type(exc), exc, exc.__traceback__)))
+            else:
+                self._log_both(f"[{name}] LOOP EXITED without an error — it "
+                               f"has no return path, so this is a fault too")
+
+        task.add_done_callback(_done)
+
     # _deepseek_peak_hour() was removed in v3.2.98 — see F-2026-08-28-01.
     # It gated the silence and propagation AI notes on UTC 01:00-04:00 and
     # 06:00-10:00, and its docstring called itself dormant. It was not: 359
@@ -803,12 +849,14 @@ class AgentManager:
 
         # Silence watch is always on: detection is cheap, and AI/notification
         # steps degrade gracefully when their configs are missing.
-        asyncio.create_task(self._silence_watch_loop(config))
+        self._supervise(asyncio.create_task(self._silence_watch_loop(config)),
+                        "silence")
         self._log_both("[silence] Silence watch started (first scan in 15m)")
 
         mon_cfg = config.get("monitor", {})
         if mon_cfg.get("enabled") and config.get("repeater_db_path", "").strip():
-            asyncio.create_task(self._monitor_loop(config))
+            self._supervise(asyncio.create_task(self._monitor_loop(config)),
+                            "monitor")
             print("[monitor] Repeater monitor started", file=sys.stderr)
         elif mon_cfg.get("enabled"):
             print("[monitor] WARNING: monitor enabled but repeater_db_path not set", file=sys.stderr)
@@ -820,7 +868,9 @@ class AgentManager:
             # enabled too — matches the silence/propagation ai_ok fix
             # (same reasoning: a provider string alone is not "configured").
             if ai_ext.get("enabled") and (ai_ext.get("provider") or ai_ext.get("base_url")):
-                asyncio.create_task(self._ai_analysis_loop(config))
+                self._supervise(
+                    asyncio.create_task(self._ai_analysis_loop(config)),
+                    "station-ai")
                 hours = sai_cfg.get("interval_hours", 24)
                 print(f"[station-ai] AI analysis started (every {hours}h, first run in 10m)", file=sys.stderr)
             else:
@@ -872,128 +922,143 @@ class AgentManager:
 
         await asyncio.sleep(900)   # let cadence baselines settle first
         while True:
-            # Warm the quake cache off the event loop; _quakes_near() only
-            # ever reads it, so no request handler can block on USGS.
+            # One scan's failure must not end the watch. Before v3.2.99 this
+            # body ran bare inside `while True:` with only two narrow try
+            # blocks in it, and the task's reference was dropped at creation
+            # - so a single exception anywhere else ended silence and
+            # propagation watching for the life of the process, in complete
+            # silence. It did: 39 hours of it, F-2026-08-31-01.
             try:
-                await asyncio.get_event_loop().run_in_executor(
-                    None, _fetch_quakes)
-            except Exception:
-                pass
-            # Off the loop like everything else: this loop runs beside the
-            # HTTP handlers, so a synchronous scan here stalls them too.
-            cells = await silence_cells_cached(self._station_db, self._sta_db_path)
-
-            # F-35: no feed, no judgement — and no announcements either.
-            # Everything below this point either raises an alert or retracts
-            # one, and while we cannot hear, a retraction is a false statement.
-            # On 2026-08-14 twelve minutes of dead feed produced 28 "cleared",
-            # two "[prop] cleared" and five "back on the air" in one second,
-            # none of which had happened. Hold every episode exactly as it was.
-            deaf_since = self._station_db.deaf_since()
-            if deaf_since:
-                if not self._silence_deaf_at:
-                    self._silence_deaf_at = deaf_since
-                    self._log_both(
-                        f"[silence] feed deaf since "
-                        f"{time.strftime('%H:%M:%S', time.localtime(deaf_since))}"
-                        f" — holding {len(self._silence_active)} episode(s), "
-                        f"judging nothing")
-                await asyncio.sleep(300)
-                continue
-            if self._silence_deaf_at:
-                self._log_both(
-                    f"[silence] feed back after "
-                    f"{int(time.time() - self._silence_deaf_at)}s — resuming")
-                self._silence_deaf_at = 0.0
-
-            alerts = {c["cell"]: c for c in cells if c["alert"]}
-
-            for cell, c in alerts.items():
-                if cell in self._silence_active:
-                    continue                     # already alerted this episode
-                self._silence_active[cell] = time.time()
-                for _call in c.get("silent_calls", []):
-                    self._missing.setdefault(
-                        _call, {"cell": cell, "flagged": time.time()})
-                note = ""
-                now_ts = time.time()
-                cached = self._silence_note_cache.get(cell)
-                if cached and now_ts - cached[1] < _AI_NOTE_COOLDOWN_S:
-                    # Same cell recently assessed and recovered since — the
-                    # verdict (power outage / igate failure) is unlikely to
-                    # have changed in the meantime, so reuse it instead of
-                    # spending another AI call on a cell that's just flapping.
-                    note = cached[0]
-                    self._log_both(f"[silence] {cell}: reusing cached AI "
-                                   f"note (cooldown, "
-                                   f"{int((_AI_NOTE_COOLDOWN_S - (now_ts - cached[1])) / 60)}m left)")
-                elif ai_ok:
-                    try:
-                        note = await self._assess_silence(c, ai_cfg)
-                    except Exception as e:
-                        self._log_both(f"[silence] AI assessment failed: {e}")
-                if note:
-                    self._silence_ai_notes[cell] = note
-                    self._silence_note_cache[cell] = (note, now_ts)
-                self._log_both(
-                    f"[silence] ALERT {cell}: {c['silent']}/{c['baseline']}"
-                    f" silent ({c['cause']})")
-                if channel:
-                    if digest_mins > 0:
-                        self._silence_pending.append((time.time(), c, note))
-                    else:
-                        try:
-                            await self._send_notification(
-                                self._format_silence_msg(c, note),
-                                channel, config)
-                        except Exception as e:
-                            self._log_both(f"[silence] notification error: {e}")
-
-            # Episode over: cell recovered — allow future re-alerts
-            for cell in list(self._silence_active):
-                if cell not in alerts:
-                    del self._silence_active[cell]
-                    self._silence_ai_notes.pop(cell, None)
-                    self._log_both(f"[silence] cleared: {cell}")
-
-            # A station leaves the missing list only by being heard again —
-            # independent of whether its cell is still alerting.
-            if self._missing:
+                # Warm the quake cache off the event loop; _quakes_near() only
+                # ever reads it, so no request handler can block on USGS.
                 try:
-                    state = self._station_db.silence_state(list(self._missing))
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, _fetch_quakes)
                 except Exception:
-                    state = {}
-                for call in list(self._missing):
-                    st = state.get(call)
-                    if st is None or not st["silent"]:
-                        del self._missing[call]
-                        self._log_both(f"[silence] back on the air: {call}")
+                    pass
+                # Off the loop like everything else: this loop runs beside the
+                # HTTP handlers, so a synchronous scan here stalls them too.
+                cells = await silence_cells_cached(self._station_db, self._sta_db_path)
 
-            # Prune cooled-down cache entries regardless of alert state, so
-            # the dict doesn't grow forever with cells that never re-alert.
-            now_ts = time.time()
-            for cell in list(self._silence_note_cache):
-                if now_ts - self._silence_note_cache[cell][1] >= _AI_NOTE_COOLDOWN_S:
-                    del self._silence_note_cache[cell]
+                # F-35: no feed, no judgement — and no announcements either.
+                # Everything below this point either raises an alert or retracts
+                # one, and while we cannot hear, a retraction is a false statement.
+                # On 2026-08-14 twelve minutes of dead feed produced 28 "cleared",
+                # two "[prop] cleared" and five "back on the air" in one second,
+                # none of which had happened. Hold every episode exactly as it was.
+                deaf_since = self._station_db.deaf_since()
+                if deaf_since:
+                    if not self._silence_deaf_at:
+                        self._silence_deaf_at = deaf_since
+                        self._log_both(
+                            f"[silence] feed deaf since "
+                            f"{time.strftime('%H:%M:%S', time.localtime(deaf_since))}"
+                            f" — holding {len(self._silence_active)} episode(s), "
+                            f"judging nothing")
+                    await asyncio.sleep(300)
+                    continue
+                if self._silence_deaf_at:
+                    self._log_both(
+                        f"[silence] feed back after "
+                        f"{int(time.time() - self._silence_deaf_at)}s — resuming")
+                    self._silence_deaf_at = 0.0
 
-            # Digest mode: flush the queued alerts as one combined message
-            if (digest_mins > 0 and self._silence_pending
-                    and time.time() - self._silence_last_flush
-                    >= digest_mins * 60):
-                msg = self._format_silence_digest(
-                    self._silence_pending, digest_mins)
-                self._silence_pending = []
-                self._silence_last_flush = time.time()
+                alerts = {c["cell"]: c for c in cells if c["alert"]}
+
+                for cell, c in alerts.items():
+                    if cell in self._silence_active:
+                        continue                     # already alerted this episode
+                    self._silence_active[cell] = time.time()
+                    for _call in c.get("silent_calls", []):
+                        self._missing.setdefault(
+                            _call, {"cell": cell, "flagged": time.time()})
+                    note = ""
+                    now_ts = time.time()
+                    cached = self._silence_note_cache.get(cell)
+                    if cached and now_ts - cached[1] < _AI_NOTE_COOLDOWN_S:
+                        # Same cell recently assessed and recovered since — the
+                        # verdict (power outage / igate failure) is unlikely to
+                        # have changed in the meantime, so reuse it instead of
+                        # spending another AI call on a cell that's just flapping.
+                        note = cached[0]
+                        self._log_both(f"[silence] {cell}: reusing cached AI "
+                                       f"note (cooldown, "
+                                       f"{int((_AI_NOTE_COOLDOWN_S - (now_ts - cached[1])) / 60)}m left)")
+                    elif ai_ok:
+                        try:
+                            note = await self._assess_silence(c, ai_cfg)
+                        except Exception as e:
+                            self._log_both(f"[silence] AI assessment failed: {e}")
+                    if note:
+                        self._silence_ai_notes[cell] = note
+                        self._silence_note_cache[cell] = (note, now_ts)
+                    self._log_both(
+                        f"[silence] ALERT {cell}: {c['silent']}/{c['baseline']}"
+                        f" silent ({c['cause']})")
+                    if channel:
+                        if digest_mins > 0:
+                            self._silence_pending.append((time.time(), c, note))
+                        else:
+                            try:
+                                await self._send_notification(
+                                    self._format_silence_msg(c, note),
+                                    channel, config)
+                            except Exception as e:
+                                self._log_both(f"[silence] notification error: {e}")
+
+                # Episode over: cell recovered — allow future re-alerts
+                for cell in list(self._silence_active):
+                    if cell not in alerts:
+                        del self._silence_active[cell]
+                        self._silence_ai_notes.pop(cell, None)
+                        self._log_both(f"[silence] cleared: {cell}")
+
+                # A station leaves the missing list only by being heard again —
+                # independent of whether its cell is still alerting.
+                if self._missing:
+                    try:
+                        state = self._station_db.silence_state(list(self._missing))
+                    except Exception:
+                        state = {}
+                    for call in list(self._missing):
+                        st = state.get(call)
+                        if st is None or not st["silent"]:
+                            del self._missing[call]
+                            self._log_both(f"[silence] back on the air: {call}")
+
+                # Prune cooled-down cache entries regardless of alert state, so
+                # the dict doesn't grow forever with cells that never re-alert.
+                now_ts = time.time()
+                for cell in list(self._silence_note_cache):
+                    if now_ts - self._silence_note_cache[cell][1] >= _AI_NOTE_COOLDOWN_S:
+                        del self._silence_note_cache[cell]
+
+                # Digest mode: flush the queued alerts as one combined message
+                if (digest_mins > 0 and self._silence_pending
+                        and time.time() - self._silence_last_flush
+                        >= digest_mins * 60):
+                    msg = self._format_silence_digest(
+                        self._silence_pending, digest_mins)
+                    self._silence_pending = []
+                    self._silence_last_flush = time.time()
+                    try:
+                        await self._send_notification(msg, channel, config)
+                    except Exception as e:
+                        self._log_both(f"[silence] digest notification error: {e}")
+
+                # ── Propagation openings (same 5-min cadence) ──
                 try:
-                    await self._send_notification(msg, channel, config)
+                    await self._prop_watch(channel, ai_ok, ai_cfg, config)
                 except Exception as e:
-                    self._log_both(f"[silence] digest notification error: {e}")
-
-            # ── Propagation openings (same 5-min cadence) ──
-            try:
-                await self._prop_watch(channel, ai_ok, ai_cfg, config)
+                    self._log_both(f"[prop] watch error: {e}")
             except Exception as e:
-                self._log_both(f"[prop] watch error: {e}")
+                # Loud, with the traceback, because the whole point is that
+                # this was invisible. The watch survives and tries again in
+                # five minutes.
+                self._log_both(f"[silence] scan failed, watch continues: "
+                               f"{type(e).__name__}: {e}")
+                self._log_both(traceback.format_exc())
+
 
             await asyncio.sleep(300)
 
