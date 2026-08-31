@@ -4673,6 +4673,69 @@ and the restore reduced to `update(notes)`, it reports 3 failures and exits 1.
 
 ---
 
+## F-2026-08-31-03 — the published archive was not the tag it was published under
+
+**Source:** the mandatory archive comparison for v3.2.100, doing its job for
+the second release running.
+
+The file listings of `aprs-agent-v3.2.97.zip` and `aprs-agent-v3.2.100.zip`
+matched exactly: 240 files each, nothing added, nothing removed, and only the
+two executables differing in size. That is the expected shape. Comparing
+**CRCs** rather than sizes then showed four files differing — the two `.exe`
+and the two `_internal/base_library.zip` — and, more usefully, that
+`README.md` was **identical** between the two archives.
+
+It should not have been. `git diff v3.2.97..HEAD -- README.md` reports 14
+insertions and 2 deletions.
+
+### Which tree the artefact actually came from
+
+| | bytes | matches the published v3.2.97 archive? |
+|---|---|---|
+| `git show v3.2.97:README.md` | 45,854 | **no** |
+| `git show HEAD:README.md` (v3.2.100) | 46,600 | **yes**, after CRLF normalisation |
+
+So the archive published as v3.2.97 was packed from a working tree that already
+carried a README commit made *after* the `v3.2.97` tag. The artefact and the
+tag describe different trees.
+
+### Why this matters even though nothing in it was wrong
+
+The README in that archive is not incorrect — it is the *better* one, the
+corrected release note. Nobody was misled by its contents. What was lost is
+reproducibility: `git checkout v3.2.97 && build` does not produce the file that
+was published under that name, and there is no record saying so. A tag whose
+artefact cannot be rebuilt from it is a tag doing half its job, and the gap is
+invisible unless someone compares the artefact to the tag rather than to the
+previous artefact.
+
+This is the same shape as F-2026-08-27-01 — an archive that looked complete and
+was not — caught by the same step, one layer deeper. The comparison found the
+missing licence by listing; it found this only by CRC.
+
+### What was done
+
+- `docs/RELEASE-HOWTO.md` now says to compare **CRCs, not sizes**, and adds a
+  step: check every shipped file against `git show <tag>:<path>`. Build from a
+  clean checkout of the tag, or state in the release notes that you did not.
+- The same file's build step said "three target folders" and named the Desktop
+  GUI, a month after v3.2.97 dropped it. Corrected against the published
+  archive, which is the authority.
+- **v3.2.100's archive was verified against its own tag before publishing**:
+  all four shipped root files match `git show v3.2.100:`, the working tree
+  carried nothing but an untracked release-notes draft, and the built
+  executable reports `3.2.100` from its own `/api/info`.
+
+### Not claimed
+
+No attempt was made to reconstruct exactly which commit the v3.2.97 archive was
+built from beyond the README, and the published artefact is **not** being
+replaced. It works, it is signed for by its checksum in
+`docs/RELEASE-v3.2.97-draft.md`, and rewriting release history to fix a
+provenance note would cost more than it buys.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

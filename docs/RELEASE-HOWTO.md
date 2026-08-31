@@ -38,13 +38,19 @@ breaks every 32-bit user silently:
 C:\Python313-32\python.exe -c "import platform; print(platform.architecture()[0])"
 ```
 
-Then zip **the three target folders and four files from the repository root**
-as `aprs-agent-vX.Y.Z.zip`:
+Then zip **two of the three target folders and four files from the repository
+root** as `aprs-agent-vX.Y.Z.zip`, with the folders at the archive root rather
+than under `dist/`:
 
 ```
-dist/aprs-agent  dist/aprs-agent-gui  dist/aprs-agent-web
+dist/aprs-agent  dist/aprs-agent-web
 README.md  LICENSE  HELP.html  aprsconfig.toml.template
 ```
+
+**The Desktop GUI is not in this archive.** It was dropped at v3.2.97 — its own
+release line is `v2.8.3-desktop-final` — and this file said "three folders"
+until 2026-08-31, a month after the thing it described had stopped being true.
+The published v3.2.97 archive is the authority: two folders, 240 files.
 
 The four root files are easy to miss — zipping `dist/` alone produces an
 archive that looks complete and ships **without the licence text**, which is
@@ -58,10 +64,21 @@ eye:
 gh release download <previous-tag> --pattern "*.zip" --dir old
 ```
 
-then compare the two file listings. It takes a minute and it is the only step
-that catches a missing file, an unexpected inclusion, or a size change that
-needs explaining. On v3.2.97 it caught the missing licence and explained a
-61.8 → 94.3 MB jump as a CPython 3.8 → 3.13 move, itemised.
+then compare the two file listings — **and their CRCs, not just their sizes**.
+It takes a minute and it is the only step that catches a missing file, an
+unexpected inclusion, or a size change that needs explaining. On v3.2.97 it
+caught the missing licence and explained a 61.8 → 94.3 MB jump as a
+CPython 3.8 → 3.13 move, itemised. On v3.2.100 the CRC half caught something a
+size comparison could not: see below.
+
+**Check the archive against the tag it is published under.** Compare every
+shipped file with `git show <tag>:<path>`, normalising line endings. The
+v3.2.100 comparison found that the *published v3.2.97 archive* carries a
+`README.md` that is not the one in the `v3.2.97` tag — it was packed from a
+working tree ahead of its own tag, so the artefact and the tag describe
+different trees (F-2026-08-31-03). Nothing in it was wrong; it simply could not
+be reproduced from the tag, which is what a tag is for. Build from a clean
+checkout of the tag, or say in the release notes that you did not.
 
 Check the new archive contains no `aprsconfig.toml` (it would carry API keys),
 no `*.db`, no loose `.py`.

@@ -30,10 +30,12 @@ then re-tag. Doc-only commits do not need a tag.
 `/api/status` for up to 90 s and reports `Deploy OK: <tag> calisiyor` or fails
 loudly.
 
-**The working copy holds no build output.** `build/`, `build313/`, `dist/` and
-`dist313/` were 461 MB of stale artefacts — the newest thirty versions old —
-and were deleted 2026-08-26. `pyinstaller aprs_agent.spec --noconfirm`
-regenerates them. Release zips are gitignored.
+**Build output is present again and is current.** `build/` and `dist/` hold the
+v3.2.100 artefacts, rebuilt 2026-08-31. They were deleted on 2026-08-26 when
+they were 461 MB of stale output thirty versions old, and that is the state to
+return them to once a release is out — *stale* build output is the hazard, not
+build output. `pyinstaller aprs_agent.spec --noconfirm` regenerates them; both
+`build/` and `dist/` are gitignored, as are the release zips.
 
 **The repo on the VPS belongs to `aprs`, not root.** Run git there as
 `sudo -u aprs git -C /opt/aprs-agent …` rather than adding a `safe.directory`
@@ -57,15 +59,32 @@ predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
 
 ## Releasing to Windows
 
-**v3.2.98, v3.2.99 and v3.2.100 are on the VPS but NOT released to Windows.** Their tags
-are on GitHub and `aprs-update.sh` took them, which is all the server needs;
-the latest GitHub *Release* is still v3.2.97. All four changes across those
-three tags touch files that ship in the zip (`web_gui.py`,
-`extensions/ai_gateway_ext.py`), so downloaders are behind on them — including
-the fix for a watch loop that can die in silence, which affects anyone running
-this at home as much as it affected the VPS. Deferred deliberately on
-2026-08-28 — "acelesi yok" — and recorded here so the next release does not
-start from the wrong baseline.
+**Published 2026-08-31: [v3.2.100](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.100)**
+— `aprs-agent-v3.2.100.zip`, 58.1 MiB, 240 files, sha256
+`C604CC8C7FC1E2AF60C2BE427F060ECB52E17526327BF1FED563D3D6FAB988A8`. Notes in
+`docs/RELEASE-v3.2.100-draft.md`; only the `## Body` section was published, so
+the draft's scaffolding stays out of the public page — v3.2.97's release
+carries the whole file including "Suggested release name", which is what not to
+repeat.
+
+v3.2.98 and v3.2.99 have no archives of their own and need none: their code is
+in this one. **The download is level with the VPS again**, for the first time
+in this cycle.
+
+Verified before publishing, and all of it belongs in the routine:
+
+- every shipped root file compared against `git show v3.2.100:` — all four match
+- the built executable's own `/api/info` reports `3.2.100`
+- both `.exe` confirmed **32-bit** from the PE header, not from the interpreter
+  that was invoked
+- the archive diffed against v3.2.97 by **CRC**, not size: 240 files each,
+  nothing added or removed, four files differing — the two executables and the
+  two `base_library.zip` they carry
+- no `aprsconfig.toml`, no `*.db`, no loose `.py`
+
+**Watch the build output's dates.** `dist/` held complete, plausible v3.2.97
+executables dated 26 August; a zip made before the rebuild finished would have
+shipped them under the new tag and looked entirely normal.
 
 **Published 2026-08-27: [v3.2.97](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.97)**
 — the first Windows release since v3.2.67, thirty versions earlier, because
