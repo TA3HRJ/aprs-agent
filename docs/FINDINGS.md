@@ -4441,6 +4441,42 @@ The same window shows the softer version twice more, unfixed and now recorded:
 
 Neither is fixed here. They are named so they are not re-discovered.
 
+### Correction, 2026-08-31 — the second row is not a finding
+
+The operator read the TG5ALY line as a form of address rather than a claim of
+identity, and he is right. Three things say so, none of which was checked when
+the row was written:
+
+**The inbound message was the bare string `TG5ALY`** — the sender's own
+callsign and nothing else, sent by a station that had been probing what the
+gateway knew about callsigns for the previous hour. The natural reply to that
+is an acknowledgement naming them back. What is missing from
+`This is APRS agent TG5ALY.` is a comma, not a licence.
+
+**Every other self-identification in the same fourteen days is clean**, and
+there are five of them: *"Hello! This is an APRS gateway."*, *"I'm an APRS
+assistant for ham radio operators"*, *"This is an APRS info service."* The
+disputed line is the only one containing a callsign at all, and that callsign
+arrived in the packet a second earlier.
+
+**The model gets this construction right elsewhere.** On 2026-08-27:
+*"Test from VK2AHB-7 received. This is an APRS info service."* — names the
+sender, then identifies itself correctly. That is the same sentence shape,
+punctuated.
+
+**And the fix proposed for it would have done harm.** A strip keyed on a
+first-person copula plus a foreign callsign would cut
+`"TG5ALY, this is the APRS agent"` — ordinary operating practice, and the
+correct form of the very thing being flagged. A filter whose false positive is
+the right answer is worse than no filter.
+
+So there is no identity fault to fix, and none is planned. The first row —
+*"All systems normal here"* — stands as recorded, but its trigger is closed:
+test messages have not reached the model since v3.2.98, and no safe pattern
+exists for a health claim, which needs a second independent signal the way the
+signal report had one. It stays a note, not a work item.
+
+
 ### The fix has two halves
 
 **`_strip_signal_report()`** drops any sentence that both claims to have
