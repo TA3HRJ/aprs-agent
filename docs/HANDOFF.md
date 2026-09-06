@@ -1,5 +1,26 @@
 # Handoff — state at v3.2.103
 
+**Published 2026-09-06: [v3.2.103](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.103)**
+— `aprs-agent-v3.2.103.zip`, 58.2 MiB, 240 files, sha256
+`8B8ABA7E38D9FAA3B472FD225A75343D6BB4F07746754F5CE714FA2CB7E888DC`. Notes in
+`docs/RELEASE-v3.2.103-draft.md`, `## Body` section only. **The download is
+level with the VPS.**
+
+`build/` and `dist/` were **deleted before building**, which is the fix for the
+trap named below rather than a precaution against it.
+
+Verified before publishing, all of it from the artefact rather than from the
+build log:
+
+- both `.exe` 32-bit by PE header; the built binary's `/api/info` says `3.2.103`
+- diffed against v3.2.100 **by CRC**: 240 files each, nothing added or removed,
+  five differing — the two executables, the two `_internal/base_library.zip`
+  (identical size, changed internal timestamps; this happens on every rebuild
+  and is not a change), and `static/index.html` at +2552 bytes, which is the
+  frontend work of v3.2.101–103 and is what proves it reached the archive
+- all four shipped root files match `git show v3.2.103:`
+- no `aprsconfig.toml`, no `*.db`, no loose `.py`
+
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
 first. If it disagrees with either of those, they win.
