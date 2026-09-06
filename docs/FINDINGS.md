@@ -4942,6 +4942,87 @@ an idle manager still starts.
 
 ---
 
+## F-2026-09-06-02 — "TA*" means Turkish stations, and it also means TACTICAL
+
+**Source:** reading the first three minutes of message history that v3.2.101
+ever wrote, rather than trusting the check that had just passed.
+
+```
+14:45  YM2KY-1    -> BLN2LOCAL   Save lives, stay at home! ...
+14:48  YM2KY-1    -> BLN1LOCAL   Keep your distance ...
+14:48  KA7EZO-7   -> TACTICAL    KA7EZO-7=MPSar
+```
+
+The third row is American traffic. It was stored because the operator's
+station filter is `TA*` and **TACTICAL starts with TA**. It is a group
+addressee, not a Turkish station.
+
+### The verification shared the code's blind spot
+
+The leak test written for that deploy asked `startswith(("TA","TB","TC","YM"))`
+— the same assumption the code makes — and reported *"kapsam disi sizan satir:
+0"*. It was reading the rows by eye that found it. A check written from the
+implementation cannot catch an error in the implementation's premise, and this
+one is a small monument to that.
+
+### The same prefix is applied in four places
+
+A wildcard is a prefix, and a prefix cannot tell a callsign from a group name.
+The digit can: every amateur callsign carries one in a fixed position, and
+TACTICAL, ANSRVR, BLN2LOCAL, TABOR, KTB7, 3X7, TAT and TX7 do not.
+`looks_like_callsign()` now lives in `packet_parser` beside the rest of the
+identifier knowledge, and three of the four sites use it:
+
+| site | what the prefix decided | fixed |
+|---|---|---|
+| `_msg_kept` | what is archived for fourteen days | yes |
+| AI gateway whitelist | **who gets answered** — a provider call and a transmission each time | yes |
+| `_matches_feed` | what may count as a station that fell silent | yes |
+| `aprs_connection` `p/` filter | what APRS-IS sends us | **no, deliberately** |
+
+The fourth is the network's own filter syntax and cannot express "must contain
+a digit". Narrowing it locally would mean asking the server for less than we
+want and then discarding the difference twice.
+
+The whitelist case is the one with a price attached: before this, a station
+calling itself `TACTICAL` passed a `TA*` whitelist and would have been
+answered.
+
+The sensor case is **F-2026-08-26-07 arriving through a different door**. That
+finding removed weather broadcasts because a warning has no beacon cadence to
+fall silent against; a group addressee has none either, and the filter was
+letting it in.
+
+**An exact filter entry is honoured as written in all three.** Naming an
+identifier is meaning it — an operator who writes `TACTICAL` gets TACTICAL.
+
+**The gateway is matched by name, not by the filter**, which matters here:
+`DMWGPT` is not callsign-shaped either, and must never need to be.
+
+### Not repaired
+
+The one stored TACTICAL row was left in place. It ages out with the fourteen-day
+window and rewriting live history to remove a single row nobody will read costs
+more than it buys.
+
+### `check_callsign_shape.py`
+
+Eleven assertions: nine real callsigns pass, including two-character prefixes
+and SSIDs; eleven group and object identifiers are rejected; the live TACTICAL
+case is no longer archived; a genuine TA station still is; the gateway is still
+kept despite its name; exact entries are honoured in both the history and the
+sensor filter; the whitelist's wildcard branch consults the shape while its
+exact branch does not; and `aprs_connection` is asserted **not** to have been
+changed.
+
+**Seen failing before it was trusted:** with all three sites reverted to
+prefix-only matching it reports one failure per site — 3 failures, exit 1 —
+and passes again when they are restored.
+
+**Shipped in v3.2.103.**
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

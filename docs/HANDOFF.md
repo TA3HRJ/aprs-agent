@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.102
+# Handoff — state at v3.2.103
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.102** |
-| repo HEAD | tag `v3.2.102` — stop reports what happened, not what was scheduled (F-2026-09-06-01) |
+| running | **v3.2.103** |
+| repo HEAD | tag `v3.2.103` — a wildcard filter no longer admits group names (F-2026-09-06-02) |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -133,7 +133,7 @@ cost is below anything this application can notice. Named rather than hidden.
 
 ## The guard rail
 
-Twenty-two checks in `tools/`, each one born from a live failure. Run them all
+Twenty-three checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -141,7 +141,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Twenty-one run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Twenty-two run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -197,6 +197,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_notes_survive` | an episode restored across a restart keeps the note that belongs to it |
 | `check_message_history` | the gateway's own conversation is kept; the world feed is not archived |
 | `check_stop` | a stop cannot report success without happening; no second agent over a live one |
+| `check_callsign_shape` | "TA*" admits Turkish stations, not TACTICAL — in three places, not the fourth |
 | `check_feedlog` | packets never reach journald, errors always do |
 | `check_coords` | no position off the Earth enters, by either door |
 | `check_prop_ts` | the evidence bundle answers with the link that was asked for, at both doors |

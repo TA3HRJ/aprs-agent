@@ -38,7 +38,7 @@ import aprs_connection
 import extension_server as ext_server_module
 from extensions import ExtensionRegistry
 import station_db as station_db_module
-from packet_parser import parse_message
+from packet_parser import parse_message, looks_like_callsign
 from station_db import StationDB
 
 
@@ -1898,8 +1898,17 @@ class AgentManager:
                 return True
         frm = (msg.get("from") or "").upper()
         to = (msg.get("to") or "").upper()
-        for stem in stems:
-            if frm.startswith(stem) or to.startswith(stem):
+        for stem, wild in stems:
+            for call in (frm, to):
+                if not call.startswith(stem):
+                    continue
+                # A wildcard is a prefix, and a prefix catches things that are
+                # not stations. "TA*" means Turkish stations and also matched
+                # TACTICAL, an American group addressee — one row of it was
+                # archived on the day this shipped (F-2026-09-06-02). An exact
+                # entry is left alone: naming an identifier is meaning it.
+                if wild and not looks_like_callsign(call):
+                    continue
                 return True
         return False
 
@@ -1928,9 +1937,10 @@ class AgentManager:
             # station_db bounds that anyway, but not wanting it is the point.
             if not p or p == "*":
                 continue
-            stem = p[:-1] if p.endswith("*") else p
+            wild = p.endswith("*")
+            stem = p[:-1] if wild else p
             if stem:
-                stems.append(stem)
+                stems.append((stem, wild))
         self._msg_scope_cache = (now, names, stems)
         return names, stems
 

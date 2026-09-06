@@ -30,6 +30,7 @@ import aprslib
 
 from . import Extension
 from config import strip_ssid, resolve_ai_api_key
+from packet_parser import looks_like_callsign
 
 _TR_MAP = str.maketrans(
     "çÇğĞıİöÖşŞüÜâÂîÎûÛ",
@@ -880,8 +881,17 @@ class AIGateway(Extension):
             if not whitelist:
                 self.warn(f"blocked {sender_full} — whitelist enabled but empty")
                 return None
+            # A wildcard entry is a prefix, and a prefix admits identifiers
+            # that are not stations: "TA*" is meant as "Turkish operators" and
+            # also matches TACTICAL, ANSRVR-style group addressees and object
+            # names. Here that is not merely untidy — it decides who this
+            # gateway answers, and every answer is a provider call and a
+            # transmission. An exact entry still matches exactly, because
+            # naming an identifier is meaning it (F-2026-09-06-02).
             if not any(
-                sender_base.startswith(w[:-1]) if w.endswith("*") else sender_base == w
+                (sender_base.startswith(w[:-1])
+                 and looks_like_callsign(sender_base)) if w.endswith("*")
+                else sender_base == w
                 for w in whitelist
             ):
                 self.warn(f"blocked {sender_full} — not in whitelist")

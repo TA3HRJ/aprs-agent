@@ -391,6 +391,30 @@ _RE_WX_B = re.compile(r'b(\d{5})')     # barometric pressure (bXXXXX in tenths o
 _RE_WX_W = re.compile(r'g(\d{3})')     # wind gust (gXXX in mph)
 
 
+# An amateur callsign: one or two prefix characters, a digit, one to four
+# letters, and an optional SSID. APRS carries plenty of identifiers that are
+# not callsigns at all — group addressees like TACTICAL and ANSRVR, object
+# names like TABOR and KTB7, and the alias beacons some igates emit (3X7, TAT,
+# TX7 were all live in one square). They matter because the operator's station
+# filter is a PREFIX: "TA*" is meant as "Turkish stations" and also matches
+# TACTICAL, which is a group of American ones.
+#
+# Deliberately not used to narrow the APRS-IS server-side filter, which speaks
+# its own p/ syntax and cannot express this; see aprs_connection.
+_CALLSIGN_SHAPE = re.compile(r"^[A-Z0-9]{1,2}[0-9][A-Z]{1,4}$")
+
+
+def looks_like_callsign(ident: str) -> bool:
+    """Is this identifier callsign-shaped, rather than a group or object name?
+
+    The SSID is stripped first, so TA3HRJ-7 and TA3HRJ both pass. Everything
+    hangs on the digit: TACTICAL, ANSRVR, BLN2LOCAL and TABOR have none in the
+    right place, and no amateur callsign lacks one.
+    """
+    base = (ident or "").upper().split("-", 1)[0]
+    return bool(_CALLSIGN_SHAPE.match(base))
+
+
 def _latlon_to_locator(lat: float, lon: float) -> str:
     """Return 6-character Maidenhead grid locator for given decimal degrees."""
     lon += 180.0

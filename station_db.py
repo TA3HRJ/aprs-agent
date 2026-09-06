@@ -24,6 +24,7 @@ from packet_parser import (
     _latlon_to_locator,
     _on_earth,
     classify_symbol,
+    looks_like_callsign,
     parse_packet,
 )
 
@@ -1287,7 +1288,15 @@ class StationDB:
             if pat == "*":
                 return True
             if pat.endswith("*"):
-                if callsign.startswith(pat[:-1]):
+                # The wildcard is a prefix and catches identifiers that are
+                # not stations — TACTICAL under "TA*", and the alias beacons
+                # some igates emit. A silence sensor has to be a station with
+                # a beacon cadence to fall silent against; this is the same
+                # error F-2026-08-26-07 found in weather broadcasts, arriving
+                # through the filter instead of through the feed
+                # (F-2026-09-06-02). An exact entry is honoured as written.
+                if (callsign.startswith(pat[:-1])
+                        and looks_like_callsign(callsign)):
                     return True
             elif callsign == pat or base == pat:
                 return True
