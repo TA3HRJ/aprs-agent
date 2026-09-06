@@ -4772,6 +4772,86 @@ provenance note would cost more than it buys.
 
 ---
 
+## F-2026-09-01-01 — the Messages panel is twelve minutes long, and the gateway is never in it
+
+**Source:** the operator — the panel is "oldukça işlevsiz" with the world feed
+on, and DMWGPT's own traffic is not kept.
+
+Measured on the live app rather than estimated:
+
+| | |
+|---|---|
+| ring size | 400 (`_MSG_BUFFER`, in memory) |
+| what 400 covers on the world feed | **12.0 minutes**, at 33.3 messages/minute |
+| of those 400, involving the gateway | **0** |
+| of those 400, involving the operator's own prefixes | 7 (1.75 %) |
+| busiest addressees in the sample | OTA 47, BLN0 19, RGSTRY 15 |
+
+So 98 % of the panel is other people's traffic and the one conversation the
+service actually owns is the one it never holds. A restart empties it as well
+— three restarts on 2026-08-31 demonstrated that at some length.
+
+### Raising the buffer is not the fix, with numbers
+
+400 → 4000 buys 120 minutes instead of 12. It is still evicted, still lost on
+restart, and `/api/messages` then ships **2 MB** of JSON per poll instead of
+200 KB. Ten times the cost for the wrong axis: the problem is composition, not
+size. Turning the world feed off is not the fix either — the silence map and
+the propagation detector are built on it.
+
+### What is stored, and why not everything
+
+| scope | rows/day | 14 days |
+|---|---|---|
+| everything | ~48,000 | **~336 MB** |
+| station filter (`allowed_callsigns`) | ~840 | ~6 MB |
+| the gateway's own conversation | ~20 | **~140 KB** |
+
+The gateway's traffic is kept unconditionally — it is the service's own record
+and it costs nothing. Anything touching the station filter is kept too. The
+rest is not, and disk is the smaller of the two reasons: **a searchable
+fourteen-day archive of third parties' messages is a different object from a
+map of their positions.** That is a decision, not an oversight, and it is
+recorded here as one.
+
+A filter of `*` is ignored for this purpose, and `message_history` carries a
+hard cap of 20,000 rows on top of the fourteen-day window, so no filter
+however broad can grow it without limit.
+
+### Shipped in v3.2.101
+
+`station_db.record_messages()` / `read_messages()`, written from the
+`_persist_loop` tick that already carries the other histories, taken by swap so
+the ingest path never waits on SQLite and put back on failure rather than
+dropped. `/api/messages?kept=1` serves the table, merged with anything still
+waiting for the next tick — a view whose promise is that nothing is lost cannot
+have a one-minute hole in it. The panel gains a source selector: *Live feed*
+(the ring, unchanged) or *Kept (14 days)*.
+
+Two things were caught while building it and are worth keeping:
+
+- **The kept view must not refetch on every live push.** It would query the
+  table 33 times a minute for a view that changes a few times a day. Coalesced
+  to 15 s.
+- **The scope test must not read the config per message.** `get_config()`
+  re-reads and re-parses the 18 KB TOML from disk on every call, and this runs
+  once per message on the ingest path — the path F-35 is about. Cached for five
+  seconds, the same interval and the same reason as the AI gateway's
+  `_live_config()`. Measured: 500 messages now cost **one** config read.
+
+### `check_message_history.py`
+
+Twelve assertions: the gateway, its aliases and both ends of the station filter
+are kept; unrelated world traffic is not; a filter of `*` does not invert that;
+the round trip through SQLite returns the rows intact and oldest-first; the same
+message gated twice is stored once; and the row cap holds.
+
+**Seen failing before it was trusted:** with the scope reduced to `return True`
+and the row cap removed — the naive "just store the messages" version — it
+reports 4 failures and exits 1.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

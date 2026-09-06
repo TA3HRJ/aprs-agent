@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.100
+# Handoff — state at v3.2.101
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.100** |
-| repo HEAD | tag `v3.2.100` — a restored episode keeps its note (F-2026-08-31-02) |
+| running | **v3.2.101** |
+| repo HEAD | tag `v3.2.101` — the gateway's own messages are kept for fourteen days (F-2026-09-01-01) |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -133,7 +133,7 @@ cost is below anything this application can notice. Named rather than hidden.
 
 ## The guard rail
 
-Twenty checks in `tools/`, each one born from a live failure. Run them all
+Twenty-one checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -141,7 +141,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Nineteen run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Twenty run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -195,6 +195,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_signal_report` | a service with no receiver never reports 5x9; a test is answered from the packet |
 | `check_watch_survives` | a background loop cannot die in silence, and one bad scan does not end the watch |
 | `check_notes_survive` | an episode restored across a restart keeps the note that belongs to it |
+| `check_message_history` | the gateway's own conversation is kept; the world feed is not archived |
 | `check_feedlog` | packets never reach journald, errors always do |
 | `check_coords` | no position off the Earth enters, by either door |
 | `check_prop_ts` | the evidence bundle answers with the link that was asked for, at both doors |

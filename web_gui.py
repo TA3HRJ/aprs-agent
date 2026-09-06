@@ -610,6 +610,10 @@ class AgentManager:
         self._prop_note_cache: dict[str, tuple[str, float]] = {}
         # Messages panel: rolling buffer of APRS messages (in + out)
         self._messages: deque = deque(maxlen=_MSG_BUFFER)
+        # Messages worth keeping, waiting for the next persistence tick. The
+        # ring above is twelve minutes of world feed and holds none of the
+        # gateway's own traffic; see station_db.record_messages.
+        self._msg_pending: list = []
         self._msg_seen: dict[tuple, int] = {}   # dedup key → last seen ts
         self._channel_map: dict[str, str] = {}  # callsign → AI/Telegram/…
 
@@ -1807,6 +1811,66 @@ class AgentManager:
         add(list(ext.get("bluesky", {}).get("allowed_recepients", [])), "Bluesky")
         return m
 
+    def _msg_kept(self, msg: dict) -> bool:
+        """Is this message worth storing past the ring's twelve minutes?
+
+        Two scopes, and both were measured on the live feed before being
+        chosen (2026-09-01, 400 messages spanning 12.0 minutes):
+
+        - **the gateway's own conversation** — 0 of those 400, about 20 a day,
+          140 KB over the retention window. It is the service's own record and
+          is kept unconditionally.
+        - **anything touching the operator's station filter** — 7 of those 400
+          (1.75%), about 840 a day, 6 MB over the window.
+
+        Everything else is other people's traffic: 48,000 messages a day, 336
+        MB over the window, and a searchable archive of third parties'
+        messages is a different object from a map of their positions. It is
+        not stored, and that is a decision about more than disk.
+        """
+        names, stems = self._msg_scope()
+        who = ((msg.get("from") or "") + " " + (msg.get("to") or "")).upper()
+        for n in names:
+            if n in who:
+                return True
+        frm = (msg.get("from") or "").upper()
+        to = (msg.get("to") or "").upper()
+        for stem in stems:
+            if frm.startswith(stem) or to.startswith(stem):
+                return True
+        return False
+
+    # The scope is derived from the config, and this runs once per message on
+    # a feed that carries 33 messages a minute. get_config() re-reads and
+    # re-parses the 18 KB TOML from disk every call, so asking it per message
+    # would put a file read on the ingest path — the one path F-35 is about.
+    # Cached for five seconds, the same interval and the same reason as the
+    # AI gateway's _live_config().
+    _MSG_SCOPE_TTL_S = 5.0
+
+    def _msg_scope(self) -> "tuple[set, list]":
+        now = time.time()
+        cached = getattr(self, "_msg_scope_cache", None)
+        if cached is not None and now - cached[0] < self._MSG_SCOPE_TTL_S:
+            return cached[1], cached[2]
+        cfg = self.get_config()
+        gw = cfg.get("extensions", {}).get("ai_gateway", {})
+        names = {str(gw.get("callsign", "")).upper()}
+        names.update(str(a).upper() for a in gw.get("trigger_aliases", []) or [])
+        names.discard("")
+        stems = []
+        for pat in cfg.get("allowed_callsigns", []) or []:
+            p = str(pat).upper().strip()
+            # A bare "*" would keep the whole world feed. The row cap in
+            # station_db bounds that anyway, but not wanting it is the point.
+            if not p or p == "*":
+                continue
+            stem = p[:-1] if p.endswith("*") else p
+            if stem:
+                stems.append(stem)
+        self._msg_scope_cache = (now, names, stems)
+        return names, stems
+
     def _track_messages(self, text: str) -> list:
         """Pull APRS messages out of the log stream and store them.
 
@@ -1835,6 +1899,8 @@ class AgentManager:
                 who = msg["to"] if direction == "rx" else msg["from"]
                 msg["channel"] = self._channel_map.get(who.upper(), "APRS")
                 self._messages.append(msg)
+                if self._msg_kept(msg):
+                    self._msg_pending.append(msg)
                 new.append(msg)
         return new
 
@@ -3149,8 +3215,30 @@ async def get_prop_history(request: web.Request) -> web.Response:
 
 @routes.get("/api/messages")
 async def get_messages(request: web.Request) -> web.Response:
-    """Recent APRS messages (newest last). Admin only — not on the public app."""
+    """Recent APRS messages (newest last). Admin only — not on the public app.
+
+    `?kept=1` serves the stored history instead of the live ring: the
+    gateway's own conversation and anything touching the station filter, up to
+    fourteen days. The ring is twelve minutes of world feed and survives no
+    restart, which is the whole reason the table exists.
+    """
     mgr: AgentManager = request.app["manager"]
+    if request.query.get("kept") in ("1", "true", "yes"):
+        try:
+            limit = max(1, min(5000, int(request.query.get("limit", 1000))))
+        except (TypeError, ValueError):
+            limit = 1000
+        msgs = await asyncio.get_event_loop().run_in_executor(
+            None, station_db_module.read_messages, mgr._sta_db_path, limit)
+        # Anything still waiting for the next persistence tick would otherwise
+        # be missing from a view whose whole promise is that nothing is lost.
+        seen = {(m["ts"], m["from"], m["to"], m["text"]) for m in msgs}
+        for m in mgr._msg_pending:
+            if (m.get("ts"), (m.get("from") or "").upper(),
+                    (m.get("to") or "").upper(), m.get("text")) not in seen:
+                msgs.append(m)
+        msgs.sort(key=lambda m: m.get("ts") or 0)
+        return web.json_response({"msgs": msgs, "kept": True})
     return web.json_response({"msgs": list(mgr._messages)})
 
 
@@ -3308,6 +3396,20 @@ async def _persist_loop(mgr: "AgentManager") -> None:
         if mgr.running:
             # Checkpoint the lifelong counter so a crash costs at most a minute
             await asyncio.get_event_loop().run_in_executor(None, mgr._save_uptime)
+            # Messages worth keeping ride the same minute. Taken by swap so
+            # the ingest path never waits on SQLite, and put back on failure
+            # rather than dropped — a minute of the gateway's own conversation
+            # is not something to lose quietly.
+            if mgr._msg_pending:
+                batch, mgr._msg_pending = mgr._msg_pending, []
+                try:
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, station_db_module.record_messages,
+                        mgr._sta_db_path, batch)
+                except Exception as e:
+                    mgr._msg_pending[0:0] = batch
+                    print(f"[station-db] message history failed: {e}",
+                          file=sys.__stderr__)
         if tick % 10 == 0 and mgr.running:
             try:
                 await asyncio.get_event_loop().run_in_executor(

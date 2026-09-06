@@ -728,6 +728,10 @@ body.public .sb-toggle{display:none!important}
         <option value="rx" data-i="msg_rx">Received</option>
         <option value="tx" data-i="msg_tx">Sent</option>
       </select>
+      <select class="sta-select" id="msg-fsrc" onchange="fetchMsgs()">
+        <option value="live" data-i="msg_live">Live feed</option>
+        <option value="kept" data-i="msg_kept">Kept (14 days)</option>
+      </select>
       <input class="sta-search" id="msg-fsearch" placeholder="Search…" data-i="msg_search" oninput="renderMsgs()">
       <span class="sta-count" id="msg-cnt">0</span>
     </div>
@@ -986,7 +990,7 @@ const S={en:{
   tab_msg:"Messages",
   msg_h_time:"Time",msg_h_from:"From",msg_h_to:"To",msg_h_chan:"Channel",msg_h_text:"Message",
   msg_empty:"No APRS messages yet — they appear here as they are heard or sent.",
-  msg_all:"All",msg_rx:"Received",msg_tx:"Sent",msg_search:"Search…",
+  msg_all:"All",msg_rx:"Received",msg_tx:"Sent",msg_search:"Search…",msg_live:"Live feed",msg_kept:"Kept (14 days)",
   pub_home:"Home",pub_default_title:"APRS-Agent",pub_default_sub:"Live worldwide APRS-IS monitoring — station map, regional silence detection, RF propagation",pub_live:"live",
   cap_log:"Raw APRS packets exactly as they arrive from the APRS-IS network, in real time.",
   cap_sta:"Every station heard by this receiver — type, location, frequency and whether it is currently active.",
@@ -1133,7 +1137,7 @@ const S={en:{
   tab_msg:"Mesajlar",
   msg_h_time:"Saat",msg_h_from:"Gönderen",msg_h_to:"Alıcı",msg_h_chan:"Kanal",msg_h_text:"Mesaj",
   msg_empty:"Henüz APRS mesajı yok — duyulan ve gönderilen mesajlar burada görünür.",
-  msg_all:"Tümü",msg_rx:"Alınan",msg_tx:"Gönderilen",msg_search:"Ara…",
+  msg_all:"Tümü",msg_rx:"Alınan",msg_tx:"Gönderilen",msg_search:"Ara…",msg_live:"Canlı akış",msg_kept:"Saklanan (14 gün)",
   pub_home:"Ana sayfa",pub_default_title:"APRS-Agent",pub_default_sub:"Dünya çapında canlı APRS-IS izleme — istasyon haritası, bölgesel sessizlik tespiti, RF yayılımı",pub_live:"canlı",
   cap_log:"APRS-IS ağından geldiği anda, ham APRS paketleri.",
   cap_sta:"Bu alıcının duyduğu tüm istasyonlar — tür, konum, frekans ve şu an aktif olup olmadıkları.",
@@ -1671,10 +1675,16 @@ function drawViewport(){
   }
 }
 // ── Messages ──
-let msgData=[],msgLoaded=false;
+let msgData=[],msgLoaded=false,keptTimer=0;
 const MSG_MAX=400;
+function msgSrc(){const e=$('msg-fsrc');return e?e.value:'live'}
 async function fetchMsgs(){
-  try{const r=await api('GET','/api/messages');msgData=r.msgs||[];msgLoaded=true;renderMsgs()}catch(e){}
+  // "Live feed" is the 400-entry ring: twelve minutes of world traffic, gone
+  // on restart. "Kept" is the stored history - the gateway's own conversation
+  // and anything matching the station filter, up to fourteen days.
+  const kept=msgSrc()==='kept';
+  try{const r=await api('GET','/api/messages'+(kept?'?kept=1&limit=2000':''));
+      msgData=r.msgs||[];msgLoaded=true;renderMsgs()}catch(e){}
 }
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML}
 // esc() serialises a TEXT NODE, so it escapes & < > and deliberately leaves
@@ -1716,7 +1726,22 @@ function renderMsgs(){
   }
 }
 function onMsgs(list){
-  for(const m of list){msgData.push(m);if(msgData.length>MSG_MAX)msgData.shift()}
+  // While the kept view is open the world feed must not scroll it away - that
+  // eviction is the fault this view exists to fix. Live pushes still land in
+  // the kept view when they belong to it; the server decides what belongs by
+  // the same rule it stores by, so anything not stored is simply not shown.
+  const kept=msgSrc()==='kept';
+  for(const m of list){
+    if(kept)continue;
+    msgData.push(m);if(msgData.length>MSG_MAX)msgData.shift();
+  }
+  // Refetching on every push would query the table ~33 times a minute at the
+  // measured world-feed message rate, for a view that changes a few times a
+  // day. Coalesce instead; the kept view is a record, not a ticker.
+  if(kept){
+    if(!keptTimer)keptTimer=setTimeout(()=>{keptTimer=0;if(msgSrc()==='kept')fetchMsgs()},15000);
+    return;
+  }
   if(activeTab==='msg')renderMsgs();
 }
 

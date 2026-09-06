@@ -465,6 +465,93 @@ def record_hazards(path: str, rows: list[dict[str, Any]]) -> int:
         con.close()
 
 
+# A hard ceiling on stored messages, independent of the time window. The
+# scope filter below is driven by the operator's own station filter, and a
+# filter of "*" with the world feed on would otherwise store 48,000 rows a
+# day — measured on the live feed, 2026-09-01. Fourteen days bounds the age;
+# this bounds the size whatever the filter says.
+_MSG_HISTORY_MAX_ROWS = 20000
+
+
+def record_messages(path: str, rows: "list[dict[str, Any]]") -> int:
+    """Append APRS messages worth keeping, and prune on age and on count.
+
+    The Messages panel is a 400-entry in-memory ring. Measured on the live
+    world feed on 2026-09-01 that is **twelve minutes**, of which 0 rows
+    involved the gateway and 7 of 400 involved the operator's own prefixes:
+    98% of what it holds is other people's traffic, and the one conversation
+    the operator wants is the one it never has. A restart empties it as well.
+
+    So the ring stays as it is — it is the live view of a firehose and it is
+    good at that — and the small fraction worth keeping is written here
+    instead. What counts as worth keeping is decided by the caller.
+
+    Deduplicated on the message itself rather than on arrival: the same
+    message reaches us once per igate that gated it, and the in-memory
+    de-duplication window does not survive a restart.
+    """
+    if not rows:
+        return 0
+    con = sqlite3.connect(path, timeout=120)
+    try:
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS message_history ("
+            "ts INTEGER, dir TEXT, from_call TEXT, to_call TEXT, "
+            "text TEXT, msg_id TEXT, channel TEXT, kind TEXT, "
+            "PRIMARY KEY (ts, from_call, to_call, msg_id, text))")
+        # The primary key leads with ts, so a lookup by correspondent cannot
+        # use it — the same trap silence_history hit and had to be indexed out
+        # of. Both directions get an index because the gateway appears as
+        # to_call on the question and from_call on the answer.
+        con.execute("CREATE INDEX IF NOT EXISTS idx_msg_to_ts "
+                    "ON message_history (to_call, ts)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_msg_from_ts "
+                    "ON message_history (from_call, ts)")
+        n = 0
+        for r in rows:
+            cur = con.execute(
+                "INSERT OR IGNORE INTO message_history VALUES (?,?,?,?,?,?,?,?)",
+                (int(r.get("ts") or time.time()), r.get("dir", ""),
+                 (r.get("from") or "").upper(), (r.get("to") or "").upper(),
+                 r.get("text", ""), str(r.get("msg_id") or ""),
+                 r.get("channel", ""), r.get("kind", "")))
+            n += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        con.execute("DELETE FROM message_history WHERE ts < ?",
+                    (int(time.time()) - StationDB._HISTORY_RETENTION_S,))
+        # Age is not enough on its own; see _MSG_HISTORY_MAX_ROWS.
+        con.execute(
+            "DELETE FROM message_history WHERE rowid NOT IN "
+            "(SELECT rowid FROM message_history ORDER BY ts DESC LIMIT ?)",
+            (_MSG_HISTORY_MAX_ROWS,))
+        con.commit()
+        return n
+    except sqlite3.Error:
+        return 0
+    finally:
+        con.close()
+
+
+def read_messages(path: str, limit: int = 1000) -> "list[dict[str, Any]]":
+    """The kept messages, oldest first so the panel can append as it does live."""
+    try:
+        con = sqlite3.connect("file:%s?mode=ro" % path, uri=True, timeout=120)
+    except sqlite3.Error:
+        return []
+    try:
+        rows = con.execute(
+            "SELECT ts, dir, from_call, to_call, text, msg_id, channel, kind "
+            "FROM message_history ORDER BY ts DESC LIMIT ?", (int(limit),)
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        con.close()
+    out = [{"ts": r[0], "dir": r[1], "from": r[2], "to": r[3], "text": r[4],
+            "msg_id": r[5], "channel": r[6], "kind": r[7]} for r in rows]
+    out.reverse()
+    return out
+
+
 def save_meta(path: str, key: str, value: str) -> None:
     """Store a small persistent counter/setting (e.g. lifelong uptime)."""
     con = sqlite3.connect(path)
