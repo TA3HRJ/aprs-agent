@@ -624,18 +624,81 @@ class AgentManager:
         cfg_module.sync_config_to_file(data, self.config_path)
 
     def start(self) -> bool:
-        if self.running:
+        # `running` alone is not enough to tell whether an agent already
+        # exists: _run_agent sets it True only after it has built its loop,
+        # its stop event and loaded the config, so between thread.start() and
+        # that line a second start is admitted. The second _run_agent then
+        # replaces self._agent_loop and self._stop_event, and from that moment
+        # stop() sets an Event nothing is waiting on — the first _agent_main
+        # is parked on the previous object forever, the receive loop is never
+        # cancelled, and `running` never returns to False. Seen live on
+        # 2026-09-06: four stop requests answered 200, the packet counter
+        # climbing throughout (F-2026-09-06-01). The thread is the honest
+        # test, because it exists for the whole of the agent's life.
+        if self.running or (self._thread is not None and self._thread.is_alive()):
             return False
         self._thread = threading.Thread(target=self._run_agent, daemon=True)
         self._thread.start()
         return True
 
     def stop(self) -> bool:
+        """Ask the agent to stop. Returns whether the request could be made.
+
+        Whether it was *obeyed* is a separate question, and the caller has to
+        ask it — see the /api/stop handler. This used to return True on the
+        strength of having scheduled a callback, which is how a dead stop
+        button reported success four times in a row.
+        """
         if not self.running:
             return False
-        if self._agent_loop and self._stop_event:
-            self._agent_loop.call_soon_threadsafe(self._stop_event.set)
+        loop, ev = self._agent_loop, self._stop_event
+        if loop is None or ev is None:
+            self._log_both("[agent] stop: no agent loop or stop event — "
+                           "nothing to signal")
+            return False
+        try:
+            loop.call_soon_threadsafe(ev.set)
+        except RuntimeError as e:
+            # A closed or never-started loop. Silent before; the operator saw
+            # a button that did nothing and no reason anywhere.
+            self._log_both(f"[agent] stop: agent loop will not accept the "
+                           f"stop signal: {type(e).__name__}: {e}")
+            return False
         return True
+
+    def _log_stop_diagnosis(self) -> None:
+        """Say, from inside the agent loop, why a stop did not take.
+
+        Runs only when a stop has already failed, so it costs nothing in the
+        normal case. It answers the two questions that took a live process
+        dump and a chain of deduction to answer on 2026-09-06: is the stop
+        event actually set, and what is still alive.
+        """
+        loop, ev = self._agent_loop, self._stop_event
+
+        def _inside() -> None:
+            try:
+                names = []
+                for t in asyncio.all_tasks(loop):
+                    coro = t.get_coro()
+                    names.append(getattr(coro, "__qualname__", repr(coro)))
+                self._log_both(
+                    "[agent] stop diagnosis: stop_event.is_set=%s, "
+                    "%d task(s) still alive: %s"
+                    % (ev.is_set() if ev is not None else "?", len(names),
+                       ", ".join(sorted(names)[:12])))
+            except Exception as e:
+                self._log_both(f"[agent] stop diagnosis failed: "
+                               f"{type(e).__name__}: {e}")
+
+        if loop is None:
+            self._log_both("[agent] stop diagnosis: no agent loop at all")
+            return
+        try:
+            loop.call_soon_threadsafe(_inside)
+        except RuntimeError as e:
+            self._log_both(f"[agent] stop diagnosis: the agent loop is not "
+                           f"accepting work at all: {type(e).__name__}: {e}")
 
     def _run_agent(self) -> None:
         self._agent_loop = asyncio.new_event_loop()
@@ -2308,11 +2371,36 @@ async def start_agent(request: web.Request) -> web.Response:
     return web.json_response({"ok": ok, "running": mgr.running})
 
 
+# How long /api/stop waits to see the agent actually stop before calling it a
+# failure. A healthy stop takes well under a second; the margin is for a task
+# parked in an executor call that cannot be cancelled until it returns.
+_STOP_CONFIRM_S = 8.0
+
+
 @routes.post("/api/stop")
 async def stop_agent(request: web.Request) -> web.Response:
+    """Stop the agent, and answer with what actually happened.
+
+    This used to answer `{"ok": true}` as soon as the stop event had been
+    *scheduled*, which is not the same as the agent stopping. On 2026-09-06
+    four stop requests were answered 200 while the agent ran on and the packet
+    counter climbed: the button was working, the request arrived, and the
+    reply was wrong (F-2026-09-06-01). So the reply is now a claim about the
+    agent rather than about the callback.
+    """
     mgr: AgentManager = request.app["manager"]
     ok = mgr.stop()
-    return web.json_response({"ok": ok})
+    if ok:
+        deadline = time.time() + _STOP_CONFIRM_S
+        while mgr.running and time.time() < deadline:
+            await asyncio.sleep(0.2)     # the web loop stays responsive
+        ok = not mgr.running
+        if not ok:
+            mgr._log_both(
+                "[agent] STOP DID NOT TAKE — the stop event was set and the "
+                f"agent was still running {_STOP_CONFIRM_S:.0f}s later")
+            mgr._log_stop_diagnosis()
+    return web.json_response({"ok": ok, "running": mgr.running})
 
 
 @routes.get("/api/status")

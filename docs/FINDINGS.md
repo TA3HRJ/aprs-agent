@@ -4852,6 +4852,96 @@ reports 4 failures and exits 1.
 
 ---
 
+## F-2026-09-06-01 — the Stop button worked, the request arrived, and the answer was a lie
+
+**Source:** the operator — "stop butonu çalışmıyor", on the VPS admin panel.
+
+Four `POST /api/stop` requests, all answered **200**. Three minutes after the
+last one `/api/status` still said `running: true` and the packet counter was
+still climbing.
+
+### Three explanations eliminated, each with evidence
+
+**Not the frontend.** `git diff v3.2.100..v3.2.101 -- static/index.html` is
+confined to the Messages panel: the source selector, two i18n entries,
+`msgSrc()`, `fetchMsgs()`, `onMsgs()`. It touches no start/stop handler, no
+status label, no WebSocket code.
+
+**Not the same-origin middleware,** though it can produce exactly this
+symptom and was worth testing. Probed on the VPS with proxy-shaped headers:
+`Origin: https://aprsagent.com` with `Host: 127.0.0.1:8080` is refused **403**,
+while the same Origin with the Host preserved is **200**. The admin vhost sets
+`ProxyPreserveHost On`, so it takes the second path — and the Apache log
+confirms it: every stop request logged 200, none 403.
+
+**Not the UI failing to update.** The counter climbing is a claim about the
+agent, not about the label.
+
+### What the facts then forced
+
+- `_agent_main` has no `await` before `await self._stop_event.wait()` — only
+  `create_task` calls. So it was parked there.
+- The agent loop was **alive and working**: packets were being ingested
+  throughout.
+- A callback scheduled with `call_soon_threadsafe` on a live loop runs.
+
+Therefore `Event.set()` executed and `_agent_main` was still waiting — so **the
+Event that was set is not the Event that was awaited**.
+
+### How the two can differ
+
+`_run_agent` builds a new `_agent_loop` and a new `_stop_event` on every call,
+and sets `running = True` only *after* it has loaded the config. `start()`
+guarded on `running` alone, so a second start was admitted in that window. The
+second `_run_agent` replaces both attributes; the first `_agent_main` has
+already evaluated `self._stop_event` and is parked on the previous object,
+which nothing will ever set again. The receive loop is never cancelled,
+`running` never returns to False, and the interface is told `ok`.
+
+**The exact sequence that opened the window on the day was not captured**, and
+is not claimed here. The window itself is in the code and is enough.
+
+### The fix, in v3.2.102
+
+- `start()` refuses while `self._thread` is alive, not merely while `running`
+  is True. The thread exists for the whole of the agent's life; `running` does
+  not.
+- `stop()` reports whether it could *signal*, and says out loud when it cannot
+  — a missing loop or event, or a loop that refuses work, were all silent
+  before.
+- `/api/stop` then **verifies**: it waits up to 8 s for `running` to fall and
+  answers `{"ok": …, "running": …}` about the agent rather than about a
+  scheduled callback. On failure it logs `STOP DID NOT TAKE` and calls
+  `_log_stop_diagnosis()`, which reports from inside the agent loop whether
+  the stop event is set and what tasks are still alive — the two facts that
+  cost a live process dump and a chain of deduction to establish this time.
+- The buttons act on the answer: a refused start or a failed stop re-enables
+  its button and writes a line to the log instead of leaving a dead control.
+
+### A process note worth keeping
+
+The frontend edit for this fix **shipped a syntax error into the local build**:
+a `
+` inside a JS string became a real newline, and the whole script failed
+to parse. Reading the diff would not have caught it and did not; loading the
+page in a browser did, in one look. Frontend changes get opened, not just
+diffed — and `typeof someFunction` in the console is what distinguishes a live
+parse error from stale console history.
+
+### `check_stop.py`
+
+Seven assertions across the two halves: stop on a stopped agent is False; stop
+with nothing to signal is False *and says so*; stop against a closed loop is
+False and names it; a working stop still signals the event and reports True;
+start is refused while running; **start is refused while a previous thread is
+alive but `running` is not yet True** — the window this finding is about; and
+an idle manager still starts.
+
+**Seen failing before it was trusted:** against the pre-fix `start()` and
+`stop()` it reports 3 failures and exits 1, including the startup-window case.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
