@@ -1,5 +1,31 @@
 # Handoff — state at v3.2.107
 
+**Published 2026-09-07: [v3.2.107](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.107)**
+— `aprs-agent-v3.2.107.zip`, 58.2 MiB, 240 files, sha256
+`6A1B02E5A2AF6CE90686A6885165693FF4B426E2E2113C93CE11484997D91832`. Notes in
+`docs/RELEASE-v3.2.107-draft.md`, `## Body` section only. **The download is
+level with the VPS.** v3.2.104-106 have no archives of their own; their code
+is in this one.
+
+`build/` and `dist/` were deleted before building, which is the routine now
+rather than a precaution.
+
+**This release is why the diff step says CRC and not size.** Against v3.2.103,
+`aprs-agent/aprs-agent.exe` came back **byte-for-byte the same length with a
+different CRC** — the only change reaching the CLI is the version string, and
+`3.2.103` and `3.2.107` are the same number of characters. A size comparison
+would have reported that executable as unchanged and been wrong about the one
+file whose version number is the point.
+
+The rest of the routine, all verified from the artefact:
+
+- both `.exe` 32-bit by PE header; the built binary's `/api/info` says `3.2.107`
+- 240 files each way, nothing added or removed; five differing by CRC —
+  `static/index.html` (+2530, the phone work), `aprs-agent-web.exe` (+351),
+  both `base_library.zip` (same size, internal timestamps), and the CLI above
+- all four shipped root files match `git show v3.2.107:`
+- no `aprsconfig.toml`, no `*.db`, no loose `.py`
+
 **Published 2026-09-06: [v3.2.103](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.103)**
 — `aprs-agent-v3.2.103.zip`, 58.2 MiB, 240 files, sha256
 `8B8ABA7E38D9FAA3B472FD225A75343D6BB4F07746754F5CE714FA2CB7E888DC`. Notes in
