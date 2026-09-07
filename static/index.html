@@ -417,12 +417,13 @@ body.public .sb-toggle{display:none!important}
   .sb-close{display:inline-block;margin-left:auto}
   .stat-bar{flex-wrap:wrap}
   .stat-bar .cell{flex:1 1 22%!important;min-width:0}
-  /* The desktop rules already give Packets more room and the diagnostics
-     less; the mobile override above erased both, so the widest value in
-     the bar got the same column as "Sent". Restored within the wrap
-     pattern: 19+19+19+25 = 82% still puts four on the first row. */
-  .stat-bar .cell.diag{flex:1 1 19%!important}
-  .stat-bar .cell.pk{flex:1 1 25%!important}
+  /* Every cell stays the same width on purpose. Giving Packets a wider
+     column (19/19/19/25 against the second row's 22/22/22/22) did fit the
+     number better and broke something worth more: the vertical rules no
+     longer lined up between the two rows, and the bar stopped reading as a
+     grid. Tried in v3.2.104, reverted in v3.2.105 on sight of it
+     (F-2026-09-07-01). Alignment beats a column that was not overflowing
+     here anyway. */
   .stat-bar .cell .v{font-size:14px}
   .stat-bar .cell .l{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .map-timeline{gap:6px;padding:4px 8px}

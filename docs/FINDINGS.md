@@ -5089,6 +5089,29 @@ Measured after: at 430 px the Packets cell went 108 → 127 px, at 375 px
 **Shipped in v3.2.104.** Confirmation is the operator's phone, and nothing
 else can supply it.
 
+### Correction, 2026-09-07 — change 3 made it worse and is reverted
+
+The operator's next screenshot: *"daha da bozuldu sanki"*, and he was right.
+
+Widening the Packets column gave the first row 19/19/19/25 while the second
+row kept 22/22/22/22, so **the vertical rules between the two rows no longer
+lined up** and the bar stopped reading as a grid. The number fitted better and
+the thing it sat in looked broken — a straight loss, because nothing was
+measured to be overflowing at that width in the first place.
+
+Reverted in **v3.2.105**; all cells are the same width again, verified by
+measuring the cell edges of both rows: `108, 215, 323, 430` in each, identical.
+
+**Changes 1 and 2 stay.** `text-size-adjust` and `white-space:nowrap` cost
+nothing, cannot misalign anything, and are the two that address the reported
+symptom if the hypothesis is right.
+
+**What this cost me to learn:** I shipped a layout change on the strength of a
+measurement that said the *number* fitted better, without measuring the thing
+a reader actually looks at — whether the columns still line up. A stat bar is
+read as a table, and alignment is most of what makes it one. The operator saw
+it in one glance from a photograph.
+
 ---
 
 ## Not findings
