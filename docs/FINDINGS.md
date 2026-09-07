@@ -5163,6 +5163,93 @@ comments on their own lines above the code, never after it.
 
 ---
 
+## F-2026-09-07-02 — the exception that killed the watch, found by asking about a number
+
+**Source:** the operator — *"Neden bu kadar yüksek sayıda error var?"* The stat
+bar read **337 errors** over one nine-hour uptime.
+
+Two separate faults, one of which had been open since 2026-08-31.
+
+### Most of the 337 were not this process's errors
+
+`_count_log_lines()` matched `error|fail|fatal` against **every line of the
+Live Log**, and the Live Log carries the packet feed as well as this process's
+own output. A station whose comment says *"Failsafe test beacon"* raised the
+operator's error counter.
+
+Measured on the live agent: **65** error-shaped lines in journald over the
+process's lifetime against **337** on the badge. The ~272 difference is other
+people's text. Packets are now skipped by their `[logger] ` marker; untagged
+real errors like `Read error from APRS-IS` are still counted, which a tag test
+would have lost.
+
+### The 65 that were real named the thing we could not name
+
+```
+28  [telegram] poll error          network timeouts, benign
+12  [silence] scan failed          v3.2.99's guard, doing its job
+ 1  [prop] history write failed
+```
+
+The twelve carry this:
+
+```
+RuntimeError: <asyncio.locks.Lock object at 0x7fefd48d1f60 [locked, waiters:1]>
+is bound to a different event loop
+  File "web_gui.py", line 1030, in _silence_watch_loop
+    cells = await silence_cells_cached(...)
+  File "web_gui.py", line 239, in silence_cells_cached
+    async with _cells_lock:
+```
+
+**`_cells_lock` was a single module-level `asyncio.Lock` used from two event
+loops** — the aiohttp app's and the agent thread's. In CPython 3.10 a Lock
+binds to the first loop that uses it and raises for every caller on any other.
+`cells_warm_task` runs at app startup on the web loop, so it always bound
+there first and the agent's silence watch always lost.
+
+It fired only twelve times in nine hours rather than on every scan because
+most scans return from the cache before reaching the lock; only a stale cache
+gets that far.
+
+**This is almost certainly what killed the watch outright on 2026-08-29.**
+F-2026-08-31-01 recorded that the exception could not be named because the
+task was gone before anyone looked, and said "the next one will be named".
+The guard shipped in v3.2.99 is what turned a silent death into a logged line,
+and the logged line is this. That open question is now closed.
+
+### Fixed in v3.2.107
+
+One lock per running loop, in a dict keyed by the loop, pruning entries whose
+loop has closed so a restarted agent does not accumulate them. Two loops can
+now rebuild the cache concurrently, costing one extra 0.3–0.9 s scan in a
+thread with the cache correct either way — against a scan that does not happen
+at all, not a close call.
+
+`_slim_lock` was checked and left alone: line 2520 is its only caller and it is
+on the web loop, which its own docstring already says.
+
+### `check_cells_lock.py`
+
+Six assertions: the first loop acquires it, a second loop in another thread
+acquires it too, three callers on one loop still serialise, the loop table
+stays small, a packet saying "failed" is not counted, and four real log lines
+are — including an untagged one.
+
+**Seen failing:** with the packet skip removed it reports both counter
+assertions failing (3 of 3 packets counted, 7 of 4 errors); with the lock
+shared it exits 1.
+
+**And a limit worth recording:** the *behavioural* half of the lock test
+**cannot fail on this machine**. CPython 3.13 no longer raises on a cross-loop
+Lock; the VPS runs 3.10, which does. So the lock is also asserted
+structurally — `_get_cells_lock` must fetch `get_running_loop()` and key by
+it — and that assertion does fail against the shared version on any
+interpreter. A check that can only pass on the machine it is run on is not a
+check, and this one says so out loud.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

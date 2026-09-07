@@ -134,6 +134,8 @@ class _QueueWriter:
 _SRC_CALL_RE = re.compile(r"^\[logger\] ([A-Z0-9]{3,9}(?:-[A-Z0-9]{1,2})?)>", re.M)
 # Full raw APRS line extracted from logger output
 _SRC_LINE_RE = re.compile(r"^\[logger\] (.+)$", re.M)
+# The same marker, for tests that ask "is this line a packet" one line at a time.
+_PKT_MARK = "[logger] "
 # The agent's own Fixed Beacon (outbound — never echoed back by APRS-IS).
 # Ingested locally so the station shows on the map; flagged so it is excluded
 # from silence detection.
@@ -184,7 +186,35 @@ def _get_slim_lock() -> "asyncio.Lock":
     return _slim_lock
 
 
-_cells_lock: "asyncio.Lock | None" = None
+# One lock per event loop, because this module runs two: the aiohttp app's and
+# the agent thread's. An asyncio.Lock binds to the first loop that uses it and
+# raises RuntimeError for a caller on any other. Measured live 2026-09-07:
+# twelve `[silence] scan failed ... is bound to a different event loop` in nine
+# hours, each one a silence scan that did not happen. `cells_warm_task` runs at
+# app startup and bound it to the web loop, so it was always the agent's watch
+# that lost.
+#
+# This is also, almost certainly, what killed the watch outright on 2026-08-29
+# — F-2026-08-31-01 could not name the exception because the task was gone by
+# the time anyone looked. The guard added in v3.2.99 is what turned it into a
+# logged line instead of a silent death, and that line is what named it.
+#
+# Two loops can now rebuild concurrently, costing one extra 0.3-0.9 s scan in a
+# thread, with the cache correct either way. Against a scan that does not
+# happen at all, that is not a close call.
+_cells_locks: "dict[object, asyncio.Lock]" = {}
+
+
+def _get_cells_lock() -> "asyncio.Lock":
+    loop = asyncio.get_running_loop()
+    lk = _cells_locks.get(loop)
+    if lk is None:
+        # A stopped agent leaves its loop behind; drop those rather than hold
+        # a reference to every loop the process ever ran.
+        for dead in [l for l in _cells_locks if l.is_closed()]:
+            del _cells_locks[dead]
+        lk = _cells_locks[loop] = asyncio.Lock()
+    return lk
 # (built_at, build_seconds, cells) — built_at 0.0 means "never built", which is
 # the only thing that makes a caller wait. An empty result is a result.
 _cells_cache: "tuple[float, float, list]" = (0.0, 0.0, [])
@@ -219,9 +249,6 @@ async def silence_cells_cached(db, history_path: str = "") -> list:
     before the next caller starts another one.
     """
     global _cells_cache
-    global _cells_lock
-    if _cells_lock is None:
-        _cells_lock = asyncio.Lock()
 
     # F-35: while the feed is deaf, silence_cells() returns [] as a refusal to
     # judge, not as a finding. Rebuilding here would overwrite the last true
@@ -236,7 +263,7 @@ async def silence_cells_cached(db, history_path: str = "") -> list:
     if built_at and now - built_at < max(_CELLS_MIN_TTL_S, build_s * 4):
         return cells
 
-    async with _cells_lock:
+    async with _get_cells_lock():
         # Another caller may have rebuilt it while this one waited.
         built_at, build_s, cells = _cells_cache
         now = time.time()
@@ -2014,6 +2041,13 @@ class AgentManager:
             elif "[ai-gateway] TX" in line:
                 self._ai_tx += 1
             elif _AIRESP_MARK in line:
+                continue
+            elif line.startswith(_PKT_MARK):
+                # A packet is somebody else's text, not a log line about this
+                # process. "error", "fail" and "fatal" appear in station
+                # comments and messages, and every one of them was raising the
+                # operator's error counter: 337 shown against 65 real log
+                # lines over one uptime, measured 2026-09-07.
                 continue
             elif _AIERR_RE.search(line) or _ERR_RE.search(line):
                 self._err_count += 1

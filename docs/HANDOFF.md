@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.106
+# Handoff — state at v3.2.107
 
 **Published 2026-09-06: [v3.2.103](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.103)**
 — `aprs-agent-v3.2.103.zip`, 58.2 MiB, 240 files, sha256
@@ -32,8 +32,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.106** |
-| repo HEAD | tag `v3.2.106` — the phone stat bar is two rows again; the badge row is back for the operator (F-2026-09-07-01) |
+| running | **v3.2.107** |
+| repo HEAD | tag `v3.2.107` — the cell cache's lock is per-loop; packets are not errors (F-2026-09-07-02) |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -154,7 +154,7 @@ cost is below anything this application can notice. Named rather than hidden.
 
 ## The guard rail
 
-Twenty-three checks in `tools/`, each one born from a live failure. Run them all
+Twenty-four checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -162,7 +162,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Twenty-two run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Twenty-three run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -218,6 +218,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_notes_survive` | an episode restored across a restart keeps the note that belongs to it |
 | `check_message_history` | the gateway's own conversation is kept; the world feed is not archived |
 | `check_stop` | a stop cannot report success without happening; no second agent over a live one |
+| `check_cells_lock` | the cell cache's lock is per event loop; a packet is not one of our errors |
 | `check_callsign_shape` | "TA*" admits Turkish stations, not TACTICAL — in three places, not the fourth |
 | `check_feedlog` | packets never reach journald, errors always do |
 | `check_coords` | no position off the Earth enters, by either door |
