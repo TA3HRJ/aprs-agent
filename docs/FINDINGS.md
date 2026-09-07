@@ -5112,6 +5112,55 @@ a reader actually looks at — whether the columns still line up. A stat bar is
 read as a table, and alignment is most of what makes it one. The operator saw
 it in one glance from a photograph.
 
+### Second correction, 2026-09-07 — it was never about the digits
+
+The operator: *"Tablo 3 değil 2 satırdı eskiden"* — it used to be two rows,
+not three — and sent a screenshot from ~2026-08-14 to prove it. He was right,
+and the whole investigation above was aimed at the wrong quantity.
+
+Diffed against `7ed9ec5` (2026-08-14), the file differs in exactly two ways:
+
+```
+then : rx tx err pk stations       calls uptime lifetime   8 cells = 4+4   = 2 rows
+now  : rx tx err pk heard registry calls uptime lifetime   9 cells = 4+4+1 = 3 rows
+```
+
+**`5717bcf` (2026-08-17) split `Stations` into `Heard` and `Registry`** — for
+a good reason, recorded in its own message: the old counter reset on every
+restart and read 1,641 twenty seconds after a deploy while the registry held
+175,000. But the ninth cell pushed `Lifetime` onto a row of its own.
+`flex: 1 1 22%` has been unchanged since 2026-07-19 and wraps on the
+percentage, not on content — **digit count cannot move it, and never could.**
+The association with a million packets was a coincidence of when it was
+noticed.
+
+The second difference, which I missed on the first pass and the operator had
+to ask for: **`28a7c1c` (2026-08-16) hid the module badge row below 700 px**,
+reasoning that "which extensions are running is operator detail, and the map
+is why a visitor is there". True of a visitor; the admin panel is exactly
+where that question is asked, and the media query could not tell the two
+apart.
+
+### Fixed in v3.2.106
+
+Nine cells cannot make two rows of four, so on a phone **Registry gives up its
+column and rides in the Heard cell** as `14842/233750`, labelled
+"Heard / Registry" — both numbers kept, which is what the split was for.
+12 px type and no spaces around the slash: measured at 375 px, the worst case
+tried was a seven-digit registry, `14842/1233750`, at 83 px in a 94 px cell.
+Eight cells, two rows, and the rows' cell edges identical at
+`94, 188, 281, 375`.
+
+The badge row is restored for the operator and stays hidden for visitors:
+`body.public .mod-status{display:none}`. Verified both ways in one page —
+`flex` on the admin body, `none` with `body.public`.
+
+**And the JavaScript was broken a second time by the same kind of edit**: a
+`//` comment appended after a statement swallowed the rest of the line, which
+held four more statements. Caught by `typeof onStats === 'function'` in the
+console, not by reading. Single-line JS in this file is edited by putting
+comments on their own lines above the code, never after it.
+
 ---
 
 ## Not findings

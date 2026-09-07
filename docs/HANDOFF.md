@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.105
+# Handoff — state at v3.2.106
 
 **Published 2026-09-06: [v3.2.103](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.103)**
 — `aprs-agent-v3.2.103.zip`, 58.2 MiB, 240 files, sha256
@@ -32,8 +32,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.105** |
-| repo HEAD | tag `v3.2.105` — v3.2.104's column widening reverted; the stat bar lines up again (F-2026-09-07-01) |
+| running | **v3.2.106** |
+| repo HEAD | tag `v3.2.106` — the phone stat bar is two rows again; the badge row is back for the operator (F-2026-09-07-01) |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
