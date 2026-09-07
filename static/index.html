@@ -21,6 +21,13 @@
   --accent:#3584e4;--accent-fg:#fff;--accent2:#78aeed;
   --success:#57e389;--warn:#f5c211;--error:#f66151;--r:10px;
 }
+/* iOS Safari inflates text it judges too small for its container, and the
+   stat bar's 14px monospace numbers in a wrapping flex row are exactly the
+   shape it targets. Chromium does not do this, so it cannot be reproduced
+   in an emulator — the packet counter overflowed its column on an iPhone
+   while measuring 54px in a 108px cell at the same width in Chromium.
+   Text sizes here are chosen; the browser may not second-guess them. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{font-family:Cantarell,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--fg);height:100vh;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;font-size:15px;line-height:1.4;
   /* iOS standalone (Home Screen) mode draws under the notch/Dynamic Island
      and home indicator per viewport-fit=cover — these are 0 in a normal
@@ -347,7 +354,7 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
 .stat-bar .cell.diag{flex:.6 1 0}
 .stat-bar .cell.pk{flex:1.4 1 0}
 .stat-bar .cell:last-child{border-right:none}
-.stat-bar .v{font-size:16px;font-weight:bold;font-family:'Consolas',monospace}
+.stat-bar .v{font-size:16px;font-weight:bold;font-family:'Consolas',monospace;white-space:nowrap}
 .stat-bar .l{font-size:10px;color:var(--dim);margin-top:1px}
 
 /* FOOTER */
@@ -410,6 +417,12 @@ body.public .sb-toggle{display:none!important}
   .sb-close{display:inline-block;margin-left:auto}
   .stat-bar{flex-wrap:wrap}
   .stat-bar .cell{flex:1 1 22%!important;min-width:0}
+  /* The desktop rules already give Packets more room and the diagnostics
+     less; the mobile override above erased both, so the widest value in
+     the bar got the same column as "Sent". Restored within the wrap
+     pattern: 19+19+19+25 = 82% still puts four on the first row. */
+  .stat-bar .cell.diag{flex:1 1 19%!important}
+  .stat-bar .cell.pk{flex:1 1 25%!important}
   .stat-bar .cell .v{font-size:14px}
   .stat-bar .cell .l{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .map-timeline{gap:6px;padding:4px 8px}

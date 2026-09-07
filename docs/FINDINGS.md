@@ -5023,6 +5023,74 @@ and passes again when they are restored.
 
 ---
 
+## F-2026-09-07-01 — the packet counter overflowed on a phone, and the emulator says it should not
+
+**Source:** the operator, from an iPhone: the bottom band overflows once the
+packet count passes a million.
+
+### What was ruled out, with numbers
+
+The value and the layout were reproduced exactly — `3706804` in the Packets
+cell, the same nine cells, the Last Heard strip populated — at three
+viewports in Chromium:
+
+| viewport | text width | cell width |
+|---|---|---|
+| 375 × 812 | 54 px | 94 px |
+| 430 × 900 | 54 px | 108 px |
+| 430 × 700 | 54 px | 108 px |
+
+- **Digit count does not change the layout.** Six to ten digits measured 46 →
+  77 px against a fixed 94 px cell; the bar stayed three rows and 136 px tall
+  throughout. `flex: 1 1 22%` wraps on the percentage basis, not on content,
+  so four cells per row regardless.
+- **No overlap.** The message list ends exactly where the bar begins, with and
+  without the Last Heard strip.
+- **No horizontal overflow.** `scrollWidth == innerWidth`.
+- **The Last Heard strip's clipped right edge is deliberate** —
+  `.heard-bar{overflow-x:auto}`, a scrollable strip, not a fault.
+
+So the layout is not geometrically over-committed. Something on the device is
+drawing the text larger than the CSS asks.
+
+### The hypothesis, stated as one
+
+**iOS Safari text autosizing.** Safari inflates text it judges too small for
+its container; 14 px monospace numerals in a wrapping flex row are the shape
+it targets. Chromium does not implement it, which is why an emulator cannot
+show this. The property that disables it, `-webkit-text-size-adjust`, was
+**absent from the stylesheet entirely**.
+
+Supporting but not conclusive: in the operator's screenshot the digits are
+visibly larger relative to their labels than the same values render here.
+
+**This is not confirmed.** It cannot be, with the tools on this machine. The
+fix was shipped on the operator's instruction with that stated.
+
+### Three changes, none of which can cost anything
+
+1. `html{-webkit-text-size-adjust:100%;text-size-adjust:100%}` — the sizes here
+   are chosen; the browser may not second-guess them.
+2. `.stat-bar .v{white-space:nowrap}` — the labels already had it, the values
+   did not. A wrapped number doubles its cell's height and pushes the whole
+   band into the list, which is the worst available failure and was one
+   unlucky font metric away.
+3. Mobile gets the desktop's own proportions back: `.cell.diag` 19 %,
+   `.cell.pk` 25 %. The desktop rules already give Packets more room
+   (`flex:1.4`) and diagnostics less (`flex:.6`), and the mobile override
+   erased both with `!important` — **the widest number in the bar was given
+   the same column as "Sent"**. 19+19+19+25 = 82 % keeps four on the first row,
+   so the 4+4+1 pattern is unchanged.
+
+Measured after: at 430 px the Packets cell went 108 → 127 px, at 375 px
+88 → 111 px, the bar height did not move, and an eight-digit value fits with
+49 px to spare.
+
+**Shipped in v3.2.104.** Confirmation is the operator's phone, and nothing
+else can supply it.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

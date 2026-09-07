@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.103
+# Handoff — state at v3.2.104
 
 **Published 2026-09-06: [v3.2.103](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.103)**
 — `aprs-agent-v3.2.103.zip`, 58.2 MiB, 240 files, sha256
@@ -32,8 +32,8 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.103** |
-| repo HEAD | tag `v3.2.103` — a wildcard filter no longer admits group names (F-2026-09-06-02) |
+| running | **v3.2.104** |
+| repo HEAD | tag `v3.2.104` — the stat bar stops iOS inflating its numbers (F-2026-09-07-01) |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
