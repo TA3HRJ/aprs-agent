@@ -5330,7 +5330,28 @@ what makes the advice free to follow.
 **Seen failing:** with the SSID test short-circuited it reports the
 bare-callsign assertion failing and exits 1.
 
-**Shipped in v3.2.108.**
+**Shipped in v3.2.108 — and the line did not reach the journal.**
+
+### Correction, 2026-09-10 — the fix wrote to the wrong stream
+
+`_run_agent` replaces `sys.stderr` with the browser's Live Log queue *before*
+the APRS-IS connection is opened, so `print(..., file=sys.stderr)` inside
+`start_server` never reaches journald. The whole point of the line was to be
+readable from `journalctl` months later, and after deploying v3.2.108 it was
+not there:
+
+```
+$ journalctl -u aprs-agent --since '1 min ago' | grep 'aprs-is] login'
+(nothing)
+```
+
+This is the same trap `_log_both` exists for, and the same one that hid the
+same-origin middleware's refusals earlier in this cycle: **while the agent is
+running, stderr is the Live Log, not the journal.**
+
+Fixed in **v3.2.109** by writing to both streams, and `check_login_collision`
+now asserts the journal stream separately — it fails against exactly what
+v3.2.108 shipped.
 
 ---
 

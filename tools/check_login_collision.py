@@ -55,9 +55,40 @@ def ok(label: str) -> None:
 
 
 def emitted(callsign: str) -> str:
-    buf = io.StringIO()
-    with redirect_stderr(buf):
-        _warn_login_collision(callsign)
+    """What reaches the Live Log (sys.stderr).
+
+    The journal stream is swallowed too, so this check's own output stays
+    clean — the function writes to both by design.
+    """
+    import sys as _s
+    real, sink, buf = _s.__stderr__, io.StringIO(), io.StringIO()
+    try:
+        _s.__stderr__ = sink
+        with redirect_stderr(buf):
+            _warn_login_collision(callsign)
+    finally:
+        _s.__stderr__ = real
+    return buf.getvalue()
+
+
+def emitted_journal(callsign: str) -> str:
+    """What reaches journald (sys.__stderr__).
+
+    While the agent runs, `sys.stderr` is the browser's Live Log — swapped in
+    `_run_agent` before the APRS-IS connection is opened. v3.2.108 wrote only
+    there, so the login line the operator was meant to read months later in
+    `journalctl` never reached the journal at all. Both streams are asserted
+    here because only one of them is the point.
+    """
+    import sys as _s
+    real, buf = _s.__stderr__, io.StringIO()
+    fake = io.StringIO()
+    try:
+        _s.__stderr__ = buf
+        with redirect_stderr(fake):
+            _warn_login_collision(callsign)
+    finally:
+        _s.__stderr__ = real
     return buf.getvalue()
 
 
@@ -69,6 +100,19 @@ for cs in ("TA3HRJ", "TA3HRJ-5"):
         break
 else:
     ok("the login callsign is stated at startup, with and without an SSID")
+
+# ── 1b: and it reaches the journal, not only the Live Log ─────────────
+j_plain = emitted_journal("TA3HRJ-5")
+j_bare = emitted_journal("TA3HRJ")
+if "login callsign" not in j_plain:
+    fail("login reaches journald",
+         "the login line went only to the Live Log — which is what v3.2.108 "
+         "shipped, and it made the line unreadable from journalctl")
+elif "WARNING" not in j_bare:
+    fail("warning reaches journald", f"journald got {j_bare!r}")
+else:
+    ok("both the login line and the warning reach journald")
+
 
 # ── 2: a bare callsign warns ──────────────────────────────────────────
 bare = emitted("TA3HRJ")

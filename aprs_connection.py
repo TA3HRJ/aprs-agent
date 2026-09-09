@@ -69,15 +69,23 @@ def _warn_login_collision(callsign: str) -> None:
     the collision unlikely rather than merely improbable, and costs nothing:
     the passcode is computed from the base callsign either way.
     """
-    print(f"[aprs-is] login callsign: {callsign}", file=sys.stderr)
+    lines = [f"[aprs-is] login callsign: {callsign}"]
     if strip_ssid(callsign) == callsign:
-        print(
+        lines.append(
             f"[aprs-is] WARNING: logging in as {callsign} with no SSID. Any "
             f"other device of yours logging in as {callsign} — a hotspot, an "
             f"igate, a phone app — becomes invisible to this agent, with no "
-            f"error reported. Consider {callsign}-5 or another SSID.",
-            file=sys.stderr,
+            f"error reported. Consider {callsign}-5 or another SSID."
         )
+    for line in lines:
+        # Both streams on purpose. While the agent runs, sys.stderr is the
+        # browser's Live Log; sys.__stderr__ is what journald captures. This
+        # exists to make the login readable months later from `journalctl`,
+        # so the second write is the one that matters — v3.2.108 shipped with
+        # only the first and the line never reached the journal at all.
+        print(line, file=sys.stderr)
+        if sys.stderr is not sys.__stderr__:
+            print(line, file=sys.__stderr__)
 
 
 async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
