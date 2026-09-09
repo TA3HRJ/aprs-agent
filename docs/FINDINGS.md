@@ -5429,6 +5429,61 @@ get their backslashes built with `chr(92)` instead of typed.
 
 ---
 
+## F-2026-09-10-03 — the answer chain stops at the first match, so a compound question is half answered
+
+**Not fixed. Recorded as a limit so it stops being rediscovered one sentence
+at a time.**
+
+`handle()` tries the deterministic answers in order and returns on the first
+one that produces text:
+
+```
+_test_answer  ->  _self_lookup  ->  _wx_lookup  ->  the model
+```
+
+Whichever fires first is the whole answer. Everything else the message asked
+is discarded, because the chain has no way to answer part of a question.
+
+### Seen twice in one evening, in both directions
+
+Asked *"Time, date and my location?"* by `TA3HRJ-1`:
+
+| version | what came back | what was lost |
+|---|---|---|
+| v3.2.109 | `22:10 UTC 2026-09-09. Your position not available via APRS…` | the position, which was in the registry |
+| v3.2.110 | `TA3HRJ-1: 38.455,27.107 (KM38nk) 4min ago via TA3HRJ.` | the time and date, which are free |
+
+The second is the better answer and still only two thirds of the question.
+
+**This predates v3.2.110.** `_wx_lookup` has the same shape — *"hava nasil ve
+saat kac"* has always returned only the weather. What v3.2.110 changed is how
+often the chain terminates early, by widening the set of questions
+`_self_lookup` claims. The defect was made visible, not created.
+
+### Why the obvious repairs were rejected
+
+- **Prepend the time when the question mentions time.** A patch shaped like
+  the one sentence that revealed it. It does nothing for *location + weather*,
+  *SWR + my location*, or any other pair, and each would want its own branch.
+- **Hand the facts to the model and let it answer everything.** This is the
+  one that would work, and it costs the guarantee the whole day was spent
+  building: `_station_answer` writes the age and the source as fixed fields
+  precisely so no model has to be trusted with them. A coordinate that passes
+  through a paraphrase is a coordinate nobody can check afterwards.
+
+### What a real fix looks like
+
+Composition rather than a longer cascade: collect every applicable
+deterministic fact, ask the model only about the residue, and join the two
+without letting any fact pass through the model's wording. That is a design,
+not a patch, and it needs measurements nobody has taken — how common compound
+questions actually are on APRS, and whether two topics are readable inside the
+186-character budget at all.
+
+Left for a session that wants to do it properly.
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
