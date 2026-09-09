@@ -110,6 +110,20 @@ def _to_ascii(text: str) -> str:
 # TABOR and TAPIOLA start with a Turkish prefix and are neither.
 _CALL_IN_TEXT = re.compile(r"\b([A-Z0-9]{1,2}[0-9][A-Z]{1,4})(-[0-9]{1,2})?\b")
 
+# Asking about yourself without naming yourself. The packet header already
+# says who is asking, so "where am I" is answerable and was not being
+# answered: on 2026-09-10 TA3HRJ-1 asked "Time, date and my location?" and
+# was told its position was not available, while its own beacon from four
+# minutes earlier sat in the registry (F-2026-09-10-02). Kept to
+# first-person forms - "where is the nearest digi" is not about the sender.
+_SELF_IN_TEXT = re.compile(
+    r"\bMY\s+(?:LAST\s+|CURRENT\s+)?"
+    r"(?:LOCATION|POSITION|POSN|QTH|GRID|LOCATOR|BEACON)\b"
+    r"|\bWHERE\s+AM\s+I\b|\bWHERE\s+I\s+AM\b"
+    r"|\bKONUMUM\b|\bNEREDEYIM\b|\bBENIM\s+KONUM"
+    r"|\bNEREDE\s+OLDUGUMU\b"
+)
+
 
 def _ago(seconds: float) -> str:
     """Plain age, because a position without one arrives in the present tense."""
@@ -620,7 +634,8 @@ class AIGateway(Extension):
                  % (sender_full, rec.get("callsign"), dist_km))
         return _wx_answer(rec, dist_km)
 
-    def _self_lookup(self, question: str, sender_base: str) -> "Optional[str]":
+    def _self_lookup(self, question: str, sender_base: str,
+                     sender_full: str = "") -> "Optional[str]":
         """Answer about the sender's own station, or hand back to the model.
 
         Returns None when the question is not one of these, so everything else
@@ -641,6 +656,19 @@ class AIGateway(Extension):
             return None
         found = _CALL_IN_TEXT.findall(text)
         if not found:
+            # "my location" names nobody, but the packet header does. Without
+            # this the question fell through to the model, which correctly
+            # said it had no position - while the registry held a beacon from
+            # four minutes earlier (F-2026-09-10-02).
+            if _SELF_IN_TEXT.search(text):
+                wanted = sender_full or sender_base
+                try:
+                    rec = db.get_one(wanted) or db.get_one(sender_base)
+                except Exception as e:
+                    self.error(f"registry lookup failed: {e}")
+                    return None
+                self.log(f"self-lookup: {wanted} asked about itself, unnamed")
+                return _station_answer(db, wanted, rec)
             return None
         for base, ssid in found:
             if base == sender_base:
@@ -914,7 +942,7 @@ class AIGateway(Extension):
         # it, and the packet header already says who is asking.
         answer = _test_answer(question, sender_full, line)
         if answer is None:
-            answer = self._self_lookup(question, sender_base)
+            answer = self._self_lookup(question, sender_base, sender_full)
         if answer is None:
             answer = await self._wx_lookup(question, sender_full, cfg)
         if answer is None:

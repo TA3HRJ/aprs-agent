@@ -5355,6 +5355,80 @@ v3.2.108 shipped.
 
 ---
 
+## F-2026-09-10-02 — asked where it was, the gateway said it did not know, and it did
+
+**Source:** the first end-to-end message ever to reach DMWGPT from a DMR
+hotspot, four minutes after F-2026-09-10-01 unblocked the path.
+
+```
+00:10:46  RX from TA3HRJ-1: Time, date and my location?
+00:10:55  TX to TA3HRJ-1: 22:10 UTC 2026-09-09. Your position not available via APRS --
+00:11:00  TX to TA3HRJ-1: here; check local digi or aprs.fi for last beacon.
+```
+
+The time was right. The position was wrong — not stale, not approximate,
+**absent**, while `TA3HRJ-1` had beaconed four minutes earlier and its
+coordinates were in the registry the gateway reads.
+
+### The template refused a question it could answer
+
+`_self_lookup()` gates on a topic word (`WHERE`, `LOCAT`, `KONUM`, …) and then
+requires a **callsign in the message text**:
+
+```python
+found = _CALL_IN_TEXT.findall(text)
+if not found:
+    return None          # -> falls through to the model
+```
+
+*"my location"* names nobody, so the lookup declined and the question reached
+the model, which then answered correctly for a model: it has no registry and
+said so. The failure is not the model's. It is that the packet header already
+carried the answer to "who is asking" and the template did not use it.
+
+This is the shape the gateway's other deterministic answers already have —
+`_test_answer` reads the sender from the packet, `_wx_lookup` falls back to
+"your last position" — and `_self_lookup` was the one that did not.
+
+### The rule, and why it is narrow
+
+First person only. `_SELF_IN_TEXT` matches *my location / position / QTH /
+grid / locator / beacon*, *where am I*, *where I am*, and the Turkish
+*konumum*, *neredeyim*, *benim konum*, *son konumum*, *nerede oldugumu*.
+
+It deliberately does not match *"where is the nearest digi"* or *"my antenna is
+broken"*. Answering the first with the asker's own coordinates would be worse
+than declining, and the second is not a location question at all — both were
+made assertions in the check rather than left to judgement.
+
+The lookup now takes the sender's **full** callsign, not just the base, so an
+answer about `TA3HRJ-1` is about `TA3HRJ-1` and not about whichever SSID the
+registry happens to return first.
+
+### `check_selflookup.py`, five cases added
+
+Three that must now be answered from the registry — `Time, date and my
+location?`, `Where am I?`, `Konumum nerede?` — and two that must still reach
+the model: `Where is the nearest digi?` and `My antenna is broken`. The
+existing five cases were left untouched and still pass.
+
+**Seen failing:** with the first-person branch short-circuited it reports
+**9 failures** across the three new cases — model consulted, no position, no
+age — and passes again when restored.
+
+### An editing note that cost four attempts
+
+The pattern was written three times before it was right. A `` carried
+through a shell heredoc into Python arrived as a literal **backspace byte**
+(``), and the compiled regex matched nothing at all while *looking*
+correct in the file. It was caught by printing `re.compile(...).pattern` and
+reading the repr, not by reading the source. Regexes edited through that path
+get their backslashes built with `chr(92)` instead of typed.
+
+**Shipped in v3.2.110.**
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:

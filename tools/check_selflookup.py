@@ -66,6 +66,18 @@ async def run() -> int:
         ("someone else",   "TA3HRJ-10", "Where is W1AW-1?",     "refused"),
         ("no callsign",    "TA3HRJ-10", "What is SWR?",         "model"),
         ("not a location", "TA3HRJ-10", "TA3HRJ-7 antenna tips", "model"),
+        # Asking about yourself without naming yourself. On 2026-09-10 a
+        # station asked "Time, date and my location?" and was told its
+        # position was unavailable, while its own beacon from four minutes
+        # earlier sat in the registry (F-2026-09-10-02).
+        ("my location",    "TA3HRJ-7",  "Time, date and my location?", "registry"),
+        ("where am i",     "TA3HRJ-7",  "Where am I?",          "registry"),
+        ("turkish self",   "TA3HRJ-7",  "Konumum nerede?",      "registry"),
+        # First person only: a location question about something else must
+        # still reach the model, or every "where is the nearest digi" would
+        # be answered with the asker's own coordinates.
+        ("nearest digi",   "TA3HRJ-7",  "Where is the nearest digi?", "model"),
+        ("my antenna",     "TA3HRJ-7",  "My antenna is broken",  "model"),
     ]:
         sent: list[str] = []
 
