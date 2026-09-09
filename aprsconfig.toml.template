@@ -20,6 +20,17 @@ server = "rotate.aprs2.net"
 port = 14580
 
 # YOUR amateur radio callsign (required - must have a valid amateur license).
+#
+# This is also the APRS-IS login, and the passcode is derived from the base
+# callsign - so adding an SSID here costs nothing and is worth doing.
+# APRS-IS never delivers a packet to a connection whose login matches the
+# callsign in that packet's q-construct. Any OTHER device of yours logging
+# in under the same bare callsign - a hotspot, an igate, a phone app -
+# therefore becomes invisible to this agent: not filtered, not rejected,
+# simply never delivered, with no error anywhere. Measured live: an
+# operator's own openSPOT4 was absent from five hours of feed until this
+# line gained an SSID, after which its next beacon arrived 51 seconds
+# later (F-2026-09-10-01).
 callsign = "N0CALL"
 
 # Filter: which callsigns/wildcards to receive from the APRS-IS server.

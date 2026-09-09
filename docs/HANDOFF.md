@@ -1,4 +1,63 @@
-# Handoff — state at v3.2.107
+# Handoff — state at v3.2.108
+
+Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
+the record; this file is only *where things stand right now* and what to do
+first. If it disagrees with either of those, they win.
+
+---
+
+## Deployment
+
+| | |
+|---|---|
+| VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
+| running | **v3.2.108** |
+| repo HEAD | tag `v3.2.108` — a bare APRS-IS login hid the operator’s own hotspot (F-2026-09-10-01) |
+| deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
+| every tag | **must** carry a `config.VERSION` bump |
+
+**Doc-only commits do not reach the VPS**, because `aprs-update.sh` deploys
+tags and nothing else. That is right for `docs/`, which nobody reads there —
+but `README.md`, `HELP.html` and `aprsconfig.toml.template` ship with the app,
+so a correction to those should be carried by the next tag rather than left
+sitting on master. v3.2.95 exists partly to do that.
+
+Moving a tag is allowed and the updater copes: `git push origin --delete <tag>`
+then re-tag. Doc-only commits do not need a tag.
+
+`aprs-update.sh` only deploys tags matching `vX.Y.Z` exactly, installs against
+`requirements-lock-linux.txt` as constraints, restarts, then polls
+`/api/status` for up to 90 s and reports `Deploy OK: <tag> calisiyor` or fails
+loudly.
+
+**Build output is present again and is current.** `build/` and `dist/` hold the
+v3.2.100 artefacts, rebuilt 2026-08-31. They were deleted on 2026-08-26 when
+they were 461 MB of stale output thirty versions old, and that is the state to
+return them to once a release is out — *stale* build output is the hazard, not
+build output. `pyinstaller aprs_agent.spec --noconfirm` regenerates them; both
+`build/` and `dist/` are gitignored, as are the release zips.
+
+**The repo on the VPS belongs to `aprs`, not root.** Run git there as
+`sudo -u aprs git -C /opt/aprs-agent …` rather than adding a `safe.directory`
+exception for root.
+
+
+### Consistency, last audited 2026-08-26 at v3.2.95
+
+Versions aligned across local, GitHub, the VPS and the running API. Every
+hardcoded `3.2.x` string in the source is a historical provenance comment and
+correct as written — do not "fix" them. `DEFAULTS` and
+`aprsconfig.toml.template` agree on all 112 keys. `README.md`, `HELP.html`,
+`aprsconfig.toml.template`, `config.py`, `station_db.py` and `web_gui.py` were
+verified byte-for-byte identical between `git show HEAD:` and the VPS.
+
+**Two figures still unmeasured**, both in the README's Silence Map row and both
+predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
+36 cells"* (F-41) and the *"under 35 %"* novelty threshold.
+
+---
+
+## Releasing to Windows
 
 **Published 2026-09-07: [v3.2.107](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.107)**
 — `aprs-agent-v3.2.107.zip`, 58.2 MiB, 240 files, sha256
@@ -46,65 +105,6 @@ build log:
   frontend work of v3.2.101–103 and is what proves it reached the archive
 - all four shipped root files match `git show v3.2.103:`
 - no `aprsconfig.toml`, no `*.db`, no loose `.py`
-
-Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
-the record; this file is only *where things stand right now* and what to do
-first. If it disagrees with either of those, they win.
-
----
-
-## Deployment
-
-| | |
-|---|---|
-| VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.107** |
-| repo HEAD | tag `v3.2.107` — the cell cache's lock is per-loop; packets are not errors (F-2026-09-07-02) |
-| deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
-| every tag | **must** carry a `config.VERSION` bump |
-
-**Doc-only commits do not reach the VPS**, because `aprs-update.sh` deploys
-tags and nothing else. That is right for `docs/`, which nobody reads there —
-but `README.md`, `HELP.html` and `aprsconfig.toml.template` ship with the app,
-so a correction to those should be carried by the next tag rather than left
-sitting on master. v3.2.95 exists partly to do that.
-
-Moving a tag is allowed and the updater copes: `git push origin --delete <tag>`
-then re-tag. Doc-only commits do not need a tag.
-
-`aprs-update.sh` only deploys tags matching `vX.Y.Z` exactly, installs against
-`requirements-lock-linux.txt` as constraints, restarts, then polls
-`/api/status` for up to 90 s and reports `Deploy OK: <tag> calisiyor` or fails
-loudly.
-
-**Build output is present again and is current.** `build/` and `dist/` hold the
-v3.2.100 artefacts, rebuilt 2026-08-31. They were deleted on 2026-08-26 when
-they were 461 MB of stale output thirty versions old, and that is the state to
-return them to once a release is out — *stale* build output is the hazard, not
-build output. `pyinstaller aprs_agent.spec --noconfirm` regenerates them; both
-`build/` and `dist/` are gitignored, as are the release zips.
-
-**The repo on the VPS belongs to `aprs`, not root.** Run git there as
-`sudo -u aprs git -C /opt/aprs-agent …` rather than adding a `safe.directory`
-exception for root.
-
-
-### Consistency, last audited 2026-08-26 at v3.2.95
-
-Versions aligned across local, GitHub, the VPS and the running API. Every
-hardcoded `3.2.x` string in the source is a historical provenance comment and
-correct as written — do not "fix" them. `DEFAULTS` and
-`aprsconfig.toml.template` agree on all 112 keys. `README.md`, `HELP.html`,
-`aprsconfig.toml.template`, `config.py`, `station_db.py` and `web_gui.py` were
-verified byte-for-byte identical between `git show HEAD:` and the VPS.
-
-**Two figures still unmeasured**, both in the README's Silence Map row and both
-predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
-36 cells"* (F-41) and the *"under 35 %"* novelty threshold.
-
----
-
-## Releasing to Windows
 
 **Published 2026-08-31: [v3.2.100](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.100)**
 — `aprs-agent-v3.2.100.zip`, 58.1 MiB, 240 files, sha256
@@ -180,7 +180,7 @@ cost is below anything this application can notice. Named rather than hidden.
 
 ## The guard rail
 
-Twenty-four checks in `tools/`, each one born from a live failure. Run them all
+Twenty-five checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -188,7 +188,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Twenty-three run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Twenty-four run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -245,6 +245,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_message_history` | the gateway's own conversation is kept; the world feed is not archived |
 | `check_stop` | a stop cannot report success without happening; no second agent over a live one |
 | `check_cells_lock` | the cell cache's lock is per event loop; a packet is not one of our errors |
+| `check_login_collision` | a bare APRS-IS login warns: another device of yours under it goes unseen |
 | `check_callsign_shape` | "TA*" admits Turkish stations, not TACTICAL — in three places, not the fourth |
 | `check_feedlog` | packets never reach journald, errors always do |
 | `check_coords` | no position off the Earth enters, by either door |

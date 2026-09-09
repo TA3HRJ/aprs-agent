@@ -25,7 +25,7 @@ import asyncio
 import sys
 from typing import Any
 
-from config import VERSION, calculate_passcode
+from config import VERSION, calculate_passcode, strip_ssid
 from extension_server import ConStore
 from extensions import ExtensionRegistry
 
@@ -47,6 +47,39 @@ SOFTWARE_VERSION = f"APRS-AGENT {VERSION}"
 READ_TIMEOUT_S = 120.0
 
 
+def _warn_login_collision(callsign: str) -> None:
+    """Say which callsign we log in as, and warn when it carries no SSID.
+
+    APRS-IS does not deliver a packet to a connection whose login matches the
+    callsign in the packet's q-construct. Anything this station injects is
+    stamped with its own login and therefore never comes back — which is
+    correct and is what the Fixed Beacon's own ingest path relies on.
+
+    The trap is a *second* device of the operator's logging in under the same
+    callsign. Its traffic is stamped with that callsign too, so this agent
+    never sees it, silently and with no error anywhere. Measured on
+    2026-09-09: an operator's own SharkRF openSPOT4 injecting as
+    `qAS,TA3HRJ` was invisible for the whole 5 h 15 min of retained feed —
+    zero packets — while every other station of the same base callsign
+    arrived normally. One SSID on the login and the next beacon arrived 51
+    seconds later (F-2026-09-10-01).
+
+    A bare base callsign is the value a hotspot, an igate or a phone app will
+    pick by default, so it is the one most likely to collide. An SSID makes
+    the collision unlikely rather than merely improbable, and costs nothing:
+    the passcode is computed from the base callsign either way.
+    """
+    print(f"[aprs-is] login callsign: {callsign}", file=sys.stderr)
+    if strip_ssid(callsign) == callsign:
+        print(
+            f"[aprs-is] WARNING: logging in as {callsign} with no SSID. Any "
+            f"other device of yours logging in as {callsign} — a hotspot, an "
+            f"igate, a phone app — becomes invisible to this agent, with no "
+            f"error reported. Consider {callsign}-5 or another SSID.",
+            file=sys.stderr,
+        )
+
+
 async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
     """
     Main APRS-IS connection loop. Connects, runs, and reconnects automatically.
@@ -55,6 +88,7 @@ async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
     server = config["server"]
     callsign = config["callsign"].upper()
     passcode = calculate_passcode(callsign)
+    _warn_login_collision(callsign)
     full_feed = config.get("full_feed", False)
     rate_limit_pps = max(0, int(config.get("rate_limit_pps", 50)))
 

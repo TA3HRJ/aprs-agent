@@ -5250,6 +5250,90 @@ check, and this one says so out loud.
 
 ---
 
+## F-2026-09-10-01 — the agent could not see its operator's own hotspot
+
+**Source:** the operator, while trying to reach the AI gateway from DMR. His
+SharkRF openSPOT4 beacons every ten minutes and is plainly visible on aprs.fi,
+and it was nowhere in this agent's feed.
+
+### Measured
+
+| window | login callsign | `TA3HRJ-1>` packets |
+|---|---|---|
+| 18:09 → 23:25 (5 h 15 min) | `TA3HRJ` | **0** |
+| 23:35 → 23:37 (2 min) | `TA3HRJ-9` | **1**, 51 s after the restart |
+| 23:41 → 23:52 (11 min) | `TA3HRJ-5` | 1, on schedule |
+
+Not a feed problem: 12,984 packets arrived in the first two minutes of the
+second window and 52,607 in the third, and every other SSID of the same base
+callsign was present throughout — `TA3HRJ-12` via `qAC,T2CHILE`, `TA3HRJ-8`
+via `qAR,TA3TX-4`.
+
+The only thing that differed was the q-construct:
+
+```
+TA3HRJ-1>APOSB4,TCPIP*,qAS,TA3HRJ:@…SharkRF openSPOT4
+                       ~~~~~~~~~~ and the agent was logged in as TA3HRJ
+```
+
+**APRS-IS does not deliver a packet to a connection whose login matches the
+callsign in that packet's q-construct.** The hotspot and the agent were logging
+in under the same callsign, so the server treated this connection as the
+packet's own origin and withheld it. Nothing errors, nothing is logged, and the
+station is simply absent — from the map, from silence detection, from the
+registry.
+
+### Why this is a finding and not a configuration note
+
+It defeats every instrument here. The station is not filtered, not rate-limited
+and not rejected — it never arrives, and `full_feed = true` does not help
+because the suppression happens before any filter. Only the operator can
+notice, because it is his own second device: nobody else's feed is missing
+anything, so no comparison reveals it.
+
+### A claim that was made mid-investigation and is wrong
+
+It was argued that moving the login to an SSID would break the Fixed Beacon's
+own-ingest path — that `_OWN_BEACON_RE`'s comment, *"never echoed back by
+APRS-IS"*, was only accidentally true and depended on the login matching the
+beacon's SSID.
+
+**Measured and false.** Under login `TA3HRJ-9` a beacon was sent (journald:
+one `beacon sent`) and did not come back (`TA3HRJ-5>`: zero). Our own
+injections always carry our own login in their q-construct, so they are
+suppressed back to us whatever SSID we use. That comment is robustly true and
+depends on nothing.
+
+The live login was moved to `TA3HRJ-5` anyway — matching the Fixed Beacon's own
+SSID, which is the identity this station already advertises
+(`APRS-Agent iGate | DMWGPT AI gateway`). That was the operator's reasoning,
+about identity, not the invented technical one.
+
+### The fix
+
+`aprs_connection` prints its login callsign at startup — previously the value
+appeared nowhere in the journal — and warns when that callsign carries no SSID,
+a bare base callsign being exactly what a second device picks by default.
+`calculate_passcode()` strips the SSID, so following the advice costs nothing.
+
+The same reasoning is now in `aprsconfig.toml.template`, which ships in the
+release archive and so reaches other operators, who cannot be told this in a
+chat.
+
+### `check_login_collision.py`
+
+Five assertions: the login is stated at startup with and without an SSID; a
+bare callsign warns and the warning names it; three SSID'd logins stay quiet;
+and the passcode is identical across `TA3HRJ`, `-5`, `-9` and `-15`, which is
+what makes the advice free to follow.
+
+**Seen failing:** with the SSID test short-circuited it reports the
+bare-callsign assertion failing and exits 1.
+
+**Shipped in v3.2.108.**
+
+---
+
 ## Not findings
 
 Kept here so they stop being re-discovered:
