@@ -5495,3 +5495,79 @@ Kept here so they stop being re-discovered:
   presentation layer, not the threshold.
 - **A single long link is not an opening**, and no amount of plausibility
   changes that. Two distinct senders in one field is the finding.
+
+
+---
+
+## F-2026-09-15-01 — the registry flush held the database for up to eighteen seconds, and writes that waited five were dropped
+
+**Fixed in v3.2.112.** The cause of the long lock is not fixed; see the last
+section.
+
+### What was being lost
+
+Over seven days the journal logged **247** propagation openings and
+`prop_history` held **234** of them. The 13 missing are exactly the 13 lines
+reading `[prop] history write failed: database is locked`, each landing about
+six seconds after its `OPENING` line. A lost opening is absent from the map
+timeline and from `find_prop_event`, so its evidence bundle cannot find it.
+
+### Why
+
+`save_sqlite` flushes the station registry once a minute, and it does so by
+rewriting every row in one transaction. Timed on a consistent copy of the live
+database, 252,427 rows:
+
+| run | write lock held |
+|---|---|
+| 1 | 14.79 s |
+| 2 | 18.24 s |
+| 3 | 9.95 s |
+
+Python's `sqlite3.connect` waits **5 seconds** for a lock by default, and 14 of
+the 16 connections in `station_db.py` used that default. Any write that arrived
+inside the flush window gave up. The database runs in rollback-journal mode, so
+there is no reader/writer separation to soften it.
+
+### What changed
+
+- **One `_connect` helper opens the database, with a 60-second busy timeout**:
+  more than three times the longest flush measured. All sixteen call sites use
+  it. `record_messages` and `read_messages`, the two that already waited, move
+  from 120 s to the same 60 s.
+- **Three reads came off the event loop.** `/api/silence/range` and
+  `/api/silence/history` called SQLite directly inside their handlers, and the
+  silence assessment built its history context there too. Harmless at 0.027 s
+  and 0.003 s, but a wait long enough to outlast the flush, spent on the loop,
+  would freeze every request for its duration. Lengthening the timeout without
+  moving them would have traded lost writes for a stalled server.
+
+`tools/check_db_lock.py` holds a write lock for six seconds and asserts that a
+propagation event written under it is stored; asserts that `station_db.py`
+opens SQLite only through `_connect`; and asserts that no async function in
+`web_gui.py` calls a database function directly, `on_shutdown` excepted.
+**Seen failing against v3.2.111 on all three**: `database is locked after
+6.0 s`, 16 connect calls outside the helper, and the three on-loop reads.
+
+### A copy is not a backup
+
+Measuring the flush needed a copy of the live database. The first `cp` taken
+while the agent was running produced a file SQLite rejected as `database disk
+image is malformed`, and loaded 171,935 stations where a copy minutes earlier
+had loaded 252,425. It was torn mid-write. SQLite's online backup API copied the
+same live database in 0.31 s, and the result passed `integrity_check`.
+
+No backup of this database existed anywhere on the server. One does now, on the
+host rather than in the application: `/usr/local/sbin/aprs-db-backup` runs
+nightly at 04:17 from `/etc/cron.d/aprs-db-backup`, uses the online backup API,
+runs `integrity_check` on the copy, and keeps seven in `/var/backups/aprs-agent`.
+First run: 79.8 MB, 252,440 stations, 1.04 s, integrity ok.
+
+### Still open
+
+The flush rewrites a quarter of a million rows every minute to persist the few
+thousand that changed. That is why the lock is long. A longer wait makes the
+collision survivable; it does not make it rare. Watch the journal for a week:
+if `database is locked` no longer appears, stop there. If it does, the next step
+is either WAL mode — which changes the file set every copy has to know about —
+or a flush that writes only the stations touched since the last one.

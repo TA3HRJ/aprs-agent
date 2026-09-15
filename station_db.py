@@ -28,6 +28,22 @@ from packet_parser import (
     parse_packet,
 )
 
+# Every write in this module can collide with the registry flush, which
+# rewrites the whole stations table once a minute and holds the write lock
+# while it does: 9.95-18.24 s measured on 252,427 rows (2026-09-15). Python's
+# default busy timeout is 5 s, and a write that waited that long was dropped -
+# 13 of 247 propagation openings in a week. The wait has to outlast the
+# flush. It is safe only off the event loop, which is where every caller in
+# web_gui.py now runs; tools/check_db_lock.py holds both halves.
+_BUSY_TIMEOUT_S = 60
+
+
+def _connect(path: str, readonly: bool = False) -> sqlite3.Connection:
+    if readonly:
+        return sqlite3.connect("file:%s?mode=ro" % path, uri=True,
+                               timeout=_BUSY_TIMEOUT_S)
+    return sqlite3.connect(path, timeout=_BUSY_TIMEOUT_S)
+
 # US amateur prefixes: A[A-L], and K/N/W optionally followed by one letter,
 # then a digit. Deliberately narrow — this is used to cast doubt on a station's
 # position, so a false positive is worse than a miss.
@@ -432,7 +448,7 @@ def record_hazards(path: str, rows: list[dict[str, Any]]) -> int:
     """
     if not rows:
         return 0
-    con = sqlite3.connect(path)
+    con = _connect(path)
     try:
         con.execute(
             "CREATE TABLE IF NOT EXISTS hazard_history ("
@@ -493,7 +509,7 @@ def record_messages(path: str, rows: "list[dict[str, Any]]") -> int:
     """
     if not rows:
         return 0
-    con = sqlite3.connect(path, timeout=120)
+    con = _connect(path)
     try:
         con.execute(
             "CREATE TABLE IF NOT EXISTS message_history ("
@@ -535,7 +551,7 @@ def record_messages(path: str, rows: "list[dict[str, Any]]") -> int:
 def read_messages(path: str, limit: int = 1000) -> "list[dict[str, Any]]":
     """The kept messages, oldest first so the panel can append as it does live."""
     try:
-        con = sqlite3.connect("file:%s?mode=ro" % path, uri=True, timeout=120)
+        con = _connect(path, readonly=True)
     except sqlite3.Error:
         return []
     try:
@@ -555,7 +571,7 @@ def read_messages(path: str, limit: int = 1000) -> "list[dict[str, Any]]":
 
 def save_meta(path: str, key: str, value: str) -> None:
     """Store a small persistent counter/setting (e.g. lifelong uptime)."""
-    con = sqlite3.connect(path)
+    con = _connect(path)
     try:
         con.execute(
             "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
@@ -568,7 +584,7 @@ def save_meta(path: str, key: str, value: str) -> None:
 def load_meta(path: str, key: str, default: str = "") -> str:
     if not Path(path).exists():
         return default
-    con = sqlite3.connect(path)
+    con = _connect(path)
     try:
         row = con.execute(
             "SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
@@ -583,7 +599,7 @@ def silence_history_range(path: str) -> Optional[dict[str, int]]:
     """Return {"min": ts, "max": ts} of stored snapshots, or None if empty."""
     if not Path(path).exists():
         return None
-    con = sqlite3.connect(path)
+    con = _connect(path)
     try:
         row = con.execute(
             "SELECT MIN(ts), MAX(ts) FROM silence_history").fetchone()
@@ -614,7 +630,7 @@ def cell_silence_history(path: str, cell: str,
                            "peak": None, "recent": [], "per_station": {}}
     if not Path(path).exists():
         return out
-    con = sqlite3.connect(path)
+    con = _connect(path)
     try:
         row = con.execute(
             "SELECT COUNT(*), COALESCE(SUM(alert),0), MIN(ts), MAX(ts) "
@@ -684,7 +700,7 @@ def load_silence_history(path: str, ts: int) -> dict[str, Any]:
     empty: dict[str, Any] = {"ts": None, "cells": []}
     if not Path(path).exists():
         return empty
-    con = sqlite3.connect(path)
+    con = _connect(path)
     try:
         row = con.execute(
             "SELECT MAX(ts) FROM silence_history WHERE ts <= ?", (ts,)
@@ -744,7 +760,7 @@ def record_prop_event(path: str, event: dict[str, Any]) -> None:
     """Append one propagation-opening event (event-driven, not periodic:
     openings are rare, a row per event keeps the table tiny). Prunes rows
     older than the same retention window the silence history uses."""
-    con = sqlite3.connect(path)
+    con = _connect(path)
     try:
         con.execute(
             "CREATE TABLE IF NOT EXISTS prop_history ("
@@ -771,7 +787,7 @@ def find_prop_event(path: str, call: str, gate: str, ts: int,
     """
     if not Path(path).exists():
         return None
-    con = sqlite3.connect(path)
+    con = _connect(path)
     try:
         for ev_ts, region, note, raw in con.execute(
                 "SELECT ts, region, note, links FROM prop_history "
@@ -804,7 +820,7 @@ def load_prop_history(path: str, ts: int,
     timeline: scrubbing near an opening replays its links)."""
     if not Path(path).exists():
         return []
-    con = sqlite3.connect(path)
+    con = _connect(path)
     try:
         links: list[dict[str, Any]] = []
         for (note, raw) in con.execute(
@@ -2112,7 +2128,7 @@ class StationDB:
 
     def save_sqlite(self, path: str) -> int:
         """Persist all station records. Returns number of rows written."""
-        con = sqlite3.connect(path)
+        con = _connect(path)
         try:
             con.execute(
                 "CREATE TABLE IF NOT EXISTS stations ("
@@ -2157,7 +2173,7 @@ class StationDB:
         """Load persisted records (skips callsigns already in memory)."""
         if not Path(path).exists():
             return 0
-        con = sqlite3.connect(path)
+        con = _connect(path)
         try:
             # load runs BEFORE the first save at startup — migrate here too,
             # or the SELECT below fails on a pre-v2.9.3 database and the
@@ -2261,7 +2277,7 @@ class StationDB:
             if c["alert"] and start:
                 c["since"] = int(start)
         now = int(time.time())
-        con = sqlite3.connect(path)
+        con = _connect(path)
         try:
             con.execute(
                 "CREATE TABLE IF NOT EXISTS silence_history ("
@@ -2336,7 +2352,7 @@ class StationDB:
             return stats
         out: dict[str, tuple] = {}
         try:
-            con = sqlite3.connect(path)
+            con = _connect(path)
             try:
                 # record_silence_history stores ONLY cells that met the
                 # threshold — worldwide, storing every cell with one silent
@@ -2399,7 +2415,7 @@ class StationDB:
         out: dict[str, dict[str, float]] = {}
         if cells:
             try:
-                con = sqlite3.connect(path)
+                con = _connect(path)
                 try:
                     marks = ",".join("?" * len(cells))
                     counts: dict[str, dict[str, int]] = {}

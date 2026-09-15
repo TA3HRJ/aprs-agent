@@ -1523,6 +1523,11 @@ class AgentManager:
                    f"better than a regional outage")
         else:
             pre = "multiple igates involved — infrastructure/power outage possible"
+        # Off the loop: this reads silence_history, and a lock wait long
+        # enough to outlast the registry flush would otherwise stall every
+        # request while it waits (tools/check_db_lock.py).
+        history = await asyncio.get_running_loop().run_in_executor(
+            None, self._history_context, c)
         prompt = (
             "APRS network silence event.\n"
             f"Maidenhead grid cell: {c['cell']}\n"
@@ -1532,7 +1537,7 @@ class AgentManager:
             f"Silent stations: {', '.join(c['silent_calls'][:10])}\n"
             f"{mins}"
             f"{self._onset_context(c)}"
-            f"{self._history_context(c)}"
+            f"{history}"
             f"{self._cell_context(c)}\n"
             f"{self._quake_context(c)}"
             "Consider that some APRS 'stations' are event advisory objects "
@@ -3378,7 +3383,8 @@ async def get_messages(request: web.Request) -> web.Response:
 async def get_silence_range(request: web.Request) -> web.Response:
     """Time range of stored silence snapshots (map timeline slider bounds)."""
     mgr: AgentManager = request.app["manager"]
-    rng = station_db_module.silence_history_range(mgr._sta_db_path)
+    rng = await asyncio.get_running_loop().run_in_executor(
+        None, station_db_module.silence_history_range, mgr._sta_db_path)
     return web.json_response({"range": rng})
 
 
@@ -3390,7 +3396,8 @@ async def get_silence_history(request: web.Request) -> web.Response:
         ts = int(request.query.get("ts", "0"))
     except ValueError:
         ts = 0
-    snap = station_db_module.load_silence_history(mgr._sta_db_path, ts)
+    snap = await asyncio.get_running_loop().run_in_executor(
+        None, station_db_module.load_silence_history, mgr._sta_db_path, ts)
     return web.json_response(snap)
 
 
