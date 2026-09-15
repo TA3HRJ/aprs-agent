@@ -23,6 +23,29 @@ C:\Python313-32\python.exe -m pip install -r requirements-build-win32.txt
 C:\Python313-32\python.exe -m PyInstaller aprs_agent.spec --noconfirm
 ```
 
+**Export the tag with `core.autocrlf=false`, and check it in bytes.** This
+machine sets `core.autocrlf=true` system-wide, so an ordinary checkout rewrites
+text files to CRLF, PyInstaller bundles those copies, and the archive stops
+carrying the bytes the tag holds. On v3.2.111 the first build shipped CRLF in
+`LICENSE`, `static/index.html`, `manifest.json` and `sw.js`: 2,967 bytes of
+line endings, which appeared as CRC differences with no commit behind them.
+The v3.2.107 archive was already mixed.
+
+Build from an export, not a checkout:
+
+```
+git -c core.autocrlf=false archive vX.Y.Z | tar -x -C <empty-dir>
+```
+
+Measured on v3.2.111 by comparing every exported file with
+`git cat-file blob`: 79 of 79 identical with the override, 7 of 79 without it.
+
+**Do not verify this with `grep -c $'\r$'`.** Inside `$(...)` in the shells used
+here the pattern degrades and matches every line, so it reports the line count.
+It reported 2,913 CRLF lines for two files that had none and stopped a correct
+build. Compare bytes against the blob instead, for example in Python with
+`open(path, 'rb').read() == subprocess.check_output(['git', 'cat-file', 'blob', 'vX.Y.Z:' + path])`.
+
 Output, three folder-mode targets:
 
 ```
