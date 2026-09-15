@@ -14,8 +14,8 @@ built by hand and uploaded by hand.
 
 `requirements-build-win32.txt` is not a suggestion. It pins **32-bit** CPython
 and exact dependency versions, and one of them is load-bearing:
-`cryptography==45.0.7` is the newest release carrying a **win32 wheel** inside
-atproto's cap. Build with anything else and the artefact silently stops being
+`cryptography==48.0.1` is the newest release carrying a **win32 wheel** at all;
+49 and later publish none, so the 32-bit build cannot follow the VPS past it. Build with anything else and the artefact silently stops being
 what every previous release was.
 
 ```

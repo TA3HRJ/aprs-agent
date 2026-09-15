@@ -18,36 +18,35 @@
 #
 # The cryptography ceiling, stated correctly:
 #
-#   atproto 0.0.69 requires cryptography >=41.0.7,<47. An earlier note in this
-#   file claimed the cap was <46 and applied on every architecture — that was
-#   wrong. It came from reading a pip backtracking log: because cryptography
-#   48 has no 32-bit Windows wheel, pip searched older atproto releases and
-#   printed *their* constraints, which are the <46 lines. The current release
-#   allows 46.x.
+#   2026-09-15, v3.2.111: atproto 0.0.72 requires cryptography >=41.0.7,<51,
+#   so the cap is no longer the limit. The 32-bit wheel is. Checked on PyPI
+#   that day: cryptography 48.0.1 carries win32 wheels, 49.0.0 and 50.0.1
+#   carry none. This build therefore moves 45.0.7 -> 48.0.1, which closes the
+#   bundled-OpenSSL advisory (GHSA-537c-gmf6-5ccf). CVE-2026-69247, -69248
+#   and -69249 are fixed only from 49.0.0 and remain in the 32-bit build;
+#   the VPS runs 50.0.1. Closing them here means dropping Bluesky from the
+#   Windows build or moving it to 64-bit.
 #
-#   What actually limits this build is the 32-bit wheel: within atproto's <47
-#   range, the newest cryptography with a win32 wheel is 46.0.3, so this file
-#   could move 45.0.7 -> 46.0.3. Above that, cryptography publishes win32
-#   wheels only up to 48.0.0, and none after — so if atproto ever raises its
-#   cap past 48, 32-bit Windows means dropping Bluesky or moving to 64-bit.
-#   (The Linux/VPS side runs 46.0.7, which needs no win32 wheel.)
+#   An earlier version of this note said win32 wheels stopped at 48.0.0 and
+#   that 48 had none; both readings came from pip backtracking logs rather
+#   than from the index, and 48.0.1 has them.
 
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.3
 aiosignal==1.4.0
-aiosmtplib==5.1.2
+aiosmtplib==5.1.3
 altgraph==0.17.5
 annotated-types==0.8.0
 anyio==4.14.2
 aprslib==0.7.2
-atproto==0.0.69
+atproto==0.0.72
 attrs==26.1.0
 certifi==2026.7.22
 cffi==2.1.1
 charset-normalizer==3.4.9
 click==8.4.2
 colorama==0.4.6
-cryptography==45.0.7
+cryptography==48.0.1
 distro==1.9.0
 dnspython==2.8.0
 frozenlist==1.8.0
@@ -65,10 +64,10 @@ openai==3.0.0
 packaging==26.3
 pefile==2024.8.26
 pillow==12.3.0
-propcache==0.5.2
+propcache==0.5.3
 pycparser==3.0
-pydantic==2.13.4
-pydantic_core==2.46.4
+pydantic==2.13.5
+pydantic_core==2.46.5
 pyinstaller==6.22.0
 pyinstaller-hooks-contrib==2026.6
 pystray==0.19.5
@@ -82,8 +81,9 @@ tomli_w==1.2.0
 tqdm==4.70.0
 truststore==0.10.4
 tweepy==4.17.0
-typing-inspection==0.4.3
+typing-inspection==0.4.4
 typing_extensions==4.16.0
 urllib3==2.7.0
 websockets==15.0.1
 yarl==1.24.5
+zstandard==0.25.0
