@@ -583,7 +583,7 @@ body.public .sb-toggle{display:none!important}
   <div class="entry-row"><label data-i="ai_trigger_aliases">Trigger Aliases</label><input id="f-ai-trigger-aliases" type="text"><div class="hint" data-i="ai_trigger_aliases_hint">Extra APRS addressees, comma-separated</div></div>
   <div class="slider-row"><label data-i="ai_extra_sms">Extra SMS Parts</label><div class="slider-inner"><input id="f-ai-extra-sms" type="range" min="0" max="5" value="0" oninput="$('ai-sms-val').textContent=this.value==0?'Off':this.value+' extra'"><span class="val" id="ai-sms-val">Off</span></div></div>
   <div class="action-row"><div class="content"><div class="title" data-i="ai_wl_enabled">Whitelist</div><div class="subtitle" data-i="ai_wl_sub">Only respond to listed callsigns</div></div><label class="adw-switch"><input type="checkbox" id="f-ai-wl-enabled"><span></span></label></div>
-  <div class="entry-row"><label data-i="ai_whitelist">Allowed Callsigns</label><input id="f-ai-whitelist" type="text" placeholder="TA3HRJ, TA3*"><div class="hint" data-i="ai_whitelist_hint">Wildcards OK</div></div>
+  <div class="entry-row"><label data-i="ai_whitelist">Allowed Callsigns</label><input id="f-ai-whitelist" type="text" placeholder="TA1ABC, TA3*"><div class="hint" data-i="ai_whitelist_hint">Wildcards OK</div></div>
   <div class="entry-row"><label data-i="ai_rate_burst">Questions in a row</label><input id="f-ai-rate-burst" type="number" min="0" max="50" style="max-width:110px"><div class="hint" data-i="ai_rate_burst_hint">How many a sender may ask back to back before being asked to wait. 0 = no limit</div></div>
   <div class="entry-row"><label data-i="ai_rate_refill">Refill (seconds)</label><input id="f-ai-rate-refill" type="number" min="0" max="86400" style="max-width:110px"><div class="hint" data-i="ai_rate_refill_hint">One more question per this many seconds, back up to the burst once idle. 0 = no limit</div></div>
   <div class="entry-row"><label data-i="ai_daily_limit">Daily ceiling</label><input id="f-ai-daily-limit" type="number" min="0" max="100000" style="max-width:110px"><div class="hint" data-i="ai_daily_limit_hint">Total questions answered per day across ALL senders. 0 = no ceiling. Per-sender limits do not protect you from many strangers asking once each</div></div>
@@ -863,7 +863,7 @@ body.public .sb-toggle{display:none!important}
   <p id="about-ver"></p>
   <p data-i="about_desc">A multi-extension APRS-IS agent for amateur radio operators.</p>
   <p style="font-weight:600;margin-top:10px" data-i="about_devs">Developers</p>
-  <div class="dev">🔧 <strong>TA3HRJ</strong> — <a href="mailto:ta3hrj@gmail.com">ta3hrj@gmail.com</a> · <a href="https://github.com/TA3HRJ" target="_blank">GitHub</a></div>
+  <div class="dev">🔧 <strong>TA3HX</strong> — <a href="mailto:ta3hrj@gmail.com">ta3hrj@gmail.com</a> · <a href="https://github.com/TA3HRJ" target="_blank">GitHub</a></div>
   <div class="dev">🔧 <strong>TA3PKS</strong> — <a href="mailto:ta3pks@mugsoft.io">ta3pks@mugsoft.io</a> · <a href="https://github.com/TA3PKS" target="_blank">GitHub</a></div>
   <div class="dev">🔧 <strong>TA3EKM</strong> — AI Gateway · <a href="https://github.com/ArdaYalinOzkan" target="_blank">GitHub</a></div>
   <p style="margin-top:10px"><span data-i="about_source">Source:</span> <a href="https://github.com/TA3HRJ/aprs-agent" target="_blank">github.com/TA3HRJ/aprs-agent</a></p>
