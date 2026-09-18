@@ -24,6 +24,7 @@ import os
 import re
 import time
 import unicodedata
+from pathlib import Path
 from typing import Optional
 
 import aprslib
@@ -378,6 +379,20 @@ _DEFAULT_RATE_NOTICE = "Too many questions - please wait {m} min, then ask again
 _DEFAULT_DAILY_NOTICE = "Daily question limit reached on this gateway - try tomorrow"
 
 
+# Message numbers are how an APRS client recognises a message it has already
+# shown: a repeat of sender and number is acknowledged and then discarded.
+# The counter used to start from zero on every restart, so the first reply of
+# every process was numbered 2 and 4 whoever it went to, and a station that
+# had heard DMWGPT before could acknowledge a new answer and never display
+# it (2026-09-19, tools/check_msg_ids.py). The counter is now kept next to
+# the config file; without one it starts from the clock, so two lifetimes do
+# not start from the same place.
+_MSGID_MAX = 99999          # the APRS message format allows 1-5 characters
+_MSGID_TICK_S = 30          # one number per 30 s of clock: a 35-day cycle
+_MSGID_FILE = "ai_gateway_msgid"
+_clock = time.time
+
+
 class AIGateway(Extension):
 
     # How often the gateway re-reads its own section from the config file.
@@ -407,7 +422,10 @@ class AIGateway(Extension):
         # retry is served from cache rather than met with silence.
         self._processed: dict[str, tuple] = {}
         self._own_writer: Optional[asyncio.Queue] = None
-        self._msg_counter = 0
+        self._msgid_path = (Path(config_path).with_name(_MSGID_FILE)
+                            if config_path else None)
+        self._msgid_warned = False
+        self._msg_counter = self._load_msg_counter()
         # Token bucket per sender: a burst of questions costs nothing, and the
         # refill only bites on sustained hammering. A flat cooldown would have
         # punished exactly the people worth having — someone meeting the thing
@@ -791,8 +809,29 @@ class AIGateway(Extension):
             self.mark_broken(f"AI query failed: {type(e).__name__}")
             return ""
 
+    def _load_msg_counter(self) -> int:
+        """Where the previous lifetime stopped, or a point set by the clock."""
+        if self._msgid_path is not None:
+            try:
+                n = int(self._msgid_path.read_text(encoding="ascii").strip())
+                if 0 < n <= _MSGID_MAX:
+                    return n
+            except (OSError, ValueError):
+                pass
+        return int(_clock() // _MSGID_TICK_S) % _MSGID_MAX
+
     def _next_msg_id(self) -> str:
-        self._msg_counter = (self._msg_counter + 1) % 999 + 1
+        self._msg_counter = self._msg_counter % _MSGID_MAX + 1
+        if self._msgid_path is not None:
+            try:
+                tmp = self._msgid_path.with_name(_MSGID_FILE + ".tmp")
+                tmp.write_text(str(self._msg_counter), encoding="ascii")
+                os.replace(tmp, self._msgid_path)
+            except OSError as e:
+                if not self._msgid_warned:
+                    self._msgid_warned = True
+                    self.warn("message number not saved, a restart falls "
+                              f"back to the clock: {e}")
         return str(self._msg_counter)
 
     async def _send_reply(self, from_call: str, to_call: str, message: str) -> None:

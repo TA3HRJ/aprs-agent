@@ -5571,3 +5571,75 @@ collision survivable; it does not make it rare. Watch the journal for a week:
 if `database is locked` no longer appears, stop there. If it does, the next step
 is either WAL mode — which changes the file set every copy has to know about —
 or a flush that writes only the stations touched since the last one.
+
+
+---
+
+## F-2026-09-19-01 — every restart reused message numbers 2 and 4, and a client showed one line of a two-line answer
+
+**Fixed in v3.2.115.**
+
+### What was seen
+
+The operator asked DMWGPT *"What is my location?"* from the aprs.fi iPhone app,
+logged in as `TA3HRJ-10`, and saw a single line. The gateway had sent two, and
+the app had acknowledged both:
+
+    00:18:51  TX to TA3HRJ-10  {2  "TA3HRJ-10: 38.455,27.108 (KM38nk) 12d ago via APRSFI. My own --"
+    00:18:56  TX to TA3HRJ-10  {4  "feed only; full history: aprs.fi"
+              TA3HRJ-10>APFII0,TCPIP*,qAC,APRSFI::DMWGPT   :ack2
+              TA3HRJ-10>APFII0,TCPIP*,qAC,APRSFI::DMWGPT   :ack4
+
+### Why
+
+The only earlier exchange between the two was on 2026-09-06: *"Test"*, answered
+in two parts. Both conversations were the first reply of their process, and the
+counter started from zero at every restart:
+
+    self._msg_counter = (self._msg_counter + 1) % 999 + 1
+
+so the first two numbers after any restart were always **2 and 4**, whoever the
+reply went to. The station received `{2` and `{4` from DMWGPT twice, thirteen
+days apart. APRS clients recognise a message they have already shown by sender
+and number, acknowledge the repeat and do not show it again — exactly what an
+acknowledged line that never appears looks like. There were five restarts on
+2026-09-17 alone.
+
+The formula also stepped by two, halving a range that was already only 999
+wide.
+
+**Not established:** how the aprs.fi app treats the repeat in detail. Both
+numbers repeated and one line still appeared, which suggests it may overwrite
+the earlier message rather than drop the new one. The server side is certain;
+the client's rendering was inferred.
+
+A second client was also logged in as `TA3HRJ-10`, through `T2TURKIYE` with
+tocall `APRS`, and acknowledged only the first part. It was not what the
+operator was looking at, and its only packet in thirty hours was that
+acknowledgement.
+
+### What changed
+
+- The last number used is kept in `ai_gateway_msgid` next to the config file
+  and read back on start, so a restart continues where the last lifetime
+  stopped.
+- Without a config path, or if the file cannot be read, the counter starts from
+  the clock at one number per 30 s — a 35-day cycle — so two lifetimes never
+  start from the same constant.
+- Numbers step by one and wrap from 99999 to 1: numeric, 1-5 characters, as
+  every client already accepted.
+- A file that cannot be written costs one warning and the reply still goes.
+
+`tools/check_msg_ids.py` sends a two-part reply to the same station from two
+lifetimes sharing a config path and asserts the numbers differ; does the same
+without a config path an hour apart; and asserts the step, the 1-5 digit shape,
+the wrap and the unwritable-file case. **Seen failing against v3.2.114 on four
+of six**, reproducing `['2', '4']` before and after a restart.
+
+### Also seen, not changed
+
+The answer itself is one sentence by design: a first-person position question
+is answered from the registry by a fixed template, not by the model
+(F-2026-09-10-02). And that sentence was stale, *"12d ago"*, because the app
+sends messages as `TA3HRJ-10` but no position — and still under the operator's
+former callsign.
