@@ -42,7 +42,7 @@ except Exception as e:
     print(f"Login FAILED: {type(e).__name__}: {e}")
     sys.exit(1)
 
-post_text = "APRS-Agent Bluesky test. 73 de TA3HRJ #APRS"
+post_text = "APRS-Agent Bluesky test. 73 de TA3HX #APRS"
 print(f"\nSending test post: {post_text}")
 try:
     response = client.send_post(text=post_text)

@@ -10,7 +10,7 @@ the response back as APRS message(s).
 Supported providers: Puter (free), Groq, OpenRouter, or any
 OpenAI-compatible endpoint.
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 Bidirectional design follows aprs-ai-gateway by TA3EKM (Arda Yalin Ozkan),
 which is what made an APRS station able to answer rather than only report.
   https://github.com/ArdaYalinOzkan/aprs-ai-gateway

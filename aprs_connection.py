@@ -16,7 +16,7 @@ APRS-IS Protocol basics:
   - Server sends lines, one APRS packet per line
   - Lines starting with '#' are server comments/status messages
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 

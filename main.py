@@ -18,7 +18,7 @@ Usage:
   python main.py --print-config           Show loaded config values and exit
   python main.py --sync-config-to-file    Add missing defaults to existing config
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 MIT License - see LICENSE file
 """
 from __future__ import annotations

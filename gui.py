@@ -22,7 +22,7 @@ Features:
 Run with:   python gui.py
             python gui.py -c /path/to/aprsconfig.toml
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 
 import argparse
@@ -753,7 +753,7 @@ _S = {
         "bcn_locator":        "QTH Locator:",
         "bcn_locator_hint":   "Maidenhead grid  örn.  KM38nk23  (4/6/8 hane) ← enlem/boylamı otomatik günceller",
         "bcn_ssid":           "İstasyon SSID:",
-        "bcn_ssid_hint":      "Çağrı işareti + SSID  örn.  TA3HRJ-10",
+        "bcn_ssid_hint":      "Çağrı işareti + SSID  örn.  TA1ABC-10",
         "bcn_lat":            "Enlem:",
         "bcn_lat_hint":       "DDMM.MMN formatı  örn.  4100.00N",
         "bcn_lon":            "Boylam:",
@@ -923,7 +923,7 @@ class _AboutDialog:
     """
 
     _DEVELOPERS = [
-        ("TA3HRJ", "ta3hrj@gmail.com",    "https://github.com/TA3HRJ"),
+        ("TA3HX",  "ta3hx.radio@gmail.com", "https://github.com/TA3HRJ"),
         ("TA3PKS", "ta3pks@mugsoft.io",   "https://github.com/TA3PKS"),
         ("TA3EKM", None,                   "https://github.com/ArdaYalinOzkan"),
     ]

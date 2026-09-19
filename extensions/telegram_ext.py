@@ -11,14 +11,14 @@ Outbound (APRS → Telegram):
 Inbound (Telegram → APRS):
   Polls the Telegram bot for new messages. Messages starting with a
   callsign are forwarded as APRS packets.
-  Format: "TA3HRJ-7 Hello from Telegram!"
+  Format: "TA1ABC-7 Hello from Telegram!"
 
 Setup:
   1. Message @BotFather on Telegram, create a bot, get the token
   2. Message your bot, then get your chat_id from @userinfobot
   3. Enter bot_token and chat_id in config
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 

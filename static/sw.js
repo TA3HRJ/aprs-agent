@@ -20,7 +20,7 @@
  * feed; it has nothing useful to show offline, and the offline shell bought
  * exactly one thing — a way to silently serve stale code.
  *
- * Developed by TA3HRJ & TA3PKS
+ * Developed by TA3HX & TA3PKS
  */
 self.addEventListener("install", () => self.skipWaiting());
 

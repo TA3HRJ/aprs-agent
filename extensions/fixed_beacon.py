@@ -17,7 +17,7 @@ Configuration fields in aprsconfig.toml:
   comment           = Short text shown on APRS maps
   beacon_interval_mins = How often to send, in minutes
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2024–2026 TA3HRJ (Erhan)
+Copyright (c) 2024–2026 TA3HX (Erhan), formerly TA3HRJ
 
 Three contributions this project is built on.
 
@@ -20,10 +20,11 @@ Three contributions this project is built on.
   that pattern.
   https://github.com/ArdaYalinOzkan/aprs-ai-gateway
 
-  TA3HRJ (Erhan) — the original concept, the Python port, and the work
-  since: the desktop and web interfaces, station intelligence, the
-  silence map and its incident response, RF propagation tracking, and
-  the Telegram, WhatsApp, Bluesky and IMAP extensions.
+  TA3HX (Erhan), formerly TA3HRJ — the original concept, the Python
+  port, and the work since: the desktop and web interfaces, station
+  intelligence, the silence map and its incident response, RF
+  propagation tracking, and the Telegram, WhatsApp, Bluesky and IMAP
+  extensions.
   https://github.com/TA3HRJ/aprs-agent
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

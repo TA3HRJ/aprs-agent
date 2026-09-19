@@ -13,7 +13,7 @@ How it works:
 
 Supports Gmail (use App Password), Outlook, or any standard SMTP server.
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 

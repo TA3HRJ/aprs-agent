@@ -14,7 +14,7 @@ How it works:
 Requires a Bluesky account and an App Password.
 Create App Password at: bsky.app → Settings → App Passwords
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 

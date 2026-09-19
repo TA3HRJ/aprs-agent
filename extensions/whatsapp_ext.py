@@ -11,7 +11,7 @@ Outbound (APRS → WhatsApp):
 Inbound (WhatsApp → APRS):
   Requires webhook endpoint on the web server. Messages starting with
   a callsign are forwarded as APRS packets.
-  Format: "TA3HRJ-7 Hello from WhatsApp!"
+  Format: "TA1ABC-7 Hello from WhatsApp!"
 
 Setup:
   1. Create a Meta Business account at business.facebook.com
@@ -20,7 +20,7 @@ Setup:
   4. Set webhook URL to: https://YOUR_SERVER/webhook/whatsapp
   5. Set verify_token to match your config
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 

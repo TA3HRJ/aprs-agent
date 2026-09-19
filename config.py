@@ -8,7 +8,7 @@ Supports:
   --print-config           Print the loaded config and exit
   --sync-config-to-file    Add any missing default values to the config file
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 
@@ -333,7 +333,7 @@ def resolve_ai_api_key(ai_cfg: dict[str, Any], provider: str) -> str:
 def strip_ssid(callsign: str) -> str:
     """Return the base callsign without SSID suffix.
 
-    Example: "TA3HRJ-7" → "TA3HRJ",  "N0CALL" → "N0CALL"
+    Example: "TA1ABC-7" → "TA1ABC",  "N0CALL" → "N0CALL"
     Used by calculate_passcode() and the Twitter/SMTP extensions.
     """
     return callsign.split("-")[0]

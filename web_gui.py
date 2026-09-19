@@ -10,7 +10,7 @@ Web-based interface for APRS-Agent. Runs on any OS with a browser.
 On Windows: automatically opens browser to http://localhost:PORT
 On Linux  : access via http://SERVER_IP:PORT
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 

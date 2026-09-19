@@ -3,7 +3,7 @@ Packet Parser
 =============
 Rule-based extraction of structured data from raw APRS-IS packet strings.
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 

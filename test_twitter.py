@@ -45,7 +45,7 @@ except tweepy.TweepyException as e:
         print(f"Response body: {e.response.text[:300]}")
     sys.exit(1)
 
-tweet_text = "APRS-Agent Twitter v2 API test. 73 de TA3HRJ #APRS"
+tweet_text = "APRS-Agent Twitter v2 API test. 73 de TA3HX #APRS"
 print(f"\nSending test tweet: {tweet_text}")
 try:
     resp = client.create_tweet(text=tweet_text)

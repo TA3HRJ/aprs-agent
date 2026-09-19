@@ -12,11 +12,11 @@ How it works:
 5. Marks the email as read (SEEN)
 
 Email subject format:
-  TA3HRJ-7 Hello, your beacon is working fine!
+  TA1ABC-7 Hello, your beacon is working fine!
 
 Requires IMAP access (Gmail: enable IMAP + use App Password).
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 

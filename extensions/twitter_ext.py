@@ -14,7 +14,7 @@ How it works:
 Requires Twitter API v2 credentials with read+write access.
 Get credentials at: https://developer.twitter.com
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 

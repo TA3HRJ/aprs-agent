@@ -12,7 +12,7 @@ Protocol:
 
 A client that sends no "ping" for 10 seconds is disconnected.
 
-Developed by TA3HRJ & TA3PKS
+Developed by TA3HX & TA3PKS
 """
 from __future__ import annotations
 

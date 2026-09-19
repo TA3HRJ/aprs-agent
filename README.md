@@ -766,7 +766,7 @@ APRS-Agent is built on three contributions:
 
 **[TA3EKM](https://github.com/ArdaYalinOzkan)** — the bidirectional [AI Gateway](https://github.com/ArdaYalinOzkan/aprs-ai-gateway). A station that could answer, and not merely report, is what turned this project from a one-way logger into a two-way service; it is the hinge the architecture turns on, and every extension added afterwards follows that pattern.
 
-**[TA3HRJ](https://github.com/TA3HRJ)** — the original concept, the Python port, and the work since: the desktop and web interfaces, station intelligence, the silence map and its incident response, RF propagation tracking, and the Telegram, WhatsApp, Bluesky and IMAP extensions.
+**[TA3HX](https://github.com/TA3HRJ)** (formerly TA3HRJ) — the original concept, the Python port, and the work since: the desktop and web interfaces, station intelligence, the silence map and its incident response, RF propagation tracking, and the Telegram, WhatsApp, Bluesky and IMAP extensions.
 
 ---
 
@@ -775,4 +775,4 @@ APRS-Agent is built on three contributions:
 Pull requests and issue reports are welcome.
 Please test your changes before submitting.
 
-73 de TA3HRJ
+73 de TA3HX

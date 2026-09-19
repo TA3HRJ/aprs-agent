@@ -4,7 +4,7 @@
 # Edit the values below with your own settings.
 # Lines starting with '#' are comments and are ignored by the program.
 #
-# Developed by TA3HRJ & TA3PKS
+# Developed by TA3HX & TA3PKS
 # https://github.com/YOUR_USERNAME/aprs-agent
 # =============================================================================
 
@@ -476,7 +476,7 @@ custom = ""
 # --- IMAP Email Receiver ---
 # Polls your email inbox and forwards new emails as APRS messages.
 # Email subject format: CALLSIGN message text
-# Example: "TA3HRJ-7 Hello from email!" → sends APRS message to TA3HRJ-7
+# Example: "TA1ABC-7 Hello from email!" → sends APRS message to TA1ABC-7
 # Requires IMAP access. Gmail: enable IMAP + use an App Password.
 
 [extensions.imap]
