@@ -29,7 +29,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from extensions import ai_gateway_ext as aig  # noqa: E402
 from extensions.ai_gateway_ext import AIGateway  # noqa: E402
+
+# The retries this check is about were minutes apart on the air. Time does
+# not pass inside a loop, so it is moved by hand; the gateway reads the
+# clock through aig._clock and nowhere else.
+_REAL_CLOCK = aig._clock
+_OFFSET = {"s": 0.0}
+aig._clock = lambda: _REAL_CLOCK() + _OFFSET["s"]
 
 CFG = {
     "enabled": True,
@@ -64,8 +72,10 @@ async def run() -> int:
 
     gw._ask_ai = stub
 
-    for _ in range(ASKED):
+    for i in range(ASKED):
+        _OFFSET["s"] = i * 60.0          # W3AKU-7 asked over five minutes
         await gw.handle(LINE)
+    _OFFSET["s"] = 0.0
 
     replies = [s for s in sent if "::W3AKU-7" in s and ":ack" not in s]
     ids = {s.rsplit("{", 1)[-1] for s in replies if "{" in s}
@@ -108,8 +118,10 @@ async def run() -> int:
 
     numbered = ("KC1MUR-5>APDR16,TCPIP*,qAC,T2X::DMWGPT   :"
                 "When was Dream Police by cheap trick released{%s")
-    for n in ("17", "18"):
+    for i, n in enumerate(("17", "18")):
+        _OFFSET["s"] = i * 60.0          # a minute apart, as KC1MUR-5 sent it
         await gw2.handle(numbered % n)
+    _OFFSET["s"] = 0.0
 
     replies2 = [s for s in sent2 if "::KC1MUR-5" in s and ":ack" not in s]
     if calls2["n"] != 1:
@@ -120,6 +132,41 @@ async def run() -> int:
                         "silence")
     print("same text, two message numbers -> %d provider call(s), %d "
           "deliveries" % (calls2["n"], len(replies2)))
+
+    # A copy that arrives in the same second is the sender's own client
+    # sending twice, not somebody who waited and heard nothing. N1QQA did
+    # exactly this on 2026-09-20: every question arrived twice, and each
+    # answer went out twice - four transmissions for one question, on a
+    # shared channel. A replay is for a retry, and a retry takes time.
+    sent4: list[str] = []
+
+    class Queue4:
+        async def put(self, b: bytes) -> None:
+            sent4.append(b.decode("utf-8").strip())
+
+    gw4 = AIGateway(dict(CFG), "")
+    gw4._own_writer = Queue4()
+    calls4 = {"n": 0}
+
+    async def stub4(question: str, sender: str = "", history=None) -> str:
+        calls4["n"] += 1
+        return ANSWER
+
+    gw4._ask_ai = stub4
+    twice = ("N1QQA>APDR16,TCPIP*,qAC,T2X::DMWGPT   :"
+             "What is tomorrows weather outlook for wakefield NH?{%s")
+    await gw4.handle(twice % "21")
+    await gw4.handle(twice % "22")
+    replies4 = [s for s in sent4 if "::N1QQA" in s and ":ack" not in s]
+    if calls4["n"] != 1:
+        problems.append("an immediate duplicate cost %d provider calls"
+                        % calls4["n"])
+    if len(replies4) > 1:
+        problems.append("a duplicate arriving in the same second was "
+                        "replayed: %d transmissions for one question"
+                        % len(replies4))
+    print("duplicate in the same second -> %d provider call(s), %d deliveries"
+          % (calls4["n"], len(replies4)))
     for p in problems:
         print("FAIL  " + p)
     return 1 if problems else 0

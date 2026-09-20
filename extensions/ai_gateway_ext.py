@@ -548,6 +548,12 @@ class AIGateway(Extension):
     # difference.
     _MAX_REPLAYS = 2
 
+    # Below this, a second copy is a client sending twice rather than a person
+    # who gave up waiting. Our own answer is on its way within a second or
+    # two; a client that retries takes tens of seconds to decide it did not
+    # arrive.
+    _REPLAY_MIN_AGE_S = 25.0
+
     def __init__(self, config: dict, config_path: str = ""):
         self._config = config
         self._config_path = config_path
@@ -1387,7 +1393,7 @@ class AIGateway(Extension):
         # indistinguishable from the gateway being down. Seen live -
         # CT4TX-10 asked "what APRS mean?" twice, seven minutes apart, and
         # was answered once.
-        now_ts = time.time()
+        now_ts = _clock()
         if self._processed:
             for k in [k for k, v in self._processed.items() if v[0] <= now_ts]:
                 del self._processed[k]
@@ -1413,6 +1419,16 @@ class AIGateway(Extension):
             # cached answer goes out again. No AI call; the cost is one more
             # transmission on a path that already failed once.
             exp, cached, left = seen
+            # How long ago the question first arrived. A copy that lands in
+            # the same breath is the sender's own client sending twice -
+            # N1QQA's did on 2026-09-20, and every answer went out twice for
+            # it. A replay is for somebody who waited and heard nothing, and
+            # waiting takes longer than this.
+            asked_ago = now_ts - (exp - self._DEDUP_TTL_S)
+            if cached and asked_ago < self._REPLAY_MIN_AGE_S:
+                self.log(f"duplicate from {sender_full} after {asked_ago:.0f}s"
+                         f", not replaying")
+                return None
             if cached and left > 0 and self._own_writer:
                 self._processed[dedup_key] = (exp, cached, left - 1)
                 self.log(f"replaying answer to {sender_full} ({left - 1} left)")

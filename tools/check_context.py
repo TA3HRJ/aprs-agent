@@ -137,13 +137,19 @@ async def run() -> int:
     # 4 - the third identical question is answered, not met with silence
     sent, seen = [], []
     gw = new_gateway(sent, seen, [A1, A1, A1, A1])
+    real = aig._clock
     for i in range(4):
         n = len(sent)
+        # Minutes apart, as he sent them. A copy in the same second is a
+        # client sending twice and is deliberately not replayed
+        # (tools/check_replay.py holds that half).
+        aig._clock = (lambda base, k: (lambda: base() + k * 90.0))(real, i)
         await gw.handle(line("DL5XL-9", Q1, "51"))
         if not replies(sent, n, "DL5XL-9"):
             problems.append("asking the same question %d times in a row left "
                             "the %dth unanswered" % (i + 1, i + 1))
             break
+    aig._clock = real
 
     for p in problems:
         print("FAIL: " + p)
