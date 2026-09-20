@@ -103,7 +103,7 @@ async def run() -> int:
 
         asked = {"n": 0}
 
-        async def stub(q: str, s: str = "") -> str:
+        async def stub(q: str, s: str = "", history=None) -> str:
             asked["n"] += 1
             return "MODEL ANSWER"
 
@@ -149,7 +149,7 @@ async def run() -> int:
     gw._own_writer = Q2()
     asked2 = {"n": 0}
 
-    async def stub2(q: str, s: str = "") -> str:
+    async def stub2(q: str, s: str = "", history=None) -> str:
         asked2["n"] += 1
         return "It is 30C and sunny in Ankara."
 
@@ -176,7 +176,7 @@ async def run() -> int:
     import time as _t
     gw._day = _t.strftime("%Y-%m-%d", _t.gmtime())
 
-    async def stub3(q, s=""):
+    async def stub3(q, s="", history=None):
         return "MODEL ANSWER"
 
     gw._ask_ai = stub3

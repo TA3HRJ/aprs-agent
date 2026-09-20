@@ -91,7 +91,7 @@ async def run() -> int:
 
         asked = {"n": 0}
 
-        async def stub(q: str, s: str = "") -> str:
+        async def stub(q: str, s: str = "", history=None) -> str:
             asked["n"] += 1
             return "MODEL ANSWER"
 

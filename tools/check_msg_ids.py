@@ -98,7 +98,7 @@ async def one_lifetime(config_path: str) -> list[str]:
     sink = Sink()
     gw._own_writer = sink
 
-    async def stub(question: str, sender: str = "") -> str:
+    async def stub(question: str, sender: str = "", history=None) -> str:
         return ANSWER
 
     gw._ask_ai = stub

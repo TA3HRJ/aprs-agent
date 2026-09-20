@@ -326,7 +326,13 @@ _HELP_MSG = re.compile(
     r"^\s*(?:help|\?+|commands?|menu)\s*[?!.]*\s*$"
     r"|what\s+(?:else\s+)?(?:can|do)\s+(?:you|u)\s+do"
     r"|what\s+are\s+you\s+for"
-    r"|^\s*(?:hello,?\s+)?can\s+you\s+help\s+me\s*[?!.]*\s*$",
+    r"|^\s*(?:hello,?\s+)?can\s+you\s+help\s+me\s*[?!.]*\s*$"
+    # Asked sideways, which is how two stations asked it on 2026-09-20:
+    # "I wonder what you can help me with." Anchored at the end, so
+    # "can you help me with converting miles" is a request and goes to
+    # the model.
+    r"|what\s+(?:you\s+can|can\s+you)\s+help\s+(?:me\s+)?with\s*[?!.]*\s*$"
+    r"|^\s*can\s+you\s+help\s+me\s+with\s+(?:anything|something)\s*[?!.]*\s*$",
     re.I)
 _HELP_MSG_TR = re.compile(
     r"^\s*(?:yardim|yardım|komutlar)\s*[?!.]*\s*$"
@@ -343,6 +349,17 @@ _HELP_TEXT = ("I answer short questions sent as APRS messages. Also: your own "
 _HELP_TEXT_TR = ("APRS mesajıyla gelen kısa soruları yanıtlarım. Ayrıca: kendi "
                  "istasyonun (neredeyim), en yakın APRS hava ölçümü ve TEST. "
                  "Haber yok, başka istasyonların konumu yok.")
+
+# How much of a conversation rides along with the next question, and for how
+# long. On 2026-09-20 DL5XL-9 asked for the best way from Bremen to Berlin,
+# then "How long would it take by car?", and was told to name the two places:
+# each question reached the model alone. He re-sent the same pair four times
+# over. Three exchanges is enough for a follow-up and short enough that a
+# stale subject cannot steer a new question; ten minutes is the same window
+# the dedup cache uses. Kept in memory only and never written down - this is
+# other people's traffic, public on the air but not ours to file.
+_HISTORY_TURNS = 3
+_HISTORY_TTL_S = 600.0
 
 # The fixed answer goes out at most this often to one sender. It is free of
 # the model and free of the token bucket, and that is exactly what would make
@@ -469,6 +486,8 @@ class AIGateway(Extension):
         # for the first time asks three or four questions back to back.
         self._buckets: dict[str, list] = {}   # sender -> [tokens, last_refill, told]
         self._help_at: dict[str, float] = {}  # sender -> when the help text went out
+        # sender -> [(ts, question, answer), ...], newest last. Memory only.
+        self._history: dict[str, list] = {}
         self._day = ""
         self._day_count = 0
         self._day_told = False
@@ -694,6 +713,35 @@ class AIGateway(Extension):
                  % (sender_full, rec.get("callsign"), dist_km))
         return _wx_answer(rec, dist_km)
 
+    def _recent_turns(self, sender_base: str) -> "list[tuple[str, str]]":
+        """The sender's last few exchanges, newest last, dropping stale ones."""
+        turns = self._history.get(sender_base)
+        if not turns:
+            return []
+        cutoff = _clock() - _HISTORY_TTL_S
+        turns = [t for t in turns if t[0] >= cutoff]
+        if turns:
+            self._history[sender_base] = turns
+        else:
+            self._history.pop(sender_base, None)
+        return [(q, a) for _, q, a in turns[-_HISTORY_TURNS:]]
+
+    def _remember(self, sender_base: str, question: str, answer: str) -> None:
+        """Keep one exchange for the next question from the same station."""
+        if not sender_base or not question or not answer:
+            return
+        now = _clock()
+        turns = self._history.setdefault(sender_base, [])
+        turns.append((now, question, answer))
+        del turns[:-_HISTORY_TURNS]
+        # A worldwide feed reaches this dict; drop whoever has gone quiet
+        # rather than let it grow.
+        if len(self._history) > 500:
+            cutoff = now - _HISTORY_TTL_S
+            for k in [k for k, v in self._history.items()
+                      if not v or v[-1][0] < cutoff]:
+                del self._history[k]
+
     def _help_answer(self, question: str, sender_base: str) -> "Optional[str]":
         """What this service can do, said by the code rather than the model.
 
@@ -768,7 +816,8 @@ class AIGateway(Extension):
         return ("I only look up your own callsign. For other stations, "
                 "aprs.fi or findu.com.")
 
-    async def _ask_ai(self, question: str, sender: str = "") -> str:
+    async def _ask_ai(self, question: str, sender: str = "",
+                      history: "Optional[list]" = None) -> str:
         cfg = self._config
         extra = int(cfg.get("extra_sms", 0))
         total_parts = 1 + extra
@@ -813,6 +862,14 @@ class AIGateway(Extension):
         model = self._model
         provider = self._provider
         max_tokens = 40 + (extra * 35)
+        # The station's last few exchanges, in the shape both providers take.
+        # Each turn is one short APRS message and its answer, so this adds a
+        # few hundred characters to a call and buys a follow-up that knows
+        # what it is following.
+        turns = []
+        for prev_q, prev_a in (history or []):
+            turns.append({"role": "user", "content": prev_q})
+            turns.append({"role": "assistant", "content": prev_a})
         loop = asyncio.get_running_loop()
 
         def _do_ask():
@@ -830,7 +887,8 @@ class AIGateway(Extension):
                             "model": model,
                             "max_tokens": max_tokens,
                             "system": system_prompt,
-                            "messages": [{"role": "user", "content": question}],
+                            "messages": turns + [{"role": "user",
+                                                  "content": question}],
                         },
                     )
                     r.raise_for_status()
@@ -857,10 +915,8 @@ class AIGateway(Extension):
                 resp = client.chat.completions.create(
                     model=model,
                     max_tokens=max_tokens,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": question},
-                    ],
+                    messages=[{"role": "system", "content": system_prompt}]
+                    + turns + [{"role": "user", "content": question}],
                     extra_body=extra_body,
                 )
                 return resp.choices[0].message.content.strip()
@@ -978,6 +1034,32 @@ class AIGateway(Extension):
                     await self._send_reply(my_call, sender_full, part)
                     if i:
                         await asyncio.sleep(5)
+                return None
+            if not cached:
+                # Still waiting on the model for this very message. This is
+                # the retry the cache exists to absorb, and answering it twice
+                # would cost two calls for one question.
+                return None
+            # The replays are used up and the sender is still asking. Silence
+            # here is what DL5XL-9 met on 2026-09-20 at the third repeat, and
+            # it is indistinguishable from a dead gateway. The answer goes out
+            # again - still no model call, one question is still one call -
+            # but from here on each copy costs a token, so how often someone
+            # may ask is the bucket's decision rather than a flat cap.
+            allowed, notice = self._allow_rate(sender_base, cfg)
+            if not allowed:
+                self.mark_working()
+                self.warn(f"rate-limited {sender_full} (past replays)")
+                if notice:
+                    await self._send_reply(my_call, sender_full, notice)
+                return None
+            self.log(f"resending answer to {sender_full} (replays spent)")
+            for i, part in enumerate(_split_message(
+                    cached, 1 + int(cfg.get("extra_sms", 0)))):
+                await self._send_reply(my_call, sender_full, part)
+                if i:
+                    await asyncio.sleep(5)
+            self.mark_working()
             return None
         self._processed[dedup_key] = (now_ts + self._DEDUP_TTL_S, "", self._MAX_REPLAYS)
 
@@ -1084,7 +1166,8 @@ class AIGateway(Extension):
                 if notice:
                     await self._send_reply(my_call, sender_full, notice)
                 return None
-            answer = await self._ask_ai(question, sender_full)
+            answer = await self._ask_ai(question, sender_full,
+                                        self._recent_turns(sender_base))
         if not answer:
             # Asked, and came back empty. Whatever the cause, this station was
             # left waiting, and that is the thing the badge has to be able to
@@ -1120,5 +1203,7 @@ class AIGateway(Extension):
             if i < len(parts) - 1:
                 await asyncio.sleep(5)
 
+        # Kept for the next question from this station, for ten minutes.
+        self._remember(sender_base, question, answer)
         self.mark_working()
         return None

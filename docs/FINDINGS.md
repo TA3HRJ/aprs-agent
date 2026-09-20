@@ -5720,3 +5720,78 @@ weather answer had disclosed that same station's callsign, distance and
 readings. Neither is a bug in what shipped here. Both are the same underlying
 gap: the gateway does not know what its own host knows, and the refusal texts
 say "I don't have the data" where the truth is "I am not allowed to".
+
+---
+
+## F-2026-09-20-02 — the gateway forgot the sentence before, and a station asking a third time got nothing
+
+**Fixed in v3.2.118.**
+
+### What was seen
+
+`DL5XL-9` found the gateway on 2026-09-20 and spent half an hour on it. The
+first exchange went well:
+
+    14:15:30  DL5XL-9>DMWGPT  I want to travel from Bremen to Berlin. What is the best way?
+    14:15:32  DMWGPT>DL5XL-9  No live data here. Best bet: Deutsche Bahn train, Bremen Hbf --
+    14:15:37  DMWGPT>DL5XL-9  to Berlin Hbf, roughly 4h with ICE. Check bahn.de.
+
+The second did not:
+
+    14:16:39  DL5XL-9>DMWGPT  How long would it take by car?
+    14:16:40  DMWGPT>DL5XL-9  I don't have route or traffic data, and you haven't told me --
+    14:16:45  DMWGPT>DL5XL-9  the two places. Please resend with start and destination.
+
+Every question was sent to the provider on its own: one user message, no
+history. A follow-up that names nothing, which is how people actually write
+them, arrived with no subject.
+
+He then re-sent the same two messages four times over the next fifteen
+minutes — which is what someone does when they are working out why a service
+does not follow them — and one of those repeats was answered by nothing at
+all:
+
+    14:19:08  DL5XL-9>DMWGPT  I wonder what you can help me with.
+    (nothing)
+
+That was the replay cache: an answer may be replayed twice, and after that the
+sender is treated as stuck rather than unlucky. The rule was written for a
+shared channel (F-2026-09-19-01 built the replay in the first place), but the
+cost lands on the sender as silence, which is what a dead gateway looks like.
+
+One more, the same afternoon: *"I wonder what you can help me with."* did not
+match the capability patterns added hours earlier in v3.2.117, so it went to
+the model, which described the service in its own words. Two different
+stations sent that same sideways phrasing.
+
+### What changed
+
+- **The last three exchanges with a station ride along with its next
+  question**, for ten minutes, in memory only and never written to disk. Each
+  turn is one short APRS message and its answer, so a call grows by a few
+  hundred characters.
+- **A spent replay no longer means silence.** The cached answer goes out
+  again — still no second model call, so one question is still one call — and
+  from that point each copy costs a rate token, so how often someone may ask
+  is the bucket's decision rather than a flat cap of two.
+- **The capability patterns take the sideways forms**, anchored at the end so
+  "can you help me with converting miles to km" is still a question for the
+  model.
+
+`tools/check_context.py` asserts that a follow-up reaches the provider with
+the exchange before it, that one station's history never reaches another's
+question, that an hour-old exchange is forgotten, and that the same question
+asked four times is answered four times. **Seen failing against v3.2.117 on
+the first and the last.** `tools/check_gateway_intent.py` grew the two
+phrasings and the counter-example; **both phrasings were seen going to the
+model** before the change.
+
+### Also seen, not changed
+
+Two parts of earlier answers appeared on aprs.fi at 14:35, minutes after they
+were sent, with no matching line in the journal and no row in the message
+history. The agent neither sent nor received anything at that time. The likely
+reading is an igate retrying delivery to RF and a second igate gating the
+repeat back onto APRS-IS — which would also be the first direct evidence that
+the replies reach RF near the sender. Settle it from the packet path: `qAR`
+means it came back from RF, `TCPIP*` would mean it came from here.

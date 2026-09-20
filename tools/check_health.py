@@ -109,7 +109,7 @@ async def run() -> int:
     # 3. answered
     gw = gateway()
 
-    async def ok(q, s=""):
+    async def ok(q, s="", history=None):
         return "A dipole is fine for that band."
 
     gw._ask_ai = ok
@@ -123,7 +123,7 @@ async def run() -> int:
     def explode():
         raise OSError("connection refused")
 
-    async def dead(q, s=""):
+    async def dead(q, s="", history=None):
         try:
             explode()
         except Exception as e:
@@ -139,7 +139,7 @@ async def run() -> int:
     gw = AIGateway(dict(CFG, rate_burst=1, rate_refill_s=3600), "")
     gw._own_writer = Sink()
 
-    async def ok2(q, s=""):
+    async def ok2(q, s="", history=None):
         return "fine"
 
     gw._ask_ai = ok2

@@ -58,7 +58,7 @@ async def run() -> int:
 
     calls = {"n": 0}
 
-    async def stub(question: str, sender: str = "") -> str:
+    async def stub(question: str, sender: str = "", history=None) -> str:
         calls["n"] += 1
         return ANSWER
 

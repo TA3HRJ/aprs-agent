@@ -95,7 +95,7 @@ def new_gateway(sent: list, calls: dict):
     gw._own_writer = Queue()
     gw.set_station_db(FakeDB())
 
-    async def stub(question: str, sender: str = "") -> str:
+    async def stub(question: str, sender: str = "", history=None) -> str:
         calls["n"] += 1
         calls["last"] = question
         return MODEL_ANSWER
@@ -148,6 +148,27 @@ async def run() -> int:
     if "APRS" not in answer.upper():
         problems.append("Turkish help text missing: %r" % answer[:60])
 
+    # 2c - the same question asked sideways. Both of these were sent by real
+    # stations on 2026-09-20 and both were answered by the model inventing a
+    # description of the service.
+    for phrasing in ("I wonder what you can help me with.",
+                     "what can you help me with?"):
+        sent, calls = [], {"n": 0, "last": ""}
+        gw = new_gateway(sent, calls)
+        answer = await ask(gw, sent, "DL5XL-9", phrasing)
+        if calls["n"]:
+            problems.append("%r went to the model" % phrasing)
+        del answer
+
+    # 2d - but a question that only begins like one is still a question
+    sent, calls = [], {"n": 0, "last": ""}
+    gw = new_gateway(sent, calls)
+    answer = await ask(gw, sent, "K1ABC-9", "can you help me with converting "
+                                            "miles to km")
+    if calls["n"] != 1:
+        problems.append("a real request beginning 'can you help me with' was "
+                        "caught by the help text instead of the model")
+
     # 3 - a joke that mentions the weather is a joke
     sent, calls = [], {"n": 0, "last": ""}
     gw = new_gateway(sent, calls)
@@ -171,7 +192,7 @@ async def run() -> int:
 
     for p in problems:
         print("FAIL: " + p)
-    print("checked 5 cases - %d failed" % len(problems))
+    print("checked 7 cases - %d failed" % len(problems))
     return 1 if problems else 0
 
 
