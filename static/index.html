@@ -2838,7 +2838,7 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden)chec
 function fillGateway(g){
   try{
     if(!g||typeof g.total!=='number')return;
-    const t=(T[lang]&&T[lang].about_gw_v)||T.en.about_gw_v;
+    const t=(S[lang]&&S[lang].about_gw_v)||S.en.about_gw_v;
     $('about-gw-n').textContent=t.replace('{t}',g.today)
       .replace('{a}',g.total).replace('{q}',g.questions);
     $('about-gw').hidden=false;
