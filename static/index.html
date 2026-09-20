@@ -477,7 +477,7 @@ body.public .sb-toggle{display:none!important}
   <button class="hdr-btn" onclick="document.querySelectorAll('.pref-group').forEach(g=>g.classList.add('collapsed'))" title="Collapse All">−</button>
   <button class="hdr-btn" onclick="document.querySelectorAll('.pref-group').forEach(g=>g.classList.remove('collapsed'))" title="Expand All">+</button>
   <button class="hdr-btn" id="btn-lang" onclick="toggleLang()">TR</button>
-  <button class="hdr-btn" id="btn-about" onclick="$('about-bg').classList.add('open')" data-i="btn_about">About</button>
+  <button class="hdr-btn" id="btn-about" onclick="openAbout()" data-i="btn_about">About</button>
   <button class="hdr-btn sb-close" onclick="document.body.classList.remove('sb-open')" title="Close">✕</button>
 </div>
 
@@ -660,7 +660,7 @@ body.public .sb-toggle{display:none!important}
            a link to somebody else's site by default. -->
       <a class="log-btn" id="pub-home" data-i="pub_home" href="#" hidden>Home</a>
       <button class="log-btn" id="pub-lang" onclick="toggleLang()">TR</button>
-      <button class="log-btn" onclick="$('about-bg').classList.add('open')" data-i="btn_about">About</button>
+      <button class="log-btn" onclick="openAbout()" data-i="btn_about">About</button>
     </div>
   </div>
   <div class="tab-bar">
@@ -2830,6 +2830,28 @@ async function checkVersion(){
 setInterval(checkVersion,VER_CHECK_MS);
 document.addEventListener('visibilitychange',function(){if(!document.hidden)checkVersion()});
 
+// Gateway usage, beside the AI analysis counter. Written as a function and
+// called again every time the About panel opens: the numbers are refreshed
+// once a minute on the server, and a page left open all day would otherwise
+// show whatever was true when it loaded - or nothing at all, if it loaded
+// before the first tally existed.
+function fillGateway(g){
+  try{
+    if(!g||typeof g.total!=='number')return;
+    const t=(T[lang]&&T[lang].about_gw_v)||T.en.about_gw_v;
+    $('about-gw-n').textContent=t.replace('{t}',g.today)
+      .replace('{a}',g.total).replace('{q}',g.questions);
+    $('about-gw').hidden=false;
+    $('about-gw-link').onclick=function(e){e.preventDefault();
+      $('about-bg').classList.remove('open');switchTab('msg')};
+  }catch(e){}
+}
+
+async function openAbout(){
+  $('about-bg').classList.add('open');
+  try{ fillGateway((await api('GET','/api/info')).gateway); }catch(e){}
+}
+
 // ── Init ──
 (async function(){
   if(window.PUBLIC){
@@ -2845,16 +2867,7 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden)chec
     $('about-ver').textContent='APRS-Agent v'+info.version;
     // Quota watch — the admin app reports lifetime AI analysis calls
     if(typeof info.ai_calls==='number'){$('about-ai-n').textContent=info.ai_calls;$('about-ai').hidden=false}
-    // Gateway usage, next to the analysis counter: today, ever, and how many
-    // questions. The Messages tab is where the traffic itself is.
-    if(info.gateway&&typeof info.gateway.total==='number'){
-      const g=info.gateway;
-      $('about-gw-n').textContent=T[lang].about_gw_v
-        .replace('{t}',g.today).replace('{a}',g.total).replace('{q}',g.questions);
-      $('about-gw').hidden=false;
-      $('about-gw-link').onclick=function(e){e.preventDefault();
-        $('about-bg').classList.remove('open');switchTab('msg')};
-    }
+    fillGateway(info.gateway);
     renderModStatus(info.active,info.health);
     if(window.PUBLIC){
       const title=(info.public_title||'').trim();
