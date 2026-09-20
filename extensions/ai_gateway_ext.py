@@ -206,7 +206,7 @@ def _grid_to_latlon(grid: str):
         return None
 
 
-def _wx_answer(rec: dict, dist_km: float) -> str:
+def _wx_answer(rec: dict, dist_km: float, origin_note: str = "") -> str:
     """One weather station's reading, with the two facts that qualify it.
 
     Distance and age are fields, not sentences, so neither can be dropped:
@@ -227,8 +227,12 @@ def _wx_answer(rec: dict, dist_km: float) -> str:
     if g:
         bits.append("gust %.1fm/s" % g)
     ago = rec.get("last_seen_ago_s")
-    return "%s %.0fkm away, %s: %s. My own feed only, not a forecast" % (
-        rec.get("callsign", "?"), dist_km,
+    # Where it was measured FROM, not just how far. N1QQA-7 asked for the
+    # weather in Wakefield NH on 2026-09-20 and was sent a reading from a
+    # station 10 km from himself; the number was right, and the answer still
+    # let him read it as the weather in the place he had named.
+    return "%s %.0fkm from %s, %s: %s. My own feed only, not a forecast" % (
+        rec.get("callsign", "?"), dist_km, origin_note or "you",
         _ago(ago) if ago is not None else "age unknown",
         ", ".join(bits) or "no readings")
 
@@ -238,8 +242,13 @@ def _wx_answer(rec: dict, dist_km: float) -> str:
 # what keeps this off the Turkish word "de" - "Ankara da guzel" has nothing
 # matching a callsign after it.
 _SIGNOFF_CUE = re.compile(
-    r"\b(?:73\s+de|73|de)\s+"
+    # The separator is not always a space. Told on 2026-09-20 to sign off
+    # only once, the model answered "thanks, 73" with "73, TA3HX-14." - the
+    # asker's own callsign behind a comma, which a \s+ cue walked straight
+    # past. Punctuation counts, and so does the callsign coming first.
+    r"\b(?:73\s+de|73|de)[\s,:;–—-]+"
     r"[A-Z0-9]{1,2}[0-9][A-Z]{1,4}(?:-[0-9]{1,2})?\b"
+    r"|\b[A-Z0-9]{1,2}[0-9][A-Z]{1,4}(?:-[0-9]{1,2})?[\s,:;–—-]+73\b"
 )
 
 
@@ -792,7 +801,9 @@ class AIGateway(Extension):
         rec, dist_km = hit
         self.log("wx lookup: %s -> %s at %.0fkm"
                  % (sender_full, rec.get("callsign"), dist_km))
-        return _wx_answer(rec, dist_km)
+        return _wx_answer(rec, dist_km,
+                          "you" if origin_note == "your last position"
+                          else origin_note)
 
     def _load_optout(self) -> set:
         """Callsigns that asked to be left out, from the file beside the config."""

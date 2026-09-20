@@ -52,6 +52,14 @@ CASES = [
      "TA1ABC", "and good luck with the antenna"),
     ("no full stop",    "Use a 1:1 balun 73 de TA9XYZ-7",
      "TA9XYZ", "Use a 1:1 balun."),
+    # 2026-09-20: told to sign off only once, the model answered "thanks, 73"
+    # with "73, TA3HX-14." - the asker's own callsign, after a comma, which
+    # the cue did not cover.
+    ("comma before call", "73, TA3HX-14.", "TA3HX", "73"),
+    ("dash before call",  "Good luck. 73 - TA1ABC-9",
+     "TA1ABC", "Good luck."),
+    ("call then 73",      "Nice contact. TA1ABC-9 73", "TA1ABC",
+     "Nice contact."),
 
     # ── must survive untouched ────────────────────────────────────────
     ("turkish de",      "Ben de oyle dusunuyorum.", None, None),
@@ -59,6 +67,11 @@ CASES = [
      None, None),
     ("plain answer",    "SWR is the ratio of forward to reflected power.",
      None, None),
+    # The cue now also reads "CALL 73", so a distance that happens to be 73
+    # must not look like a sign-off. Lookup answers print "73km", no space,
+    # and this is what keeps it that way.
+    ("73 km away",      "W1ABC-9: 41.714,-72.727 (FN31pr) 10min ago, 73km "
+                        "from you.", None, None),
     ("position lookup",
      "TA1ABC-7: 38.457,27.099 (KM38nk) 3d ago via YM3KC-8. My own feed only",
      None, None),

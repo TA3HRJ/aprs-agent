@@ -124,9 +124,15 @@ async def run() -> int:
             if "26.1C" not in body:
                 problems.append("%s: no reading in the answer -> %r"
                                 % (label, body[:80]))
-            if "km away" not in body:
+            if "km from" not in body:
                 problems.append("%s: reading without a distance -> %r"
                                 % (label, body[:80]))
+            # 2026-09-20: N1QQA-7 asked for the weather in Wakefield NH and
+            # got a reading from a station 10 km from HIM, with nothing in
+            # the answer to say which place it was measured from.
+            if "from you" not in body and "FROM KM" not in body.upper():
+                problems.append("%s: does not say where it measured from "
+                                "-> %r" % (label, body[:80]))
             if "ago" not in body:
                 problems.append("%s: reading without an age -> %r"
                                 % (label, body[:80]))
@@ -160,6 +166,31 @@ async def run() -> int:
         problems.append("city name: invented a reading for a place it cannot "
                         "locate -> %r" % body2[:80])
     print("  %-13s %-28s -> %s" % ("city name", "weather in Ankara?", body2[:74]))
+
+    # A place name we cannot resolve must not be answered as if it were the
+    # place asked about: the reading is from the asker's own beacon and the
+    # answer has to say so.
+    sent4: list[str] = []
+
+    class Q4:
+        async def put(self, b: bytes) -> None:
+            sent4.append(b.decode("utf-8").strip())
+
+    gw = AIGateway(dict(CFG), "")
+    gw.set_station_db(FakeDB())
+    gw._own_writer = Q4()
+
+    async def stub4(q: str, s: str = "", history=None) -> str:
+        return "MODEL ANSWER"
+
+    gw._ask_ai = stub4
+    await gw.handle(line("TA1ABC-7", "What's the weather for Wakefield NH today?"))
+    body4 = " ".join(s.split(":", 2)[-1] for s in sent4 if ":ack" not in s)
+    if "26.1C" in body4 and "from you" not in body4:
+        problems.append("named place: answered from the asker's own position "
+                        "without saying so -> %r" % body4[:80])
+    print("  %-13s %-28s -> %s" % ("named place", "weather for Wakefield NH?",
+                                   body4[:74]))
 
     # The daily ceiling caps the provider bill. A template answer sends no
     # bill, so an exhausted ceiling must not silence one.
