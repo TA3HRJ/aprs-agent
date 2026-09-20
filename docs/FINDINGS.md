@@ -5795,3 +5795,51 @@ reading is an igate retrying delivery to RF and a second igate gating the
 repeat back onto APRS-IS — which would also be the first direct evidence that
 the replies reach RF near the sender. Settle it from the packet path: `qAR`
 means it came back from RF, `TCPIP*` would mean it came from here.
+
+---
+
+## F-2026-09-20-03 — the same question, numbered twice, paid for twice
+
+**Fixed in v3.2.119.**
+
+### What was seen
+
+`KC1MUR-5`, on the afternoon the gateway was first announced:
+
+    14:29  KC1MUR-5>DMWGPT  When was Dream Police by cheap trick released
+    14:30  DMWGPT>KC1MUR-5  Cheap Trick's "Dream Police" album came out in 1979 (Sept 21 --
+    14:30  DMWGPT>KC1MUR-5  US). The title single was released in 1979 too. No live data --
+    14:30  DMWGPT>KC1MUR-5  here, but that date is well documented.
+    14:30  KC1MUR-5>DMWGPT  When was Dream Police by cheap trick released
+    14:30  DMWGPT>KC1MUR-5  Cheap Trick's "Dream Police" album was released September --
+    14:30  DMWGPT>KC1MUR-5  21, 1979; the title single followed in 1979 as well. No live --
+    14:31  DMWGPT>KC1MUR-5  data here, but that date is well documented.
+
+One question, asked once in the plain sense of the word, answered twice a
+minute apart: two provider calls, six transmissions, and two answers that
+differ only in wording.
+
+The dedup key is the sender plus the APRS message number, and a client that
+gives up waiting numbers its re-send afresh. The key for a packet with no
+message number has always been the sender plus the text — the case this
+misses is precisely the one where the sender's own client is trying hardest.
+
+### What changed
+
+A second index, kept for two minutes: the sender and the question with case,
+spacing and punctuation removed. A message whose words were already asked
+inside that window is filed under the first question's key, so it takes the
+replay path — the earlier answer goes out again, with its own message number,
+and no second call is made. Past two minutes the words are a new question
+again, because by then asking the same thing means asking, not retrying.
+
+`tools/check_replay.py` gained the case: the same text sent twice with
+different message numbers must cost one provider call and must still be
+answered both times. **Seen failing against v3.2.118 at two calls.**
+
+### Also seen, not changed
+
+Both answers carried "No live data here" on a question about a 1979 record.
+That was the operator's `system_prompt`, not the code, and was made
+conditional in the live config the same day — no release, because the gateway
+re-reads its own section every five seconds.

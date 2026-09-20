@@ -83,6 +83,43 @@ async def run() -> int:
 
     print("asked %d times -> %d provider call(s), %d deliveries, %d message ids"
           % (ASKED, calls["n"], len(replies), len(ids)))
+
+    # The same text with a DIFFERENT message number each time. KC1MUR-5 sent
+    # "When was Dream Police by cheap trick released" twice inside a minute on
+    # 2026-09-20; the numbers differed, so the key differed, and one question
+    # cost two provider calls and two near-identical answers on a shared
+    # channel. A person re-sending because nothing came back writes exactly
+    # this, and they must still be answered - just not paid for twice.
+    sent2: list[str] = []
+
+    class Queue2:
+        async def put(self, b: bytes) -> None:
+            sent2.append(b.decode("utf-8").strip())
+
+    gw2 = AIGateway(dict(CFG), "")
+    gw2._own_writer = Queue2()
+    calls2 = {"n": 0}
+
+    async def stub2(question: str, sender: str = "", history=None) -> str:
+        calls2["n"] += 1
+        return ANSWER
+
+    gw2._ask_ai = stub2
+
+    numbered = ("KC1MUR-5>APDR16,TCPIP*,qAC,T2X::DMWGPT   :"
+                "When was Dream Police by cheap trick released{%s")
+    for n in ("17", "18"):
+        await gw2.handle(numbered % n)
+
+    replies2 = [s for s in sent2 if "::KC1MUR-5" in s and ":ack" not in s]
+    if calls2["n"] != 1:
+        problems.append("the same text sent twice with different message "
+                        "numbers cost %d provider calls" % calls2["n"])
+    if not replies2:
+        problems.append("a re-send with a new message number was met with "
+                        "silence")
+    print("same text, two message numbers -> %d provider call(s), %d "
+          "deliveries" % (calls2["n"], len(replies2)))
     for p in problems:
         print("FAIL  " + p)
     return 1 if problems else 0

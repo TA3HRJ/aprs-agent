@@ -361,6 +361,21 @@ _HELP_TEXT_TR = ("APRS mesajıyla gelen kısa soruları yanıtlarım. Ayrıca: k
 _HISTORY_TURNS = 3
 _HISTORY_TTL_S = 600.0
 
+# Two packets carrying the same words but different message numbers. A client
+# that gave up waiting and sent the question again numbers the second one
+# afresh, so sender-plus-number sees two questions where the person asked one:
+# KC1MUR-5 sent "When was Dream Police by cheap trick released" twice inside a
+# minute on 2026-09-20 and it cost two provider calls and two near-identical
+# answers on a shared channel. Two minutes is the shape of someone re-sending
+# because nothing came back; past that, asking again is asking again.
+_TEXT_DEDUP_S = 120.0
+_PUNCT = re.compile(r"[^A-Z0-9]+")
+
+
+def _text_key(sender_base: str, text: str) -> str:
+    """Sender and question, with case, spacing and punctuation taken out."""
+    return sender_base + ":" + _PUNCT.sub(" ", text.upper()).strip()
+
 # The fixed answer goes out at most this often to one sender. It is free of
 # the model and free of the token bucket, and that is exactly what would make
 # it a way to key a distant transmitter on demand if it answered every time.
@@ -488,6 +503,9 @@ class AIGateway(Extension):
         self._help_at: dict[str, float] = {}  # sender -> when the help text went out
         # sender -> [(ts, question, answer), ...], newest last. Memory only.
         self._history: dict[str, list] = {}
+        # normalised question -> (expiry, the dedup key it was first filed
+        # under), so a re-send with a fresh message number finds the original.
+        self._text_keys: dict[str, tuple] = {}
         self._day = ""
         self._day_count = 0
         self._day_told = False
@@ -1018,6 +1036,19 @@ class AIGateway(Extension):
             for k in [k for k, v in self._processed.items() if v[0] <= now_ts]:
                 del self._processed[k]
         dedup_key = f"{sender_full}:{msg_id or raw_msg}"
+        # A re-send numbered afresh is the same question. Look it up by its
+        # words as well, and if it was asked moments ago, answer it as the
+        # repeat it is rather than buying a second answer.
+        tkey = _text_key(sender_base, raw_msg)
+        if self._text_keys:
+            for k in [k for k, v in self._text_keys.items() if v[0] <= now_ts]:
+                del self._text_keys[k]
+        prior = self._text_keys.get(tkey)
+        if (prior is not None and dedup_key not in self._processed
+                and prior[1] in self._processed):
+            dedup_key = prior[1]
+        else:
+            self._text_keys[tkey] = (now_ts + _TEXT_DEDUP_S, dedup_key)
         seen = self._processed.get(dedup_key)
         if seen is not None:
             # Asking again almost always means the answer never arrived — an
