@@ -5914,3 +5914,66 @@ restart and an opening on the other side of the world not counting as near.
 **Seen failing against v3.2.119 on fifteen assertions.**
 `tools/check_selflookup.py`, which had encoded the old refusal, was rewritten
 to the new boundary rather than deleted.
+
+---
+
+## F-2026-09-20-05 — two services talked to each other, and ours invented what it was doing
+
+**Fixed on master, untagged at the time of writing.**
+
+### What was seen
+
+Caught live at 17:59 local while a read-only listener was watching DMWGPT's
+own traffic for something else:
+
+    16:59:41  DMWGPT>QRX   Stored and queued for N1QQA; it will go out on the next --
+    16:59:46  DMWGPT>QRX   beacon. 73
+    16:59:46  QRX>DMWGPT   QRX holds missed msgs. Send REG to start.
+    16:59:47  DMWGPT>QRX   Understood. Nothing more to send; your message to N1QQA is --
+    16:59:52  DMWGPT>QRX   queued and will go out on the next beacon. 73
+    16:59:53  DMWGPT>QRX   replaying answer (1 left)
+    16:59:58  DMWGPT>QRX   replaying answer (0 left)
+    17:00:04  DMWGPT>QRX   resending answer (replays spent)
+    17:00:11  DMWGPT>QRX   resending answer (replays spent)
+    17:00:17  DMWGPT>QRX   resending answer (replays spent)
+    17:00:23  DMWGPT>QRX   Too many questions - please wait 5 min, then ask again
+
+`QRX` is another APRS service: it holds messages for stations that were not
+listening and re-delivers them. It sent its own advert here. Three things then
+went wrong at once:
+
+1. **The model answered a machine as if it were a person.**
+2. **It invented a capability.** This gateway cannot store, queue or forward
+   anything, and it told another service twice that a message to N1QQA was
+   queued for the next beacon. On the air, to a third party, about traffic
+   that never existed.
+3. **The repeat handling amplified it.** Two replays and three resends, each
+   one a transmission, until the token bucket stopped the episode. Eleven
+   packets in forty seconds between two automatic stations.
+
+The replay-then-resend behaviour is new: before v3.2.118 an exhausted replay
+was met with silence, which would have damped this. Silence was removed
+because it cost a human their answer (F-2026-09-20-02); the cost of removing
+it shows up here, and the answer is not to bring silence back but to stop
+talking to machines.
+
+### What changed
+
+- **A sender whose callsign is not callsign-shaped is ignored, before the
+  ack.** APRS service names are built that way: `QRX`, `WXBOT`, `SMSGTE`,
+  `EMAIL-2` carry no digit where a callsign must. A licensed station always
+  has one, and a tactical name that wants an answer can ask from a callsign.
+- The live `system_prompt` now states that the gateway cannot store, queue,
+  relay or forward, and must never say it will. Config only, no restart.
+
+`tools/check_gateway_intent.py` holds both halves: a service advert draws no
+packet at all, not even an ack, and a licensed callsign is still answered.
+**Seen failing on three assertions**, including the ack.
+
+### Also learned
+
+`QRX` re-delivers messages that were missed. That is a plausible reading of
+the duplicate answer parts seen on aprs.fi at 14:35, 15:35 and 17:26, each
+about four minutes after the original and with nothing in our journal: a
+store-and-forward service repeating what it heard, not this station sending
+twice.

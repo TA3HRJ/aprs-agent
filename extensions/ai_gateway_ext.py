@@ -1362,6 +1362,20 @@ class AIGateway(Extension):
         if sender_base == strip_ssid(my_call).upper():
             return None
 
+        # Another machine. On 2026-09-20 the store-and-forward service QRX
+        # sent its own advert here, the model answered it as a person and
+        # invented "your message to N1QQA is queued and will go out on the
+        # next beacon", and the two services exchanged eleven packets in
+        # forty seconds before the rate limiter stopped it. APRS service
+        # names are not callsign-shaped - QRX, WXBOT, SMSGTE, EMAIL-2 carry
+        # no digit where a callsign must - so this breaks the loop at the
+        # cheapest point, before the ack. A licensed station always has a
+        # callsign; a tactical name that wants an answer can ask from one.
+        if not looks_like_callsign(sender_base):
+            self.log(f"ignoring {sender_full}: not a callsign, likely an "
+                     f"automatic station")
+            return None
+
         raw_msg = packet.get("message_text", "")
         if not raw_msg or raw_msg.lower().startswith(("ack", "rej")):
             return None

@@ -191,6 +191,33 @@ async def run() -> int:
         problems.append("a question naming another station was taken for a "
                         "relay attempt")
 
+    # 2g - another machine. QRX, a store-and-forward service, sent its own
+    # advert to DMWGPT on 2026-09-20 ("QRX holds missed msgs. Send REG to
+    # start."). The model answered it as a person, inventing "your message to
+    # N1QQA is queued and will go out on the next beacon", and the two of them
+    # exchanged eleven packets in forty seconds before the bucket stopped it.
+    # A service name is not callsign-shaped - QRX has no digit - and that is
+    # the cheapest place to break the loop.
+    sent, calls = [], {"n": 0, "last": ""}
+    gw = new_gateway(sent, calls)
+    answer = await ask(gw, sent, "QRX", "QRX holds missed msgs. Send REG to start.")
+    if calls["n"]:
+        problems.append("a service advert went to the model")
+    if answer:
+        problems.append("answered an automatic station, which is how a loop "
+                        "starts: %r" % answer[:60])
+    if sent:
+        problems.append("sent %d packet(s) to a non-callsign sender, "
+                        "including acks" % len(sent))
+
+    # 2h - and a real callsign is still answered
+    sent, calls = [], {"n": 0, "last": ""}
+    gw = new_gateway(sent, calls)
+    answer = await ask(gw, sent, "KC1MUR-8", "who is the fcc")
+    if calls["n"] != 1:
+        problems.append("a licensed station was caught by the automatic-"
+                        "station rule")
+
     # 3 - a joke that mentions the weather is a joke
     sent, calls = [], {"n": 0, "last": ""}
     gw = new_gateway(sent, calls)
@@ -214,7 +241,7 @@ async def run() -> int:
 
     for p in problems:
         print("FAIL: " + p)
-    print("checked 9 cases - %d failed" % len(problems))
+    print("checked 11 cases - %d failed" % len(problems))
     return 1 if problems else 0
 
 
