@@ -5643,3 +5643,80 @@ is answered from the registry by a fixed template, not by the model
 (F-2026-09-10-02). And that sentence was stale, *"12d ago"*, because the app
 sends messages as `TA3HRJ-10` but no position — and still under the operator's
 former callsign.
+
+---
+
+## F-2026-09-20-01 — the first strangers to use the gateway asked what it could do, and that was the one question it could not answer
+
+**Fixed in v3.2.116.**
+
+### What was seen
+
+The gateway was announced in a Facebook APRS group on 2026-09-20. Two people
+who had never used it put questions to it within twenty minutes, and both
+exchanges went wrong in a way the operator could read straight off the log.
+
+`WB2EHG-5` opened with *"hello can you help me?"*, asked four questions about
+William Shatner, and then asked the thing a newcomer always asks:
+
+    13:46:55  WB2EHG-5>DMWGPT  what else can you do for me?
+    13:46:56  DMWGPT>WB2EHG-5  Too many questions - please wait 3 min, then ask again
+    13:51:04  WB2EHG-5>DMWGPT  what else can you do for me?
+    (nothing)
+
+The limiter was working as built: five tokens, one back every six minutes, one
+notice per episode and silence after it, so a sender who keeps asking cannot
+turn a distant igate into a repeating transmitter (F-2026-09-10 era design,
+kept). But the question it refused costs no model call and no money, its answer
+is a fixed sentence, and it was the last thing that stranger heard from the
+service.
+
+The answer he did get earlier was no better: *"hello can you help me?"* went to
+the model, which replied with a description of itself that nobody had checked.
+
+`KR4MVP-5`, the same afternoon:
+
+    13:56:52  KR4MVP-5>DMWGPT  Tell me a joke about the weather
+    13:56:53  DMWGPT>KR4MVP-5  KM6YFK-13 28km away, 3min ago: 23.3C, 92%RH, 1013mb, gust --
+    13:56:58  DMWGPT>KR4MVP-5  0.9m/s. My own feed only, not a forecast
+
+The weather shortcut ran before the model and matched the word `WEATHER`
+anywhere in the text. Naming the weather was read as asking for it.
+
+### Why it matters
+
+Both faults are invisible from the inside. The service logged a successful
+weather lookup and a correctly enforced rate limit; nothing was marked broken.
+What they cost was the first impression of two people who had just been told
+the thing was worth trying.
+
+### What changed
+
+- A capability question is answered by the code: *"I answer short questions
+  sent as APRS messages. Also: your own station (ask where am I), nearest APRS
+  weather, and TEST. No news, no other stations' positions."* Turkish gets the
+  same in Turkish, folded to ASCII on the way out like any answer.
+- It is answered **before** the token bucket, because it costs neither a model
+  call nor a token — and **at most once per sender per ten minutes**, because a
+  free answer that came every time would be a way to key someone else's
+  transmitter on demand. After that it follows the ordinary rules.
+- The weather shortcut now stands down when the question asks for a joke, a
+  poem, a song, a story or a riddle, in either language, and the question goes
+  to the model like any other.
+
+`tools/check_gateway_intent.py` asserts that a capability question is answered
+without a model call and without spending a token, that the fixed text does not
+come back twice in a row, that the Turkish path answers in Turkish and in
+ASCII without truncation, that a joke about the weather reaches the model, and
+that a real weather question still reaches the registry. **Seen failing against
+v3.2.115 on six of its assertions.**
+
+### Also seen, not changed
+
+`KR4MVP-5` asked *"Propagation near me"* and *"Who is km6yfk"*. The first was
+refused for want of live data by a program whose own map draws propagation
+openings; the second was refused as a third-party lookup two minutes after the
+weather answer had disclosed that same station's callsign, distance and
+readings. Neither is a bug in what shipped here. Both are the same underlying
+gap: the gateway does not know what its own host knows, and the refusal texts
+say "I don't have the data" where the truth is "I am not allowed to".

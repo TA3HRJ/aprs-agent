@@ -319,6 +319,43 @@ def _strip_signal_report(text: str) -> str:
 # question and goes to the model like any other.
 _TEST_MSG = re.compile(r"^\s*(?:test|ping|deneme)\b", re.I)
 
+# "What can you do?" — the question a newcomer sends before any real one.
+# Tight in the same way: it has to be about the service, so "can you help me
+# convert 5 miles" is a question and goes to the model.
+_HELP_MSG = re.compile(
+    r"^\s*(?:help|\?+|commands?|menu)\s*[?!.]*\s*$"
+    r"|what\s+(?:else\s+)?(?:can|do)\s+(?:you|u)\s+do"
+    r"|what\s+are\s+you\s+for"
+    r"|^\s*(?:hello,?\s+)?can\s+you\s+help\s+me\s*[?!.]*\s*$",
+    re.I)
+_HELP_MSG_TR = re.compile(
+    r"^\s*(?:yardim|yardım|komutlar)\s*[?!.]*\s*$"
+    r"|ne(?:ler)?\s+yapabilirsin"
+    r"|nas[iı]l\s+kullan",
+    re.I)
+
+# Two facts and a boundary, in the order someone meeting it needs them.
+# Deliberately not a command list: there are no commands, and promising some
+# would be the next thing to go stale.
+_HELP_TEXT = ("I answer short questions sent as APRS messages. Also: your own "
+              "station (ask where am I), nearest APRS weather, and TEST. No "
+              "news, no other stations' positions.")
+_HELP_TEXT_TR = ("APRS mesajıyla gelen kısa soruları yanıtlarım. Ayrıca: kendi "
+                 "istasyonun (neredeyim), en yakın APRS hava ölçümü ve TEST. "
+                 "Haber yok, başka istasyonların konumu yok.")
+
+# The fixed answer goes out at most this often to one sender. It is free of
+# the model and free of the token bucket, and that is exactly what would make
+# it a way to key a distant transmitter on demand if it answered every time.
+_HELP_REPEAT_S = 600.0
+
+# A question that mentions the weather while asking for something else. The
+# weather shortcut matches a word anywhere in the text, which is what sent a
+# temperature reading to someone who asked for a joke about the weather.
+_NOT_A_LOOKUP = re.compile(
+    r"\b(joke|jokes|funny|pun|riddle|poem|haiku|song|story|limerick|"
+    r"şaka|saka|fıkra|fikra|şiir|siir|şarkı|sarki|hikaye|bilmece)\b", re.I)
+
 
 def _test_answer(question: str, sender_full: str, raw_line: str) -> "Optional[str]":
     """Answer a test message from the packet itself, without asking the model.
@@ -431,6 +468,7 @@ class AIGateway(Extension):
         # punished exactly the people worth having — someone meeting the thing
         # for the first time asks three or four questions back to back.
         self._buckets: dict[str, list] = {}   # sender -> [tokens, last_refill, told]
+        self._help_at: dict[str, float] = {}  # sender -> when the help text went out
         self._day = ""
         self._day_count = 0
         self._day_told = False
@@ -615,6 +653,10 @@ class AIGateway(Extension):
                                        "HAVA DURUMU", "HAVA NASIL", "SICAKLIK",
                                        "YAGMUR", "RAIN")):
             return None
+        # Naming the weather is not asking for it. A reading is a poor answer
+        # to "tell me a joke about the weather", which is what one went out as.
+        if _NOT_A_LOOKUP.search(question):
+            return None
 
         # where to measure from
         origin, origin_note = None, ""
@@ -651,6 +693,31 @@ class AIGateway(Extension):
         self.log("wx lookup: %s -> %s at %.0fkm"
                  % (sender_full, rec.get("callsign"), dist_km))
         return _wx_answer(rec, dist_km)
+
+    def _help_answer(self, question: str, sender_base: str) -> "Optional[str]":
+        """What this service can do, said by the code rather than the model.
+
+        Returns None when the question is not about the service, and also when
+        the same sender was told within the last _HELP_REPEAT_S — then it
+        follows the ordinary path, limiter included. Answering every time
+        would hand anyone a way to make a gateway transmit on demand for free.
+
+        A model asked "what can you do" invents an answer, which is how a
+        newcomer ends up with a list of things this gateway does not do.
+        """
+        tr = bool(_HELP_MSG_TR.search(question))
+        if not tr and not _HELP_MSG.search(question):
+            return None
+        now = _clock()
+        last = self._help_at.get(sender_base, 0.0)
+        if now - last < _HELP_REPEAT_S:
+            return None
+        self._help_at[sender_base] = now
+        if len(self._help_at) > 2000:
+            cutoff = now - _HELP_REPEAT_S
+            for k in [k for k, v in self._help_at.items() if v < cutoff]:
+                del self._help_at[k]
+        return _HELP_TEXT_TR if tr else _HELP_TEXT
 
     def _self_lookup(self, question: str, sender_base: str,
                      sender_full: str = "") -> "Optional[str]":
@@ -963,6 +1030,29 @@ class AIGateway(Extension):
             ):
                 self.warn(f"blocked {sender_full} — not in whitelist")
                 return None
+
+        # Before the limiter, because it costs neither a model call nor a
+        # token. On 2026-09-20 a newcomer spent his burst on four questions
+        # and then asked what else it could do; the limiter refused that one
+        # and the one he sent after it, so the only question of the day left
+        # unanswered was the one with a fixed answer sitting in the code.
+        help_text = self._help_answer(question, sender_base)
+        if help_text is not None:
+            self.log(f"RX from {sender_full}: {question}")
+            prev = self._processed.get(dedup_key)
+            if prev is not None:
+                self._processed[dedup_key] = (prev[0], help_text, prev[2])
+            # Folded like a model answer: the Turkish text is written with
+            # its own letters and APRS carries ASCII.
+            parts = _split_message(_to_ascii(help_text),
+                                   1 + int(cfg.get("extra_sms", 0)))
+            for i, part in enumerate(parts):
+                await self._send_reply(my_call, sender_full, part)
+                self.log(f"TX to {sender_full}: {part}")
+                if i < len(parts) - 1:
+                    await asyncio.sleep(5)
+            self.mark_working()
+            return None
 
         allowed, notice = self._allow_rate(sender_base, cfg)
         if not allowed:
