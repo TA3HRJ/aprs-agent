@@ -169,6 +169,28 @@ async def run() -> int:
         problems.append("a real request beginning 'can you help me with' was "
                         "caught by the help text instead of the model")
 
+    # 2e - a message meant for somebody else. KE4PIC sent "CHASE DL7PJ gm
+    # Peter" twice on 2026-09-20 and the model greeted him as Peter, which
+    # both calls a man by the wrong name and suggests this thing relays
+    # messages. It does not.
+    sent, calls = [], {"n": 0, "last": ""}
+    gw = new_gateway(sent, calls)
+    answer = await ask(gw, sent, "KE4PIC", "CHASE DL7PJ gm Peter")
+    if calls["n"]:
+        problems.append("a message addressed to a third party went to the "
+                        "model, which answered as that person")
+    if "DL7PJ" not in answer.upper():
+        problems.append("the relay refusal does not name who it was meant "
+                        "for: %r" % answer[:70])
+
+    # 2f - but a question that merely names another station is a question
+    sent, calls = [], {"n": 0, "last": ""}
+    gw = new_gateway(sent, calls)
+    answer = await ask(gw, sent, "KE4PIC", "hi, what antenna does DL7PJ use?")
+    if calls["n"] != 1:
+        problems.append("a question naming another station was taken for a "
+                        "relay attempt")
+
     # 3 - a joke that mentions the weather is a joke
     sent, calls = [], {"n": 0, "last": ""}
     gw = new_gateway(sent, calls)
@@ -192,7 +214,7 @@ async def run() -> int:
 
     for p in problems:
         print("FAIL: " + p)
-    print("checked 7 cases - %d failed" % len(problems))
+    print("checked 9 cases - %d failed" % len(problems))
     return 1 if problems else 0
 
 

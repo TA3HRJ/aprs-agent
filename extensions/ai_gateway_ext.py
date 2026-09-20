@@ -407,6 +407,20 @@ _OPTOUT_MSG = re.compile(r"^\s*(NO\s*LOOKUP|NOLOOKUP|GORUNME|G[ÖO]R[ÜU]NME)\s*
 _OPTIN_MSG = re.compile(r"^\s*(LOOKUP|GORUN|G[ÖO]R[ÜU]N)\s*[.!]*\s*$", re.I)
 _OPTOUT_FILE = "ai_gateway_nolookup"
 
+# A message meant for somebody else, arriving here by mistake or in the hope
+# that this thing passes messages on. KE4PIC sent "CHASE DL7PJ gm Peter"
+# twice on 2026-09-20 and the model read the greeting as addressed to itself
+# and answered "Hi Peter" - to Frank. A greeting plus a callsign that is
+# neither ours nor the sender's, and no question anywhere, is the shape of
+# it; a question that merely names another station is still a question.
+_GREETING = re.compile(
+    r"\b(?:GM|GA|GE|GN|HI|HELLO|HEY|73|88|TNX|THANKS|THX|QSL|CQ"
+    r"|SELAM|MERHABA|G[UÜ]NAYDIN|KOLAY\s+GELS[İI]N)\b", re.I)
+_QUESTIONISH = re.compile(
+    r"\?|\b(?:WHAT|WHERE|WHO|WHEN|WHY|HOW|WHICH|CAN|COULD|DOES|DO|IS|ARE"
+    r"|TELL|GIVE|EXPLAIN|NEDIR|NEREDE|KIM|NASIL|NE\s+KADAR|MISIN|MUSUN)\b",
+    re.I)
+
 # How far out an opening still counts as "near me". Openings are measured
 # between a station and the igate that heard it, and either end being close
 # is what makes the opening relevant to the asker.
@@ -824,6 +838,23 @@ class AIGateway(Extension):
             self.log(f"opt-in: {sender_base} may be looked up")
             return ("Noted. %s can be looked up here again. Send NOLOOKUP to "
                     "opt out." % sender_base)
+        return None
+
+    def _misaddressed(self, question: str, sender_base: str,
+                      my_call: str) -> "Optional[str]":
+        """A greeting for a third station, answered as what it is.
+
+        The gateway is not a relay: anything it sends goes out under its own
+        addressee, from somebody else's igate. Saying so is more use to the
+        sender than a model pretending to be the person they meant.
+        """
+        if _QUESTIONISH.search(question) or not _GREETING.search(question):
+            return None
+        mine = {strip_ssid(my_call).upper(), sender_base}
+        for base, ssid in _CALL_IN_TEXT.findall(question.upper()):
+            if base not in mine:
+                return ("I do not pass messages on - I only answer what is "
+                        "sent to me. Send it to %s directly." % base)
         return None
 
     def _sender_origin(self, sender_full: str, sender_base: str):
@@ -1485,6 +1516,8 @@ class AIGateway(Extension):
         answer = _test_answer(question, sender_full, line)
         if answer is None:
             answer = self._optout_command(question, sender_base)
+        if answer is None:
+            answer = self._misaddressed(question, sender_base, my_call)
         if answer is None:
             answer = self._self_lookup(question, sender_base, sender_full)
         if answer is None:
