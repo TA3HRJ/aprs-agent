@@ -569,6 +569,88 @@ def read_messages(path: str, limit: int = 1000) -> "list[dict[str, Any]]":
     return out
 
 
+def record_gateway_users(path: str, rows: "list[dict[str, Any]]") -> int:
+    """Tally the stations that have asked the gateway something.
+
+    One row per station, not per message, and keyed on the base callsign so
+    that a man with two SSIDs is one man. It rides the same persistence tick
+    as the messages themselves.
+
+    Kept apart from `message_history` on purpose: that table holds fourteen
+    days and twenty thousand rows, which answers "today" and forgets "ever".
+    The question the operator actually asked on the day this was written was
+    how many people had used the service at all.
+
+    Automatic stations are tallied too, in their own column: they are traffic
+    but they are not users, and the difference is the interesting part.
+    """
+    from packet_parser import looks_like_callsign
+    seen: "dict[str, list]" = {}
+    for r in rows:
+        if (r.get("channel") or "") != "AI" or r.get("dir") != "rx":
+            continue
+        call = (r.get("from") or "").upper().split("-")[0]
+        if not call:
+            continue
+        ts = int(r.get("ts") or time.time())
+        e = seen.setdefault(call, [ts, ts, 0])
+        e[0], e[1] = min(e[0], ts), max(e[1], ts)
+        e[2] += 1
+    if not seen:
+        return 0
+    con = _connect(path)
+    try:
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS gateway_users ("
+            "callsign TEXT PRIMARY KEY, is_bot INTEGER, "
+            "first_ts INTEGER, last_ts INTEGER, questions INTEGER)")
+        for call, (first, last, n) in seen.items():
+            con.execute(
+                "INSERT INTO gateway_users VALUES (?,?,?,?,?) "
+                "ON CONFLICT(callsign) DO UPDATE SET "
+                "last_ts=max(last_ts,excluded.last_ts), "
+                "first_ts=min(first_ts,excluded.first_ts), "
+                "questions=questions+excluded.questions",
+                (call, 0 if looks_like_callsign(call) else 1, first, last, n))
+        con.commit()
+        return len(seen)
+    except sqlite3.Error:
+        return 0
+    finally:
+        con.close()
+
+
+def gateway_stats(path: str) -> "dict[str, Any]":
+    """Who has used the gateway: today, ever, and how much.
+
+    Aggregates only. The callsigns themselves stay in the database, where the
+    operator can look at them; a public page saying who asked what is a
+    different object from a count of how many did.
+    """
+    out = {"today": 0, "total": 0, "questions": 0, "bots": 0, "since": 0}
+    if not Path(path).exists():
+        return out
+    con = _connect(path, readonly=True)
+    try:
+        day0 = int(time.mktime(time.strptime(
+            time.strftime("%Y-%m-%d"), "%Y-%m-%d")))
+        row = con.execute(
+            "SELECT COUNT(*), COALESCE(SUM(questions),0), "
+            "COALESCE(MIN(first_ts),0) FROM gateway_users "
+            "WHERE is_bot=0").fetchone()
+        out["total"], out["questions"], out["since"] = int(row[0]), int(row[1]), int(row[2])
+        out["today"] = int(con.execute(
+            "SELECT COUNT(*) FROM gateway_users WHERE is_bot=0 AND last_ts>=?",
+            (day0,)).fetchone()[0])
+        out["bots"] = int(con.execute(
+            "SELECT COUNT(*) FROM gateway_users WHERE is_bot=1").fetchone()[0])
+    except sqlite3.Error:
+        pass
+    finally:
+        con.close()
+    return out
+
+
 def save_meta(path: str, key: str, value: str) -> None:
     """Store a small persistent counter/setting (e.g. lifelong uptime)."""
     con = _connect(path)

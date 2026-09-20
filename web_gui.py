@@ -641,6 +641,8 @@ class AgentManager:
         # ring above is twelve minutes of world feed and holds none of the
         # gateway's own traffic; see station_db.record_messages.
         self._msg_pending: list = []
+        # Gateway usage counts, refreshed once a minute off the event loop.
+        self._gw_stats: dict = {}
         self._msg_seen: dict[tuple, int] = {}   # dedup key → last seen ts
         self._channel_map: dict[str, str] = {}  # callsign → AI/Telegram/…
 
@@ -2272,6 +2274,11 @@ async def info(request: web.Request) -> web.Response:
             "imap": bool(ext_cfg.get("imap", {}).get("enabled")),
         },
     }
+    # How many people have used the gateway. Aggregates only: the
+    # callsigns stay in the database, where the operator can look at them.
+    if mgr._gw_stats:
+        data["gateway"] = dict(mgr._gw_stats)
+
     if not request.app.get("public"):
         # The config file path is operator information — admin app only
         data["config_path"] = mgr.config_path
@@ -3545,10 +3552,24 @@ async def _persist_loop(mgr: "AgentManager") -> None:
                     await asyncio.get_event_loop().run_in_executor(
                         None, station_db_module.record_messages,
                         mgr._sta_db_path, batch)
+                    # Who asked, tallied in the same tick. The message table
+                    # keeps fourteen days; this keeps the count.
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, station_db_module.record_gateway_users,
+                        mgr._sta_db_path, batch)
                 except Exception as e:
                     mgr._msg_pending[0:0] = batch
                     print(f"[station-db] message history failed: {e}",
                           file=sys.__stderr__)
+            # Read back off the loop and cached: /api/status is polled by
+            # every open map, and a query per poll is the shape of fault
+            # F-2026-09-15-01.
+            try:
+                mgr._gw_stats = await asyncio.get_event_loop().run_in_executor(
+                    None, station_db_module.gateway_stats, mgr._sta_db_path)
+            except Exception as e:
+                print(f"[station-db] gateway stats failed: {e}",
+                      file=sys.__stderr__)
         if tick % 10 == 0 and mgr.running:
             try:
                 await asyncio.get_event_loop().run_in_executor(
