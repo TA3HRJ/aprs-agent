@@ -5843,3 +5843,74 @@ Both answers carried "No live data here" on a question about a 1979 record.
 That was the operator's `system_prompt`, not the code, and was made
 conditional in the live config the same day — no release, because the gateway
 re-reads its own section every five seconds.
+
+---
+
+## F-2026-09-20-04 — the gateway refused what its own registry held, and gave a reason that was not the reason
+
+**Fixed in v3.2.120.**
+
+### What was seen
+
+`KE4PIC` introduced himself with a grid and asked two questions:
+
+    16:01  KE4PIC>DMWGPT  de Frank EM97xe
+    16:04  KE4PIC>DMWGPT  what is my distance to fairfax, va
+    16:04  DMWGPT>KE4PIC  No live position data, so I cannot calculate that. Check --
+    16:04  DMWGPT>KE4PIC  aprs.fi for your beacon and use its distance tool.
+    16:09  KE4PIC>DMWGPT  what is my nearest igate
+    16:09  DMWGPT>KE4PIC  I have no live station or igate data. aprs.fi or findu.com --
+    16:09  DMWGPT>KE4PIC  can show igates near EM97xe.
+
+Both refusals were false in the same way. The registry held his position - the
+map was drawing him while he asked - and it classifies igates by symbol and
+records which gate last carried each station. The only thing genuinely missing
+was a way to turn "fairfax, va" into coordinates.
+
+`KR4MVP-5`, earlier the same afternoon, asked *"Propagation near me"* and was
+sent to hamqsl.com by the program that had measured 247 openings that week and
+draws them on its own map.
+
+Measured on the live registry: 262,429 stations, of which 21,786 are
+igate- or gateway-symbolled with a position, and 75 within 250 km of the
+operator's QTH. A full scan takes **79 ms**, so it belongs off the event loop
+beside `nearest_wx` - and it is not a reason to refuse.
+
+### The decision behind it
+
+Third-party lookup had been refused since the feature was written, on the
+grounds that a service answering "where is XX1YYY" is a different object from
+a map somebody chose to open. Re-examined on 2026-09-20 and changed:
+
+- The data is published to be seen, and aprs.fi serves the same beacons and
+  keeps them for up to 36 months. A refusal here protects nobody.
+- The asker is identified - their callsign is in the packet - which is more
+  accountability than a web page asks for.
+- What makes it defensible is the boundary, not the refusal: **one
+  observation, never an identity**. Position, age, distance, station type.
+  No name, no licence record, no address, no history summary.
+- The subject gets a lever: a station that sends `NOLOOKUP` is left out of
+  other people's answers, `LOOKUP` puts it back, and the refusal then says so
+  rather than pretending the data is missing. Documented in `HELP.html`.
+
+### What changed
+
+- `station_db.nearest_of_type()` and `has_gated()`: the closest stations of a
+  symbol type, and whether a callsign has actually been seen gating.
+- The gateway answers **which igate gated this message** from the packet path,
+  and says plainly that nobody is hearing a sender who came in over the
+  internet - a `qAC` path names a core server, not an igate
+  (`is_backbone_gate`, written for the same confusion).
+- **Nearest igates**, from the registry, with distances.
+- **Openings near you**, from the propagation links the program has just
+  measured, within 400 km and three hours.
+- **Another station's last position**, with its age and its distance from the
+  asker.
+- Refusals now name their own reason: no data, no place names, or a station
+  that opted out.
+
+`tools/check_lookup.py` holds all seven, including the opt-out surviving a
+restart and an opening on the other side of the world not counting as near.
+**Seen failing against v3.2.119 on fifteen assertions.**
+`tools/check_selflookup.py`, which had encoded the old refusal, was rewritten
+to the new boundary rather than deleted.

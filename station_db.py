@@ -2045,6 +2045,35 @@ class StationDB:
         rec = self._stations.get(callsign)
         return rec.to_dict() if rec else None
 
+    def has_gated(self, callsign: str) -> bool:
+        """True when this callsign has been seen gating somebody to APRS-IS.
+
+        A symbol says what a station calls itself; this says what it has
+        actually done. An igate that is only a symbol helps nobody who is
+        looking for a way onto the network.
+        """
+        return callsign.upper() in self._gate_stats
+
+    def nearest_of_type(self, lat: float, lon: float, kinds: "tuple",
+                        max_km: float = 250.0,
+                        limit: int = 3) -> "list[tuple[dict, float]]":
+        """Closest stations of the given symbol types, nearest first.
+
+        Walks the whole registry like nearest_wx, so it belongs off the event
+        loop. The type test comes first: on the live feed it rejects nine
+        records in ten before any trigonometry runs.
+        """
+        hits: "list[tuple[float, Any]]" = []
+        for rec in self._stations.values():
+            if (rec.station_type not in kinds
+                    or rec.lat is None or rec.lon is None):
+                continue
+            d = self._haversine_km(lat, lon, rec.lat, rec.lon)
+            if d <= max_km:
+                hits.append((d, rec))
+        hits.sort(key=lambda h: h[0])
+        return [(rec.to_dict(), d) for d, rec in hits[:limit]]
+
     def nearest_wx(self, lat: float, lon: float,
                    max_km: float = 100.0) -> "Optional[tuple[dict, float]]":
         """The closest station carrying a live weather reading, or None.

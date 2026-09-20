@@ -177,6 +177,18 @@ _GRID_IN_TEXT = re.compile(r"\b([A-R]{2}[0-9]{2}(?:[A-X]{2})?)\b")
 _WX_RADIUS_KM = 250.0
 
 
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance, the same formula the registry uses."""
+    import math
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = (math.sin(dp / 2) ** 2
+         + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2)
+    return 2 * r * math.asin(math.sqrt(a))
+
+
 def _grid_to_latlon(grid: str):
     """Centre of a Maidenhead square. Enough for "which station is nearest"."""
     g = grid.upper()
@@ -371,6 +383,38 @@ _HISTORY_TTL_S = 600.0
 _TEXT_DEDUP_S = 120.0
 _PUNCT = re.compile(r"[^A-Z0-9]+")
 
+# Infrastructure questions. An igate, a digipeater or a weather station
+# beacons precisely so that others can find it; answering about one is not
+# the same act as answering about a person who happens to carry a tracker.
+_IGATE_NEAR = re.compile(
+    r"\b(?:NEAREST|CLOSEST|LOCAL)\s+(?:APRS\s+)?(?:IGATE|I-GATE|GATE|DIGI\w*)"
+    r"|\bIGATES?\s+NEAR\b|\bEN\s+YAKIN\s+(?:IGATE|DIGI\w*)", re.I)
+_IGATE_MINE = re.compile(
+    r"\bWHICH\s+IGATE\b|\bWHAT\s+IGATE\b|\bMY\s+IGATE\b"
+    r"|\bWHO\s+IS\s+GATING\s+ME\b|\bGATED?\s+ME\b|\bHEARS?\s+ME\b"
+    r"|\bBEN[İI]\s+(?:K[İI]M|HANG[İI]\s+IGATE)\s+DUYUYOR", re.I)
+
+# Propagation: the program measures openings and draws them on its own map,
+# and was sending people to another site to ask about them.
+_PROP_ASK = re.compile(
+    r"\bPROPAGATION\b|\bBAND\s+OPEN|\bOPENINGS?\b|\bDX\s+CONDITIONS?\b"
+    r"|\bYAYILIM\b|\bA[CÇ]ILIM", re.I)
+
+# Asking to be left out of third-party answers, and asking back in. A whole
+# message and nothing else, so it cannot be tripped by a sentence about
+# lookups.
+_OPTOUT_MSG = re.compile(r"^\s*(NO\s*LOOKUP|NOLOOKUP|GORUNME|G[ÖO]R[ÜU]NME)\s*[.!]*\s*$", re.I)
+_OPTIN_MSG = re.compile(r"^\s*(LOOKUP|GORUN|G[ÖO]R[ÜU]N)\s*[.!]*\s*$", re.I)
+_OPTOUT_FILE = "ai_gateway_nolookup"
+
+# How far out an opening still counts as "near me". Openings are measured
+# between a station and the igate that heard it, and either end being close
+# is what makes the opening relevant to the asker.
+_PROP_NEAR_KM = 400.0
+_PROP_RECENT_S = 3 * 3600.0
+_IGATE_RADIUS_KM = 250.0
+_IGATE_TYPES = ("igate", "gateway")
+
 
 def _text_key(sender_base: str, text: str) -> str:
     """Sender and question, with case, spacing and punctuation taken out."""
@@ -506,6 +550,11 @@ class AIGateway(Extension):
         # normalised question -> (expiry, the dedup key it was first filed
         # under), so a re-send with a fresh message number finds the original.
         self._text_keys: dict[str, tuple] = {}
+        # Stations that asked not to be looked up by others. Public data, but
+        # the subject gets a lever: that is what makes answering defensible.
+        self._optout_path = (Path(config_path).with_name(_OPTOUT_FILE)
+                             if config_path else None)
+        self._optout: set = self._load_optout()
         self._day = ""
         self._day_count = 0
         self._day_told = False
@@ -731,6 +780,255 @@ class AIGateway(Extension):
                  % (sender_full, rec.get("callsign"), dist_km))
         return _wx_answer(rec, dist_km)
 
+    def _load_optout(self) -> set:
+        """Callsigns that asked to be left out, from the file beside the config."""
+        if self._optout_path is None:
+            return set()
+        try:
+            return {ln.strip().upper() for ln
+                    in self._optout_path.read_text(encoding="ascii").split()
+                    if ln.strip()}
+        except OSError:
+            return set()
+
+    def _save_optout(self) -> None:
+        if self._optout_path is None:
+            return
+        try:
+            tmp = self._optout_path.with_name(_OPTOUT_FILE + ".tmp")
+            tmp.write_text("\n".join(sorted(self._optout)) + "\n",
+                           encoding="ascii")
+            os.replace(tmp, self._optout_path)
+        except OSError as e:
+            self.warn("opt-out list not saved: " + str(e))
+
+    def _optout_command(self, question: str, sender_base: str) -> "Optional[str]":
+        """Let a station take itself out of other people's answers, or back in.
+
+        Only ever about the sender's own callsign - the packet header is the
+        only proof of identity there is here, and it proves exactly one thing.
+        """
+        if not sender_base:
+            return None
+        if _OPTOUT_MSG.match(question):
+            self._optout.add(sender_base)
+            self._save_optout()
+            self.log(f"opt-out: {sender_base} will not be looked up")
+            return ("Noted. I will not tell others where %s is. Send LOOKUP "
+                    "to undo. Your beacons stay public on aprs.fi."
+                    % sender_base)
+        if _OPTIN_MSG.match(question):
+            if sender_base in self._optout:
+                self._optout.discard(sender_base)
+                self._save_optout()
+            self.log(f"opt-in: {sender_base} may be looked up")
+            return ("Noted. %s can be looked up here again. Send NOLOOKUP to "
+                    "opt out." % sender_base)
+        return None
+
+    def _sender_origin(self, sender_full: str, sender_base: str):
+        """Where the asker is, from their own beacon, or None."""
+        db = self._station_db
+        if db is None:
+            return None
+        try:
+            rec = db.get_one(sender_full) or db.get_one(sender_base)
+        except Exception as e:
+            self.error(f"registry lookup failed: {e}")
+            return None
+        if rec and rec.get("lat") is not None and rec.get("lon") is not None:
+            return (rec["lat"], rec["lon"])
+        return None
+
+    def _igate_mine(self, question: str, sender_full: str, sender_base: str,
+                    raw_line: str) -> "Optional[str]":
+        """Which igate put this sender on APRS-IS, from the packet in hand.
+
+        The path is the truth here, and it is already parsed. A sender who
+        came in over the internet has no igate at all, and being told that is
+        the answer to the question they asked.
+        """
+        if not _IGATE_MINE.search(question):
+            return None
+        gate, internet = "", False
+        try:
+            from packet_parser import parse_packet
+            p = parse_packet(raw_line)
+            gate = p.get("gate") or ""
+            internet = bool(p.get("tcpip")) or p.get("q_type") in ("C", "S")
+        except Exception as e:
+            self.error(f"path parse failed: {e}")
+        # A qAC path names the core server that accepted the connection, not
+        # an igate that heard anything. Reading it as an igate would tell a
+        # phone-app user that a station in another hemisphere is receiving
+        # them (station_db.is_backbone_gate, written for the same confusion).
+        try:
+            from station_db import is_backbone_gate
+            if is_backbone_gate(gate):
+                gate = ""
+        except Exception:
+            pass
+        if internet and not gate:
+            return ("No igate is hearing you: this message reached me over "
+                    "the internet, not RF.")
+        if not gate:
+            db = self._station_db
+            rec = None
+            if db is not None:
+                try:
+                    rec = db.get_one(sender_full) or db.get_one(sender_base)
+                except Exception:
+                    rec = None
+            gate = (rec or {}).get("last_gate") or ""
+            if not gate:
+                return ("I cannot see which igate heard you - this message "
+                        "carries no gate in its path.")
+            return "Last gated by %s, from my records." % gate
+        extra = ""
+        origin = self._sender_origin(sender_full, sender_base)
+        db = self._station_db
+        if origin and db is not None:
+            try:
+                grec = db.get_one(gate)
+            except Exception:
+                grec = None
+            if grec and grec.get("lat") is not None:
+                km = _haversine_km(origin[0], origin[1],
+                                   grec["lat"], grec["lon"])
+                extra = ", %.0fkm from you" % km
+        return "%s gated this message%s." % (gate, extra)
+
+    async def _igate_near(self, question: str, sender_full: str,
+                          sender_base: str) -> "Optional[str]":
+        """The closest igates to the asker, from the registry."""
+        if not _IGATE_NEAR.search(question):
+            return None
+        db = self._station_db
+        if db is None:
+            return None
+        origin = self._sender_origin(sender_full, sender_base)
+        if origin is None:
+            return ("I do not know where you are - I have no position for "
+                    "your callsign. Send a beacon first, or name a grid.")
+        try:
+            hits = await asyncio.get_event_loop().run_in_executor(
+                None, db.nearest_of_type, origin[0], origin[1],
+                _IGATE_TYPES, _IGATE_RADIUS_KM, 2)
+        except Exception as e:
+            self.error(f"igate scan failed: {e}")
+            return None
+        if not hits:
+            return ("No igate within %.0fkm of you in my records."
+                    % _IGATE_RADIUS_KM)
+        bits = []
+        for rec, km in hits:
+            call = rec.get("callsign") or "?"
+            seen = ""
+            try:
+                if db.has_gated(call):
+                    seen = " (seen gating)"
+            except Exception:
+                pass
+            bits.append("%s %.0fkm%s" % (call, km, seen))
+        return "Nearest igates: " + "; ".join(bits) + ". My own feed only."
+
+    async def _prop_near(self, question: str, sender_full: str,
+                         sender_base: str) -> "Optional[str]":
+        """Openings this program measured, near the asker.
+
+        KR4MVP-5 asked for propagation and was sent to another site by the
+        program that had just measured 247 openings that week.
+        """
+        if not _PROP_ASK.search(question):
+            return None
+        db = self._station_db
+        if db is None:
+            return None
+        origin = self._sender_origin(sender_full, sender_base)
+        if origin is None:
+            return ("I do not know where you are, so I cannot pick out "
+                    "openings near you. Send a beacon first.")
+        try:
+            summary = await asyncio.get_event_loop().run_in_executor(
+                None, db.prop_summary, 200)
+        except Exception as e:
+            self.error(f"prop summary failed: {e}")
+            return None
+        now = _clock()
+        near = []
+        for ln in summary.get("links", []):
+            if now - float(ln.get("ts") or 0) > _PROP_RECENT_S:
+                continue
+            for la, lo in ((ln.get("s_lat"), ln.get("s_lon")),
+                           (ln.get("g_lat"), ln.get("g_lon"))):
+                if la is None or lo is None:
+                    continue
+                if _haversine_km(origin[0], origin[1], la, lo) <= _PROP_NEAR_KM:
+                    near.append(ln)
+                    break
+        if not near:
+            return ("No openings measured near you in the last 3h. That is "
+                    "my own feed, not a forecast.")
+        near.sort(key=lambda l: float(l.get("km") or 0), reverse=True)
+        best = near[0]
+        return ("%d opening(s) near you in 3h; longest %s-%s %.0fkm, %s. "
+                "My own feed, not a forecast."
+                % (len(near), best.get("call") or "?", best.get("gate") or "?",
+                   float(best.get("km") or 0),
+                   _ago(now - float(best.get("ts") or now))))
+
+    def _other_lookup(self, question: str, sender_base: str,
+                      sender_full: str) -> "Optional[str]":
+        """Another station's last position, as the map already shows it.
+
+        APRS positions are broadcast to be seen, and aprs.fi has served them
+        for years - refusing here protects nobody while the same fact is one
+        web page away. What this does not do is the step that turns a
+        callsign into a person: no licence lookup, no name, no address, and
+        no history beyond the one observation the registry holds. A station
+        that has sent NOLOOKUP is left out, and the refusal says so rather
+        than pretending the data is missing.
+        """
+        db = self._station_db
+        if db is None:
+            return None
+        text = question.upper()
+        if not any(w in text for w in ("WHERE", "LOCAT", "HEARD", "HOW FAR",
+                                       "DISTANCE", "NEREDE", "KONUM",
+                                       "UZAKLIK", "NE KADAR UZAK")):
+            return None
+        found = [b + (s or "") for b, s in _CALL_IN_TEXT.findall(text)
+                 if strip_ssid(b).upper() != sender_base]
+        if not found:
+            # A question about distance that names no station and no grid is
+            # about a place, and places are what this has no way to find.
+            if any(w in text for w in ("HOW FAR", "DISTANCE", "UZAK")):
+                return ("I cannot look up place names. Give me a callsign or "
+                        "a grid like EM97 and I will measure from your last "
+                        "beacon.")
+            return None
+        wanted = found[0]
+        base = strip_ssid(wanted).upper()
+        if base in self._optout:
+            return ("%s has asked not to be looked up through this gateway. "
+                    "Their beacons are still public on aprs.fi." % base)
+        try:
+            rec = db.get_one(wanted) or db.get_one(base)
+        except Exception as e:
+            self.error(f"registry lookup failed: {e}")
+            return None
+        answer = _station_answer(db, wanted, rec)
+        if rec and rec.get("lat") is not None:
+            origin = self._sender_origin(sender_full, sender_base)
+            if origin:
+                km = _haversine_km(origin[0], origin[1],
+                                   rec["lat"], rec["lon"])
+                answer = answer.replace(". My own feed only",
+                                        ", %.0fkm from you. My own feed only"
+                                        % km)
+        self.log(f"lookup: {sender_base} asked about {wanted}")
+        return answer
+
     def _recent_turns(self, sender_base: str) -> "list[tuple[str, str]]":
         """The sender's last few exchanges, newest last, dropping stale ones."""
         turns = self._history.get(sender_base)
@@ -831,8 +1129,10 @@ class AIGateway(Extension):
                     return None
                 self.log(f"self-lookup: {sender_base} asked about {wanted}")
                 return _station_answer(db, wanted, rec)
-        return ("I only look up your own callsign. For other stations, "
-                "aprs.fi or findu.com.")
+        # A question about somebody else is not refused here any more; it
+        # goes on to _other_lookup, which answers what the map already shows
+        # and honours a station's own NOLOOKUP.
+        return None
 
     async def _ask_ai(self, question: str, sender: str = "",
                       history: "Optional[list]" = None) -> str:
@@ -1184,7 +1484,17 @@ class AIGateway(Extension):
         # it, and the packet header already says who is asking.
         answer = _test_answer(question, sender_full, line)
         if answer is None:
+            answer = self._optout_command(question, sender_base)
+        if answer is None:
             answer = self._self_lookup(question, sender_base, sender_full)
+        if answer is None:
+            answer = self._igate_mine(question, sender_full, sender_base, line)
+        if answer is None:
+            answer = await self._igate_near(question, sender_full, sender_base)
+        if answer is None:
+            answer = await self._prop_near(question, sender_full, sender_base)
+        if answer is None:
+            answer = self._other_lookup(question, sender_base, sender_full)
         if answer is None:
             answer = await self._wx_lookup(question, sender_full, cfg)
         if answer is None:

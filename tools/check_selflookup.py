@@ -9,8 +9,12 @@ Four things it holds:
 
   1. the sender's own callsign is answered from the registry, with no model
      call at all
-  2. another operator's callsign is refused - the whole risk in this feature
-     is third-party lookup
+  2. another operator's callsign is answered from the registry as well -
+     the same one observation the map already draws, and no more. Until
+     2026-09-20 it was refused; the refusal protected nobody while aprs.fi
+     served the same beacon, and it is now bounded by what the answer may
+     contain (no name, no licence record, no history) and by a station's own
+     NOLOOKUP, which tools/check_lookup.py holds
   3. an answer that carries a position also carries its age, because a
      three-hour-old fix stated in the present tense is worse than no answer
   4. a question that names no callsign still reaches the model
@@ -45,12 +49,29 @@ RECORDS = {
         "callsign": "TA3HRJ-7", "lat": 38.4276, "lon": 27.1043,
         "locator": "KM38ok", "last_seen_ago_s": 840, "last_gate": "TA3HRJ-5",
     },
+    "W1AW-1": {
+        "callsign": "W1AW-1", "lat": 41.714, "lon": -72.727,
+        "locator": "FN31pr", "last_seen_ago_s": 600, "last_gate": "W1AW-10",
+    },
+    "TA3HRJ-10": {
+        "callsign": "TA3HRJ-10", "lat": 38.42, "lon": 27.10,
+        "locator": "KM38ok", "last_seen_ago_s": 60, "last_gate": "TA3HRJ-5",
+    },
 }
 
 
 class FakeDB:
     def get_one(self, call):
         return RECORDS.get(call)
+
+    def nearest_of_type(self, lat, lon, kinds, max_km=250.0, limit=3):
+        return [(dict(RECORDS["TA3HRJ-7"]), 12.0)]
+
+    def has_gated(self, call):
+        return False
+
+    def prop_summary(self, max_links=200):
+        return {"links": []}
 
 
 def line(sender: str, text: str) -> str:
@@ -63,7 +84,9 @@ async def run() -> int:
     for label, sender, question, expect in [
         ("own callsign",   "TA3HRJ-10", "Where is TA3HRJ-7?",   "registry"),
         ("own, no record", "TA3HRJ-10", "Where is TA3HRJ-9?",   "registry"),
-        ("someone else",   "TA3HRJ-10", "Where is W1AW-1?",     "refused"),
+        # Policy changed 2026-09-20: answered, not refused. See the head
+        # of this file and tools/check_lookup.py for the boundary.
+        ("someone else",   "TA3HRJ-10", "Where is W1AW-1?",     "registry"),
         ("no callsign",    "TA3HRJ-10", "What is SWR?",         "model"),
         ("not a location", "TA3HRJ-10", "TA3HRJ-7 antenna tips", "model"),
         # Asking about yourself without naming yourself. On 2026-09-10 a
@@ -76,7 +99,8 @@ async def run() -> int:
         # First person only: a location question about something else must
         # still reach the model, or every "where is the nearest digi" would
         # be answered with the asker's own coordinates.
-        ("nearest digi",   "TA3HRJ-7",  "Where is the nearest digi?", "model"),
+        # Infrastructure, answered from the registry since 2026-09-20.
+        ("nearest digi",   "TA3HRJ-7",  "Where is the nearest digi?", "registry"),
         ("my antenna",     "TA3HRJ-7",  "My antenna is broken",  "model"),
     ]:
         sent: list[str] = []
@@ -109,14 +133,25 @@ async def run() -> int:
                                 "answered" % label)
 
         if expect == "registry" and "TA3HRJ-9" not in question:
+            if "W1AW" in question:
+                if "41.7" not in body:
+                    problems.append("%s: another station's public position "
+                                    "was not answered -> %r" % (label, body[:70]))
+                if "ago" not in body:
+                    problems.append("%s: position without an age -> %r"
+                                    % (label, body[:70]))
+                print("  %-15s %-24s -> %s" % (label, question, body[:78]))
+                continue
+            if "nearest digi" == label:
+                if "12km" not in body.replace(" ", "") and "12" not in body:
+                    problems.append("%s: no igate/digi distance -> %r"
+                                    % (label, body[:70]))
+                print("  %-15s %-24s -> %s" % (label, question, body[:78]))
+                continue
             if "38.428" not in body and "38.4" not in body:
                 problems.append("%s: no position in the answer -> %r" % (label, body[:70]))
             if "ago" not in body:
                 problems.append("%s: position without an age -> %r" % (label, body[:70]))
-        if expect == "refused":
-            if "W1AW" in body and "only look up your own" not in body:
-                problems.append("%s: leaked another station -> %r" % (label, body[:70]))
-
         print("  %-15s %-24s -> %s" % (label, question, body[:78]))
 
     print()
