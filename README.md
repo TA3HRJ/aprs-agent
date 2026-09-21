@@ -53,7 +53,7 @@ between versions, see the
 | 🧠 | **AI Station Analysis** | Periodically sends beacon comments to AI to extract organisation name and description — results shown in Stations tab; skips seasonal/greeting messages |
 | 📡 | **Fixed Beacon** | Periodically sends your station's position — with APRS symbol picker and Maidenhead / QTH Locator support |
 | 🪵 | **Logger** | Logs incoming APRS packets to the terminal, with type and keyword filters |
-| 🤖 | **AI Gateway** | Auto-responds to APRS messages using AI (ChatGPT/Claude/DeepSeek/Groq/OpenRouter/Puter/custom — free options available); a separate API key is stored per provider, recalled automatically when you switch |
+| 🤖 | **AI Gateway** | Answers APRS messages. Questions about the network are answered from the station registry without a model call at all — your own position, which igate heard you, the nearest igates or repeaters, the nearest APRS weather reading, the propagation openings this agent measured, and another station's last position (with `NOLOOKUP` for anyone who would rather be left out). Everything else goes to AI (ChatGPT/Claude/DeepSeek/Groq/OpenRouter/Puter/custom — free options available), carrying the last few exchanges with that station so a follow-up makes sense; a separate API key is stored per provider, recalled automatically when you switch |
 | 🐦 | **Twitter / X** | Forwards APRS messages addressed to `TWSEND` to your Twitter/X account |
 | 🦋 | **Bluesky** | Forwards APRS messages addressed to `BSKYSEND` to your Bluesky account (free API) |
 | 📥 | **IMAP Receive** | Polls email inbox and forwards new emails as APRS messages to the radio |
@@ -337,7 +337,41 @@ max_batch      = 20     # max stations analysed per run
 
 ### AI Gateway
 
-Auto-responds to incoming APRS messages using AI. Free providers available.
+Answers incoming APRS messages. Free providers available.
+
+#### What it answers without asking the model
+
+The agent already holds a quarter of a million stations, the igate that
+carried each of them, and the propagation openings it measured itself.
+Sending someone to a website for facts that are in memory is a poor answer,
+so these are served from the registry — no model call, no API cost, and no
+chance of an invented number:
+
+| Question | Answer |
+|---|---|
+| `where am I`, `my last position` | your own record: position, grid, age, and the igate that gated you |
+| `which igate hears me` | the igate on your packet's own path — or that nobody is, if you arrived over the internet, since a `qAC` path names a core server rather than an igate |
+| `nearest igate`, `nearest repeater` | the closest ones with distances, measured from a grid you name or from your last beacon |
+| `propagation near me` | openings this agent measured within 400 km and three hours, or a plain statement that there were none |
+| `weather`, `wx KM38` | the nearest APRS weather station, with its distance, its age, and **what it was measured from** |
+| `where is XX1YYY` | that station's last position, its age and its distance from you |
+| `what can you do` | a fixed sentence, answered before the rate limiter because it costs nothing |
+| `TEST` | what the packet itself says: who sent it, which igate gated it, whether it touched RF at all |
+
+Two boundaries are deliberate. An answer about another station is **one
+observation** — never a name, a licence record or an address — and a station
+that sends **`NOLOOKUP`** is left out of other people's answers until it
+sends `LOOKUP`. And a refusal names its own reason: no data, no place names
+(a postcode is not a Maidenhead square), or a station that opted out.
+
+Everything else goes to the model, carrying the last three exchanges with
+that station for ten minutes, in memory only, so that *"how long would it
+take by car?"* still knows which journey you meant.
+
+Automatic stations are not answered at all. APRS service names are not
+callsign-shaped — `QRX`, `WXBOT`, `SMSGTE` carry no digit where a callsign
+must — and answering one is how two machines end up talking to each other on
+a shared channel.
 
 > **⚠️ Everything that passes through this is public.**
 > Amateur radio is conducted in the clear; encoding a transmission to obscure
@@ -448,6 +482,13 @@ wx_radius_km   = 250
 puter = "your-puter-key"
 # groq, openrouter, openai, anthropic, deepseek, custom = "..." as needed
 ```
+
+Two small files live beside the config file and are written by the gateway
+itself: `ai_gateway_msgid`, the last APRS message number used, so a restart
+does not reuse numbers a client has already seen and discarded; and
+`ai_gateway_nolookup`, the callsigns that have asked not to be looked up by
+others. Neither needs editing; deleting the first costs numbering continuity,
+deleting the second forgets people's wishes.
 
 To ask the AI via APRS, send a message to the configured callsign:
 ```
