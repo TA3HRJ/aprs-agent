@@ -169,6 +169,16 @@ def _station_answer(db, wanted: str, rec: "Optional[dict]") -> str:
 # A 4- or 6-character Maidenhead locator, standing alone in a question.
 _GRID_IN_TEXT = re.compile(r"\b([A-R]{2}[0-9]{2}(?:[A-X]{2})?)\b")
 
+# A UK postcode looks exactly like a four-character grid square followed by
+# noise. 2M0SBP asked "PH39 4NX wx" on 2026-09-20 and PH39 was read as a
+# locator, putting the origin at 10S 127E - open ocean north of Australia -
+# and the answer, confidently, was that no weather station was within 250 km
+# of it. Six-character locators are unambiguous and keep working.
+# The space is load-bearing: without it this also swallows KM38OK and IO76BV,
+# which are the locators the feature exists to accept.
+_POSTCODE_IN_TEXT = re.compile(
+    r"\b[A-Z]{1,2}[0-9][0-9A-Z]?\s+[0-9][A-Z]{2}\b")
+
 # Beyond this it is somebody else's weather. Overridable per instance as
 # wx_radius_km: measured on the live registry, 235 stations sat within
 # 100 km of this operator and not one of them measured weather; the
@@ -437,6 +447,15 @@ _PROP_NEAR_KM = 400.0
 _PROP_RECENT_S = 3 * 3600.0
 _IGATE_RADIUS_KM = 250.0
 _IGATE_TYPES = ("igate", "gateway")
+
+# Repeaters are infrastructure in the same sense: they beacon in order to be
+# found, and the registry held 7,940 of them with positions on the day
+# 2M0SBP-5 asked for the nearest one and was sent to a website.
+_REPEATER_NEAR = re.compile(
+    r"\b(?:NEAREST|CLOSEST|LOCAL)\s+(?:APRS\s+)?(?:REPEATER|RPT)"
+    r"|\bREPEATERS?\s+(?:NEAR|AROUND)\b"
+    r"|\bEN\s+YAKIN\s+(?:R[ÖO]LE|AKTAR\w*)", re.I)
+_REPEATER_TYPES = ("repeater",)
 
 
 def _text_key(sender_base: str, text: str) -> str:
@@ -775,6 +794,9 @@ class AIGateway(Extension):
 
         # where to measure from
         origin, origin_note = None, ""
+        if _POSTCODE_IN_TEXT.search(text):
+            return ("I cannot read postcodes or place names. Send a Maidenhead "
+                    "grid like IO76 and I will measure from there.")
         grid = _GRID_IN_TEXT.search(text)
         if grid:
             origin = _grid_to_latlon(grid.group(1))
@@ -948,26 +970,45 @@ class AIGateway(Extension):
 
     async def _igate_near(self, question: str, sender_full: str,
                           sender_base: str) -> "Optional[str]":
-        """The closest igates to the asker, from the registry."""
-        if not _IGATE_NEAR.search(question):
+        """The closest igates - or repeaters - to the asker, from the registry.
+
+        Both are infrastructure that beacons in order to be found. The origin
+        is a grid if the question names one, and the asker's own last beacon
+        otherwise; a postcode is neither, and says so.
+        """
+        if _REPEATER_NEAR.search(question):
+            kinds, label = _REPEATER_TYPES, "repeaters"
+        elif _IGATE_NEAR.search(question):
+            kinds, label = _IGATE_TYPES, "igates"
+        else:
             return None
         db = self._station_db
         if db is None:
             return None
-        origin = self._sender_origin(sender_full, sender_base)
+        text = question.upper()
+        if _POSTCODE_IN_TEXT.search(text):
+            return ("I cannot read postcodes or place names. Send a Maidenhead "
+                    "grid like IO76 and I will measure from there.")
+        origin, whence = None, "you"
+        grid = _GRID_IN_TEXT.search(text)
+        if grid:
+            origin = _grid_to_latlon(grid.group(1))
+            whence = grid.group(1)
+        if origin is None:
+            origin = self._sender_origin(sender_full, sender_base)
         if origin is None:
             return ("I do not know where you are - I have no position for "
                     "your callsign. Send a beacon first, or name a grid.")
         try:
             hits = await asyncio.get_event_loop().run_in_executor(
                 None, db.nearest_of_type, origin[0], origin[1],
-                _IGATE_TYPES, _IGATE_RADIUS_KM, 2)
+                kinds, _IGATE_RADIUS_KM, 2)
         except Exception as e:
-            self.error(f"igate scan failed: {e}")
+            self.error(f"{label} scan failed: {e}")
             return None
         if not hits:
-            return ("No igate within %.0fkm of you in my records."
-                    % _IGATE_RADIUS_KM)
+            return ("No %s within %.0fkm of %s in my records."
+                    % (label[:-1], _IGATE_RADIUS_KM, whence))
         bits = []
         for rec, km in hits:
             call = rec.get("callsign") or "?"
@@ -978,7 +1019,8 @@ class AIGateway(Extension):
             except Exception:
                 pass
             bits.append("%s %.0fkm%s" % (call, km, seen))
-        return "Nearest igates: " + "; ".join(bits) + ". My own feed only."
+        return ("Nearest %s to %s: %s. My own feed only."
+                % (label, whence, "; ".join(bits)))
 
     async def _prop_near(self, question: str, sender_full: str,
                          sender_base: str) -> "Optional[str]":

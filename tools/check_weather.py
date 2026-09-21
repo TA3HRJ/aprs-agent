@@ -192,6 +192,34 @@ async def run() -> int:
     print("  %-13s %-28s -> %s" % ("named place", "weather for Wakefield NH?",
                                    body4[:74]))
 
+    # A UK postcode is not a Maidenhead square. 2M0SBP asked "PH39 4NX wx"
+    # on 2026-09-20 and PH39 was read as a grid, putting the origin in the
+    # Pacific Ocean: "no APRS weather station within 250km of PH39".
+    sent5: list[str] = []
+
+    class Q5:
+        async def put(self, b: bytes) -> None:
+            sent5.append(b.decode("utf-8").strip())
+
+    gw = AIGateway(dict(CFG), "")
+    gw.set_station_db(FakeDB())
+    gw._own_writer = Q5()
+
+    async def stub5(q: str, s: str = "", history=None) -> str:
+        return "MODEL ANSWER"
+
+    gw._ask_ai = stub5
+    await gw.handle(line("TA1ABC-7", "PH39 4NX wx"))
+    body5 = " ".join(s.split(":", 2)[-1] for s in sent5 if ":ack" not in s)
+    if "PH39" in body5 and "250km" in body5:
+        problems.append("postcode: read a postcode as a grid square -> %r"
+                        % body5[:80])
+    low5 = body5.lower()
+    if "postcode" not in low5 and "place name" not in low5:
+        problems.append("postcode: refusal does not say what it cannot read "
+                        "-> %r" % body5[:80])
+    print("  %-13s %-28s -> %s" % ("postcode", "PH39 4NX wx", body5[:74]))
+
     # The daily ceiling caps the provider bill. A template answer sends no
     # bill, so an exhausted ceiling must not silence one.
     sent3 = []

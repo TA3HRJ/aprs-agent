@@ -72,6 +72,9 @@ class FakeDB:
         return dict(STATIONS.get(call.upper(), {})) or None
 
     def nearest_of_type(self, lat, lon, kinds, max_km=250.0, limit=3):
+        if "repeater" in kinds:
+            return [({"callsign": "GB3AA", "lat": 56.9, "lon": -5.9,
+                      "type": "repeater"}, 7.2)]
         if "igate" not in kinds and "gateway" not in kinds:
             return []
         return [(dict(STATIONS["W4ABC-10"]), 18.4)]
@@ -200,6 +203,17 @@ async def run() -> int:
     if "36.9" not in e and "EM76" not in e.upper():
         problems.append("opting back in did not restore the lookup: %r" % e[:80])
 
+    # 5b - repeaters are infrastructure too, and the registry holds 7,940
+    # of them with positions. 2M0SBP-5 asked "Nearest repeater to io76bv" on
+    # 2026-09-20 and was sent to a website.
+    sent, calls = [], {"n": 0}
+    gw = new_gateway(sent, calls, tmp)
+    a = await ask(gw, sent, "KE4PIC", "nearest repeater to IO76BV")
+    if "GB3AA" not in a.upper():
+        problems.append("nearest repeater not named: %r" % a[:80])
+    if calls["n"]:
+        problems.append("the repeater question cost a model call")
+
     # 6 - a place name is refused for the right reason
     sent, calls = [], {"n": 0}
     gw = new_gateway(sent, calls, tmp)
@@ -230,7 +244,7 @@ async def run() -> int:
 
     for p in problems:
         print("FAIL: " + p)
-    print("checked 7 cases - %d failed" % len(problems))
+    print("checked 8 cases - %d failed" % len(problems))
     return 1 if problems else 0
 
 
