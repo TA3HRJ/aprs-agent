@@ -3384,6 +3384,12 @@ async def get_messages(request: web.Request) -> web.Response:
         # be missing from a view whose whole promise is that nothing is lost.
         seen = {(m["ts"], m["from"], m["to"], m["text"]) for m in msgs}
         for m in mgr._msg_pending:
+            # The pending batch is whatever the last minute heard, so it has to
+            # obey the same channel the query asked for - without this, asking
+            # for the gateway's conversation came back with world traffic
+            # mixed into the last sixty seconds of it.
+            if channel and (m.get("channel") or "") != channel:
+                continue
             if (m.get("ts"), (m.get("from") or "").upper(),
                     (m.get("to") or "").upper(), m.get("text")) not in seen:
                 msgs.append(m)
