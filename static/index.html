@@ -405,6 +405,10 @@ body.sb-collapsed .sidebar{display:none}
 body.al-open .alert-panel:not([hidden]){display:block}
 body.ms-open .miss-panel:not([hidden]){display:block}
 body.public .sb-toggle{display:none!important}
+/* The Messages tab is admin-only; on the public map this link had
+   nowhere to go. Hidden here rather than in the fill function, which
+   does not run at all when the counter has no numbers yet. */
+body.public #about-gw-link{display:none!important}
 @media(max-width:700px){
   /* The public header was 143 px of an 812 px screen: the subtitle wrapped
      to two lines and pushed the action buttons onto a row of their own.
