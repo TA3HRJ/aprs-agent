@@ -3372,8 +3372,14 @@ async def get_messages(request: web.Request) -> web.Response:
             limit = max(1, min(5000, int(request.query.get("limit", 1000))))
         except (TypeError, ValueError):
             limit = 1000
+        # `channel=AI` reads the gateway's own conversation on its own. Without
+        # it the newest rows win and the operator-scope traffic this table also
+        # keeps buries it: measured 2026-09-23, the newest 2000 rows carried 29
+        # of the 257 gateway messages stored.
+        channel = (request.query.get("channel") or "").strip() or None
         msgs = await asyncio.get_event_loop().run_in_executor(
-            None, station_db_module.read_messages, mgr._sta_db_path, limit)
+            None, station_db_module.read_messages, mgr._sta_db_path, limit,
+            channel)
         # Anything still waiting for the next persistence tick would otherwise
         # be missing from a view whose whole promise is that nothing is lost.
         seen = {(m["ts"], m["from"], m["to"], m["text"]) for m in msgs}

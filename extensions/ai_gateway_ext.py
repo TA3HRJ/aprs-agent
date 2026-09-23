@@ -161,6 +161,17 @@ def _station_answer(db, wanted: str, rec: "Optional[dict]") -> str:
     if ago is not None:
         bits.append(_ago(ago))
     gate = rec.get("last_gate")
+    # A qAC path names the APRS-IS server a station connected to, not an igate
+    # that heard it. Printed as "via T2DENMARK" it describes a radio path that
+    # does not exist - the same confusion the igate answer had to be taught
+    # (2026-09-22, KC1MUR-7 asked where he was).
+    try:
+        from station_db import is_backbone_gate
+        if gate and is_backbone_gate(gate):
+            gate, = "",
+            bits.append("internet-connected")
+    except Exception:
+        pass
     if gate:
         bits.append("via " + str(gate))
     return " ".join(bits) + ". My own feed only; full history: aprs.fi"

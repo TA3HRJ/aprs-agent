@@ -548,17 +548,30 @@ def record_messages(path: str, rows: "list[dict[str, Any]]") -> int:
         con.close()
 
 
-def read_messages(path: str, limit: int = 1000) -> "list[dict[str, Any]]":
-    """The kept messages, oldest first so the panel can append as it does live."""
+def read_messages(path: str, limit: int = 1000,
+                  channel: "Optional[str]" = None) -> "list[dict[str, Any]]":
+    """The kept messages, oldest first so the panel can append as it does live.
+
+    `channel` reads one channel on its own. Without it the newest rows win,
+    and the world-feed traffic this table also keeps drowns the gateway's own
+    conversation: measured 2026-09-23, the newest 2000 rows held 29 of the
+    257 gateway messages stored. Fourteen days is only true for a
+    conversation that can be asked for by name.
+    """
     try:
         con = _connect(path, readonly=True)
     except sqlite3.Error:
         return []
     try:
-        rows = con.execute(
-            "SELECT ts, dir, from_call, to_call, text, msg_id, channel, kind "
-            "FROM message_history ORDER BY ts DESC LIMIT ?", (int(limit),)
-        ).fetchall()
+        sql = ("SELECT ts, dir, from_call, to_call, text, msg_id, channel, kind "
+               "FROM message_history ")
+        args: "list[Any]" = []
+        if channel:
+            sql += "WHERE channel = ? "
+            args.append(channel)
+        sql += "ORDER BY ts DESC LIMIT ?"
+        args.append(int(limit))
+        rows = con.execute(sql, args).fetchall()
     except sqlite3.Error:
         return []
     finally:

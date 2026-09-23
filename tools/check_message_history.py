@@ -150,6 +150,41 @@ with tempfile.TemporaryDirectory() as d:
         else:
             ok(f"the table is bounded by row count ({total} <= {cap})")
 
+# ── 8: the conversation stays reachable behind the world feed ─────────
+# 2026-09-23: the panel asked for the newest 2000 rows of everything, and the
+# operator saw 29 gateway messages out of the 257 the table held - the
+# operator-scope traffic it also keeps had pushed the rest out of the window.
+# Fourteen days is only true for the gateway's own conversation if it can be
+# read back on its own.
+with tempfile.TemporaryDirectory() as d:
+    path = str(Path(d) / "c.db")
+    base = int(time.time())
+    mine = [{"ts": base - 5000 - i, "dir": "rx", "from": "TA1ABC-7",
+             "to": "DMWGPT", "text": "q%d" % i, "msg_id": "",
+             "channel": "AI", "kind": "msg"} for i in range(5)]
+    newer = [{"ts": base - i, "dir": "rx", "from": "TA1X", "to": "TA2Y",
+              "text": "x%d" % i, "msg_id": str(i), "channel": "APRS",
+              "kind": "msg"} for i in range(50)]
+    sdb.record_messages(path, mine + newer)
+    window = sdb.read_messages(path, limit=20)
+    if sum(1 for r in window if r["channel"] == "AI") == len(mine):
+        ok("the newest-rows window happened to include the conversation")
+    else:
+        ok("the newest-rows window hides older gateway messages, as measured")
+    try:
+        only = sdb.read_messages(path, limit=20, channel="AI")
+    except TypeError:
+        only = None
+    if only is None:
+        fail("read by channel", "read_messages has no channel filter, so old "
+                                "gateway messages cannot be reached at all")
+    elif len(only) != len(mine):
+        fail("read by channel", f"{len(only)} of {len(mine)} gateway messages")
+    elif any(r["channel"] != "AI" for r in only):
+        fail("read by channel", "other channels came back too")
+    else:
+        ok(f"the conversation reads back on its own ({len(only)} rows)")
+
 if FAIL:
     print(f"\n{FAIL} failure(s)")
     sys.exit(1)

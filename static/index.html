@@ -385,7 +385,14 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
 
 /* Phone layout: settings behind a ⚙ overlay, alerts collapsed to one line,
    stat bar wraps 4+4, compact timeline, no legend */
-.sb-toggle,.sb-close{display:none}
+/* The settings column is only ever read while something is being changed,
+   and it costs 380px of a landscape iPad or a desktop for the rest of the
+   day. The gear now shows at every width: on a phone it opens the panel as
+   an overlay (below), and on a wide screen it collapses the column out of
+   the way. The choice is remembered per browser. */
+.sb-toggle{display:block}
+.sb-close{display:none}
+body.sb-collapsed .sidebar{display:none}
 /* Collapsible panel summaries. These used to be a phone-only trick, but the
    panels cost the same screen on a laptop — two of them open together left
    the map with a strip of what it should have. One line each by default at
@@ -664,7 +671,7 @@ body.public .sb-toggle{display:none!important}
     </div>
   </div>
   <div class="tab-bar">
-    <button class="tab-btn sb-toggle" id="btn-sb" onclick="document.body.classList.add('sb-open')" title="Settings">⚙</button>
+    <button class="tab-btn sb-toggle" id="btn-sb" onclick="toggleSidebar()" title="Settings">⚙</button>
     <button class="tab-btn" id="tab-log" onclick="switchTab('log')" data-i="tab_log">Live Log</button>
     <button class="tab-btn" id="tab-sta" onclick="switchTab('sta')" data-i="tab_sta">Stations</button>
     <button class="tab-btn active" id="tab-map" onclick="switchTab('map')" data-i="tab_map">Map</button>
@@ -940,7 +947,7 @@ const S={en:{
   ext_enabled:"Extension Server",ext_sub:"Bidirectional TCP stream for external programs",ext_host:"Listen host",ext_port:"Listen port",
   cfg_path:"Path",status_stopped:"● Stopped",status_running:"● Running",btn_reload:"🔄 Reload",btn_save:"💾 Save",btn_start:"▶ Start",btn_stop:"■ Stop",
   heard_label:"Last Heard",st_rx:"Received",st_tx:"Sent",st_err:"Errors",st_pk:"Packets",st_heard:"Heard",st_registry:"Registry",st_heard_reg:"Heard / Registry",st_stations:"Stations",st_calls:"Callsigns",st_uptime:"Uptime",st_lifetime:"Lifetime",btn_about:"About",
-  about_title:"About APRS-Agent",about_desc:"A multi-extension APRS-IS agent for amateur radio operators.",about_devs:"Developers",about_source:"Source:",about_infra:"Infrastructure",about_infra_detail:"Contabo VPS, Germany · Ubuntu 22.04 LTS",about_ai_calls:"AI analysis calls (lifetime):",about_gw:"Gateway:",about_gw_v:"{t} operators today, {a} ever, {q} questions answered",about_gw_link:"see the messages",about_license:"MIT License",about_close:"Close",
+  about_title:"About APRS-Agent",about_desc:"A multi-extension APRS-IS agent for amateur radio operators.",about_devs:"Developers",about_source:"Source:",about_infra:"Infrastructure",about_infra_detail:"Contabo VPS, Germany · Ubuntu 22.04 LTS",about_ai_calls:"AI analysis calls (lifetime):",about_gw:"Gateway:",about_gw_v:"{t} {o} today, {a} ever, {q} {qq} answered",about_gw_one:"operator",about_gw_many:"operators",about_gw_q1:"question",about_gw_qn:"questions",about_gw_link:"see the messages",about_license:"MIT License",about_close:"Close",
   save_ok:"Config saved.",save_err:"Save failed.",reload_ok:"Config reloaded.",no_callsign:"Enter your callsign first.",
   save_restart_hint:"⚠ The running agent won't see this change until you Stop and Start it again.",
   btn_clear:"Clear",btn_autoscroll:"Auto Scroll",
@@ -1086,7 +1093,7 @@ const S={en:{
   ext_enabled:"Extension Sunucusu",ext_sub:"Harici programlar için çift yönlü TCP akışı",ext_host:"Dinleme adresi",ext_port:"Dinleme portu",
   cfg_path:"Dosya yolu",status_stopped:"● Durduruldu",status_running:"● Çalışıyor",btn_reload:"🔄 Yenile",btn_save:"💾 Kaydet",btn_start:"▶ Başlat",btn_stop:"■ Durdur",
   heard_label:"Son Duyulan",st_rx:"Alınan",st_tx:"Gönderilen",st_err:"Hata",st_pk:"Paket",st_heard:"Duyulan",st_registry:"Kayıtlı",st_heard_reg:"Duyulan / Kayıtlı",st_stations:"İstasyon",st_calls:"Çağrı İşareti",st_uptime:"Süre",st_lifetime:"Toplam Süre",btn_about:"Hakkında",
-  about_title:"APRS-Agent Hakkında",about_desc:"Amatör radyo operatörleri için çok eklentili bir APRS-IS ajanı.",about_devs:"Geliştiriciler",about_source:"Kaynak:",about_infra:"Altyapı",about_infra_detail:"Contabo VPS, Almanya · Ubuntu 22.04 LTS",about_ai_calls:"AI analiz çağrısı (toplam):",about_gw:"Geçit:",about_gw_v:"bugün {t} operatör, toplam {a}, {q} soru yanıtlandı",about_gw_link:"mesajlara bak",about_license:"MIT Lisansı",about_close:"Kapat",
+  about_title:"APRS-Agent Hakkında",about_desc:"Amatör radyo operatörleri için çok eklentili bir APRS-IS ajanı.",about_devs:"Geliştiriciler",about_source:"Kaynak:",about_infra:"Altyapı",about_infra_detail:"Contabo VPS, Almanya · Ubuntu 22.04 LTS",about_ai_calls:"AI analiz çağrısı (toplam):",about_gw:"Geçit:",about_gw_v:"bugün {t} operatör, toplam {a}, {q} soru yanıtlandı",about_gw_one:"operatör",about_gw_many:"operatör",about_gw_q1:"soru",about_gw_qn:"soru",about_gw_link:"mesajlara bak",about_license:"MIT Lisansı",about_close:"Kapat",
   save_ok:"Ayarlar kaydedildi.",save_err:"Kaydetme başarısız.",reload_ok:"Ayarlar yeniden yüklendi.",no_callsign:"Çağrı işaretinizi girin.",
   save_restart_hint:"⚠ Çalışan ajan bu değişikliği görmeyecek — Durdur'a basıp tekrar Başlat'a basmanız gerekir.",
   btn_clear:"Temizle",btn_autoscroll:"Otomatik Kaydır",
@@ -1722,8 +1729,24 @@ async function fetchMsgs(){
   // on restart. "Kept" is the stored history - the gateway's own conversation
   // and anything matching the station filter, up to fourteen days.
   const kept=msgSrc()==='kept';
-  try{const r=await api('GET','/api/messages'+(kept?'?kept=1&limit=2000':''));
-      msgData=r.msgs||[];msgLoaded=true;renderMsgs()}catch(e){}
+  try{
+    if(!kept){const r=await api('GET','/api/messages');
+      msgData=r.msgs||[];msgLoaded=true;renderMsgs();return}
+    // Two reads, because one cannot answer both questions. The newest rows
+    // are what "recent" means; the gateway's own conversation has to be asked
+    // for by name or the world-feed traffic buries it - on 2026-09-23 the
+    // newest 2000 rows held 29 of the 257 gateway messages kept.
+    const [all,gw]=await Promise.all([
+      api('GET','/api/messages?kept=1&limit=2000'),
+      api('GET','/api/messages?kept=1&limit=2000&channel=AI')]);
+    const seen=new Set(),out=[];
+    for(const m of [...(all.msgs||[]),...(gw.msgs||[])]){
+      const k=m.ts+'|'+m.from+'|'+m.to+'|'+m.text+'|'+(m.msg_id||'');
+      if(seen.has(k))continue;seen.add(k);out.push(m);
+    }
+    out.sort((a,b)=>a.ts-b.ts);
+    msgData=out;msgLoaded=true;renderMsgs();
+  }catch(e){}
 }
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML}
 // esc() serialises a TEXT NODE, so it escapes & < > and deliberately leaves
@@ -2839,11 +2862,18 @@ function fillGateway(g){
   try{
     if(!g||typeof g.total!=='number')return;
     const t=(S[lang]&&S[lang].about_gw_v)||S.en.about_gw_v;
+    const L=S[lang]||S.en;
     $('about-gw-n').textContent=t.replace('{t}',g.today)
-      .replace('{a}',g.total).replace('{q}',g.questions);
+      .replace('{o}',g.today===1?L.about_gw_one:L.about_gw_many)
+      .replace('{a}',g.total).replace('{q}',g.questions)
+      .replace('{qq}',g.questions===1?L.about_gw_q1:L.about_gw_qn);
     $('about-gw').hidden=false;
-    $('about-gw-link').onclick=function(e){e.preventDefault();
-      $('about-bg').classList.remove('open');switchTab('msg')};
+    // The Messages tab is admin-only, so on the public map the link had
+    // nowhere to go: switchTab('msg') quietly lands a visitor on the map.
+    const lk=$('about-gw-link');
+    if(window.PUBLIC){lk.hidden=true}
+    else{lk.hidden=false;lk.onclick=function(e){e.preventDefault();
+      $('about-bg').classList.remove('open');switchTab('msg')}}
   }catch(e){}
 }
 
@@ -2852,8 +2882,24 @@ async function openAbout(){
   try{ fillGateway((await api('GET','/api/info')).gateway); }catch(e){}
 }
 
+// The gear does two different things, because the two screens have two
+// different problems. Narrow: the column is off-screen and the gear brings it
+// in as a full-screen overlay, closed with the ✕. Wide: the column is there
+// and the gear takes it away, which is what a landscape iPad wanted.
+function toggleSidebar(){
+  if(window.matchMedia('(max-width:700px)').matches){
+    document.body.classList.add('sb-open');return;
+  }
+  const off=document.body.classList.toggle('sb-collapsed');
+  try{localStorage.setItem('sbCollapsed',off?'1':'0')}catch(e){}
+}
+
 // ── Init ──
 (async function(){
+  try{
+    if(localStorage.getItem('sbCollapsed')==='1')
+      document.body.classList.add('sb-collapsed');
+  }catch(e){}
   if(window.PUBLIC){
     document.body.classList.add('public');
     $('pub-hdr').hidden=false;
