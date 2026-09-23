@@ -542,9 +542,9 @@ class AgentManager:
                                             "ai_calls_total", "0"))
         except (ValueError, TypeError):
             self._ai_calls = 0
-        # Read once at startup as well as on every persistence tick: without
-        # this the About line has nothing to show for the first minute after
-        # a restart, and hides itself instead.
+        # Gateway usage counts. Read here at startup and refreshed once a
+        # minute off the event loop; a second initialiser further down used to
+        # wipe this one, which put the first-minute blank straight back.
         try:
             self._gw_stats = station_db_module.gateway_stats(self._sta_db_path)
         except Exception:
@@ -648,8 +648,6 @@ class AgentManager:
         # ring above is twelve minutes of world feed and holds none of the
         # gateway's own traffic; see station_db.record_messages.
         self._msg_pending: list = []
-        # Gateway usage counts, refreshed once a minute off the event loop.
-        self._gw_stats: dict = {}
         self._msg_seen: dict[tuple, int] = {}   # dedup key → last seen ts
         self._channel_map: dict[str, str] = {}  # callsign → AI/Telegram/…
 
