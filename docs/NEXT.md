@@ -11,8 +11,7 @@ what merely under-informs them.**
 
 ## WHERE THIS STANDS — 2026-09-25
 
-**Deployed: v3.2.133** on the VPS, v3.2.134 committed; the Windows download
-is v3.2.130.
+**Deployed: v3.2.134** on the VPS; the Windows download is v3.2.130.
 
 [AUDIT-2026-09-15.md](AUDIT-2026-09-15.md) §8 was the plan. Packages 1 and 2
 are done, WAL included (v3.2.130); package 3 is done apart from item 10; the
