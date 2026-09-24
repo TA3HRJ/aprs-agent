@@ -11,7 +11,7 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.132** since 2026-09-24 (`/api/info` checked from outside) |
+| running | **v3.2.133** since 2026-09-24 19:02, deployed by the hourly timer; `Deploy OK`, 0 restarts, no console error on a fresh load of the public map |
 | repo HEAD | **v3.2.133** — a fault in the page's own code reaches the console and the admin journal instead of an empty catch; a failed request still stays quiet (F-2026-09-24-05). v3.2.132 a weather reading past 30 km says it is not local (F-2026-09-24-04); v3.2.131 email reports template values and parses its sender (F-2026-09-24-03); v3.2.130 WAL mode (F-2026-09-24-02); v3.2.129 Telegram poll margin and a daily RSS line (F-2026-09-24-01); v3.2.117-128 the AI gateway's registry answers, conversation memory and usage counter (F-2026-09-20-01 to -05; release notes v3.2.119, v3.2.125, v3.2.130) |
 | APRS-IS login | `TA3HX-5` since 2026-09-17 (was `TA3HRJ-5`); the software side of the callsign change shipped in v3.2.116, plan outside the repo in `CALLSIGN-TA3HX-APRS-AGENT.md` |
 | DB backup | nightly 04:17, `/usr/local/sbin/aprs-db-backup` from `/etc/cron.d/aprs-db-backup`, online backup API + integrity_check, 7 kept in `/var/backups/aprs-agent`. Never `cp` the live file: since v3.2.130 the database is in **WAL mode**, and while the agent runs committed data can sit in `-wal` beside it. The `-wal` file comes and goes as connections close; ask `PRAGMA journal_mode`, not `ls` |
