@@ -6055,3 +6055,45 @@ VPS is the agent itself.
 reader waiting 4.07 s behind a 4 s writer; after the change the reader answers
 in 6 ms. It also holds that a read-only connection opens the file and that an
 online backup passes integrity_check.
+
+---
+
+## F-2026-09-24-03 — email was switched on for two months and could not send
+
+**Fixed in v3.2.131; the live config was corrected the same day.**
+
+### What was seen
+
+The SMTP extension on the VPS had `enabled = true` and
+`smtp_server = "smtp.example.com:587"` — the template's value, unchanged in
+every config backup back to 2026-07-17. It logged "SMTP initialized" at every
+start and `/api/info` reported `smtp: true`. No message could have been sent.
+
+Correcting the server exposed a second fault. `from_email` held
+`Erhan Ozkan, TA3HRJ <ta3hrj@gmail.com>`, and the same string was passed to
+`sendmail()` as the envelope sender. The unquoted comma makes it two
+mailboxes, so the SMTP conversation would have carried
+`MAIL FROM:<Erhan Ozkan, TA3HRJ <ta3hrj@gmail.com>>`, which no server
+accepts, and the From header parsed as two senders. A display name decided
+whether any mail left. The monitor's email notification in `web_gui.py` had
+the same construction.
+
+### What changed
+
+- `sender_addresses()` in `smtp_ext.py` parses `from_email` into a From
+  header and a bare envelope address; anything that is not exactly one
+  address falls back to the login. The extension and the monitor
+  notification both use it.
+- An extension whose server, login or sender still holds a template value
+  says so at start, as an error, and reports its health as error. A send
+  that succeeds or fails now sets the health too.
+- `/api/info` carries `health.smtp` beside `health.ai`: `off`, `idle`, `ok`
+  or `error`.
+- Live config, no release needed: server `smtp.gmail.com:587`, and the name
+  quoted as `"Erhan Ozkan, TA3HX" <ta3hrj@gmail.com>`.
+
+`tools/check_smtp_sender.py` sends through the real code path into a fake
+server. **Seen failing on four of five assertions**: the broken name reached
+the envelope as it stood, a well-formed one did too (smtplib would have
+normalised that one on the wire, but it was luck), the monitor branch used the
+raw string, and placeholder values drew no remark.

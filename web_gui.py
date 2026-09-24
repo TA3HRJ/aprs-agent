@@ -1859,7 +1859,8 @@ class AgentManager:
             server_port = smtp_cfg.get("smtp_server", "")
             username = smtp_cfg.get("smtp_username", "")
             password = smtp_cfg.get("smtp_password", "")
-            from_email = smtp_cfg.get("from_email", username)
+            from extensions.smtp_ext import sender_addresses
+            from_email, envelope_from = sender_addresses(smtp_cfg)
             recipients = smtp_cfg.get("allowed_receiver_emails", [])
             if not server_port or not recipients:
                 print("[monitor] SMTP not configured — cannot send notification", file=sys.stderr)
@@ -1876,7 +1877,7 @@ class AgentManager:
                     s.starttls()
                     if username:
                         s.login(username, password)
-                    s.sendmail(from_email, recipients, mime.as_string())
+                    s.sendmail(envelope_from, recipients, mime.as_string())
             await loop.run_in_executor(None, _send)
 
     def _build_channel_map(self, config: dict) -> dict[str, str]:
@@ -2245,6 +2246,22 @@ async def info(request: web.Request) -> web.Response:
         except Exception:
             pass        # never let a status read break the status endpoint
 
+    # The same question for email: switched on is not the same as able to
+    # send, and the SMTP extension ran on template values for two months
+    # while this endpoint called it active.
+    smtp_on = bool(ext_cfg.get("smtp", {}).get("enabled"))
+    smtp_state = "off"
+    if smtp_on:
+        smtp_state = "idle"
+        try:
+            from extensions import ExtensionRegistry
+            for ext in ExtensionRegistry._extensions:
+                if ext.name == "smtp":
+                    smtp_state = ext.health["state"]
+                    break
+        except Exception:
+            pass
+
     data = {
         "version": cfg_module.VERSION,
         "running": mgr.running,
@@ -2261,7 +2278,7 @@ async def info(request: web.Request) -> web.Response:
         # Left a plain bool: it means "configured", the loops below depend
         # on exactly that, and widening it here would change what four other
         # readers think they are being told.
-        "health": {"ai": ai_health["state"]},
+        "health": {"ai": ai_health["state"], "smtp": smtp_state},
         "active": {
             "ai": ai_ok,
             "station_ai": bool(sai_cfg.get("enabled")) and ai_ok,
@@ -2275,7 +2292,7 @@ async def info(request: web.Request) -> web.Response:
             "whatsapp": bool(ext_cfg.get("whatsapp", {}).get("enabled")),
             "twitter": bool(ext_cfg.get("twitter", {}).get("enabled")),
             "bluesky": bool(ext_cfg.get("bluesky", {}).get("enabled")),
-            "smtp": bool(ext_cfg.get("smtp", {}).get("enabled")),
+            "smtp": smtp_on,
             "imap": bool(ext_cfg.get("imap", {}).get("enabled")),
         },
     }

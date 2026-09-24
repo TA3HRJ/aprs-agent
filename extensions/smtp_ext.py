@@ -21,13 +21,42 @@ from __future__ import annotations
 import asyncio
 import smtplib
 from email.mime.text import MIMEText
-from email.utils import formatdate
+from email.utils import formataddr, formatdate, getaddresses
 from typing import Optional
 
 import aprslib
 
 from . import Extension
 from config import strip_ssid
+
+
+# What the config template ships with. A config still carrying one of these
+# was never finished: the extension starts, is reported active, and fails on
+# every send. One ran that way from July to September 2026 unnoticed.
+_PLACEHOLDERS = ("example.com", "example.org", "example.net", "your@email.com")
+
+
+def placeholder_fields(cfg: dict) -> list[str]:
+    """Names of the settings that still hold a template value."""
+    return [key for key in ("smtp_server", "smtp_username", "from_email")
+            if any(p in str(cfg.get(key, "")).lower() for p in _PLACEHOLDERS)]
+
+
+def sender_addresses(cfg: dict) -> tuple[str, str]:
+    """(From header, envelope sender) for the configured account.
+
+    `from_email` is free text typed by a person, and the envelope sender must
+    be a bare address. An unquoted comma in the display name - "Name, CALL
+    <a@b>" - is two mailboxes, and handed to sendmail() as it stood it became
+    `MAIL FROM:<Name, CALL <a@b>>`, which no server accepts. A from_email
+    that does not parse as exactly one address falls back to the login.
+    """
+    user = str(cfg.get("smtp_username", ""))
+    found = getaddresses([str(cfg.get("from_email", "") or user)])
+    if len(found) == 1 and "@" in found[0][1]:
+        name, addr = found[0]
+        return formataddr((name, addr)), addr
+    return user, user
 
 
 class SmtpEmailer(Extension):
@@ -41,6 +70,11 @@ class SmtpEmailer(Extension):
             f"| senders={config['allowed_senders']} "
             f"| recipients={config['allowed_recipients']}"
         )
+        bad = placeholder_fields(config)
+        if bad:
+            self.error(f"{', '.join(bad)} still hold the template's example "
+                       f"values - no email can be sent until they are set")
+            self.mark_broken("template values: " + ", ".join(bad))
 
     def _validate(self) -> None:
         cfg = self._config
@@ -145,7 +179,8 @@ class SmtpEmailer(Extension):
             msg["Subject"] = (
                 f"APRS message from {aprs_sender} via APRS-Agent"
             )
-            msg["From"] = cfg.get("from_email", "aprs@example.com")
+            header_from, envelope_from = sender_addresses(cfg)
+            msg["From"] = header_from
             msg["To"] = to_addr
             msg["Date"] = formatdate(localtime=True)
 
@@ -153,14 +188,17 @@ class SmtpEmailer(Extension):
                 server.ehlo()
                 server.starttls()
                 server.login(cfg["smtp_username"], cfg["smtp_password"])
-                server.sendmail(msg["From"], [to_addr], msg.as_string())
+                server.sendmail(envelope_from, [to_addr], msg.as_string())
 
             self.log(f"email sent to {to_addr} from {aprs_sender}")
+            self.mark_working()
             return True
 
         except smtplib.SMTPException as e:
             self.error(f"SMTP error: {e}")
+            self.mark_broken(f"SMTP error: {e}")
             return False
         except Exception as e:
             self.error(f"unexpected email error: {e}")
+            self.mark_broken(f"unexpected email error: {type(e).__name__}")
             return False
