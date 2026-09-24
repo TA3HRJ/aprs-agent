@@ -9,17 +9,22 @@ what merely under-informs them.**
 
 ---
 
-## WHERE THIS STANDS — 2026-09-24
+## WHERE THIS STANDS — 2026-09-25
 
-**Deployed: v3.2.133** on the VPS; the Windows download is v3.2.130.
+**Deployed: v3.2.133** on the VPS, v3.2.134 committed; the Windows download
+is v3.2.130.
 
 [AUDIT-2026-09-15.md](AUDIT-2026-09-15.md) §8 was the plan. Packages 1 and 2
 are done, WAL included (v3.2.130); package 3 is done apart from item 10; the
 host package is partly done and its details are kept outside the repository.
 What is left, in the order it is worth doing:
 
-1. **Silence AI-note timeout** (audit item 10): log the latency for a week,
-   then set the timeout from the measurement.
+1. **Silence AI-note timeout** (audit item 10): **measuring since v3.2.134,
+   read after 2026-10-02** with the query in F-2026-09-25-01. Every note now
+   logs its duration. The failures on record were 27 in three hours of one
+   evening and one 503, which looks like a provider incident rather than a
+   tight limit; the week decides. A longer timeout also delays the next
+   alert in the same pass, so leaving 20 s is a real answer.
 2. ~~**A weather reading from far away.**~~ Done in v3.2.132: past 30 km the
    answer opens with the distance and says it is not local (F-2026-09-24-04).
 3. ~~**Silent `catch` blocks in `static/index.html`.**~~ Done in v3.2.133:

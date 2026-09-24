@@ -1108,10 +1108,7 @@ class AgentManager:
                                        f"note (cooldown, "
                                        f"{int((_AI_NOTE_COOLDOWN_S - (now_ts - cached[1])) / 60)}m left)")
                     elif ai_ok:
-                        try:
-                            note = await self._assess_silence(c, ai_cfg)
-                        except Exception as e:
-                            self._log_both(f"[silence] AI assessment failed: {e}")
+                        note = await self._silence_note(cell, c, ai_cfg)
                     if note:
                         self._silence_ai_notes[cell] = note
                         self._silence_note_cache[cell] = (note, now_ts)
@@ -1508,6 +1505,31 @@ class AgentManager:
                      f"snapshots and are chronically absent rather than newly "
                      f"lost: {', '.join(repeat[:8])}.\n")
         return line
+
+    async def _silence_note(self, cell: str, c: dict, ai_cfg: dict) -> str:
+        """One AI note for a silence alert, and how long it took, either way.
+
+        The timeout is to be set from a measurement (AUDIT-2026-09-15 item
+        10), and until v3.2.134 only failures reached the journal: 28 since
+        2026-08-21, 27 of them inside three hours on the evening of
+        2026-09-14. How close an ordinary answer comes to the 20 s limit was
+        recorded nowhere, so there was nothing to set it from.
+
+        The monitor loop awaits this, one alert after another, so every
+        second spent here is a second the next alert in the same pass waits
+        for its notification. A longer timeout is not free.
+        """
+        t0 = time.monotonic()
+        try:
+            note = await self._assess_silence(c, ai_cfg)
+        except Exception as e:
+            self._log_both(f"[silence] AI assessment failed after "
+                           f"{time.monotonic() - t0:.1f} s: {e}")
+            return ""
+        self._log_both(f"[silence] AI note for {cell} in "
+                       f"{time.monotonic() - t0:.1f} s"
+                       + ("" if note else ", empty"))
+        return note
 
     async def _assess_silence(self, c: dict, ai_cfg: dict) -> str:
         """Ask the AI Gateway to interpret a silence cluster. Returns a short

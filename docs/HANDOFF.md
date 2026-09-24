@@ -15,7 +15,7 @@ first. If it disagrees with either of those, they win.
 | repo HEAD | **v3.2.133** — a fault in the page's own code reaches the console and the admin journal instead of an empty catch; a failed request still stays quiet (F-2026-09-24-05). v3.2.132 a weather reading past 30 km says it is not local (F-2026-09-24-04); v3.2.131 email reports template values and parses its sender (F-2026-09-24-03); v3.2.130 WAL mode (F-2026-09-24-02); v3.2.129 Telegram poll margin and a daily RSS line (F-2026-09-24-01); v3.2.117-128 the AI gateway's registry answers, conversation memory and usage counter (F-2026-09-20-01 to -05; release notes v3.2.119, v3.2.125, v3.2.130) |
 | APRS-IS login | `TA3HX-5` since 2026-09-17 (was `TA3HRJ-5`); the software side of the callsign change shipped in v3.2.116, plan outside the repo in `CALLSIGN-TA3HX-APRS-AGENT.md` |
 | DB backup | nightly 04:17, `/usr/local/sbin/aprs-db-backup` from `/etc/cron.d/aprs-db-backup`, online backup API + integrity_check, 7 kept in `/var/backups/aprs-agent`. Never `cp` the live file: since v3.2.130 the database is in **WAL mode**, and while the agent runs committed data can sit in `-wal` beside it. The `-wal` file comes and goes as connections close; ask `PRAGMA journal_mode`, not `ls` |
-| watching | Telegram `poll error` lines, ~60 a day before v3.2.129, expected near zero; the daily `[health] rss` journal line (953 MB five minutes after the v3.2.130 start); `health.smtp` in `/api/info`, which stays `idle` until the first email is sent |
+| watching | **`[silence] AI note for <cell> in N s` lines from v3.2.134 — read after 2026-10-02** to answer audit item 10 (F-2026-09-25-01 has the query); Telegram `poll error` lines, ~60 a day before v3.2.129, expected near zero; the daily `[health] rss` journal line (953 MB five minutes after the v3.2.130 start); `health.smtp` in `/api/info`, which stays `idle` until the first email is sent |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -225,7 +225,7 @@ cost is below anything this application can notice. Named rather than hidden.
 
 ## The guard rail
 
-Thirty-five checks in `tools/`, each one born from a live failure. Run them all
+Thirty-six checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -239,7 +239,7 @@ dependencies. `python -m venv .venv` then `.venv/Scripts/python.exe -m pip
 install -r requirements.txt` (`.venv/` is gitignored), and run them with that
 interpreter. On Windows a bare `python` may be the Microsoft Store alias.
 
-Thirty-four run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Thirty-five run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -309,6 +309,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_hazard_record` | a warning that beacons for an hour is one row, read from the live packet |
 | `check_prop_bundle` | the evidence bundle cannot judge an event with numbers that event wrote |
 | `check_silent_catch` | an empty catch in the page never swallows a fault in the page's own code |
+| `check_ai_note_latency` | every silence AI note says how long it took, success or failure, without reading as an error |
 
 ---
 

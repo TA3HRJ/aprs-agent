@@ -6202,3 +6202,76 @@ to mark both the request and the parse, and `fillGateway` to hand its error to
 handlers above and the five missing pieces — and with 2 when only
 `fillGateway`'s handler was put back. Promise-style `.catch(function(){})`
 is not covered: the three in the page are deliberate.
+
+---
+
+## F-2026-09-25-01 — the silence AI timeout could not be set from a measurement, because nothing measured it
+
+**Instrumented in v3.2.134. The timeout itself is unchanged, at 20 s.**
+
+### What was seen
+
+AUDIT-2026-09-15 item 10 counted twelve silence assessments hitting the 20 s
+read timeout in 24 hours and said to measure the provider's latency for a
+week before choosing a number. The journal could not supply that week. Only
+failures reached it; the notes that arrived left no trace of how long they
+took.
+
+What the journal did hold, read on 2026-09-25 across its whole history
+(from 2026-08-21):
+
+| | |
+|---|---|
+| silence alerts logged, 2026-09-10 to 09-24 | 110-361 a day |
+| AI assessment failures, whole history | **28** |
+| of them, 2026-09-14 between 20:32 and 23:24 | **27**, all "The read operation timed out" |
+| the rest | 1, an HTTP 503 on 2026-09-18 |
+
+So the twelve the audit counted were the tail of a three-hour window on one
+evening, and on every other day of the record the failure count is zero or
+one. That points at a provider incident (the provider is DeepSeek), not at a
+limit set too tight for ordinary answers — but that is an inference from
+failures alone. Whether ordinary answers take 2 s or 18 s is exactly what was
+not recorded, and it decides whether 20 s has any margin.
+
+**A correction to the audit.** It said the call "already runs in the
+background, so a longer timeout costs nothing but a later note". The provider
+call runs in an executor, so the event loop is free, but the silence monitor
+awaits each assessment in turn before it sends that alert and moves to the
+next. During the 2026-09-14 window every new alert cell held the pass for
+20 s. A 60 s timeout would have held it for 60. A longer timeout costs the
+next alert's notification as well as this alert's note.
+
+### What changed
+
+`_silence_note()` wraps the assessment and logs how long it took, whichever
+way it ends:
+
+    [silence] AI note for KM38 in 3.4 s
+    [silence] AI note for KM38 in 2.1 s, empty
+    [silence] AI assessment failed after 20.0 s: The read operation timed out
+
+The duration covers the whole assessment as the loop sees it, including the
+history read, which under WAL takes milliseconds. The success lines match none
+of the patterns `_count_log_lines` counts as errors; the failure line still
+does, as before. Roughly 130 extra journal lines a day.
+
+`tools/check_ai_note_latency.py` drives `_silence_note` with a stand-in
+provider: a note, a timeout and an empty answer must each produce one line
+with a duration, no success line may read as an error, and `_assess_silence`
+may be called from nowhere but `_silence_note`. **Seen failing** against
+v3.2.133 on both counts: no `_silence_note`, and `_assess_silence` called
+directly from `_silence_watch_loop`.
+
+### What to do with it
+
+Read it after 2026-10-02:
+
+    journalctl -u aprs-agent --since 2026-09-25 -o cat \
+      | grep -oP 'AI note for \S+ in \K[0-9.]+' | sort -n \
+      | awk '{a[NR]=$1} END {print NR, "p50", a[int(NR*.5)], "p90", a[int(NR*.9)], "p99", a[int(NR*.99)], "max", a[NR]}'
+
+If p99 sits well under 20 s, the limit is not the problem and the answer to
+item 10 is to leave it. Only if ordinary answers crowd the limit is there a
+number to choose — and then with the cost above in view. `_call_ai_api` also
+serves station AI and propagation notes, so a change there moves all three.
