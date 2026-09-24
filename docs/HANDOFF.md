@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.110
+# Handoff — state at v3.2.131
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -11,8 +11,11 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.110** |
-| repo HEAD | tag `v3.2.110` — "where am I" is answered from the registry (F-2026-09-10-02) |
+| running | **v3.2.131** since 2026-09-24 |
+| repo HEAD | tag `v3.2.131` — email reports template values and parses its sender (F-2026-09-24-03); v3.2.130 WAL mode (F-2026-09-24-02); v3.2.129 Telegram poll margin and a daily RSS line (F-2026-09-24-01); v3.2.117-128 the AI gateway's registry answers, conversation memory and usage counter (F-2026-09-20-01 to -05; release notes v3.2.119, v3.2.125, v3.2.130) |
+| APRS-IS login | `TA3HX-5` since 2026-09-17 (was `TA3HRJ-5`); the software side of the callsign change shipped in v3.2.116, plan outside the repo in `CALLSIGN-TA3HX-APRS-AGENT.md` |
+| DB backup | nightly 04:17, `/usr/local/sbin/aprs-db-backup` from `/etc/cron.d/aprs-db-backup`, online backup API + integrity_check, 7 kept in `/var/backups/aprs-agent`. Never `cp` the live file: since v3.2.130 the database is in **WAL mode**, and while the agent runs committed data can sit in `-wal` beside it. The `-wal` file comes and goes as connections close; ask `PRAGMA journal_mode`, not `ls` |
+| watching | Telegram `poll error` lines, ~60 a day before v3.2.129, expected near zero; the daily `[health] rss` journal line (953 MB five minutes after the v3.2.130 start); `health.smtp` in `/api/info`, which stays `idle` until the first email is sent |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
@@ -59,11 +62,53 @@ predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
 
 ## Releasing to Windows
 
+**Published 2026-09-24: [v3.2.130](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.130)**
+— `aprs-agent-v3.2.130.zip`, 59.7 MiB, 248 files, sha256
+`CD8D8356A7A151BE32EB426B14F65924327B21A46AF5AE2BC6870821F660C156`. Notes in
+`docs/RELEASE-v3.2.130-draft.md`. One tag behind the VPS: v3.2.131 changes
+only the email extension. **Built with pins from `62578d1`**, one commit
+after the tag, to take httpx2 2.13.1 past three advisories; the pin file is
+not shipped and every shipped file matched the tag. v3.2.116, v3.2.119 and
+v3.2.125 were published in between, each with its own draft in `docs/`.
+
+Dependabot alerts are on since 2026-09-24. Its one open alert is
+cryptography 48.0.1 in `requirements-build-win32.txt`, the win32 ceiling
+described below — known, not new.
+
+The v3.2.115 block below is history.
+
+**Published 2026-09-19: [v3.2.115](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.115)**
+— `aprs-agent-v3.2.115.zip`, 59.6 MiB, 248 files, sha256
+`2EBB1EF260AB0C308CA980615B6066B9E1FEC88FFEEE7E5C5E08EE220DB3AA06`. Notes in
+`docs/RELEASE-v3.2.115-draft.md`. The download was level with the VPS at the
+time.
+Built as RELEASE-HOWTO describes: an autocrlf-free export with 82/82 files
+identical to their blobs, 10/10 shipped text files identical, and the built
+binary reporting 3.2.115.
+
+**Published 2026-09-16: [v3.2.111](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.111)**
+— `aprs-agent-v3.2.111.zip`, 59.6 MiB, 248 files, sha256
+`3354E5DDE2E1397DB6F8A4A951C96465E2766A13688C84E7CCF95C457C3BBC4F`. Notes in
+`docs/RELEASE-v3.2.111-draft.md`, `## Body` section only. **The download is
+level with the VPS again**, carrying v3.2.108 to v3.2.111.
+
+**The first archive whose files match its tag byte for byte.** Built from a
+`git -c core.autocrlf=false archive` export; every exported file and every
+shipped root and static file compared against its blob. The v3.2.107 archive
+had carried README, HELP and the template with CRLF. RELEASE-HOWTO has the
+procedure and the shell trap that nearly stopped a correct build.
+
+**The 32-bit build is capped at cryptography 48.0.1**, the last release with a
+win32 wheel; CVE-2026-69247/69248/69249 remain in it while the VPS runs 50.0.1.
+
+The v3.2.107 block below is history.
+
 **Published 2026-09-07: [v3.2.107](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.107)**
 — `aprs-agent-v3.2.107.zip`, 58.2 MiB, 240 files, sha256
 `6A1B02E5A2AF6CE90686A6885165693FF4B426E2E2113C93CE11484997D91832`. Notes in
-`docs/RELEASE-v3.2.107-draft.md`, `## Body` section only. **The download is
-level with the VPS.** v3.2.104-106 have no archives of their own; their code
+`docs/RELEASE-v3.2.107-draft.md`, `## Body` section only. **The download was
+level with the VPS at the time; the VPS has since moved to v3.2.110, so the
+published archive lacks v3.2.108-110 (AUDIT-2026-09-15 §6).** v3.2.104-106 have no archives of their own; their code
 is in this one.
 
 `build/` and `dist/` were deleted before building, which is the routine now
@@ -180,7 +225,7 @@ cost is below anything this application can notice. Named rather than hidden.
 
 ## The guard rail
 
-Twenty-five checks in `tools/`, each one born from a live failure. Run them all
+Thirty-four checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -188,7 +233,7 @@ for c in tools/check_*.py; do python "$c" >/dev/null 2>&1 \
   && echo "  ok   $c" || echo "  FAIL $c"; done
 ```
 
-Twenty-four run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Thirty-three run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -484,7 +529,15 @@ it. **Do not change one of the three without re-running the sweep** — a
 loosened `min_silent` releases 53 single-operator cells through a threshold
 that looks untouched.
 
-### 6. Hazard correlation — ⏳ COLLECTING, measure on or after **2026-09-09**
+### 6. Hazard correlation — MEASURED 2026-09-15: above chance, too few episodes to decide
+**Result, and a correction to the query below.** `silence_history` stores only
+alerting snapshots, so `alert = 1` selects every row and gives no base rate.
+Restricted to the 17 cells that also broadcast hazards: 57 of 693 snapshots
+(8.2 %) had a warning in the same cell within 2 h, against 1.3-3.9 % for the
+same windows shifted by 24 h and 72 h. The 57 are six episodes in five cells.
+History retention is 14 days, so the table will not ripen further by waiting.
+Details and the choice this leaves: AUDIT-2026-09-15 §4a.
+
 The table shipped in v3.2.96 and is filling. **Its first four rows carried no
 cell** and were therefore unjoinable — an NWS warning is a message and has no
 coordinates; the position had to come from the station record. Fixed in
@@ -570,7 +623,7 @@ judged against it since v3.2.34. What the data cannot support is *direction*.
 
 ## Verification still owed
 
-**How much of the live anomaly list carries `fixed_geometry`.** Not
+**How much of the live anomaly list carries `fixed_geometry`.** **Answered 2026-09-15: 0 of 200.** Not
 takeable at deploy time — the ring held 6 links fifteen minutes after
 v3.2.90 went out, and a percentage from that would be the
 F-2026-08-25-02 trap with the paint still wet. Run once the ring has

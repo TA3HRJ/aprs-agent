@@ -9,15 +9,32 @@ what merely under-informs them.**
 
 ---
 
-## WHERE THIS STANDS — 2026-08-21
+## WHERE THIS STANDS — 2026-09-24
 
-**Deployed: v3.2.80** on the VPS. The next package is **§B · Propagation
-evidence**: go straight to its **Start here** block, which carries the command,
-the measured red, the definition of done and the scope for that session.
-Nothing else in this file needs reading first.
+**Deployed: v3.2.131** on the VPS; the Windows download is v3.2.130.
 
-Everything from the next heading down to §B is history — kept for the
-reasoning, not for the status. It stopped being current at v3.2.31.
+[AUDIT-2026-09-15.md](AUDIT-2026-09-15.md) §8 was the plan. Packages 1 and 2
+are done, WAL included (v3.2.130); package 3 is done apart from item 10; the
+host package is partly done and its details are kept outside the repository.
+What is left, in the order it is worth doing:
+
+1. **Silence AI-note timeout** (audit item 10): log the latency for a week,
+   then set the timeout from the measurement.
+2. **A weather reading from far away.** The nearest APRS weather station can
+   be 146 km off, inside `wx_radius_km = 250`, and is then presented as if it
+   were local. Lower the radius or say the distance in the answer's first
+   words.
+3. **Silent `catch` blocks in `static/index.html`.** One hid the
+   `T[lang]`/`S[lang]` fault for two releases (v3.2.122-123). Sweep the rest.
+4. **The compound-question limit**, F-2026-09-10-03.
+5. **Hazard correlation** (audit §4a, item 19): longer retention for two
+   tables or an external episode tally, then re-measure by episode.
+6. **Propagation alerts as a subscription**, asked for publicly. It would be
+   the first time the gateway starts traffic rather than answering it, which
+   is an etiquette question before it is a code one.
+
+Everything below this block is history — kept for the reasoning, not for the
+status.
 
 ---
 
@@ -978,3 +995,34 @@ somebody messaging this gateway is entitled to know it is broken.
 by an insertion, v3.2.52) and now has a guard: `tools/check_unreachable.py`.
 That prevents this particular cause. It does nothing about the reporting,
 which would have hidden any other cause just as well.
+
+---
+
+## DONE — 2026-09-20, shipped as v3.2.119 (F-2026-09-20-03)
+
+**The same question asked twice, paid for twice.** `KC1MUR-5` sent *"When was
+Dream Police by cheap trick released"* twice inside a minute. The two packets
+carried different message numbers, so the dedup key - sender plus message
+number - saw two different questions: two provider calls, and two nearly
+identical answers on a shared channel. The text-only key already exists for
+packets with no message number; it should also apply, inside a short window,
+when the numbers differ. Two minutes is the shape of a person re-sending
+because nothing came back, not of a person asking again.
+
+Shipped in v3.2.119: a second index on the question's words, two minutes
+wide, sends the re-send down the replay path. Verified on the live server
+with the real provider - one call, two deliveries, two message numbers. It
+is a code change, so it cost a restart; the gateway's prompt
+faults found the same day did not, and were fixed in the live config.
+
+---
+
+## SHIPPED in v3.2.121 — 2026-09-20, commit `1205634`
+
+**A message meant for another station.** `KE4PIC` sent "CHASE DL7PJ gm Peter"
+twice and the model greeted him as Peter. A greeting plus a callsign that is
+neither the gateway's nor the sender's, with no question anywhere, is now
+answered from the code: no relay, and it names who the message was meant for.
+
+It waited on master, untagged, so it would cost no restart of its own, and
+reached the VPS with v3.2.121.
