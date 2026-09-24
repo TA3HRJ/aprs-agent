@@ -5977,3 +5977,40 @@ the duplicate answer parts seen on aprs.fi at 14:35, 15:35 and 17:26, each
 about four minutes after the original and with nothing in our journal: a
 store-and-forward service repeating what it heard, not this station sending
 twice.
+
+---
+
+## F-2026-09-24-01 — an idle Telegram bot filled the error counter
+
+**Fixed in v3.2.129.**
+
+### What was seen
+
+62 `[telegram] poll error` lines in 24 hours on the VPS: 59 read timeouts, one
+connection reset, two slow TLS handshakes. No Telegram message was missed
+among them. Every line reached the operator's error counter, which counts any
+log line containing "error" — and `TimeoutError` is spelt with it. This was
+item 9 of AUDIT-2026-09-15 and had not been done: the tag it was planned for
+went to something else.
+
+### Why
+
+getUpdates is a long poll. Telegram was asked to hold the request for 10 s
+when there was nothing to deliver, and the HTTP client was given 15 s to
+receive the answer. Five seconds covers the round trip only on a good day, so
+an idle bot timed out several times an hour.
+
+### What changed
+
+- The HTTP timeout on getUpdates is the long-poll wait plus 20 s.
+- A lone failed poll is logged as a plain line naming its kind (`timeout`,
+  `connection reset`, `network`) without the exception's class name. Three in
+  a row is an outage and is counted as one error, however long it lasts; its
+  recovery is logged and not counted. Offsets mean the next good poll delivers
+  whatever the failed ones would have.
+
+`tools/check_telegram_poll.py` feeds the loop's own output through
+`web_gui`'s error classifier. **Seen failing on all four assertions**: a 5 s
+margin, 4 errors counted from four isolated failures, 12 from one twelve-poll
+outage, and no recovery line.
+

@@ -3544,6 +3544,18 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
     return papp
 
 
+def _rss_mb() -> Optional[float]:
+    """Resident memory of this process in MB, or None where /proc is absent."""
+    try:
+        with open("/proc/self/status", encoding="ascii") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) / 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
+
 async def _persist_loop(mgr: "AgentManager") -> None:
     """Flush station records to SQLite once a minute; every 10 minutes also
     record a silence-cell snapshot for the map timeline."""
@@ -3551,6 +3563,14 @@ async def _persist_loop(mgr: "AgentManager") -> None:
     while True:
         await asyncio.sleep(60)
         tick += 1
+        # One line a day in the journal, five minutes after start and every
+        # 24 h after. Two samples could not say whether memory grows over an
+        # uptime (AUDIT-2026-09-15 §5); a daily series can.
+        if tick % 1440 == 5:
+            rss = _rss_mb()
+            if rss is not None:
+                print(f"[health] rss {rss:.0f} MB, up {tick // 60} h",
+                      file=sys.__stderr__)
         try:
             await asyncio.get_event_loop().run_in_executor(
                 None, mgr._station_db.save_sqlite, mgr._sta_db_path)

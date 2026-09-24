@@ -34,7 +34,32 @@ from . import Extension
 from config import strip_ssid
 
 
-def _tg_api(token: str, method: str, params: Optional[dict] = None) -> dict:
+# getUpdates is a long poll: Telegram holds the request this long when there
+# is nothing to deliver. The HTTP client must outwait it with room for the
+# round trip, or an idle bot "times out" several times an hour.
+_POLL_WAIT_S = 10
+_POLL_HTTP_TIMEOUT_S = _POLL_WAIT_S + 20
+
+# Consecutive failed polls before it is an outage worth an error line. One
+# failure heals on the next poll; the error counter is for what does not.
+_POLL_OUTAGE_AFTER = 3
+
+
+def _failure_kind(e: BaseException) -> str:
+    """A name for a poll failure that the error counter will not read as one.
+
+    The counter matches "error" anywhere in a line, and `TimeoutError` is
+    spelt with it, so the exception's own class name cannot appear here.
+    """
+    if isinstance(e, TimeoutError) or "timed out" in str(e):
+        return "timeout"
+    if isinstance(e, ConnectionError) or "reset" in str(e):
+        return "connection reset"
+    return "network"
+
+
+def _tg_api(token: str, method: str, params: Optional[dict] = None,
+            timeout: float = 15) -> dict:
     url = f"https://api.telegram.org/bot{token}/{method}"
     if params:
         data = json.dumps(params).encode("utf-8")
@@ -42,7 +67,7 @@ def _tg_api(token: str, method: str, params: Optional[dict] = None) -> dict:
                                      headers={"Content-Type": "application/json"})
     else:
         req = urllib.request.Request(url)
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read())
 
 
@@ -181,6 +206,7 @@ class Telegram(Extension):
             pass
         self.log(f"polling Telegram every {interval}s")
         await asyncio.sleep(5)
+        failed = 0
         while True:
             try:
                 await self._check_updates()
@@ -191,7 +217,20 @@ class Telegram(Extension):
                 else:
                     self.error(f"poll error: {e}")
             except Exception as e:
-                self.error(f"poll error: {type(e).__name__}: {e}")
+                # A lone timeout or reset is the network, not the bot, and
+                # the next poll carries on where this one stopped — offsets
+                # mean nothing is lost. Counted as an error once, when it
+                # has become an outage, and not again until it recovers.
+                failed += 1
+                if failed == _POLL_OUTAGE_AFTER:
+                    self.error(f"poll error: {failed} polls in a row failed, "
+                               f"last {type(e).__name__}: {e}")
+                elif failed < _POLL_OUTAGE_AFTER:
+                    self.log(f"poll: {_failure_kind(e)}, retrying")
+            else:
+                if failed >= _POLL_OUTAGE_AFTER:
+                    self.log(f"poll recovered after {failed} missed polls")
+                failed = 0
             await asyncio.sleep(interval)
 
     async def _check_updates(self) -> None:
@@ -204,8 +243,8 @@ class Telegram(Extension):
         def _fetch():
             return _tg_api(token, "getUpdates", {
                 "offset": self._last_update_id + 1,
-                "timeout": 10,
-            })
+                "timeout": _POLL_WAIT_S,
+            }, timeout=_POLL_HTTP_TIMEOUT_S)
 
         result = await loop.run_in_executor(None, _fetch)
         if not result.get("ok"):
