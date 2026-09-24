@@ -6014,3 +6014,44 @@ an idle bot timed out several times an hour.
 margin, 4 errors counted from four isolated failures, 12 from one twelve-poll
 outage, and no recovery line.
 
+---
+
+## F-2026-09-24-02 — the public map waited for the registry flush
+
+**Fixed in v3.2.130.**
+
+### What was seen
+
+`/api/silence/range` against the public map, 30 requests two seconds apart:
+29 answered in 0.2-1.0 s, one in 8.0 s. A page load in the browser saw the
+same request take 9.0 s and 8.6 s, and `/api/stations` 5.4 s. The query runs
+in 4 ms on the live database.
+
+### Why
+
+Once a minute `save_sqlite` rewrites the registry and holds the write lock for
+10-18 s (F-2026-09-15-01). In rollback-journal mode a writer that spills its
+cache or commits takes an EXCLUSIVE lock, and every reader queues behind it.
+The v3.2.112 fix moved the waiting off the event loop and made it long enough
+that nothing is dropped — 0 "database is locked" lines in the 48 hours before
+this — so what was left was the delay, landing on whoever opened the map at
+the wrong second. AUDIT-2026-09-15 had deferred WAL until the journal was read
+again on 2026-09-23; this is that reading.
+
+### What changed
+
+The first writable connection through `station_db._connect` puts the database
+in WAL mode, which is stored in the file. Readers now see the last committed
+state without waiting for a writer.
+
+The cost is the file set: `aprs_stations.db` is now accompanied by `-wal` and
+`-shm` while the agent runs, and a plain file copy of the `.db` alone can miss
+committed data. The nightly backup already uses SQLite's online backup API,
+which is correct in both modes. A read-only connection still needs the
+directory to be writable by someone who has opened the database, which on the
+VPS is the agent itself.
+
+`tools/check_db_wal.py`: **seen failing** with `journal_mode` `delete` and a
+reader waiting 4.07 s behind a 4 s writer; after the change the reader answers
+in 6 ms. It also holds that a read-only connection opens the file and that an
+online backup passes integrity_check.

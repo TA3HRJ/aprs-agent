@@ -37,12 +37,28 @@ from packet_parser import (
 # web_gui.py now runs; tools/check_db_lock.py holds both halves.
 _BUSY_TIMEOUT_S = 60
 
+# Readers do not wait for that flush at all in WAL mode; in the rollback
+# journal they queued behind it, and the public map's timeline request took
+# 8-9 s at the wrong second while its query needed 4 ms (2026-09-24,
+# tools/check_db_wal.py). The mode lives in the file, so it is set by the
+# first writable connection and this only remembers that it has been. Paths
+# where it cannot hold (":memory:", a busy first attempt) are simply tried
+# again next time.
+_WAL_PATHS: set[str] = set()
+
 
 def _connect(path: str, readonly: bool = False) -> sqlite3.Connection:
     if readonly:
         return sqlite3.connect("file:%s?mode=ro" % path, uri=True,
                                timeout=_BUSY_TIMEOUT_S)
-    return sqlite3.connect(path, timeout=_BUSY_TIMEOUT_S)
+    con = sqlite3.connect(path, timeout=_BUSY_TIMEOUT_S)
+    if path not in _WAL_PATHS:
+        try:
+            if con.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal":
+                _WAL_PATHS.add(path)
+        except sqlite3.Error:
+            pass
+    return con
 
 # US amateur prefixes: A[A-L], and K/N/W optionally followed by one letter,
 # then a digit. Deliberately narrow — this is used to cast doubt on a station's
