@@ -6097,3 +6097,37 @@ server. **Seen failing on four of five assertions**: the broken name reached
 the envelope as it stood, a well-formed one did too (smtplib would have
 normalised that one on the wire, but it was luck), the monitor branch used the
 raw string, and placeholder values drew no remark.
+
+---
+
+## F-2026-09-24-04 — a reading from 146 km away looked like the local weather
+
+**Fixed in v3.2.132.**
+
+### What was seen
+
+2M0SBP asked for the weather at Arisaig on 2026-09-20 and was answered from
+a station 146 km away, inside the configured 250 km radius. The answer was
+in the same shape as one from down the road:
+
+    MM0ABC-13 146km from you, 15min ago: 11.4C, 88%RH, 1012mb, ...
+
+The distance was in it, behind the callsign, and nothing said this was not
+his weather. The origin wording from v3.2.121 ("from you", "from IO76") told
+him where it was measured from; it did not tell him the reading was too far
+off to be his.
+
+### What changed
+
+Past 30 km (`_WX_LOCAL_KM`) the answer leads with the distance and says so:
+
+    Nearest APRS weather is 146km from you, not local: MM0ABC-13 15min ago: ...
+
+A reading within 30 km keeps the old shape. The radius still decides whether
+there is an answer at all; this decides how a distant one is presented. The
+template and the README say the same.
+
+`tools/check_weather.py` has two new cases: a 146 km reading inside a 250 km
+radius must put the distance before the station's callsign and say "not
+local", and a 12 km reading must not. **Seen failing on both assertions** for
+the far case.

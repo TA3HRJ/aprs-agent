@@ -220,6 +220,58 @@ async def run() -> int:
                         "-> %r" % body5[:80])
     print("  %-13s %-28s -> %s" % ("postcode", "PH39 4NX wx", body5[:74]))
 
+    # Inside the radius is not the same as local. 2M0SBP asked for the
+    # weather at Arisaig on 2026-09-20 and was sent a reading from 146 km
+    # away in the same shape as one from down the road: the distance was in
+    # the answer, behind the callsign, and nothing said this was not his
+    # weather. A far reading has to lead with how far it is and say so.
+    sent6: list[str] = []
+
+    class Q6:
+        async def put(self, b: bytes) -> None:
+            sent6.append(b.decode("utf-8").strip())
+
+    gw = AIGateway(dict(CFG, wx_radius_km=250), "")
+    gw.set_station_db(FakeDB(NEAR, 146.0))
+    gw._own_writer = Q6()
+
+    async def stub6(q: str, s: str = "", history=None) -> str:
+        return "MODEL ANSWER"
+
+    gw._ask_ai = stub6
+    await gw.handle(line("TA1ABC-7", "what is the weather?"))
+    body6 = " ".join(s.split(":", 2)[-1] for s in sent6 if ":ack" not in s)
+    if "26.1C" not in body6:
+        problems.append("far reading: no reading at all -> %r" % body6[:80])
+    # "Leads" means before the station's own callsign, which is where the
+    # distance sat when it was read past.
+    if ("146km" not in body6 or "TA1ABC-13" not in body6
+            or body6.index("146km") > body6.index("TA1ABC-13")):
+        problems.append("far reading: the distance does not lead the answer "
+                        "-> %r" % body6[:80])
+    if "not local" not in body6.lower():
+        problems.append("far reading: does not say it is not local weather "
+                        "-> %r" % body6[:80])
+    print("  %-13s %-28s -> %s" % ("far, in radius", "what is the weather?",
+                                   body6[:74]))
+
+    # And a near one must not be dressed up as distant.
+    sent7: list[str] = []
+
+    class Q7:
+        async def put(self, b: bytes) -> None:
+            sent7.append(b.decode("utf-8").strip())
+
+    gw = AIGateway(dict(CFG), "")
+    gw.set_station_db(FakeDB())
+    gw._own_writer = Q7()
+    gw._ask_ai = stub6
+    await gw.handle(line("TA1ABC-7", "what is the weather?"))
+    body7 = " ".join(s.split(":", 2)[-1] for s in sent7 if ":ack" not in s)
+    if "not local" in body7.lower():
+        problems.append("near reading: 12 km called not local -> %r"
+                        % body7[:80])
+
     # The daily ceiling caps the provider bill. A template answer sends no
     # bill, so an exhausted ceiling must not silence one.
     sent3 = []

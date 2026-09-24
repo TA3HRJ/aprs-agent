@@ -457,6 +457,8 @@ daily_notice = "Daily question limit reached on this gateway - try tomorrow"
 # it if you get "no weather station in my records", lower it if the answers
 # come from too far to mean anything. The reply always states the distance and
 # the age of the reading, so nothing arrives sounding more current than it is.
+# A reading from more than 30 km away is still given, but opens with the
+# distance and says it is not local weather.
 wx_radius_km = 250
 
 # One API key per provider, so switching "provider" above recalls that

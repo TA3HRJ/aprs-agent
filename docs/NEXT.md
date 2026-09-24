@@ -20,10 +20,8 @@ What is left, in the order it is worth doing:
 
 1. **Silence AI-note timeout** (audit item 10): log the latency for a week,
    then set the timeout from the measurement.
-2. **A weather reading from far away.** The nearest APRS weather station can
-   be 146 km off, inside `wx_radius_km = 250`, and is then presented as if it
-   were local. Lower the radius or say the distance in the answer's first
-   words.
+2. ~~**A weather reading from far away.**~~ Done in v3.2.132: past 30 km the
+   answer opens with the distance and says it is not local (F-2026-09-24-04).
 3. **Silent `catch` blocks in `static/index.html`.** One hid the
    `T[lang]`/`S[lang]` fault for two releases (v3.2.122-123). Sweep the rest.
 4. **The compound-question limit**, F-2026-09-10-03.

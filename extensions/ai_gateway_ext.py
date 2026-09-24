@@ -197,6 +197,12 @@ _POSTCODE_IN_TEXT = re.compile(
 # others - only the operator knows which one they are in.
 _WX_RADIUS_KM = 250.0
 
+# Within the radius is not the same as local. Past this a reading is still
+# worth giving - it may be the only one there is - but it leads with the
+# distance and says it is not local. 30 km is roughly where valley, coast
+# and altitude start to make a neighbour's weather a different weather.
+_WX_LOCAL_KM = 30.0
+
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance, the same formula the registry uses."""
@@ -248,14 +254,23 @@ def _wx_answer(rec: dict, dist_km: float, origin_note: str = "") -> str:
     if g:
         bits.append("gust %.1fm/s" % g)
     ago = rec.get("last_seen_ago_s")
+    age = _ago(ago) if ago is not None else "age unknown"
+    readings = ", ".join(bits) or "no readings"
+    origin = origin_note or "you"
+    # A reading that far off is somebody else's weather, and has to say so
+    # before anything else. 2M0SBP asked for Arisaig on 2026-09-20 and got a
+    # reading from 146 km away in the same shape as one from down the road:
+    # the distance was there, behind the callsign, and was read past.
+    if dist_km > _WX_LOCAL_KM:
+        return ("Nearest APRS weather is %.0fkm from %s, not local: %s %s: "
+                "%s. My own feed only, not a forecast" % (
+                    dist_km, origin, rec.get("callsign", "?"), age, readings))
     # Where it was measured FROM, not just how far. N1QQA-7 asked for the
     # weather in Wakefield NH on 2026-09-20 and was sent a reading from a
     # station 10 km from himself; the number was right, and the answer still
     # let him read it as the weather in the place he had named.
     return "%s %.0fkm from %s, %s: %s. My own feed only, not a forecast" % (
-        rec.get("callsign", "?"), dist_km, origin_note or "you",
-        _ago(ago) if ago is not None else "age unknown",
-        ", ".join(bits) or "no readings")
+        rec.get("callsign", "?"), dist_km, origin, age, readings)
 
 
 # A ham sign-off with a callsign in it: "73 de TA1ABC-7", "de TA1ABC",

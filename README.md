@@ -353,7 +353,7 @@ chance of an invented number:
 | `which igate hears me` | the igate on your packet's own path — or that nobody is, if you arrived over the internet, since a `qAC` path names a core server rather than an igate |
 | `nearest igate`, `nearest repeater` | the closest ones with distances, measured from a grid you name or from your last beacon |
 | `propagation near me` | openings this agent measured within 400 km and three hours, or a plain statement that there were none |
-| `weather`, `wx KM38` | the nearest APRS weather station, with its distance, its age, and **what it was measured from** |
+| `weather`, `wx KM38` | the nearest APRS weather station, with its distance, its age, and **what it was measured from**; beyond 30 km the answer opens with the distance and says it is not local |
 | `where is XX1YYY` | that station's last position, its age and its distance from you |
 | `what can you do` | a fixed sentence, answered before the rate limiter because it costs nothing |
 | `TEST` | what the packet itself says: who sent it, which igate gated it, whether it touched RF at all |
@@ -473,7 +473,8 @@ daily_notice   = "Daily question limit reached on this gateway - try tomorrow"
 # it if you get "no weather station in my records", lower it if the answers
 # come from too far to mean anything. The reply always states the distance
 # and the age of the reading, so nothing arrives sounding more current than
-# it is.
+# it is. A reading from more than 30 km away is still given, but opens with
+# the distance and says it is not local weather.
 wx_radius_km   = 250
 
 # One key per provider — switching "provider" above recalls that provider's
