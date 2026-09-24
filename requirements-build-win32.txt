@@ -30,6 +30,12 @@
 #   An earlier version of this note said win32 wheels stopped at 48.0.0 and
 #   that 48 had none; both readings came from pip backtracking logs rather
 #   than from the index, and 48.0.1 has them.
+#
+#   2026-09-24, v3.2.130: httpx2 and httpcore2 2.10.0 -> 2.13.1. openai 3
+#   pulls them in (httpx2<3,>=2.7.0), and 2.10.0 carries GHSA-8xx6-hgc6-gc2m
+#   (high, decompression amplification, fixed in 2.12.0) and two moderate
+#   advisories fixed in 2.11.0. Pure-Python wheels, so no win32 question. The
+#   VPS runs openai 2.x and never had them.
 
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.3
@@ -52,9 +58,9 @@ dnspython==2.8.0
 frozenlist==1.8.0
 h11==0.16.0
 httpcore==1.0.9
-httpcore2==2.10.0
+httpcore2==2.13.1
 httpx==0.28.1
-httpx2==2.10.0
+httpx2==2.13.1
 idna==3.18
 jiter==0.16.0
 libipld==3.4.1
