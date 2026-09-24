@@ -1495,14 +1495,14 @@ async function fetchStations(){
   try{
     const o={headers:{}};
     if(staEtag)o.headers['If-None-Match']=staEtag;
-    const res=await fetch('/api/stations',o);
+    const res=await net(fetch('/api/stations',o));
     if(res.status===401||(res.redirected&&/\/login\.html/.test(res.url))){
       if(!authBounced){authBounced=true;location.href='/login.html'}
       return;
     }
     if(res.status===304)return;   // unchanged since our last poll
     staEtag=res.headers.get('ETag');
-    const r=await res.json();
+    const r=await net(res.json());
     staData=r.stations||[];staTotal=r.count||staData.length;
     vpKey='';   // viewport cache is one poll old now — refetch on next render
     if(activeTab==='sta')renderStations();
@@ -1511,16 +1511,16 @@ async function fetchStations(){
       // Propagation layer rides the same 5 s poll; the response is small
       // (recent anomalous links only, usually empty). Not while the
       // timeline is scrubbed — the poll would sweep the historical lines.
-      if(tlLive){try{const p=await api('GET','/api/prop');renderProp(p.links||[])}catch(e){}}
+      if(tlLive){try{const p=await api('GET','/api/prop');renderProp(p.links||[])}catch(e){quiet(e)}}
     }
-  }catch(e){}
+  }catch(e){quiet(e)}
 }
 // Silence is polled on its own timer, independent of the active tab, so the
 // alert panel is up to date wherever the visitor happens to be looking.
 async function pollSilence(){
   if(!tlLive)return;          // timeline is showing a past snapshot
-  try{const s=await api('GET','/api/silence');renderSilence(s.cells||[],s)}catch(e){}
-  try{const m=await api('GET','/api/missing');renderMissing(m.missing||[])}catch(e){}
+  try{const s=await api('GET','/api/silence');renderSilence(s.cells||[],s)}catch(e){quiet(e)}
+  try{const m=await api('GET','/api/missing');renderMissing(m.missing||[])}catch(e){quiet(e)}
 }
 // The slim station list no longer carries last_seen_ago_s — it is last_seen
 // subtracted from now, and sending both cost 83 KB of every 1.24 MB response.
@@ -1699,14 +1699,14 @@ async function fetchViewport(force){
     // unchanged view costs a 304 instead of 3,000 stations.
     const o={headers:{}};
     if(key===vpKey&&vpEtag)o.headers['If-None-Match']=vpEtag;
-    const res=await fetch('/api/stations?limit=3000&bbox='+key,o);
+    const res=await net(fetch('/api/stations?limit=3000&bbox='+key,o));
     if(res.status!==304){
       vpEtag=res.headers.get('ETag');
-      const r=await res.json();
+      const r=await net(res.json());
       vpData=r.stations||[];
     }
     vpKey=key;
-  }catch(e){}
+  }catch(e){quiet(e)}
   vpBusy=false;
   // Fresh data: below zoom 9 the clusters are drawn by renderMap(), above it by
   // drawViewport(). The key now matches, so the call above returns immediately
@@ -1750,7 +1750,7 @@ async function fetchMsgs(){
     }
     out.sort((a,b)=>a.ts-b.ts);
     msgData=out;msgLoaded=true;renderMsgs();
-  }catch(e){}
+  }catch(e){quiet(e)}
 }
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML}
 // esc() serialises a TEXT NODE, so it escapes & < > and deliberately leaves
@@ -1824,7 +1824,7 @@ async function tlRefreshRange(){
     s.min=tlRange.min;s.max=tlRange.max+600;   // extra step = "live" position
     if(tlLive)s.value=s.max;
     tlDrawScale();
-  }catch(e){}
+  }catch(e){quiet(e)}
 }
 // The slider covers whatever history is stored — about a day on a fresh
 // server, up to 14 on an established one — so without a scale the same
@@ -1873,8 +1873,8 @@ async function tlScrub(v){
   const s=$('tl-slider');
   if(v>=parseInt(s.max)-1){  // rightmost = back to live
     tlLive=true;tlSetLabel(null);
-    try{const r=await api('GET','/api/silence');renderSilence(r.cells||[],r)}catch(e){}
-    try{const p=await api('GET','/api/prop');renderProp(p.links||[])}catch(e){}
+    try{const r=await api('GET','/api/silence');renderSilence(r.cells||[],r)}catch(e){quiet(e)}
+    try{const p=await api('GET','/api/prop');renderProp(p.links||[])}catch(e){quiet(e)}
     return;
   }
   tlLive=false;
@@ -1882,12 +1882,12 @@ async function tlScrub(v){
     const h=await api('GET','/api/silence/history?ts='+v);
     tlSetLabel(h.ts!==null?h.ts:v);
     renderSilence(h.cells||[]);
-  }catch(e){}
+  }catch(e){quiet(e)}
   // Openings recorded near the scrubbed time replay as historical lines
   try{
     const ph=await api('GET','/api/prop/history?ts='+v);
     renderProp(ph.links||[],true);
-  }catch(e){}
+  }catch(e){quiet(e)}
 }
 function tlPlay(){
   if(tlTimer){clearInterval(tlTimer);tlTimer=null;$('tl-play').textContent='▶';return}
@@ -2674,7 +2674,7 @@ function renderStations(){
 async function showDetail(r){
   // The list endpoint is slim (table/map fields only) — fetch the full
   // record for the detail panel; fall back to the slim row on error.
-  try{const full=await api('GET','/api/stations/'+encodeURIComponent(r.callsign));if(full&&full.callsign)r=full}catch(e){}
+  try{const full=await api('GET','/api/stations/'+encodeURIComponent(r.callsign));if(full&&full.callsign)r=full}catch(e){quiet(e)}
   $('sd-title').innerHTML=aprsSym(r)+' '+esc(r.callsign);
   const srcLabel=r.has_db&&r.packet_count>0?t('sd_both'):r.has_db?t('sd_db_only'):t('sd_aprs_live');
   let html='';
@@ -2739,16 +2739,39 @@ function connectWS(){const p=location.protocol==='https:'?'wss:':'ws:';ws=new We
 // login returns cleanly. Without this a poll would keep parsing login HTML
 // as JSON and the app would look frozen instead of asking you to sign in.
 let authBounced=false;
+// A failed request is weather: the next poll asks again, so the page says
+// nothing. A failed render is a bug, and a bare catch(e){} cannot tell the two
+// apart - one hid `T[lang]` in a page whose table is `S` for two releases
+// (v3.2.122-123). So requests mark their own failures and quiet() lets only
+// those through. Anything else reaches the console, and on the admin page the
+// server journal, once per distinct message per page load.
+function netFail(e){if(e&&typeof e==='object')e.net=true;return e}
+function net(p){return p.catch(function(e){throw netFail(e)})}
+const uiSeen=new Set();
+function quiet(e){
+  if(e&&e.net)return;
+  console.error('[ui]',e);
+  const msg=String((e&&e.message)||e);
+  if(window.PUBLIC||uiSeen.has(msg))return;  // the public app has no clientlog
+  uiSeen.add(msg);
+  const at=(String((e&&e.stack)||'').split('\n').find(function(l){return /:\d+:\d+/.test(l)})||'')
+    .replace(/https?:\/\/[^/\s]+/g,'').trim();
+  try{
+    fetch('/api/clientlog',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({what:'ui-error',trace:[{step:(e&&e.name)||'error',detail:msg},
+        {step:'at',detail:at}]})}).catch(function(){});
+  }catch(_){}
+}
 async function api(m,p,b,signal){
   const o={method:m,headers:{}};
   if(b!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}
   if(signal)o.signal=signal;                 // caller can abandon a slow request
-  const res=await fetch(p,o);
+  const res=await net(fetch(p,o));
   if(res.status===401||(res.redirected&&/\/login\.html/.test(res.url))){
     if(!authBounced){authBounced=true;location.href='/login.html'}
-    throw new Error('not authenticated');
+    throw netFail(new Error('not authenticated'));
   }
-  return res.json();
+  return net(res.json());
 }
 async function startAgent(){
   const cs=$('f-callsign').value.trim();if(!cs||cs==='N0CALL'){alert(t('no_callsign'));return}
@@ -2759,7 +2782,7 @@ async function startAgent(){
   // first one.
   try{const r=await api('POST','/api/start');
       if(r&&r.ok===false){addLog('[web] '+t('start_refused')+'\n');$('btn-start').disabled=false}
-  }catch(e){$('btn-start').disabled=false}
+  }catch(e){quiet(e);$('btn-start').disabled=false}
 }
 async function stopAgent(){
   $('btn-stop').disabled=true;
@@ -2770,11 +2793,11 @@ async function stopAgent(){
     const r=await api('POST','/api/stop');
     if(r&&r.ok===false){addLog('[web] '+t('stop_failed')+'\n');$('btn-stop').disabled=false}
     if(r&&typeof r.running==='boolean')setStatus(r.running);
-  }catch(e){$('btn-stop').disabled=false;addLog('[web] '+t('stop_failed')+'\n')}
+  }catch(e){quiet(e);$('btn-stop').disabled=false;addLog('[web] '+t('stop_failed')+'\n')}
 }
-async function saveCfg(){try{const r=await api('POST','/api/config',getCfg());addLog('[web] '+(r.ok?t('save_ok'):t('save_err'))+'\n');if(r.ok&&agentRunning)addLog('[web] '+t('save_restart_hint')+'\n');refreshModStatus()}catch(e){addLog('[web] '+t('save_err')+'\n')}}
-async function refreshModStatus(){try{const info=await api('GET','/api/info');renderModStatus(info.active,info.health)}catch(e){}}
-async function reloadCfg(){try{const p=$('hdr-cfg').value.trim();if(p)await api('POST','/api/config-path',{path:p});const c=await api('GET','/api/config');loadCfg(c);addLog('[web] '+t('reload_ok')+'\n')}catch(e){addLog('[web] '+t('save_err')+'\n')}}
+async function saveCfg(){try{const r=await api('POST','/api/config',getCfg());addLog('[web] '+(r.ok?t('save_ok'):t('save_err'))+'\n');if(r.ok&&agentRunning)addLog('[web] '+t('save_restart_hint')+'\n');refreshModStatus()}catch(e){quiet(e);addLog('[web] '+t('save_err')+'\n')}}
+async function refreshModStatus(){try{const info=await api('GET','/api/info');renderModStatus(info.active,info.health)}catch(e){quiet(e)}}
+async function reloadCfg(){try{const p=$('hdr-cfg').value.trim();if(p)await api('POST','/api/config-path',{path:p});const c=await api('GET','/api/config');loadCfg(c);addLog('[web] '+t('reload_ok')+'\n')}catch(e){quiet(e);addLog('[web] '+t('save_err')+'\n')}}
 // Status updates arrive via WebSocket "stats" messages every 2s — no polling needed.
 
 // ── No service worker ──────────────────────────────────────────────────────
@@ -2878,12 +2901,12 @@ function fillGateway(g){
     if(window.PUBLIC){lk.hidden=true}
     else{lk.hidden=false;lk.onclick=function(e){e.preventDefault();
       $('about-bg').classList.remove('open');switchTab('msg')}}
-  }catch(e){}
+  }catch(e){quiet(e)}
 }
 
 async function openAbout(){
   $('about-bg').classList.add('open');
-  try{ fillGateway((await api('GET','/api/info')).gateway); }catch(e){}
+  try{ fillGateway((await api('GET','/api/info')).gateway); }catch(e){quiet(e)}
 }
 
 // The gear does two different things, because the two screens have two
@@ -2932,8 +2955,8 @@ function toggleSidebar(){
       $('hdr-cfg').value=info.config_path||'';
       setStatus(info.running);
     }
-  }catch(e){}
-  if(!window.PUBLIC){try{const cfg=await api('GET','/api/config');loadCfg(cfg)}catch(e){addLog('[web] Failed to load config\n')}}
+  }catch(e){quiet(e)}
+  if(!window.PUBLIC){try{const cfg=await api('GET','/api/config');loadCfg(cfg)}catch(e){quiet(e);addLog('[web] Failed to load config\n')}}
   restorePanelState();restoreTab();connectWS();applyLang();
   pollSilence();setInterval(pollSilence,15000);
 })();

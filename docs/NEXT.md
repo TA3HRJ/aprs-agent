@@ -11,7 +11,8 @@ what merely under-informs them.**
 
 ## WHERE THIS STANDS — 2026-09-24
 
-**Deployed: v3.2.131** on the VPS; the Windows download is v3.2.130.
+**Deployed: v3.2.132** on the VPS; v3.2.133 committed; the Windows download
+is v3.2.130.
 
 [AUDIT-2026-09-15.md](AUDIT-2026-09-15.md) §8 was the plan. Packages 1 and 2
 are done, WAL included (v3.2.130); package 3 is done apart from item 10; the
@@ -22,8 +23,10 @@ What is left, in the order it is worth doing:
    then set the timeout from the measurement.
 2. ~~**A weather reading from far away.**~~ Done in v3.2.132: past 30 km the
    answer opens with the distance and says it is not local (F-2026-09-24-04).
-3. **Silent `catch` blocks in `static/index.html`.** One hid the
-   `T[lang]`/`S[lang]` fault for two releases (v3.2.122-123). Sweep the rest.
+3. ~~**Silent `catch` blocks in `static/index.html`.**~~ Done in v3.2.133:
+   16 of 32 empty handlers wrapped the page's own code with a request; a
+   fault there now reaches the console and the admin journal, a failed
+   request still does not (F-2026-09-24-05, `check_silent_catch`).
 4. **The compound-question limit**, F-2026-09-10-03.
 5. **Hazard correlation** (audit §4a, item 19): longer retention for two
    tables or an external episode tally, then re-measure by episode.

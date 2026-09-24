@@ -6131,3 +6131,74 @@ template and the README say the same.
 radius must put the distance before the station's callsign and say "not
 local", and a 12 km reading must not. **Seen failing on both assertions** for
 the far case.
+
+---
+
+## F-2026-09-24-05 — sixteen empty catches in the page could hide a fault of its own
+
+**Fixed in v3.2.133.**
+
+### What was seen
+
+v3.2.122 shipped `T[lang]` in a page whose translation table is `S`. v3.2.123
+moved the line into `fillGateway()` inside `try{...}catch(e){}`, which kept
+the rest of the page alive and hid the cause: the counter did not appear, and
+nothing anywhere said why. Found in v3.2.124 by reading the code, not from
+any report.
+
+A sweep of `static/index.html` found 32 empty catch handlers. Sixteen wrap a
+single browser API — `localStorage`, `sessionStorage`, the clipboard, the
+service worker, `abort()` — where nothing of ours can fail, and are right as
+they are. **The other sixteen wrapped the page's own code together with a
+request**, so a bug and a dropped connection ended the same way:
+
+| where | what a fault there would have done, silently |
+|---|---|
+| the 5 s station poll | `renderMap()`, `renderStations()`, `renderProp()`: the map stops updating |
+| the silence poll | the alert panel and the missing-station list freeze |
+| the timeline | scrubbing shows nothing, the scale does not draw |
+| the Messages tab | the tab stays empty |
+| `fillGateway()`, About, init | the v3.2.122 case, and the header, version and module badges |
+| module status, station detail | stale badges, the slim record in place of the full one |
+
+None of these is known to be failing now. The finding is that if one did,
+the page could not say so.
+
+### What changed
+
+A failed request is weather — the next poll asks again — so it stays quiet.
+A failed render is a bug. `api()` and the two raw `fetch` calls of the
+station polls now mark their own failures (`netFail`, `net()`), both the
+request and the JSON parse, so a 502 page that is not JSON counts as the
+network too. `quiet(e)` returns silently for those and for nothing else:
+anything unmarked goes to `console.error`, and on the admin page to
+`/api/clientlog`, once per distinct message per page load, so a fault in the
+5 s poll is one journal line and not seventeen thousand a day. The public
+app has no `clientlog` route (by design, see `post_clientlog`), so there it
+reaches the console only.
+
+The four handlers that already said something (`save_err`, `stop_failed`,
+the start button, `Failed to load config`) keep their message and now also
+hand the error to `quiet`, because "save failed" was also what a bug in
+`getCfg()` would have printed.
+
+### Measured in a browser against a local server
+
+| injected | console | server journal |
+|---|---|---|
+| `renderSilence` throws `ReferenceError`, polled twice | 2 lines | **1 line**: `[clientlog] ui-error \| ReferenceError=T is not defined -> at=...` |
+| `about-gw-link` removed, `fillGateway()` called | 1 line | `TypeError=Cannot set properties of null (setting 'hidden') -> at=at fillGateway (/:2902:19)` |
+| every `fetch` rejected; silence poll, timeline, About | nothing | nothing |
+| every `fetch` answers a 502 HTML page | nothing | nothing |
+| public app, the same `ReferenceError` | 1 line | no request made |
+
+A clean load of both apps printed no console error.
+
+`tools/check_silent_catch.py` finds every `try{...}catch(x){}` with an empty
+handler and fails if its try block calls a function the page declares or
+parses a response; it also requires `quiet` to pass only `.net` errors, `api()`
+to mark both the request and the parse, and `fillGateway` to hand its error to
+`quiet`. **Seen failing** against v3.2.132 with 21 problems — the sixteen
+handlers above and the five missing pieces — and with 2 when only
+`fillGateway`'s handler was put back. Promise-style `.catch(function(){})`
+is not covered: the three in the page are deliberate.
