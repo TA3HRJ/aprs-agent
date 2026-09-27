@@ -23,6 +23,11 @@ What the stored half must get right:
     7. the table is bounded by row count as well as by age, so no filter
        however broad can grow it without limit
 
+  and the bound must not take the one thing it exists to protect
+    8. the gateway's conversation can be read back on its own
+    9. a flood of other traffic past the row cap evicts none of it
+       (2026-09-25: a bot loop of 6,102 messages did exactly that)
+
 Usage:  python tools/check_message_history.py
 Exit code 1 on failure.
 """
@@ -184,6 +189,47 @@ with tempfile.TemporaryDirectory() as d:
         fail("read by channel", "other channels came back too")
     else:
         ok(f"the conversation reads back on its own ({len(only)} rows)")
+
+# ── 9: a flood of other traffic cannot evict the conversation ─────────
+# 2026-09-25 03:00-05:59: two automatic stations, YM2KDZ and TI0RHU-15,
+# answered each other 6,102 times. YM2KDZ matches the station filter, so every
+# message was kept, and the 20,000-row cap - written to bound the world feed -
+# took the oldest rows of any channel with it. The live table's oldest row was
+# then two days old, and three people's questions to DMWGPT were gone.
+with tempfile.TemporaryDirectory() as d:
+    path = str(Path(d) / "f.db")
+    base = int(time.time())
+    cap = sdb._MSG_HISTORY_MAX_ROWS
+    mine = [{"ts": base - 86400 - i, "dir": "rx", "from": "TA1ABC-7",
+             "to": "DMWGPT", "text": "q%d" % i, "msg_id": "",
+             "channel": "AI", "kind": "msg"} for i in range(5)]
+    bridge = [{"ts": base - 90000 - i, "dir": "rx", "from": "TA1ABC-7",
+               "to": "TA1ABC-6", "text": "tg%d" % i, "msg_id": "",
+               "channel": "Telegram", "kind": "msg"} for i in range(3)]
+    sdb.record_messages(path, mine + bridge)
+    loop = [{"ts": base - i, "dir": "rx", "from": "YM1ABC", "to": "TA1XYZ-15",
+             "text": "loop%d" % i, "msg_id": str(i), "channel": "APRS",
+             "kind": "msg"} for i in range(cap + 500)]
+    sdb.record_messages(path, loop)
+    import sqlite3
+    con = sqlite3.connect(path)
+    ai = con.execute("SELECT COUNT(*) FROM message_history "
+                     "WHERE channel = 'AI'").fetchone()[0]
+    tg = con.execute("SELECT COUNT(*) FROM message_history "
+                     "WHERE channel = 'Telegram'").fetchone()[0]
+    rest = con.execute("SELECT COUNT(*) FROM message_history "
+                       "WHERE channel = 'APRS'").fetchone()[0]
+    con.close()
+    if ai != len(mine):
+        fail("flood", f"{len(mine) - ai} of {len(mine)} gateway messages "
+                      f"evicted by {len(loop)} newer rows of other traffic")
+    elif tg != len(bridge):
+        fail("flood", f"{len(bridge) - tg} of {len(bridge)} bridge messages evicted")
+    elif rest > cap:
+        fail("flood", f"{rest} rows of other traffic kept, cap is {cap}")
+    else:
+        ok(f"a flood of {len(loop)} rows leaves the gateway ({ai}) and the "
+           f"bridges ({tg}) whole, and the rest bounded ({rest} <= {cap})")
 
 if FAIL:
     print(f"\n{FAIL} failure(s)")

@@ -6275,3 +6275,66 @@ If p99 sits well under 20 s, the limit is not the problem and the answer to
 item 10 is to leave it. Only if ordinary answers crowd the limit is there a
 number to choose — and then with the cost above in view. `_call_ai_api` also
 serves station AI and propagation notes, so a change there moves all three.
+
+---
+
+## F-2026-09-27-01 — a bot loop elsewhere on the feed erased the gateway's own conversation
+
+**Fixed in v3.2.135.**
+
+### What was seen
+
+Asked on 2026-09-27 to review DMWGPT's traffic, `message_history` held 11
+gateway rows for the past seven days, while `gateway_users` said VE7EPT
+(09-22), VE7JBX (09-23) and KF6TYS (09-24) had asked questions in that time,
+and KR4OII more than the one question left. The table's oldest row of any
+kind was from 2026-09-24 20:20. Fourteen days of the service's own record had
+become about two.
+
+### Why
+
+`message_history` keeps the gateway's conversation and anything matching the
+station filter (F-2026-09-01, v3.2.101), under a fourteen-day age limit and a
+hard cap of 20,000 rows. The cap was written to bound the station-filter
+traffic and counted every channel.
+
+On 2026-09-25 between 03:00 and 05:59 two automatic stations answered each
+other 6,102 times: YM2KDZ, an auto-responder ("Mesajiniz alindi. Tesekkur
+ediyoruz - DARD81"), and TI0RHU-15, a menu bot ("Or choose: 1-QSL 2-Board
+3-WhatsApp"). YM2KDZ matches `YM*` in the station filter, so every message
+was kept — 9,709 station-filter rows that day against the ~840 a day the
+design was measured at. The cap then took the oldest rows, and the oldest
+rows were DMWGPT's. The loop stopped by itself; nothing of ours was party
+to it. Same shape as the QRX exchange of F-2026-09-20-05, one step removed.
+
+### What changed
+
+The cap applies to channel `APRS` only — the station-filter traffic it was
+written for. The AI gateway and the bridges (Telegram, WhatsApp, Email,
+Twitter, Bluesky) are the service's own conversations, a few dozen rows a
+day, and are bounded by the age limit alone. The table is still bounded:
+20,000 rows of station-filter traffic plus fourteen days of its own.
+
+`tools/check_message_history.py` case 9 stores five gateway and three
+Telegram rows a day old, then 20,500 newer rows from a looping pair: all
+eight must survive and the station-filter rows must stay at the cap. **Seen
+failing** against v3.2.134: "5 of 5 gateway messages evicted by 20500 newer
+rows of other traffic".
+
+### Not recovered
+
+The evicted rows are not restored by the fix. The journal still carries the
+`[ai-gateway] RX` / `TX` lines for them (without message numbers), so they
+could be written back; that is a write to the live database and was left for
+the operator to decide.
+
+### Also seen in the same review, not changed
+
+- The "nearest igates" answer to KR4OII was 72 characters and went out as two
+  packets, the second carrying only "feed only." — the fixed tail
+  ". My own feed only." pushed it past 64. A second packet on the air for
+  two words; any change to the tail is wording and gets a draft first.
+- "SAAT VE TARIH?" was answered by the model with "Yerel saat dilimini
+  bilemem", although the sender's position puts him in Turkey, and a stray
+  "Yoksa" opened the second part. Time and date go to the model every time;
+  a code path would make them exact.

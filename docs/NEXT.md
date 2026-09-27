@@ -9,9 +9,10 @@ what merely under-informs them.**
 
 ---
 
-## WHERE THIS STANDS — 2026-09-25
+## WHERE THIS STANDS — 2026-09-27
 
-**Deployed: v3.2.134** on the VPS; the Windows download is v3.2.130.
+**Deployed: v3.2.134** on the VPS, v3.2.135 committed; the Windows download
+is v3.2.130.
 
 [AUDIT-2026-09-15.md](AUDIT-2026-09-15.md) §8 was the plan. Packages 1 and 2
 are done, WAL included (v3.2.130); package 3 is done apart from item 10; the
@@ -24,6 +25,8 @@ What is left, in the order it is worth doing:
    evening and one 503, which looks like a provider incident rather than a
    tight limit; the week decides. A longer timeout also delays the next
    alert in the same pass, so leaving 20 s is a real answer.
+   **Early read, 2026-09-27:** 286 notes, p50 1.1 s, p99 1.8 s, max 2.1 s,
+   no failure. Ten times the margin so far.
 2. ~~**A weather reading from far away.**~~ Done in v3.2.132: past 30 km the
    answer opens with the distance and says it is not local (F-2026-09-24-04).
 3. ~~**Silent `catch` blocks in `static/index.html`.**~~ Done in v3.2.133:

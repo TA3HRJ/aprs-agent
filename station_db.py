@@ -551,10 +551,17 @@ def record_messages(path: str, rows: "list[dict[str, Any]]") -> int:
             n += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
         con.execute("DELETE FROM message_history WHERE ts < ?",
                     (int(time.time()) - StationDB._HISTORY_RETENTION_S,))
-        # Age is not enough on its own; see _MSG_HISTORY_MAX_ROWS.
+        # Age is not enough on its own; see _MSG_HISTORY_MAX_ROWS. The cap
+        # bounds the station-filter traffic, channel "APRS", and leaves the
+        # service's own conversations - the AI gateway and the bridges, a few
+        # dozen rows a day - to the age limit alone, since keeping them is
+        # what this table is for. Counted across all channels, a two-bot loop
+        # of 6,102 messages on 2026-09-25 evicted three people's questions to
+        # DMWGPT (F-2026-09-27-01).
         con.execute(
-            "DELETE FROM message_history WHERE rowid NOT IN "
-            "(SELECT rowid FROM message_history ORDER BY ts DESC LIMIT ?)",
+            "DELETE FROM message_history WHERE channel = 'APRS' AND rowid NOT IN "
+            "(SELECT rowid FROM message_history WHERE channel = 'APRS' "
+            "ORDER BY ts DESC LIMIT ?)",
             (_MSG_HISTORY_MAX_ROWS,))
         con.commit()
         return n
