@@ -11,7 +11,7 @@ first. If it disagrees with either of those, they win.
 | | |
 |---|---|
 | VPS | 169.58.31.240, live at aprsagent.com, systemd unit `aprs-agent` |
-| running | **v3.2.134** since 2026-09-25 01:01 CEST, deployed by the hourly timer; `Deploy OK`, 0 restarts |
+| running | **v3.2.135** since 2026-09-27 22:02 CEST, deployed by the hourly timer; `Deploy OK`, 0 restarts. v3.2.136 committed (`8caee46`), not yet tagged |
 | repo HEAD | **v3.2.135** — the message-history row cap no longer evicts the gateway's own conversation; a bot loop elsewhere had (F-2026-09-27-01). v3.2.134 every silence AI note logs its duration, to set the timeout from a week of data (F-2026-09-25-01). v3.2.133 a fault in the page's own code reaches the console and the admin journal instead of an empty catch; a failed request still stays quiet (F-2026-09-24-05). v3.2.132 a weather reading past 30 km says it is not local (F-2026-09-24-04); v3.2.131 email reports template values and parses its sender (F-2026-09-24-03); v3.2.130 WAL mode (F-2026-09-24-02); v3.2.129 Telegram poll margin and a daily RSS line (F-2026-09-24-01); v3.2.117-128 the AI gateway's registry answers, conversation memory and usage counter (F-2026-09-20-01 to -05; release notes v3.2.119, v3.2.125, v3.2.130) |
 | APRS-IS login | `TA3HX-5` since 2026-09-17 (was `TA3HRJ-5`); the software side of the callsign change shipped in v3.2.116, plan outside the repo in `CALLSIGN-TA3HX-APRS-AGENT.md` |
 | DB backup | nightly 04:17, `/usr/local/sbin/aprs-db-backup` from `/etc/cron.d/aprs-db-backup`, online backup API + integrity_check, 7 kept in `/var/backups/aprs-agent`. Never `cp` the live file: since v3.2.130 the database is in **WAL mode**, and while the agent runs committed data can sit in `-wal` beside it. The `-wal` file comes and goes as connections close; ask `PRAGMA journal_mode`, not `ls` |
@@ -724,6 +724,8 @@ Worse was the repair: a PowerShell attempt whose `AddRange` calls failed while
 from git because it had been committed; the uncommitted section did not. Three
 separate attempts to fix one invisible byte, and the tool that had no shell in
 the path fixed it first time.
+
+**Read a backup with `immutable=1`, not only `mode=ro`.** The nightly backups are WAL-mode files, and a read-only open of one still creates `-wal` and `-shm` beside it in `/var/backups/aprs-agent`. Found and removed 2026-09-27; `?mode=ro&immutable=1` leaves nothing. The 266 gateway rows the row cap had evicted were restored that day from the 2026-09-24 backup, after a snapshot kept as `aprs_stations-pre-restore-20260927.db` (F-2026-09-27-01).
 
 **Write patch scripts to a file, not through a heredoc.** Backslash levels get
 eaten; `\b` has arrived as a literal backspace more than once and the regex
