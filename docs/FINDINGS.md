@@ -6332,12 +6332,32 @@ The evicted rows are not restored by the fix. The journal still carries the
 could be written back; that is a write to the live database and was left for
 the operator to decide.
 
+> **Correction, 2026-09-27 (same day).** The loop was not the start of it.
+> Every nightly backup from 09-21 to 09-24 already held exactly 20,000 rows
+> with the oldest about seven days back (09-17 in all four), so the cap had
+> been evicting everything past a week — the gateway's conversation included —
+> since well before the loop. "Fourteen days" was never true of this table;
+> the loop took it from seven to two. And the better source is not the
+> journal: the 2026-09-24 backup holds all 266 gateway rows from 09-19 00:18
+> (the first gateway traffic on record) to 09-23 23:36 with their message
+> numbers, a strict superset of the 189 journal lines for the same span —
+> the journal logs at receipt, the table a minute later, and it lacks the
+> limiter's replies. There was no gateway traffic between 09-23 23:36 and the
+> live table's oldest row, 09-24 20:01, so the backup closes the gap.
+
 ### Also seen in the same review, not changed
 
 - The "nearest igates" answer to KR4OII was 72 characters and went out as two
   packets, the second carrying only "feed only." — the fixed tail
   ". My own feed only." pushed it past 64. A second packet on the air for
   two words; any change to the tail is wording and gets a draft first.
+  **Changed in v3.2.136, at the operator's word on the draft:** when the
+  short form keeps the answer in one packet, the tail is " (own feed)";
+  otherwise the sentence stays. The one-igate answer had the same spill
+  (`…18km (seen gating). My own --` / `feed only.`) and is one packet now.
+  `tools/check_lookup.py` case 8 reproduces KR4OII's two igates and fails
+  against v3.2.135 ("went out as 2"); case 9 keeps the full sentence on a
+  listing too long for one packet either way.
 - "SAAT VE TARIH?" was answered by the model with "Yerel saat dilimini
   bilemem", although the sender's position puts him in Turkey, and a stray
   "Yoksa" opened the second part. Time and date go to the model every time;

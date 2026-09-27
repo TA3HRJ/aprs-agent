@@ -1045,8 +1045,17 @@ class AIGateway(Extension):
             except Exception:
                 pass
             bits.append("%s %.0fkm%s" % (call, km, seen))
-        return ("Nearest %s to %s: %s. My own feed only."
-                % (label, whence, "; ".join(bits)))
+        listing = "Nearest %s to %s: %s" % (label, whence, "; ".join(bits))
+        full = listing + ". My own feed only."
+        # The tail says where the answer comes from, and on a two-station
+        # listing it cost a packet of its own: KR4OII-9's answer on
+        # 2026-09-25 was 72 characters and the second packet carried
+        # "feed only." (F-2026-09-27-01). When the short form keeps the
+        # answer in one packet, use it; otherwise the sentence stays.
+        short = listing + " (own feed)"
+        if len(full) > 64 and len(short) <= 64:
+            return short
+        return full
 
     async def _prop_near(self, question: str, sender_full: str,
                          sender_base: str) -> "Optional[str]":

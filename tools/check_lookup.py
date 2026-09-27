@@ -238,13 +238,54 @@ async def run() -> int:
     if calls["n"]:
         problems.append("the propagation question cost a model call")
 
+    # 8 - the provenance tail must not cost a second packet on its own.
+    # KR4OII-9 asked "IGATE near me" on 2026-09-25; the answer was 72
+    # characters and went out as two packets, the second carrying only
+    # "feed only." (F-2026-09-27-01). A listing that fits one packet with a
+    # short tail gets the short tail; one that fits either way keeps the
+    # sentence, and one too long for a packet anyway keeps it too.
+    class TwoIgates(FakeDB):
+        def __init__(self, seen=()):
+            self.seen = set(seen)
+
+        def nearest_of_type(self, lat, lon, kinds, max_km=250.0, limit=3):
+            return [({"callsign": "AJ4AB-10", "type": "igate"}, 44.0),
+                    ({"callsign": "K4RBC-B", "type": "igate"}, 47.0)]
+
+        def has_gated(self, call):
+            return call.upper() in self.seen
+
+    def packets(sent, before):
+        return [s for s in sent[before:]
+                if not s.split("::", 1)[1][9:].lstrip(":").startswith(("ack", "rej"))]
+
+    sent, calls = [], {"n": 0}
+    gw = new_gateway(sent, calls, tmp)
+    gw.set_station_db(TwoIgates())
+    before = len(sent)
+    a = await ask(gw, sent, "KE4PIC", "IGATE near me")
+    n = len(packets(sent, before))
+    if n != 1:
+        problems.append("a two-igate answer that fits one packet went out as "
+                        "%d: %r" % (n, a))
+    if "own feed" not in a.lower():
+        problems.append("the short answer lost its provenance: %r" % a)
+
+    sent, calls = [], {"n": 0}
+    gw = new_gateway(sent, calls, tmp)
+    gw.set_station_db(TwoIgates(seen=("AJ4AB-10", "K4RBC-B")))
+    a = await ask(gw, sent, "KE4PIC", "IGATE near me")
+    if "my own feed only" not in a.lower():
+        problems.append("a listing too long for one packet lost the full "
+                        "provenance sentence: %r" % a)
+
     for f in tmp.iterdir():
         f.unlink()
     tmp.rmdir()
 
     for p in problems:
         print("FAIL: " + p)
-    print("checked 8 cases - %d failed" % len(problems))
+    print("checked 9 cases - %d failed" % len(problems))
     return 1 if problems else 0
 
 
