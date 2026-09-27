@@ -39,6 +39,15 @@ What is left, in the order it is worth doing:
 6. **Propagation alerts as a subscription**, asked for publicly. It would be
    the first time the gateway starts traffic rather than answering it, which
    is an etiquette question before it is a code one.
+7. **A registered tocall — waiting on the registry.** DMWGPT and the bridges
+   send with the generic `APRS` ("Unknown" in the device-id list) and the
+   fixed beacon with `AP4GNT`, which is registered to nobody. `APRAGT`
+   requested on 2026-09-27 as
+   [aprsorg/aprs-deviceid#368](https://github.com/aprsorg/aprs-deviceid/issues/368);
+   the registry answers in batches, weeks apart. When it is allocated: one
+   constant in `config.py` in place of the seven literals
+   (`ai_gateway_ext.py` ×3, `fixed_beacon.py` ×2, telegram, whatsapp, imap),
+   and a tag. Not before - using an unallocated tocall is what `AP4GNT` is.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.
