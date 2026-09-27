@@ -573,6 +573,56 @@ _MSGID_TICK_S = 30          # one number per 30 s of clock: a 35-day cycle
 _MSGID_FILE = "ai_gateway_msgid"
 _clock = time.time
 
+# "What is the date / time?" is answered from the clock, not the model. On
+# 2026-09-27 TA3HX-7 sent "SAAT VE TARIH?" and was told "Yerel saat dilimini
+# bilemem" by a model that knew the UTC time, over two packets with a stray
+# "Yoksa"; "DATE?" came back three ways the same afternoon. Matched on the
+# whole message, folded to ASCII first so a Turkish capital I cannot miss,
+# and tight enough that "what time does the ISS pass" is still a question.
+_TIME_ASK = re.compile(
+    r"^\s*(?:what\s+is\s+|what'?s\s+)?(?:the\s+)?(?:current\s+|today'?s\s+)?"
+    r"(?:date|time|utc|day|date\s+and\s+time|time\s+and\s+date)"
+    r"(?:\s+(?:now|today|please|pls))?\s*[?!.]*\s*$"
+    r"|^\s*what\s+time\s+is\s+it(?:\s+now)?\s*[?!.]*\s*$"
+    r"|^\s*what\s+day\s+is\s+(?:it|today)\s*[?!.]*\s*$",
+    re.I)
+_TIME_ASK_TR = re.compile(
+    r"^\s*(?:saat|tarih|saat\s+(?:ve|&)\s+tarih|tarih\s+(?:ve|&)\s+saat)"
+    r"(?:\s+(?:kac|nedir|ne))?\s*[?!.]*\s*$"
+    r"|^\s*bugun(?:un)?\s+(?:tarihi?|gunlerden\s+ne|hangi\s+gun|ne(?:\s+gunu)?)"
+    r"(?:\s+(?:nedir|ne))?\s*[?!.]*\s*$",
+    re.I)
+_DAYS_EN = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+            "Saturday", "Sunday")
+_DAYS_TR = ("Pazartesi", "Sali", "Carsamba", "Persembe", "Cuma",
+            "Cumartesi", "Pazar")
+# Turkey keeps UTC+3 all year (no DST since 2016). It is the only zone this
+# answer names: anywhere else, UTC is exact and a guessed zone would not be.
+_TR_OFFSET_S = 3 * 3600
+_TR_BOX = (35.8, 42.2, 25.6, 44.9)          # lat min/max, lon min/max
+_TR_PREFIX = re.compile(r"^(?:T[A-C]|YM)\d")
+
+
+def _time_answer(question: str, in_turkey: bool) -> "Optional[str]":
+    """The date and time, from the clock, or None if not asked."""
+    folded = _to_ascii(question)
+    tr = bool(_TIME_ASK_TR.search(folded))
+    if not tr and not _TIME_ASK.search(folded):
+        return None
+    now = int(_clock())
+    u = time.gmtime(now)
+    days = _DAYS_TR if tr else _DAYS_EN
+    text = "%s %s, %02d:%02d UTC" % (time.strftime("%Y-%m-%d", u),
+                                     days[u.tm_wday], u.tm_hour, u.tm_min)
+    if in_turkey:
+        t = time.gmtime(now + _TR_OFFSET_S)
+        if t.tm_yday == u.tm_yday:
+            text += " (TR %02d:%02d)" % (t.tm_hour, t.tm_min)
+        else:   # after 21:00 UTC it is already tomorrow in Turkey
+            text += " (TR %02d.%02d %s %02d:%02d)" % (
+                t.tm_mday, t.tm_mon, days[t.tm_wday], t.tm_hour, t.tm_min)
+    return text + ". 73"
+
 
 class AIGateway(Extension):
 
@@ -921,6 +971,22 @@ class AIGateway(Extension):
                 return ("I do not pass messages on - I only answer what is "
                         "sent to me. Send it to %s directly." % base)
         return None
+
+    def _time_lookup(self, question: str, sender_full: str,
+                     sender_base: str) -> "Optional[str]":
+        """Date and time from the clock; Turkish time beside UTC only for a
+        sender whose own beacon is in Turkey, or, with no beacon on record,
+        whose callsign is Turkish."""
+        if not (_TIME_ASK.search(_to_ascii(question))
+                or _TIME_ASK_TR.search(_to_ascii(question))):
+            return None
+        origin = self._sender_origin(sender_full, sender_base)
+        if origin is not None:
+            la0, la1, lo0, lo1 = _TR_BOX
+            in_tr = la0 <= origin[0] <= la1 and lo0 <= origin[1] <= lo1
+        else:
+            in_tr = bool(_TR_PREFIX.match(sender_base or ""))
+        return _time_answer(question, in_tr)
 
     def _sender_origin(self, sender_full: str, sender_base: str):
         """Where the asker is, from their own beacon, or None."""
@@ -1636,6 +1702,8 @@ class AIGateway(Extension):
             answer = self._optout_command(question, sender_base)
         if answer is None:
             answer = self._misaddressed(question, sender_base, my_call)
+        if answer is None:
+            answer = self._time_lookup(question, sender_full, sender_base)
         if answer is None:
             answer = self._self_lookup(question, sender_base, sender_full)
         if answer is None:

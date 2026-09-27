@@ -6362,3 +6362,15 @@ the operator to decide.
   bilemem", although the sender's position puts him in Turkey, and a stray
   "Yoksa" opened the second part. Time and date go to the model every time;
   a code path would make them exact.
+  **Changed in v3.2.137, at the operator's word on the draft:** a message
+  that is only a date/time question — "DATE?", "saat kaç", "SAAT VE
+  TARİH?", "what day is it" — is answered from the clock in one packet:
+  `2026-09-27 Pazar, 16:48 UTC (TR 19:48). 73`. Turkish time is added only
+  for a sender whose own beacon is in Turkey (or, with no beacon, a Turkish
+  callsign); anywhere else it is UTC alone, because Turkey's fixed UTC+3 is
+  the only zone the code can state without guessing. After 21:00 UTC the
+  Turkish part carries its own date, which the draft had missed:
+  `… 22:30 UTC (TR 28.09 Pazartesi 01:30)`. Matched on the whole message
+  after folding to ASCII, so "what time is sunset in Izmir" and "tarihte
+  bugün ne oldu" still reach the model. `tools/check_time_answer.py`: five
+  cases, 14 problems against v3.2.136.
