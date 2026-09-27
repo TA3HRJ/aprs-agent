@@ -6298,10 +6298,14 @@ station filter (F-2026-09-01, v3.2.101), under a fourteen-day age limit and a
 hard cap of 20,000 rows. The cap was written to bound the station-filter
 traffic and counted every channel.
 
-On 2026-09-25 between 03:00 and 05:59 two automatic stations answered each
-other 6,102 times: YM2KDZ, an auto-responder ("Mesajiniz alindi. Tesekkur
-ediyoruz - DARD81"), and TI0RHU-15, a menu bot ("Or choose: 1-QSL 2-Board
-3-WhatsApp"). YM2KDZ matches `YM*` in the station filter, so every message
+On 2026-09-25 from 01:55:17 to 03:30:51 UTC — 96 minutes, about 64 a
+minute — two automatic stations answered each other 6,102 times: YM2KDZ, an
+auto-responder ("Mesajiniz alindi. Tesekkur ediyoruz - DARD81"), and
+TI0RHU-15, a menu bot ("Or choose: 1-QSL 2-Board 3-WhatsApp"). TI0RHU-15
+read every text as a menu command and answered with four numbered messages
+(4,884 in all); YM2KDZ answered each with a free-text receipt or "HATA:
+Mukerrer Mesaj!" (1,218). A receipt sent as a message rather than as an APRS
+`ack` is what kept it going. YM2KDZ matches `YM*` in the station filter, so every message
 was kept — 9,709 station-filter rows that day against the ~840 a day the
 design was measured at. The cap then took the oldest rows, and the oldest
 rows were DMWGPT's. The loop stopped by itself; nothing of ours was party

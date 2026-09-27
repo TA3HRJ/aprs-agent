@@ -191,7 +191,7 @@ with tempfile.TemporaryDirectory() as d:
         ok(f"the conversation reads back on its own ({len(only)} rows)")
 
 # ── 9: a flood of other traffic cannot evict the conversation ─────────
-# 2026-09-25 03:00-05:59: two automatic stations, YM2KDZ and TI0RHU-15,
+# 2026-09-25 01:55-03:30 UTC: two automatic stations, YM2KDZ and TI0RHU-15,
 # answered each other 6,102 times. YM2KDZ matches the station filter, so every
 # message was kept, and the 20,000-row cap - written to bound the world feed -
 # took the oldest rows of any channel with it. The live table's oldest row was
