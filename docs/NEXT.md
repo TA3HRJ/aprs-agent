@@ -47,6 +47,11 @@ What is left, in the order it is worth doing:
    constant in `config.py` in place of the seven literals
    (`ai_gateway_ext.py` ×3, `fixed_beacon.py` ×2, telegram, whatsapp, imap),
    and a tag. Not before - using an unallocated tocall is what `AP4GNT` is.
+8. **The public map on a second name, waiting on DNS.** Prepared on
+   2026-09-28 at the operator's word: the map will also answer on an
+   `ampr.org` name over the VPS's 44Net address once the record is published;
+   a timer on the host takes the certificate and enables the site by itself.
+   Nothing in the agent changes. Host details are outside the repository.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.
