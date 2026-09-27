@@ -602,6 +602,21 @@ _TR_OFFSET_S = 3 * 3600
 _TR_BOX = (35.8, 42.2, 25.6, 44.9)          # lat min/max, lon min/max
 _TR_PREFIX = re.compile(r"^(?:T[A-C]|YM)\d")
 
+# Getting an answer onto a radio. On 2026-09-27 23:02 TA3HX-7 sent TEST over
+# RF; the first part of the answer left under a second later and never
+# arrived, the second part five seconds after it did and was acked. The
+# radio that has just transmitted is not yet listening, and nothing resent
+# the part it missed: the gateway sent every part once and dropped incoming
+# acks unread. APRS messaging is resend-until-acked everywhere else.
+_RF_TURNAROUND_S = 3.0          # before the first part, to a sender heard on RF
+_PART_GAP_S = 5.0               # between parts
+# Resends of a numbered part that drew no ack. APRS-IS drops a packet
+# identical to one it passed in the last 30 s as a duplicate, so the first
+# resend cannot come sooner than that or it never reaches the air.
+_RETRY_GAPS_S = (40.0, 60.0, 120.0)
+_RF_QCONS = {"qAR", "qAr", "qAO", "qAo"}   # gated from RF, not typed online
+_ACK_TEXT = re.compile(r"^(ack|rej)([A-Za-z0-9]{1,5})\}", re.I)   # REPLY-ACK form
+
 
 def _time_answer(question: str, in_turkey: bool) -> "Optional[str]":
     """The date and time, from the clock, or None if not asked."""
@@ -658,6 +673,8 @@ class AIGateway(Extension):
         # key -> (expiry, answer, replays left). The answer is kept so a
         # retry is served from cache rather than met with silence.
         self._processed: dict[str, tuple] = {}
+        # (addressee, msg id) -> the task that resends it until acked.
+        self._unacked: dict[tuple, asyncio.Task] = {}
         self._own_writer: Optional[asyncio.Queue] = None
         self._msgid_path = (Path(config_path).with_name(_MSGID_FILE)
                             if config_path else None)
@@ -1473,6 +1490,50 @@ class AIGateway(Extension):
         mid = self._next_msg_id()
         pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
         await self._own_writer.put(pkt.encode("utf-8"))
+        if _RETRY_GAPS_S:
+            key = (to_call.upper(), str(mid))
+            self._unacked[key] = asyncio.create_task(
+                self._resend(key, to_call, str(mid), pkt))
+
+    async def _resend(self, key: tuple, to_call: str, mid: str, pkt: str) -> None:
+        """Send the same numbered part again until it is acked or rejected."""
+        try:
+            for n, gap in enumerate(_RETRY_GAPS_S, 1):
+                await asyncio.sleep(gap)
+                if self._unacked.get(key) is not asyncio.current_task():
+                    return
+                if not self._own_writer:
+                    return
+                await self._own_writer.put(pkt.encode("utf-8"))
+                self.log(f"TX to {to_call} (resend {n} of {mid}, no ack)")
+            self.log(f"no ack from {to_call} for {mid} after "
+                     f"{len(_RETRY_GAPS_S)} resends")
+        finally:
+            if self._unacked.get(key) is asyncio.current_task():
+                del self._unacked[key]
+
+    def _acked(self, sender_full: str, mid: str, kind: str) -> None:
+        """An ack or rej for one of our parts: stop resending it."""
+        task = self._unacked.pop((sender_full.upper(), str(mid)), None)
+        if task is not None:
+            task.cancel()
+            self.log(f"{kind.lower()} from {sender_full} for {mid}")
+
+    async def _send_parts(self, from_call: str, to_call: str,
+                          parts: "list[str]", rf: bool,
+                          log: bool = True) -> None:
+        """Every answer leaves through here: a pause before the first part to
+        a sender heard on RF, and a gap between parts. The two replay loops
+        used to sleep after a part rather than before the next, which sent
+        the first two parts back to back."""
+        for i, part in enumerate(parts):
+            if i:
+                await asyncio.sleep(_PART_GAP_S)
+            elif rf and _RF_TURNAROUND_S > 0:
+                await asyncio.sleep(_RF_TURNAROUND_S)
+            await self._send_reply(from_call, to_call, part)
+            if log:
+                self.log(f"TX to {to_call}: {part}")
 
     async def handle(self, line: str) -> Optional[bytes]:
         cfg = self._live_config()
@@ -1526,8 +1587,20 @@ class AIGateway(Extension):
             return None
 
         raw_msg = packet.get("message_text", "")
+        # An ack or rej for one of our parts. These used to be dropped
+        # unread, which is why nothing could tell a delivered part from a
+        # lost one.
+        resp = (packet.get("response") or "").lower()
+        if resp in ("ack", "rej") and packet.get("msgNo"):
+            self._acked(sender_full, packet["msgNo"], resp)
+            return None
+        m = _ACK_TEXT.match(raw_msg or "")
+        if m:
+            self._acked(sender_full, m.group(2), m.group(1))
+            return None
         if not raw_msg or raw_msg.lower().startswith(("ack", "rej")):
             return None
+        rf = any(p in _RF_QCONS for p in (packet.get("path") or []))
 
         msg_id = packet.get("msgNo", "")
         # Retries have to be absorbed, but a repeat is not a retry. With no
@@ -1575,11 +1648,10 @@ class AIGateway(Extension):
             if cached and left > 0 and self._own_writer:
                 self._processed[dedup_key] = (exp, cached, left - 1)
                 self.log(f"replaying answer to {sender_full} ({left - 1} left)")
-                for i, part in enumerate(_split_message(
-                        cached, 1 + int(cfg.get("extra_sms", 0)))):
-                    await self._send_reply(my_call, sender_full, part)
-                    if i:
-                        await asyncio.sleep(5)
+                await self._send_parts(
+                    my_call, sender_full,
+                    _split_message(cached, 1 + int(cfg.get("extra_sms", 0))),
+                    rf, log=False)
                 return None
             if not cached:
                 # Still waiting on the model for this very message. This is
@@ -1597,14 +1669,13 @@ class AIGateway(Extension):
                 self.mark_working()
                 self.warn(f"rate-limited {sender_full} (past replays)")
                 if notice:
-                    await self._send_reply(my_call, sender_full, notice)
+                    await self._send_parts(my_call, sender_full, [notice], rf)
                 return None
             self.log(f"resending answer to {sender_full} (replays spent)")
-            for i, part in enumerate(_split_message(
-                    cached, 1 + int(cfg.get("extra_sms", 0)))):
-                await self._send_reply(my_call, sender_full, part)
-                if i:
-                    await asyncio.sleep(5)
+            await self._send_parts(
+                my_call, sender_full,
+                _split_message(cached, 1 + int(cfg.get("extra_sms", 0))),
+                rf, log=False)
             self.mark_working()
             return None
         self._processed[dedup_key] = (now_ts + self._DEDUP_TTL_S, "", self._MAX_REPLAYS)
@@ -1674,11 +1745,7 @@ class AIGateway(Extension):
             # its own letters and APRS carries ASCII.
             parts = _split_message(_to_ascii(help_text),
                                    1 + int(cfg.get("extra_sms", 0)))
-            for i, part in enumerate(parts):
-                await self._send_reply(my_call, sender_full, part)
-                self.log(f"TX to {sender_full}: {part}")
-                if i < len(parts) - 1:
-                    await asyncio.sleep(5)
+            await self._send_parts(my_call, sender_full, parts, rf)
             self.mark_working()
             return None
 
@@ -1688,7 +1755,7 @@ class AIGateway(Extension):
             self.warn(f"rate-limited {sender_full}"
                       + (" (told)" if notice else " (already told)"))
             if notice:
-                await self._send_reply(my_call, sender_full, notice)
+                await self._send_parts(my_call, sender_full, [notice], rf)
             return None
 
         self.log(f"RX from {sender_full}: {question}")
@@ -1724,7 +1791,7 @@ class AIGateway(Extension):
                 self.warn(f"daily limit reached, refused {sender_full}"
                           + (" (told)" if notice else ""))
                 if notice:
-                    await self._send_reply(my_call, sender_full, notice)
+                    await self._send_parts(my_call, sender_full, [notice], rf)
                 return None
             answer = await self._ask_ai(question, sender_full,
                                         self._recent_turns(sender_base))
@@ -1756,12 +1823,7 @@ class AIGateway(Extension):
             self._processed[dedup_key] = (prev[0], answer, prev[2])
 
         parts = _split_message(answer, 1 + int(cfg.get("extra_sms", 0)))
-
-        for i, part in enumerate(parts):
-            await self._send_reply(my_call, sender_full, part)
-            self.log(f"TX to {sender_full}: {part}")
-            if i < len(parts) - 1:
-                await asyncio.sleep(5)
+        await self._send_parts(my_call, sender_full, parts, rf)
 
         # Kept for the next question from this station, for ten minutes.
         self._remember(sender_base, question, answer)

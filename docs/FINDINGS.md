@@ -6374,3 +6374,63 @@ the operator to decide.
   after folding to ASCII, so "what time is sunset in Izmir" and "tarihte
   bugün ne oldu" still reach the model. `tools/check_time_answer.py`: five
   cases, 14 problems against v3.2.136.
+
+---
+
+## F-2026-09-28-01 — the first part of an answer was lost on the way to a radio, and nothing sent it again
+
+**Fixed in v3.2.138.**
+
+### What was seen
+
+2026-09-27 23:02:25 CEST, TA3HX-7 (AnyTone AT-D890UV) sent `TEST` over RF,
+gated by TA3HX-10 (YAAC). DMWGPT answered in two parts, 59898 and 59899.
+The radio showed only the second, and acked only the second
+(`ack59899`, 23:02:34). The first part had left under a second after the
+question arrived; the second went five seconds later.
+
+Two things made the loss permanent. The gateway sent every part exactly
+once. And incoming acks were dropped unread — `handle()` returned on any
+message starting with `ack` or `rej` — so nothing in the program could tell
+a delivered part from a lost one. APRS messaging everywhere else, the
+AnyTone and YAAC included, resends a numbered message until it is acked.
+
+Nothing in the record says a delay before the first part was ever tried;
+the nearest is the DMR bridge note (outside the repo), where a reply
+collided with a message the hotspot was still delivering.
+
+Reading the send loops for this found a second fault. The two paths that
+replay a cached answer slept after a part rather than before the next, so
+parts one and two of a replay went out back to back. Measured with the
+check below against v3.2.137: 0.00 s between them.
+
+### What changed
+
+Every answer now leaves through one helper, `_send_parts()`:
+
+- **3 s before the first part** when the question came from RF (`qAR`,
+  `qAO`); none for a sender typed online. The gateway's ack of the
+  question itself still goes at once — if it is lost, the sender asks
+  again and the dedup cache replays.
+- **5 s between parts**, in every path including the replays.
+- **Resend until acked.** Each numbered part is resent, same number and
+  text, 40, 60 and 120 s apart — at most three times, 3 min 40 s in all —
+  and stops on an `ack`, a `rej` or the REPLY-ACK form `ackNN}`. The first
+  gap is 40 s, not the 30 s drafted: APRS-IS drops a packet identical to one
+  it passed in the last 30 s, so a resend at 30 s would likely never reach
+  the air.
+- Acks and rejs are logged now (`ack from X for N`), and so is each resend
+  and a part that ran out of resends.
+
+Cost, stated: a part that is acked costs nothing more. A lost part costs up
+to three more packets. A station that never acks — APRSSwift until its fix
+ships — gets every part four times. Machines are still not answered at all,
+so this opens no new loop with a bot. The guard rail now takes about five
+minutes, because checks that ask over RF wait the real 3 s.
+
+`tools/check_resend.py`, delays shortened: RF waits the turnaround and
+internet does not; parts are spaced in answers and replays; an unacked part
+goes four times and an acked one once; ack, rej and REPLY-ACK each stop the
+resends; a stray ack costs nothing. **Seen failing** against v3.2.137 with
+3 problems — no turnaround, one send of the unacked part, and replayed
+parts 0.00 s apart.

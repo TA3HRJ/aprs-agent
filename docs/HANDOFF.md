@@ -225,7 +225,7 @@ cost is below anything this application can notice. Named rather than hidden.
 
 ## The guard rail
 
-Thirty-seven checks in `tools/`, each one born from a live failure. Run them all
+Thirty-eight checks in `tools/`, each one born from a live failure. Run them all
 before tagging:
 
 ```
@@ -239,7 +239,7 @@ dependencies. `python -m venv .venv` then `.venv/Scripts/python.exe -m pip
 install -r requirements.txt` (`.venv/` is gitignored), and run them with that
 interpreter. On Windows a bare `python` may be the Microsoft Store alias.
 
-Thirty-six run offline. **`check_prop_bundle.py` needs a live feed** — but *not* an
+Thirty-seven run offline, in about five minutes. **`check_prop_bundle.py` needs a live feed** — but *not* an
 admin API, which is what this file used to say. `/api/prop` and
 `/api/prop/evidence` are both on the public app, so it runs from anywhere:
 
@@ -310,6 +310,7 @@ or on the VPS against `http://127.0.0.1:8080`, which is the default.
 | `check_prop_bundle` | the evidence bundle cannot judge an event with numbers that event wrote |
 | `check_silent_catch` | an empty catch in the page never swallows a fault in the page's own code |
 | `check_ai_note_latency` | every silence AI note says how long it took, success or failure, without reading as an error |
+| `check_resend` | an answer part that draws no ack is sent again; RF senders get a turnaround pause; parts are never sent back to back |
 | `check_time_answer` | the date and time come from the clock, Turkish time only for a sender in Turkey, and a question that mentions time still reaches the model |
 
 ---
