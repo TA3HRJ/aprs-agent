@@ -1,4 +1,4 @@
-# Handoff — state at v3.2.133
+# Handoff — state at v3.2.138
 
 Written for a session starting cold. `NEXT.md` is the plan and `FINDINGS.md` is
 the record; this file is only *where things stand right now* and what to do
@@ -17,6 +17,8 @@ first. If it disagrees with either of those, they win.
 | neighbours on the VPS | Since 2026-09-28 the VPS also hosts a public web SDR and a 44Net tunnel, and the old `ta3hrj` host names redirect (301) to the `ta3hx` ones. None of it carries the agent's traffic; the SDR is capped so it cannot starve the agent. Host details are kept outside the repository |
 | DB backup | nightly 04:17, `/usr/local/sbin/aprs-db-backup` from `/etc/cron.d/aprs-db-backup`, online backup API + integrity_check, 7 kept in `/var/backups/aprs-agent`. Never `cp` the live file: since v3.2.130 the database is in **WAL mode**, and while the agent runs committed data can sit in `-wal` beside it. The `-wal` file comes and goes as connections close; ask `PRAGMA journal_mode`, not `ls` |
 | watching | **Sharing the VPS, from 2026-09-28 for a week:** the daily `[health] rss` line and the load average with the new neighbour running. Baseline at 01:33 CEST: agent 1.3 GB, neighbour 0.2 GB of its 2 GB cap, 5.8 GB of 7.9 GB available, load 0.5-0.7 on 4 CPUs. **`[silence] AI note for <cell> in N s` lines from v3.2.134 — read after 2026-10-02** to answer audit item 10 (F-2026-09-25-01 has the query); Telegram `poll error` lines — **answered**: 29 on 09-24, then 5, 1, 4 a day, all 502/429 from Telegram; the daily `[health] rss` journal line (953 MB five minutes after the v3.2.130 start); `health.smtp` in `/api/info`, which stays `idle` until the first email is sent |
+| on hold | **RF field tests of v3.2.137/138**, paused by the operator on 2026-09-28. The code is live and its checks pass (`check_time_answer`, `check_resend`); what is unproven is the air: that a resent part reaches a radio and the 3 s turnaround is enough. Do not restart them unasked, and do not assume which radio, TNC or app is attached when they resume — the test setup changes between sessions; read it off the packet log (path, tocall) or ask |
+| waiting on others | **Tocall** — NEXT item 7, aprs-deviceid#368. **APRSSwift's missing ack** — seen 2026-09-27 (no ack over RF where the Anytone acked in 6 s), its author is fixing it. While it does not ack, v3.2.138 resends every part to an APRSSwift sender three times even when it arrived — expected, not a fault. **DMWGPT in WB2OSZ's "APRS Information Services" list** (how.aprs.works) — the address on that page bounced on 2026-09-29; the site is run by the APRS Foundation and its contact form is the route. Draft written, sending it is the operator's |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
 | every tag | **must** carry a `config.VERSION` bump |
 
