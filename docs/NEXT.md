@@ -63,6 +63,10 @@ What is left, in the order it is worth doing:
 11. **Dependabot, 32-bit build:** nothing to do. The cryptography alerts on
     `requirements-build-win32.txt` are dismissed as unreachable; HANDOFF has
     the check to repeat when the next one comes.
+12. ~~**A Meshtastic bot module** calling the public read-only API.~~
+    Looked at 2026-09-29 (Purgatoria/meshtastic-bot-modules): feasible, no
+    server change. **Declined by the operator — no risk taken.** Do not
+    re-propose unless he raises it.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.
