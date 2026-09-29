@@ -122,6 +122,27 @@ elif "T2SYDNEY" in b:
 else:
     print("  ok    internet-connected test names no igate")
 
+# qAS after used digi hops. 2026-09-29, CE3EOA-6 in Chile, an AnyTone heard
+# through CE3AA-5, stamped qAS by CD3IRV-1: the answer said "via APRS-IS" to a
+# radio. The hops prove RF; the name after qAS may be a server, so it is not
+# called an igate. qAS with no hops, and anything with TCPIP*, stay internet.
+QAS_RF = "CE3EOA-6>APAT81,CE3AA-5*,WIDE1*,WIDE2-1,qAS,CD3IRV-1::DMWGPT   :TEST"
+QAS_NET = "TA1ABC-1>APOSB4,TCPIP*,qAS,TA1ABC::DMWGPT   :TEST"
+QAS_BARE = "TA1ABC-2>APRS,qAS,T2TEST::DMWGPT   :TEST"
+d = _test_answer("TEST", "CE3EOA-6", QAS_RF)
+if not d or "via APRS-IS" in d or "CD3IRV-1" not in d or "RF" not in d:
+    fail("qAS after digi hops", f"not answered as RF: {d!r}")
+elif "gated by" in d:
+    fail("qAS after digi hops", f"called the qAS name an igate: {d!r}")
+else:
+    print("  ok    qAS after digi hops is answered as heard on RF")
+for lbl, ln in (("qAS with TCPIP*", QAS_NET), ("qAS, no hops", QAS_BARE)):
+    e = _test_answer("TEST", "TA1ABC", ln)
+    if not e or "via APRS-IS" not in e:
+        fail(lbl, f"not answered as internet: {e!r}")
+    else:
+        print(f"  ok    {lbl} is still 'via APRS-IS'")
+
 # A question that merely contains the word must NOT be short-circuited.
 c = _test_answer("What is the SWR test procedure for a dipole?", "TA1ABC", RF_LINE)
 if c is not None:

@@ -4517,6 +4517,12 @@ reports 8 failures and exits 1; against the real code, all clear.
 
 **Shipped in v3.2.98.**
 
+**Correction, 2026-09-29 (F-2026-09-29-01):** `qAS` does not always mean a
+direct login. A packet digipeated on RF can arrive stamped `qAS`; the used
+hops before the q-construct are what prove RF. Since v3.2.139 such a sender
+is answered *"heard on RF, into APRS-IS at <name>"*, and the name is still
+not called an igate.
+
 ---
 
 ## F-2026-08-31-01 — the silence watch died, and for 39 hours nothing said so
@@ -6434,3 +6440,48 @@ goes four times and an acked one once; ack, rej and REPLY-ACK each stop the
 resends; a stray ack costs nothing. **Seen failing** against v3.2.137 with
 3 problems — no turnaround, one send of the unacked part, and replayed
 parts 0.00 s apart.
+
+**Correction, 2026-09-29 (F-2026-09-29-01):** "a sender heard on RF (`qAR`,
+`qAO`)" was too narrow. A digipeated sender stamped `qAS` is on RF too and
+now gets the turnaround.
+
+---
+
+## F-2026-09-29-01 — a radio heard through a digipeater was told "via APRS-IS"
+
+2026-09-29 05:13 CEST. CE3EOA-6 in Chile sent `TEST`:
+
+    CE3EOA-6>APAT81,CE3AA-5*,WIDE1*,WIDE2-1,qAS,CD3IRV-1::DMWGPT   :TEST
+
+`APAT81` is an AnyTone. The packet was digipeated by CE3AA-5 and entered
+APRS-IS at CD3IRV-1 - it was on RF. The answer said *"Test OK CE3EOA-6, via
+APRS-IS"*, because `_test_answer` read `qAS` as a direct login
+(F-2026-08-28-02). The same reading kept it off the RF list in `handle()`,
+so the first part left with no turnaround.
+
+Neither part was acked. 59900 and 59901 were each resent three times
+(05:13:55 to 05:17:00) and logged *"no ack ... after 3 resends"*, as
+designed. The station does ack: it sent `ack3` to CE3EOA at 00:49 the same
+night. The likeliest reading - inference, not measured - is that no igate
+there transmitted our reply to RF, which is outside our control.
+
+### What changed (v3.2.139)
+
+A used digipeater hop before the q-construct (`*`, not `TCPIP*`/`TCPXX*`)
+now counts as RF whatever the q-construct is:
+
+- `_test_answer`: a `qAS` packet with such a hop answers *"heard on RF,
+  into APRS-IS at CD3IRV-1"*. Not "gated by": the name after `qAS` is
+  whoever handed the packet in and can be a server (the F-2026-08-14-41
+  mistake). `qAS` with no hop, and anything with `TCPIP*`, stay *"via
+  APRS-IS"*; `qAR`/`qAO` answers are unchanged.
+- `handle()`: `_digi_hop(path)` adds such a sender to the RF set, so the
+  first part waits the 3 s turnaround.
+
+Cost: those senders' first part leaves 3 s later; the answer grows by the
+longer phrase and still fits two parts.
+
+`check_signal_report` gained three cases (the Chile packet, `qAS` with
+`TCPIP*`, `qAS` with no hops) and `check_resend` one (a digipeated `qAS`
+sender waits the turnaround). **Seen failing** against v3.2.138: the Chile
+packet answered *"via APRS-IS"*, and its first part left after 0.00 s.

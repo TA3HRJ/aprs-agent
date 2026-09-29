@@ -15,7 +15,8 @@ of before the next one, which sent the first two parts back to back.
 What must hold (delays shortened for the test):
 
   1. to a sender heard on RF (qAR), the first part waits the turnaround;
-     to one typed online (qAC) it does not
+     to one typed online (qAC) it does not; a digipeated sender stamped
+     qAS is on RF too
   2. parts are spaced by the part gap, in a fresh answer and in a replay
   3. a part that draws no ack is sent again, the same message number, the
      configured number of times and no more
@@ -62,6 +63,7 @@ LONG = ("This answer is long enough to need two APRS message parts, "
         "so the second part follows the first after a gap.")
 RF = "APAT89,WIDE1-1,qAR,TA1ABC-10"
 NET = "APDR16,TCPIP*,qAC,T2TEST"
+QAS_RF = "APAT81,CE3AA-5*,WIDE1*,WIDE2-1,qAS,CD3IRV-1"
 
 
 class Rec:
@@ -121,6 +123,16 @@ async def run() -> int:
                         "turnaround (%s s)" % first_rf)
     if first_net is None or first_net > TURN * 0.5:
         problems.append("a sender typed online was made to wait (%s s)" % first_net)
+    # a digipeated sender stamped qAS is on RF too (CE3EOA-6, 2026-09-29)
+    gw3, rec3, _ = new_gateway("Short answer.")
+    rec3.t0 = time.monotonic()
+    await gw3.handle(line("CE3EOA-6", "question one", QAS_RF))
+    first_qas = rec3.sent[0][0] if rec3.sent else None
+    print("  first part: digipeated qAS after %s s"
+          % (None if first_qas is None else round(first_qas, 2)))
+    if first_qas is None or first_qas < TURN * 0.9:
+        problems.append("a digipeated sender stamped qAS got no turnaround "
+                        "(%s s)" % first_qas)
 
     # 2-4 - two parts, spaced; resends until acked
     gw, rec, _ = new_gateway()

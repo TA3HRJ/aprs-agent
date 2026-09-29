@@ -515,18 +515,27 @@ def _test_answer(question: str, sender_full: str, raw_line: str) -> "Optional[st
     """
     if not _TEST_MSG.match(question) or len(question) > 32:
         return None
-    gate, internet = "", False
+    gate, internet, q = "", False, ""
     try:
         from packet_parser import parse_packet
         p = parse_packet(raw_line)
         gate = p.get("gate") or ""
+        q = p.get("q_type") or ""
         # qAC/qAS mean the sender was connected to APRS-IS directly; no igate
         # heard them, so naming one would be as invented as the 5x9 was.
-        internet = bool(p.get("tcpip")) or p.get("q_type") in ("C", "S")
+        # Unless a used digi hop comes first: that proves RF whatever the
+        # q-construct says. CE3EOA-6 came in digipeated and stamped qAS
+        # (2026-09-29) and was told "via APRS-IS".
+        on_rf = bool(p.get("digipeated")) and not p.get("tcpip")
+        internet = bool(p.get("tcpip")) or (q in ("C", "S") and not on_rf)
     except Exception:
         pass
     if internet or not gate:
         where = "via APRS-IS"
+    elif q == "S":
+        # qAS names whoever handed the packet in, which can be a server -
+        # the hops prove RF, the name does not prove an igate.
+        where = "heard on RF, into APRS-IS at " + gate
     else:
         where = "gated by " + gate
     return ("Test OK %s, %s. Internet-fed service - I cannot give a signal "
@@ -615,6 +624,17 @@ _PART_GAP_S = 5.0               # between parts
 # resend cannot come sooner than that or it never reaches the air.
 _RETRY_GAPS_S = (40.0, 60.0, 120.0)
 _RF_QCONS = {"qAR", "qAr", "qAO", "qAo"}   # gated from RF, not typed online
+
+
+def _digi_hop(path) -> bool:
+    """A used digipeater hop before the q-construct: the packet was on RF,
+    whatever the q-construct says (CE3EOA-6, digipeated, stamped qAS)."""
+    for e in path:
+        if e.startswith("qA"):
+            return False
+        if e.endswith("*") and not e.startswith(("TCPIP", "TCPXX")):
+            return True
+    return False
 _ACK_TEXT = re.compile(r"^(ack|rej)([A-Za-z0-9]{1,5})\}", re.I)   # REPLY-ACK form
 
 
@@ -1600,7 +1620,8 @@ class AIGateway(Extension):
             return None
         if not raw_msg or raw_msg.lower().startswith(("ack", "rej")):
             return None
-        rf = any(p in _RF_QCONS for p in (packet.get("path") or []))
+        path = packet.get("path") or []
+        rf = any(p in _RF_QCONS for p in path) or _digi_hop(path)
 
         msg_id = packet.get("msgNo", "")
         # Retries have to be absorbed, but a repeat is not a retry. With no
