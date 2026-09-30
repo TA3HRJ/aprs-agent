@@ -1,0 +1,39 @@
+name: Uptime
+
+# Checks the live service from outside the VPS. The agent's own [health]
+# lines cannot report the VPS itself going down; this can. A failed run
+# makes GitHub email the account that owns the schedule.
+#
+# Two things must hold: the public API answers "running": true, and the
+# APRS-IS feed is moving - the packet counter grows over 90 s. A
+# process that is up with a dead feed would pass the first test alone.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: API answers and the feed is moving
+        env:
+          URL: https://map.aprsagent.com/api/counters
+        run: |
+          get() { curl -fsS --retry 3 --retry-delay 10 --max-time 20 "$URL"; }
+          a=$(get) || { echo "::error::API did not answer: $URL"; exit 1; }
+          echo "first:  $a"
+          echo "$a" | jq -e '.running == true' >/dev/null \
+            || { echo "::error::agent reports running != true"; exit 1; }
+          sleep 90
+          b=$(get) || { echo "::error::API stopped answering"; exit 1; }
+          echo "second: $b"
+          p1=$(echo "$a" | jq '.packets'); p2=$(echo "$b" | jq '.packets')
+          if [ "$p2" -le "$p1" ]; then
+            echo "::error::feed not moving: packets $p1 -> $p2 in 90 s"
+            exit 1
+          fi
+          echo "ok: packets $p1 -> $p2 in 90 s"

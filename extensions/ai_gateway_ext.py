@@ -1388,7 +1388,17 @@ class AIGateway(Extension):
             "Be concise and direct. "
             "Use only ASCII characters (a-z, A-Z, 0-9, punctuation). "
             "No emoji, no unicode. "
-            "Answer in the same language as the question."
+            "Answer in the same language as the question. "
+            # Answers reach radios through other stations' IS->RF igates, so
+            # they go out under those operators' licences (2026-09-30).
+            "Your answer may be transmitted on amateur radio by other "
+            "stations' igates, under their licences, so keep it fit for the "
+            "amateur service: no advertising or selling on anyone's behalf "
+            "(talking about radio equipment is fine), no profanity, insults "
+            "or sexual content, no political or religious propaganda, no "
+            "music or lyrics, and nothing encoded to hide its meaning. "
+            "If asked for such content, say briefly that it does not belong "
+            "on amateur radio."
         )
         if sender:
             # The sender's callsign is in the packet header, so asking them for
