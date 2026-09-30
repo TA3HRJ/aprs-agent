@@ -51,12 +51,11 @@ What is left, in the order it is worth doing:
    also answers at https://map.ta3hx.ampr.org over 44Net, same page, same
    anonymised log. Nothing in the agent changed. Host details are outside
    the repository.
-9. **RF field tests of v3.2.137/138 — on hold** by the operator since
-   2026-09-28. Live and checked offline; what the air has not shown yet is a
-   resent part reaching a radio and whether 3 s of turnaround is enough.
-   Resume only when he does, and read the setup off the packet log rather
-   than assuming it. The updated APRSSwift was in use for the last tries and
-   none of them reached APRS-IS, so its ack behaviour is still unknown.
+9. **RF field tests.** Resend proven on air 2026-09-30 (v3.2.139): a
+   second part lost on RF was resent at +40 s and acked (HANDOFF has the
+   packets). Still open: the date/time answer on air, and whether the updated
+   APRSSwift acks. Tests run when the operator runs them; read the setup off
+   the packet log rather than assuming it.
 10. **DMWGPT in WB2OSZ's "APRS Information Services" list — stalled.** The
     address on the page bounced and the APRS Foundation form would not take
     the message (2026-09-29). Nothing to do until a working route turns up.
