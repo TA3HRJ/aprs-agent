@@ -190,6 +190,27 @@ _GRID_IN_TEXT = re.compile(r"\b([A-R]{2}[0-9]{2}(?:[A-X]{2})?)\b")
 _POSTCODE_IN_TEXT = re.compile(
     r"\b[A-Z]{1,2}[0-9][0-9A-Z]?\s+[0-9][A-Z]{2}\b")
 
+# A place named in the question that this program cannot read: "for
+# Flemington", "in Wakefield", "around 21921" (a US ZIP), "Izmir'de". There is
+# no geocoder (F-2026-09-20-04), so such a question is answered from the
+# sender's own position - and has to say the place was not read. KE2AHQ-8 and
+# KC3NZY-5 were answered "from you" with nothing more (F-2026-10-04-02).
+_PLACE_WORD = re.compile(
+    r"\b(?:for|in|at|near|around|of)\s+(?!(?:me|my|here|you|your|the|this|"
+    r"today|tonight|tomorrow|now|celsius|fahrenheit|metric|english|turkish|"
+    r"general|qth|grid|locator)\b)[A-Za-z][A-Za-z.'-]{2,}", re.I)
+# "to" only before a capital: "nearest igate to Flemington", not "how to read".
+_PLACE_TO = re.compile(r"\bto\s+(?!(?:Me|My|You|Your|The)\b)[A-Z][A-Za-z.'-]{2,}")
+_PLACE_ZIP = re.compile(r"\b[0-9]{5}(?:-[0-9]{4})?\b")
+_PLACE_TR = re.compile(r"\b[A-Z][a-z]+'(?:da|de|ta|te|dan|den|tan|ten)\b")
+_PLACE_UNREAD = " (I can't read place names)"
+
+
+def _names_place(question: str) -> bool:
+    """Whether the question names a place or postcode the gateway cannot read."""
+    return bool(_PLACE_WORD.search(question) or _PLACE_TO.search(question)
+                or _PLACE_ZIP.search(question) or _PLACE_TR.search(question))
+
 # Beyond this it is somebody else's weather. Overridable per instance as
 # wx_radius_km: measured on the live registry, 235 stations sat within
 # 100 km of this operator and not one of them measured weather; the
@@ -922,6 +943,8 @@ class AIGateway(Extension):
                 return None
             if me and me.get("lat") is not None:
                 origin, origin_note = (me["lat"], me["lon"]), "your last position"
+        own = origin_note == "your last position"
+        unread = own and _names_place(question)
         if origin is None:
             return ("I do not know where you are and I cannot look up place "
                     "names. Send a grid like KM38, or use a weather service.")
@@ -943,8 +966,8 @@ class AIGateway(Extension):
         self.log("wx lookup: %s -> %s at %.0fkm"
                  % (sender_full, rec.get("callsign"), dist_km))
         return _wx_answer(rec, dist_km,
-                          "you" if origin_note == "your last position"
-                          else origin_note)
+                          ("you" + (_PLACE_UNREAD if unread else ""))
+                          if own else origin_note)
 
     def _load_optout(self) -> set:
         """Callsigns that asked to be left out, from the file beside the config."""
@@ -1125,6 +1148,8 @@ class AIGateway(Extension):
             whence = grid.group(1)
         if origin is None:
             origin = self._sender_origin(sender_full, sender_base)
+            if _names_place(question):
+                whence += _PLACE_UNREAD
         if origin is None:
             return ("I do not know where you are - I have no position for "
                     "your callsign. Send a beacon first, or name a grid.")

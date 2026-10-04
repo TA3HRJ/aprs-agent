@@ -279,13 +279,25 @@ async def run() -> int:
         problems.append("a listing too long for one packet lost the full "
                         "provenance sentence: %r" % a)
 
+    # 10 - a place named in an igate question is said to be unread, as in the
+    # weather lookup (F-2026-10-04-02); without one, no note.
+    sent, calls = [], {"n": 0}
+    gw = new_gateway(sent, calls, tmp)
+    a = await ask(gw, sent, "KE4PIC", "nearest igate to Flemington NJ")
+    if "place name" not in a.lower():
+        problems.append("a named place was answered from the sender's "
+                        "position without saying so: %r" % a)
+    a = await ask(gw, sent, "KE4PIC", "what is my nearest igate")
+    if "place name" in a.lower():
+        problems.append("a plain igate question carried the place note: %r" % a)
+
     for f in tmp.iterdir():
         f.unlink()
     tmp.rmdir()
 
     for p in problems:
         print("FAIL: " + p)
-    print("checked 9 cases - %d failed" % len(problems))
+    print("checked 10 cases - %d failed" % len(problems))
     return 1 if problems else 0
 
 

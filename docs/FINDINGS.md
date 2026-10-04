@@ -6528,3 +6528,15 @@ Not fixed yet. The fix belongs in the refusal, not in geocoding: say
 "measured from your last position - I cannot read place names" when the
 question names a place (`for X`, `in X`, `around NNNNN`) and gives no grid.
 Where KE2AHQ-8 actually was is not known; the raw packet log had rotated.
+
+**Fixed 2026-10-05, v3.2.144.** `_names_place()` recognises a place the
+gateway cannot read - a word after for/in/at/near/around/of (minus
+me/my/here/today/celsius and the like), a capitalised word after "to", a
+five-digit ZIP, a Turkish locative (`Izmir'de`). When the answer is measured
+from the sender's own position and the question named such a place, "from
+you" becomes "from you (I can't read place names)", in the weather and the
+igate answers alike. No geocoding was added. `check_weather` gained eight
+cases (four places, four plain questions), `check_lookup` one (case 10);
+**seen failing** against v3.2.143 with 4 and 1. A first version of the new
+weather cases bound the output list by closure and collected the previous
+case's resends; the check binds it per instance now.
