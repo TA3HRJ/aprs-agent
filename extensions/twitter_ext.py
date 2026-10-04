@@ -23,7 +23,15 @@ import asyncio
 from typing import Optional
 
 import aprslib
-import tweepy
+
+# Optional since 2026-10-04: tweepy and the packages it pulls in (requests,
+# oauthlib, urllib3) were installed everywhere for an extension most
+# instances never enable, and carried their advisories with them. Absent, the
+# program runs and only enabling Twitter fails, with a message saying why.
+try:
+    import tweepy
+except ImportError:
+    tweepy = None
 
 from . import Extension
 from config import strip_ssid
@@ -44,6 +52,9 @@ class Twitter(Extension):
     """
 
     def __init__(self, config: dict):
+        if tweepy is None:
+            raise RuntimeError("Twitter extension needs tweepy, which is not "
+                               "installed: pip install tweepy")
         self._config = config
         self._validate()
         self.log(
