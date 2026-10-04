@@ -2293,6 +2293,7 @@ async def info(request: web.Request) -> web.Response:
         "public_title": cfg.get("public_title", ""),
         "public_subtitle": cfg.get("public_subtitle", ""),
         "public_home_url": cfg.get("public_home_url", ""),
+        "public_contact_email": cfg.get("public_contact_email", ""),
         # Which modules are actually doing something right now — none of
         # this is sensitive (no keys/paths), so it's exposed on the public
         # app too. Kept separate from the "Running" action bar, which the

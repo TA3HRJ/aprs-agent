@@ -6485,3 +6485,46 @@ longer phrase and still fits two parts.
 `TCPIP*`, `qAS` with no hops) and `check_resend` one (a digipeated `qAS`
 sender waits the turnaround). **Seen failing** against v3.2.138: the Chile
 packet answered *"via APRS-IS"*, and its first part left after 0.00 s.
+
+---
+
+## F-2026-10-04-01 — the kept Messages view showed two days as one, with no dates
+
+The operator sent a screenshot of the Messages tab, "Kept (14 days)" view,
+and pointed out it carried no date. The rows were from two days - KE2AHQ-8
+on 2 October 19:40-19:48 CEST and KC3NZY-5 on 3 October 23:33 - shown as
+bare clock times, newest first, so the older conversation looked like the
+later part of the same evening. The dates came only from the journal.
+
+`fmtClock()` was `toLocaleTimeString` and nothing else. The same function
+drew "last seen" in the off-the-air list, and the station detail's "first
+seen" - often weeks old - had its own copy of the same call.
+
+### What changed (v3.2.141)
+
+`fmtClock()` returns the time alone for today, and the date before it
+otherwise (`02.10 20:44:27` in a Turkish browser, the browser's own date
+order elsewhere), with the year when it is not this year. "First seen" goes
+through it. `tools/check_timestamp_date.py`: `toLocaleTimeString` only in
+`fmtClock`, which must show a date and compare with today, and the three
+stamps must use it. **Seen failing** against v3.2.140 with 4 problems.
+
+## F-2026-10-04-02 — a place name or a US ZIP code is answered from the sender's position, silently
+
+Same screenshot. KE2AHQ-8 asked "weather for flemington, nj please" and was
+answered `KD2CRT 22km from you` - the station nearest the sender's last
+position (`wx lookup: KE2AHQ-8 -> KD2CRT at 22km`), not Flemington.
+KC3NZY-5 asked "Weather around 21921", a US ZIP code, and got the same kind
+of answer.
+
+The design is right and old: no geocoding, a place name is refused rather
+than guessed (`_wx_lookup` docstring; F-2026-09-20-04, "no place names"). The hole
+is the detection. `_POSTCODE_IN_TEXT` matches only the UK shape (`AB1 2CD`),
+so a town name or a five-digit ZIP falls through to the sender's own
+position and the answer does not say it ignored what was asked. "From you"
+is literally true and still not the answer to the question.
+
+Not fixed yet. The fix belongs in the refusal, not in geocoding: say
+"measured from your last position - I cannot read place names" when the
+question names a place (`for X`, `in X`, `around NNNNN`) and gives no grid.
+Where KE2AHQ-8 actually was is not known; the raw packet log had rotated.

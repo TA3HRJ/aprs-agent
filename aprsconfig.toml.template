@@ -83,6 +83,11 @@ public_subtitle = ""
 # Optional "Home" link in the public header, e.g. "https://example.org/"
 # Empty = no link shown.
 public_home_url = ""
+# Optional data-contact address. When set, the public page's About box shows
+# what this program keeps (station records with no time limit, messages and
+# history for 14 days, NOLOOKUP) and where to ask for a record to be removed.
+# Empty = no data note.
+public_contact_email = ""
 
 
 # =============================================================================

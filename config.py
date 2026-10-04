@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.140"
+VERSION = "3.2.141"
 
 # ── Secret handling for the HTTP API ────────────────────────────────────────
 # print_config()'s masking below is for human eyes: it keeps the first and last
@@ -137,6 +137,10 @@ DEFAULTS: dict[str, Any] = {
     # belongs to. Empty = no link, which is the right default: this page is
     # often the only thing an operator publishes.
     "public_home_url": "",
+    # Where a visitor asks about, or for removal of, the data this instance
+    # keeps. Empty = the About box shows no data note: the retention it states
+    # is this program's, the address is the operator's own.
+    "public_contact_email": "",
     "monitor": {
         "enabled": False,
         "watch_callsigns": [],
