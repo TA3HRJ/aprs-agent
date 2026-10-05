@@ -552,6 +552,11 @@ class AgentManager:
         # Silence watch (Phase 4): active alert episodes + AI assessments
         self._silence_active: dict[str, float] = {}
         self._silence_ai_notes: dict[str, str] = {}
+        # Every station seen silent in a cell during its current alert episode.
+        # Those no longer silent have come back while the alert ran - one of the
+        # facts that separate drop-outs from an outage (F-2026-10-05-03). Kept
+        # in memory: a restart starts the count again, which only undercounts.
+        self._silence_seen: dict[str, set] = {}
         # Stations that crossed their silence threshold while their cell was
         # alerting and have not been heard since. Deliberately NOT cleared
         # when the cell's alert clears: in the Colombia M7.4 case the cell
@@ -1087,6 +1092,9 @@ class AgentManager:
                     self._silence_deaf_at = 0.0
 
                 alerts = {c["cell"]: c for c in cells if c["alert"]}
+                for cell, c in alerts.items():
+                    self._silence_seen.setdefault(cell, set()).update(
+                        c.get("silent_calls") or [])
 
                 for cell, c in alerts.items():
                     if cell in self._silence_active:
@@ -1131,6 +1139,7 @@ class AgentManager:
                     if cell not in alerts:
                         del self._silence_active[cell]
                         self._silence_ai_notes.pop(cell, None)
+                        self._silence_seen.pop(cell, None)
                         self._log_both(f"[silence] cleared: {cell}")
 
                 # A station leaves the missing list only by being heard again —
@@ -1441,40 +1450,53 @@ class AgentManager:
                 + "\n".join(lines) + "\n")
 
     def _onset_context(self, c: dict) -> str:
-        """How far apart the stations actually fell silent.
+        """When the stations fell silent, stated as facts for the model.
 
-        The note used to assert that stations "went silent simultaneously"
-        without ever checking. Sometimes that was true to nine seconds, and
-        sometimes the onsets were spread over eleven hours — the opposite
-        signature — and the sentence read the same either way. A downstream
-        reader then repeated the word while printing the numbers that
-        contradicted it. So the spread is measured and stated, and the model is
-        told what it means.
+        v3.2.12 measured the spread because the note claimed "simultaneously"
+        without checking (F-2026-08-12-01). It then told the model that a wide
+        spread rules out one power event, and 98.8 % of notes over two weeks
+        repeated it. It does not rule it out: after a mains
+        failure, stations on UPS, battery or solar stop later than the
+        unprotected ones, minutes to hours apart (F-2026-10-05-03, corrected).
+        So the spread, the opening and the returns are given as facts, with
+        what each can and cannot show, and the verdict is left to the reading.
+        Measured from last packets (onset_facts), not last packet + threshold.
         """
+        calls = c.get("silent_calls") or []
         try:
-            state = self._station_db.silence_state(c.get("silent_calls") or [])
+            f = self._station_db.onset_facts(calls)
         except Exception:
             return ""
-        onsets = sorted(s["since"] for s in state.values() if s.get("since"))
-        if len(onsets) < 2:
+        if f["n"] < 2:
             return ""
-        spread = int(onsets[-1] - onsets[0])
+        spread = f["spread_s"]
         if spread < 120:
             human, reading = f"{spread} seconds", (
-                "essentially simultaneous — consistent with one shared path "
-                "or supply failing at once")
+                "essentially simultaneous - consistent with one shared path or "
+                "supply failing at once")
         elif spread < 1800:
             human, reading = f"{spread // 60} minutes", (
-                "close together — a shared cause is plausible, though not "
-                "the instant drop a single feed failure produces")
+                "close together - a shared cause is plausible")
         else:
             human = (f"{spread // 3600} hours {(spread % 3600) // 60} minutes"
                      if spread >= 3600 else f"{spread // 60} minutes")
-            reading = ("far apart — these stations did NOT go down together, "
-                       "which argues against one power or infrastructure "
-                       "event and towards independent or gradual causes")
-        return (f"Onsets span {human} between the first and last station: "
-                f"{reading}.\n")
+            reading = (
+                "spread out. That alone does not separate independent "
+                "drop-outs from one outage: after a mains failure, stations on "
+                "UPS, battery or solar stop later than unprotected ones, minutes "
+                "to hours apart, a solar site at dusk")
+        out = (f"Last packets of the silent stations span {human} from first "
+               f"to last: {reading}.\n"
+               f"{f['opening']} of {f['n']} stopped within "
+               f"{max(1, f['window_s'] // 60)} minutes of the first. A mains cut "
+               f"stops every unprotected station at once; a lone first drop "
+               f"fits drop-outs, or a cell whose stations are all backed up.\n")
+        back = sorted(self._silence_seen.get(c.get("cell", ""), set()) - set(calls))
+        if back:
+            out += (f"{len(back)} station(s) came back while this alert ran "
+                    f"({', '.join(back[:5])}): that fits drop-outs, but power "
+                    f"returning or sunrise on a solar site does the same.\n")
+        return out
 
     def _history_context(self, c: dict) -> str:
         """What this cell has looked like before now.
@@ -2656,6 +2678,15 @@ async def get_silence(request: web.Request) -> web.Response:
         # Only alerting cells: _cell_quakes is cheap (one shared cached feed)
         # but the payload is not, on a worldwide feed.
         c["quakes"] = _cell_quakes(c["cell"], c.get("since")) if c["alert"] else []
+        # When they stopped, as facts: spread and opening from the last
+        # packets, and who has come back while the alert ran. Alerting cells
+        # only - a handful, each a dict lookup per silent station.
+        if c["alert"]:
+            o = mgr._station_db.onset_facts(c.get("silent_calls") or [])
+            now_silent = set(c.get("silent_calls") or [])
+            o["returned"] = sorted(mgr._silence_seen.get(c["cell"], set())
+                                   - now_silent)
+            c["onset"] = o
     # F-35. An empty `cells` used to be the only thing the map was told, and it
     # drew the only conclusion available: nothing is silent anywhere. These two
     # fields let it say the true thing instead — that we cannot hear, since

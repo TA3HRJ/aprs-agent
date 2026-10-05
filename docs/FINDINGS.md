@@ -6722,3 +6722,14 @@ mains cut, which should take every unprotected station at once, but a cell
 whose stations are all protected would show the same. What they can do is
 be stated as facts, beside the spread, so a reader weighs them rather than
 a rule deciding for them.
+
+**Done 2026-10-05, v3.2.148.** No gate. `StationDB.onset_facts()` measures
+the spread and the opening from last packets; the watch loop keeps every
+station seen silent during an episode, so `/api/silence` carries
+`onset: {n, spread_s, opening, window_s, returned}` on alerting cells. The
+popup states them ("Stopped over 6.1 h; 1 of 4 within 40 min of the first
+- 3 back during this alert") and, past 30 min of spread, that a spread does
+not rule out one outage because UPS-, battery- and solar-backed stations
+stop later. `_onset_context` gives the model the same three facts with what
+each can and cannot show, and no longer says a wide spread argues against
+one outage. `tools/check_onset_facts.py`, seen failing (9) against v3.2.147.

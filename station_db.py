@@ -2964,6 +2964,34 @@ class StationDB:
                                 -x["ratio"]))
         return out
 
+    def onset_facts(self, callsigns) -> dict[str, Any]:
+        """When a cell's silent stations stopped, as facts rather than a verdict.
+
+        Measured from each station's last packet. silence_state()'s `since`
+        adds the station's own threshold (3x its interval), which makes a
+        10-minute and a 30-minute beacon that stopped together look an hour
+        apart. `opening` counts the stations that stopped within one beacon
+        interval (the longest among them, at least 15 min) of the first.
+
+        A wide spread does not mean independent causes (F-2026-10-05-03,
+        corrected): after a mains failure, stations on UPS, battery or solar
+        stop later than the unprotected ones, minutes to hours apart.
+        """
+        seen = []
+        for call in callsigns:
+            r = self._stations.get(call)
+            if r is not None and r.last_seen:
+                seen.append((r.last_seen, r.ema_interval_s or 0.0))
+        if not seen:
+            return {"n": 0, "spread_s": 0, "opening": 0, "window_s": 0}
+        seen.sort()
+        first = seen[0][0]
+        window = max(900.0, max(iv for _, iv in seen))
+        return {"n": len(seen),
+                "spread_s": int(seen[-1][0] - first),
+                "opening": sum(1 for t, _ in seen if t - first <= window),
+                "window_s": int(window)}
+
     def silence_state(self, callsigns) -> dict[str, dict[str, Any]]:
         """Current silence detail for a named set of stations.
 

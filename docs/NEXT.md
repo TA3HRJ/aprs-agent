@@ -63,14 +63,10 @@ What is left, in the order it is worth doing:
     server change. **Declined by the operator — no risk taken.** Do not
     re-propose unless he raises it.
 
-13. **Silence alerts and staggered onsets - decision open.** The last
-    packets of every live alert's silent stations spread over 1.9-19 h
-    (F-2026-10-05-03), but a mains failure with UPS, battery or solar
-    backup staggers the same way, so the spread does not show independence
-    and the gate first proposed is withdrawn (correction line there). What
-    is left to decide: state the opening cluster and the returns in the
-    popup and the AI note as facts, and stop the note reading "far apart"
-    as "no single outage".
+13. ~~**Silence alerts and staggered onsets.**~~ Done in v3.2.148: the
+    spread, the opening and the returns are stated as facts in the popup and
+    the AI note, with UPS / battery / solar named; no gate (F-2026-10-05-03).
+    Watch: whether the notes stop reading every spread as independence.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.
