@@ -159,6 +159,15 @@ _ERR_RE = re.compile(r"error|fail|fatal", re.I)
 
 _MAX_STATIONS = 200     # last-heard chip table (most recent N callsigns)
 _STATS_INTERVAL = 2.0   # seconds between stats pushes to browsers
+# An alert episode opens only once the cell has met the rule on every scan for
+# this long, and survives a dip below it for up to _SILENCE_HOLD_S. Replayed
+# over two weeks (F-2026-10-05-05) the pair cut alert onsets 38 %, 127 -> 79
+# a day: one-scan blips never announced, and a cell flickering across the
+# threshold (KM59, five onsets on 2026-10-03) announced once. The price is
+# about ten minutes on a real event, and a new event in the same cell within
+# the hour riding on the open episode.
+_SILENCE_CONFIRM_S = 600
+_SILENCE_HOLD_S = 3600
 _AI_NOTE_COOLDOWN_S = 3 * 3600   # reuse a silence/prop AI note this long
 
 # ── Earthquake correlation (USGS, free, no API key, refreshed every minute)
@@ -557,6 +566,10 @@ class AgentManager:
         # facts that separate drop-outs from an outage (F-2026-10-05-03). Kept
         # in memory: a restart starts the count again, which only undercounts.
         self._silence_seen: dict[str, set] = {}
+        # A: when a cell first met the alert rule, while it waits out
+        # _SILENCE_CONFIRM_S. B: when an open episode's cell fell below it.
+        self._silence_pending_since: dict[str, float] = {}
+        self._silence_dip: dict[str, float] = {}
         # Stations that crossed their silence threshold while their cell was
         # alerting and have not been heard since. Deliberately NOT cleared
         # when the cell's alert clears: in the Colombia M7.4 case the cell
@@ -1096,10 +1109,9 @@ class AgentManager:
                     self._silence_seen.setdefault(cell, set()).update(
                         c.get("silent_calls") or [])
 
-                for cell, c in alerts.items():
-                    if cell in self._silence_active:
-                        continue                     # already alerted this episode
-                    self._silence_active[cell] = time.time()
+                opened, cleared = self._silence_episodes(set(alerts), time.time())
+                for cell in opened:
+                    c = alerts[cell]
                     for _call in c.get("silent_calls", []):
                         self._missing.setdefault(
                             _call, {"cell": cell, "flagged": time.time()})
@@ -1134,13 +1146,9 @@ class AgentManager:
                             except Exception as e:
                                 self._log_both(f"[silence] notification error: {e}")
 
-                # Episode over: cell recovered — allow future re-alerts
-                for cell in list(self._silence_active):
-                    if cell not in alerts:
-                        del self._silence_active[cell]
-                        self._silence_ai_notes.pop(cell, None)
-                        self._silence_seen.pop(cell, None)
-                        self._log_both(f"[silence] cleared: {cell}")
+                # Episode over: below the rule for longer than _SILENCE_HOLD_S
+                for cell in cleared:
+                    self._log_both(f"[silence] cleared: {cell}")
 
                 # A station leaves the missing list only by being heard again —
                 # independent of whether its cell is still alerting.
@@ -1448,6 +1456,46 @@ class AgentManager:
             lines.append(f"  - {_fmt_quake(q)}, {when}")
         return ("Recent seismic activity near this cell (USGS):\n"
                 + "\n".join(lines) + "\n")
+
+    def _silence_episodes(self, alerting: set, now: float
+                          ) -> "tuple[list, list]":
+        """Open and close alert episodes; returns (opened, cleared) cells.
+
+        A cell meeting the rule waits _SILENCE_CONFIRM_S, alerting on every
+        scan, before its episode opens - dated from when it first met the
+        rule. An open episode outlives a dip below the rule for up to
+        _SILENCE_HOLD_S; coming back within that continues it. Pure state, no
+        I/O, so the rule can be driven with a fake clock
+        (tools/check_silence_episodes.py).
+        """
+        opened, cleared = [], []
+        for cell in list(self._silence_pending_since):
+            if cell not in alerting:
+                del self._silence_pending_since[cell]
+                if cell not in self._silence_active:
+                    self._silence_seen.pop(cell, None)
+        for cell in alerting:
+            self._silence_dip.pop(cell, None)
+            if cell in self._silence_active:
+                continue
+            first = self._silence_pending_since.setdefault(cell, now)
+            if now - first < _SILENCE_CONFIRM_S:
+                continue
+            del self._silence_pending_since[cell]
+            self._silence_active[cell] = first
+            opened.append(cell)
+        for cell in list(self._silence_active):
+            if cell in alerting:
+                continue
+            dip = self._silence_dip.setdefault(cell, now)
+            if now - dip < _SILENCE_HOLD_S:
+                continue
+            del self._silence_active[cell]
+            self._silence_dip.pop(cell, None)
+            self._silence_ai_notes.pop(cell, None)
+            self._silence_seen.pop(cell, None)
+            cleared.append(cell)
+        return opened, cleared
 
     def _onset_context(self, c: dict) -> str:
         """When the stations fell silent, stated as facts for the model.

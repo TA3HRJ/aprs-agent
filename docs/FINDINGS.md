@@ -6864,3 +6864,15 @@ were 96 note calls and 49 cached reuses, because `_AI_NOTE_COOLDOWN_S`
 (3 h) already reuses a note on re-alert. Telegram goes out as an hourly
 digest (`silence_digest_mins = 60`), so the operator sees the count inside
 fewer messages, not fewer messages.
+
+**Lever 1 applied, v3.2.150 (A + B 1 h).** `AgentManager._silence_episodes()`
+decides openings and closings: a cell must meet the alert rule on every scan
+for `_SILENCE_CONFIRM_S` = 600 s before its episode opens, dated from the
+first crossing; an open episode survives a dip for `_SILENCE_HOLD_S` =
+3600 s. The watch loop scans every 5 min, so "two consecutive runs" of the
+replay (snapshots about 12 min apart) is written as a time, 10 min, not a
+scan count. It governs what is announced - the log line, the AI note, the
+notification, the still-missing list. The map's alert list still shows the
+cell from the first scan that meets the rule, since that is the measurement.
+`tools/check_silence_episodes.py` drives it with a fake clock; **seen
+failing** against v3.2.149 (no such method).
