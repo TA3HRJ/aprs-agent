@@ -229,6 +229,9 @@ body.public .stat-bar .cell.diag{display:none!important}
 .miss-call{font-weight:600;color:#f5c211;font-family:'Consolas',monospace}
 .miss-dur{color:#f88;font-variant-numeric:tabular-nums}
 .miss-meta{color:var(--dim)}
+.miss-call,.miss-cell{cursor:pointer}
+.miss-call:hover,.miss-cell:hover{text-decoration:underline}
+.miss-toggle{color:#8ab4f8;margin-left:6px}
 .sil-quake{color:#f5c211;font-size:11px}
 /* Evidence actions sit at the foot of the popup, under a rule: they are about
    the popup's data, not more of it. */
@@ -1045,7 +1048,7 @@ const S={en:{
   miss_sum:"{n} stations still off the air",miss_sum_one:"1 station still off the air",
   miss_title:"Still off the air ({n})",
   miss_hint:"— no APRS signal since the time shown. Not a confirmed emergency.",
-  miss_since:"no signal for",
+  miss_since:"no signal for",miss_total:"({t} in all)",miss_all:"show all {t}",miss_recent:"last 7 days only",
   leg_prop1:"Opening < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
   leg_prop_young:"Faint: gate too new to have a normal",
   prop_link:"Realised RF link — possible band opening",
@@ -1192,7 +1195,7 @@ const S={en:{
   miss_sum:"{n} istasyon hâlâ yayında değil",miss_sum_one:"1 istasyon hâlâ yayında değil",
   miss_title:"Hâlâ yayında değil ({n})",
   miss_hint:"— gösterilen saatten beri APRS sinyali yok. Teyit edilmiş bir acil durum değildir.",
-  miss_since:"sinyal yok:",
+  miss_since:"sinyal yok:",miss_total:"(toplam {t})",miss_all:"{t} istasyonun tümünü göster",miss_recent:"yalnızca son 7 gün",
   leg_prop1:"Açılma < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
   leg_prop_young:"Soluk: gate'in henüz bir olağanı yok",
   prop_link:"Gerçekleşmiş RF linki — olası bant açılması",
@@ -2504,35 +2507,70 @@ function restorePanelState(){
 }
 // Triage list: backend sorts by wall-clock time since the station was last
 // actually heard, longest first — that is the number a responder acts on.
+// Stations leave this list only when heard again - on purpose, from the
+// Colombia M7.4 case: the ones that never come back are the ones that matter.
+// So nothing is dropped, but on 2026-10-05 it held 1,692 stations, 300 of them
+// over a month old, as unlinked text. The default view is the last 7 days by
+// when each was added; the rest is one click away, and the choice is kept.
+const MISS_RECENT_S=7*86400;
+let missAll=false;try{missAll=localStorage.getItem('aprs.missAll')==='1'}catch(e){}
+let missRows=[],missLast=[];
 function renderMissing(list){
   const p=$('miss-panel'),s=$('miss-sum');
   if(!p)return;
+  missLast=list||[];
   if(!list||!list.length){
     p.hidden=true;p.innerHTML='';
     if(s){s.hidden=true;s.textContent=''}
     return;
   }
+  const now=Date.now()/1000;
+  const recent=list.filter(m=>now-(m.flagged||m.last_seen||0)<=MISS_RECENT_S);
+  const shown=missAll?list:recent;
+  const more=list.length>recent.length?' '+t('miss_total').replace('{t}',list.length):'';
   if(s){
-    s.textContent='🟡 '+t(list.length===1?'miss_sum_one':'miss_sum').replace('{n}',list.length)
+    s.textContent='🟡 '+t(recent.length===1?'miss_sum_one':'miss_sum').replace('{n}',recent.length)+more
       +(document.body.classList.contains('ms-open')?' ▴':' ▾');
     s.hidden=false;
   }
-  const now=Date.now()/1000;
-  let h='<div class="miss-head">'+t('miss_title').replace('{n}',list.length)
-       +' <span class="miss-hint">'+t('miss_hint')+'</span></div>';
-  for(const m of list){
+  let h='<div class="miss-head">'+t('miss_title').replace('{n}',shown.length)
+       +' <span class="miss-hint">'+t('miss_hint')+'</span>';
+  if(list.length>recent.length)
+    h+=' <a href="#" class="miss-toggle">'+esc(missAll?t('miss_recent'):t('miss_all').replace('{t}',list.length))+'</a>';
+  h+='</div>';
+  missRows=shown;
+  shown.forEach((m,i)=>{
     h+='<div class="miss-row">'
-      +'<span class="miss-call">'+esc(m.call)+'</span>'
+      +'<span class="miss-call" data-miss="'+i+'" title="'+escA(t('al_go'))+'">'+esc(m.call)+'</span>'
       +'<span class="miss-dur">'+t('miss_since')+' '
         +fmtAgoLong(Math.max(0,Math.floor(now-m.last_seen)))+'</span>'
-      +'<span class="miss-meta">'+esc(m.cell||'')
+      +'<span class="miss-meta">'+(m.cell?'<span class="miss-cell" data-loc="'+escA(m.cell)+'">'+esc(m.cell)+'</span>':'')
         +(m.type?' · '+esc(m.type):'')
         +' · '+fmtClock(m.last_seen)+' ('+t('tz_local')+')</span>'
       +'</div>';
-  }
+  });
   p.innerHTML=h;
   p.hidden=false;
 }
+// A callsign goes to the station, a cell code to its square - the same moves
+// the map search makes, from whichever tab the list was read on.
+function missGo(el){
+  if(activeTab!=='map')switchTab('map');
+  const loc=el.getAttribute('data-loc');
+  if(loc){mapLocGo(loc);return}
+  const m=missRows[+el.getAttribute('data-miss')];
+  if(!m)return;
+  mapSearchGo({callsign:m.call,lat:m.lat,lon:m.lon,
+               has_position:m.lat!=null&&m.lon!=null});
+}
+document.addEventListener('click',e=>{
+  const tg=e.target.closest&&e.target.closest('#miss-panel .miss-toggle');
+  if(tg){e.preventDefault();missAll=!missAll;
+    try{localStorage.setItem('aprs.missAll',missAll?'1':'0')}catch(x){}
+    renderMissing(missLast);return}
+  const el=e.target.closest&&e.target.closest('#miss-panel [data-miss], #miss-panel [data-loc]');
+  if(el)missGo(el);
+});
 function renderAlerts(cells){
   const on=cells.filter(c=>c.alert);
   const p=$('alert-panel');
