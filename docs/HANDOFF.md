@@ -16,7 +16,7 @@ first. If it disagrees with either of those, they win.
 | APRS-IS login | `TA3HX-5` since 2026-09-17 (was `TA3HRJ-5`); the software side of the callsign change shipped in v3.2.116, plan outside the repo in `CALLSIGN-TA3HX-APRS-AGENT.md` |
 | neighbours on the VPS | Since 2026-09-28 the VPS also hosts a public web SDR and a 44Net tunnel, and the old `ta3hrj` host names redirect (301) to the `ta3hx` ones. None of it carries the agent's traffic; the SDR is capped so it cannot starve the agent. Host details are kept outside the repository |
 | DB backup | nightly 04:17, `/usr/local/sbin/aprs-db-backup` from `/etc/cron.d/aprs-db-backup`, online backup API + integrity_check, 7 kept in `/var/backups/aprs-agent`; since 2026-09-30 a copy is pulled daily to the operator's PC, outside the repo, integrity-checked, 7 kept - six pulls 09-30 to 10-05, all `integrity ok`, 88.6 to 91.4 MB. Never `cp` the live file: since v3.2.130 the database is in **WAL mode**, and while the agent runs committed data can sit in `-wal` beside it. The `-wal` file comes and goes as connections close; ask `PRAGMA journal_mode`, not `ls` |
-| watching | **Both week-long watches are answered (2026-10-05).** AI-note latency: leave the 20 s timeout - p99 1.9 s over 1,071 notes, failures only in outage windows (F-2026-10-05-01). Sharing the VPS: agent RSS flat at ~1.2 GB after day one, every restart a deploy, neighbour at 140 MB of its 2 GB cap; one global OOM on 2026-09-28 killed a root maintenance `git`, not the agent - run heavy host maintenance memory-capped (F-2026-10-05-02). Still standing: the daily `[health] rss` line; `health.smtp` in `/api/info`, which stays `idle` until the first email is sent |
+| watching | **Read on 2026-10-06, a full day after v3.2.150:** the `[silence] ALERT` count (134 on 2026-10-04; the replay says about 80), whether new AI notes stop reading a spread as independence (v3.2.148; 98.8 % did before), and whether `onset.returned` fills now that the episode memory has run a day. **Open decisions:** F-2026-10-05-05 levers 2 (one novel station) and 3 (young cells). **Both week-long watches are answered (2026-10-05).** AI-note latency: leave the 20 s timeout - p99 1.9 s over 1,071 notes, failures only in outage windows (F-2026-10-05-01). Sharing the VPS: agent RSS flat at ~1.2 GB after day one, every restart a deploy, neighbour at 140 MB of its 2 GB cap; one global OOM on 2026-09-28 killed a root maintenance `git`, not the agent - run heavy host maintenance memory-capped (F-2026-10-05-02). Still standing: the daily `[health] rss` line; `health.smtp` in `/api/info`, which stays `idle` until the first email is sent |
 | RF field tests | **Resend proven on air, 2026-09-30 08:11 CEST** (v3.2.139): TA3HX-7 `TEST` via `qAR,TA3HX-10`; part 59903 left 3 s after the question and was acked in 6 s; part 59904 drew no ack, was resent at +40 s and acked 5 s later. Still unmeasured: whether 3 s of turnaround is enough on its own - the lost part here was the second, not the first. v3.2.137's date/time answer has not been field-tested since the tests paused on 2026-09-28. Do not restart them unasked, and do not assume which radio, TNC or app is attached when they resume — the test setup changes between sessions; read it off the packet log (path, tocall) or ask |
 | waiting on others | **Tocall** — NEXT item 7, aprs-deviceid#368: still open, no comment, as of 2026-10-05. **APRSSwift's ack** — on 2026-09-27 its RF `Test{001` drew replies but no RF ack (the Anytone acks in 6 s); the only acks for 59892/59893 came 1.5 h later over APRS-IS from aprs.fi's app (`APFII0`) under the same call. Its author has since released an update, and the 2026-09-28 tests ran on it; **none of them put a TA3HX-4 packet into APRS-IS** (packets.log, 2026-09-29), so whether the update acks is not known. If it does not, v3.2.138 resends each part three times though it arrived — expected, not a fault. **DMWGPT in WB2OSZ's "APRS Information Services" list** (how.aprs.works) — not sent: the address on the page bounced and the APRS Foundation's contact form, which runs the site, would not accept the message (both 2026-09-29). No working route known; draft kept outside the repo. **The data contact** is set on the VPS (`public_contact_email`) and shown on both About boxes and on the landing page |
 | deploy | commit → push master → tag `vX.Y.Z` → `systemctl start aprs-update.service` on the VPS. Nothing else |
@@ -680,6 +680,20 @@ in F-2026-08-25-02 rather than settled inside someone else's fix.
 
 Each of these cost real time. They are in `FINDINGS.md` in full; this is the
 short form.
+
+**Root-level `test_*.py` are not tests.** `test_twitter.py` reads the live
+keys in the local `aprsconfig.toml`, logs in as @ta3hx_radio and posts a
+real tweet. It was run blind on 2026-10-04 to check the tweepy change; the
+tweet did not go out, by luck (credits depleted). Only `tools/check_*.py`
+are offline. Read a script before running it.
+
+**A spread of silence onsets is not independence.** One mains failure stops
+unprotected stations at once and UPS-, battery- and solar-backed ones
+minutes to hours later. A gate on the spread was proposed on 2026-10-05 and
+withdrawn the same day (F-2026-10-05-03, corrected); the operator had
+reasoned it through in an earlier session that left no written trace. Grep
+FINDINGS for the algorithm before proposing a change to it, and when the
+operator recalls a past decision, look for it before arguing.
 
 **A check can go green by being asked an easy question.** `check_prop_bundle`
 exited 0 on 2026-08-22 and 1 on 2026-08-25 with no detector code changing
