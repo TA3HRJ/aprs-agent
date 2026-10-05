@@ -2772,6 +2772,14 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
             state = mgr._station_db.silence_state(c["silent_calls"])
         except Exception:
             state = {}
+        # The same timing facts the popup and the note get (v3.2.148). Two
+        # outside models read v3.2.147 bundles without them and called an
+        # 8.9 h spread evidence against one outage (F-2026-10-05-03).
+        o = mgr._station_db.onset_facts(c.get("silent_calls") or [])
+        o["returned"] = sorted(mgr._silence_seen.get(cell, set())
+                               - set(c.get("silent_calls") or []))
+        c = dict(c)                  # the cached cell is shared; copy first
+        c["onset"] = o
     # The cell's past. A single frame cannot answer "is this the last station
     # still down after the others came back", which is the first thing anyone
     # asks — and a reader who cannot answer it from the file will invent an
@@ -2799,8 +2807,22 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
                 "on_still_missing_list": call in mgr._missing,
             })
             continue
+        # Whether the station's gate fell silent before it. Gemini blamed
+        # KM59 on YM2KF-10 failing as TA2OK's gate; TA2OK had stopped about
+        # 7 h earlier. The gate map was in the bundle, its timing was not.
+        gate = (c.get("gate_of") or {}).get(call)
+        grec = mgr._station_db._stations.get(gate) if gate else None
+        gate_seen = int(grec.last_seen) if grec and grec.last_seen else None
         stations.append({
             **st,
+            "gate": gate,
+            "gate_last_seen": gate_seen,
+            # True only when the gate's last packet is older than the
+            # station's: a gate still heard, or silent only later, did not
+            # take this station down. None when the gate is not in the
+            # registry (a backbone server, an unseen igate): unknown, not no.
+            "gate_stopped_first": (None if gate_seen is None
+                                   else gate_seen < st["last_seen"]),
             "silent_for_s": max(0, now - st["last_seen"]),
             # Counted across stored snapshots: distinguishes a station that
             # never came back from one that goes quiet regularly.
@@ -2863,7 +2885,19 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
                          "fewer than min_silent of them cannot alert",
             "site_radius_m": int(station_db_module._SITE_RADIUS_KM * 1000),
         },
+        "since_means": "A station's `since` is the moment it crossed its "
+                       "silence threshold - last_seen + 3x its own beacon "
+                       "interval (at least 15 min) - not the moment it went "
+                       "quiet. When it stopped is `last_seen`.",
         "caveats": [
+            "Timing does not decide the cause by itself. cell.onset gives the "
+            "spread of the silent stations' last packets, how many stopped "
+            "within one interval of the first (opening) and who came back "
+            "during the alert (returned). A wide spread does not show "
+            "independent causes: after a mains failure, stations on UPS, "
+            "battery or solar stop later than unprotected ones, minutes to "
+            "hours apart. A return fits drop-outs, but power coming back or "
+            "sunrise on a solar site does the same.",
             "Point-in-time snapshot: the cell may have recovered since "
             "generated_at. Use cell_history for what came before it, and do "
             "not infer a past outage the history does not show.",

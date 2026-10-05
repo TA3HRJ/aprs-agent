@@ -2971,7 +2971,9 @@ class StationDB:
         adds the station's own threshold (3x its interval), which makes a
         10-minute and a 30-minute beacon that stopped together look an hour
         apart. `opening` counts the stations that stopped within one beacon
-        interval (the longest among them, at least 15 min) of the first.
+        interval of the first - the first station's own interval, at least
+        15 min. The longest in the cell was used at first, and one station
+        beaconing every 4-6 h stretched the window to hours.
 
         A wide spread does not mean independent causes (F-2026-10-05-03,
         corrected): after a mains failure, stations on UPS, battery or solar
@@ -2986,7 +2988,7 @@ class StationDB:
             return {"n": 0, "spread_s": 0, "opening": 0, "window_s": 0}
         seen.sort()
         first = seen[0][0]
-        window = max(900.0, max(iv for _, iv in seen))
+        window = max(900.0, seen[0][1])
         return {"n": len(seen),
                 "spread_s": int(seen[-1][0] - first),
                 "opening": sum(1 for t, _ in seen if t - first <= window),

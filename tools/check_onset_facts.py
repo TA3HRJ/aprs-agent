@@ -23,6 +23,17 @@ What must hold:
      UPS / battery / solar backup as a reason one outage staggers, and no
      longer says a wide spread argues against one outage
   4. the map popup shows the three facts
+  5. the opening window is the FIRST station's own interval (at least
+     15 min), not the longest in the cell: one station beaconing every
+     4-6 h stretched the window to hours in DM15, FJ09 and JN27
+  6. the evidence bundle ("Copy as AI prompt") carries the same facts and
+     says what a station's `since` is. 2026-10-05: ChatGPT and Gemini, given
+     v3.2.147 bundles for KM59 and LM09, both read an 8.9 h spread as
+     evidence against one outage, and read `since` (last packet + 3x the
+     interval) as the moment each station went quiet
+  7. each silent station in the bundle says whether its gate fell silent
+     before it. Gemini blamed KM59 on YM2KF-10 failing as TA2OK's gate;
+     TA2OK had stopped about 7 h before YM2KF-10 did
 
 Usage:  python tools/check_onset_facts.py
 Exit code 1 on failure.
@@ -69,6 +80,15 @@ def main() -> int:
         if f.get("opening") != 2:
             fails.append("opening %r, expected 2 (the two that stopped within "
                          "the longest interval, 30 min, of the first)" % f.get("opening"))
+        # the first to stop beacons every 10 min; another every 5 h. The window
+        # is the first one's, 15 min, so the 5 h station 40 min later is out
+        put(db, "BB1AA", 8 * 3600, 600)
+        put(db, "BB1AB", 8 * 3600 - 2400, 5 * 3600)
+        put(db, "BB1AC", 2 * 3600, 600)
+        h = db.onset_facts(["BB1AA", "BB1AB", "BB1AC"])
+        if h.get("opening") != 1 or h.get("window_s") != 900:
+            fails.append("opening window taken from the longest interval, not "
+                         "the first station's: %r" % h)
         g = db.onset_facts(["AA1AA"])
         if g.get("n") != 1 or g.get("spread_s") != 0:
             fails.append("a single station: %r" % g)
@@ -83,6 +103,14 @@ def main() -> int:
     for w in ("UPS", "battery", "solar", "onset_facts", "came back"):
         if w not in ctx:
             fails.append("the AI context does not mention %r" % w)
+    k = web.find("async def get_silence_evidence")
+    ev = web[k:web.find("\n@routes", k + 10)] if k >= 0 else ""
+    if 'c["onset"]' not in ev:
+        fails.append("the evidence bundle does not carry the onset facts")
+    if "UPS" not in ev or "since_means" not in ev:
+        fails.append("the evidence bundle does not name backup power or say what `since` is")
+    if "gate_stopped_first" not in ev:
+        fails.append("bundle stations do not say whether their gate fell silent first")
     page = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
     j = page.find("function silPopup")
     pop = page[j:page.find("\nfunction ", j + 10)] if j >= 0 else ""

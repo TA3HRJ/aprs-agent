@@ -6733,3 +6733,58 @@ not rule out one outage because UPS-, battery- and solar-backed stations
 stop later. `_onset_context` gives the model the same three facts with what
 each can and cannot show, and no longer says a wide spread argues against
 one outage. `tools/check_onset_facts.py`, seen failing (9) against v3.2.147.
+
+---
+
+## F-2026-10-05-04 — two outside readings of v3.2.147 bundles repeated the spread error, and one invented a gate failure
+
+The operator ran the silence evidence bundles of KM59 and LM09 (v3.2.147,
+"Copy as AI prompt") through ChatGPT and Gemini and shared the four
+readings for checking. Each reading answered the three questions; what they
+show about the bundle:
+
+**Right, and the bundle earned it.** All four used `recurrence` and
+`novel_stations` well. KM59: TA2GBV (0.793) and TA2OK (0.772) are this
+cell's habitual missing, YM2KF-10 (0.03) the one new face that kept the
+alert. LM09: no novel station, and both noticed `threshold_met: true` with
+`alert: false` - the novelty rule demoting it, read correctly. All four
+discounted the quakes (460-490 km, 7.5-19 h before) as candidates, not
+causes, as the caveat asks.
+
+**Wrong, and the bundle invited it.**
+
+- Both read KM59's 8.9 h spread of onsets as evidence against one outage
+  (ChatGPT "moderate-strong", Gemini "rather than staggering over a 9-hour
+  period"). The bundle carried neither the onset facts of v3.2.148 nor the
+  caveat that UPS-, battery- and solar-backed stations stop later after one
+  mains failure (F-2026-10-05-03, corrected) - those went to the popup and
+  our own note only.
+- Both took each station's `since` as the moment it went quiet ("TA2GBV went
+  silent at epoch 1791150220"). `since` is last packet + 3x the station's
+  own interval: the threshold crossing, which shifts stations of different
+  cadence by different amounts.
+- Gemini blamed KM59 on YM2KF-10 failing as TA2OK's gate. ChatGPT, on the
+  same bundle, pointed out that TA2OK had stopped about 7 h before YM2KF-10.
+  The bundle gave `gate_of` but not whether a gate fell silent before its
+  station, and the gap was filled with a story.
+
+### What changed (v3.2.149)
+
+- The bundle carries `cell.onset` (spread, opening, returned), a
+  `since_means` field, and a first caveat: timing does not decide the cause;
+  a wide spread does not show independence; a return fits drop-outs but
+  also restored power or sunrise on a solar site.
+- Each silent station carries `gate`, `gate_last_seen` and
+  `gate_stopped_first` - true only when the gate's last packet is older
+  than the station's, null when the gate is not in the registry. On a
+  KM59-shaped fixture: TA2OK -> YM2KF-10, `gate_stopped_first: false`.
+- The opening window is the first station's own interval (min 15 min), not
+  the longest in the cell; on the live alerts one 4-6 h beacon had
+  stretched it to hours in DM15, FJ09 and JN27.
+
+`check_onset_facts` gained cases 5-7, **seen failing** (4) against v3.2.148.
+
+**Open, for the operator:** KM59 alerted on one novel station among three,
+with two habitual ones making up the count. Whether a single novel station
+should carry an alert is a detection question, not a wording one, and is
+not touched here.
