@@ -74,6 +74,14 @@ What is left, in the order it is worth doing:
     and 3 (young cells) stay open (F-2026-10-05-05). Watch: the daily count
     of `[silence] ALERT` lines against 2026-10-04's 134.
 
+15. **Propagation detection - to be re-evaluated from the start, later.**
+    F-2026-10-05-06 proposed four more exclusions (impossible-speed jumps,
+    balloon by symbol, Norway L[A-N], sender record in the bundle). The
+    operator declined them for now (2026-10-05): each tightening has cut
+    the count, and four more would leave little to call propagation. The
+    whole approach - what a link has to be to count, and what an opening is
+    - gets a fresh look in a session of its own. Until then: no new rules.
+
 Everything below this block is history — kept for the reasoning, not for the
 status.
 

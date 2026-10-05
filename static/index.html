@@ -230,6 +230,9 @@ body.public .stat-bar .cell.diag{display:none!important}
 .miss-dur{color:#f88;font-variant-numeric:tabular-nums}
 .miss-meta{color:var(--dim)}
 .miss-call,.miss-cell{cursor:pointer}
+.msg-cs{cursor:pointer}
+.msg-cs:hover{text-decoration:underline}
+.msg-cs-miss{opacity:.55;cursor:default;text-decoration:line-through}
 .miss-call:hover,.miss-cell:hover{text-decoration:underline}
 .miss-toggle{color:#8ab4f8;margin-left:6px}
 .sil-quake{color:#f5c211;font-size:11px}
@@ -1057,7 +1060,7 @@ const S={en:{
   tab_msg:"Messages",
   msg_h_time:"Time",msg_h_from:"From",msg_h_to:"To",msg_h_chan:"Channel",msg_h_text:"Message",
   msg_empty:"No APRS messages yet — they appear here as they are heard or sent.",
-  stop_failed:"Stop did not take — see the log above",start_refused:"Start refused — an agent is still running",msg_all:"All",msg_rx:"Received",msg_tx:"Sent",msg_search:"Search…",ms_ph:"Callsign or locator: TA3HX*, KM38",ms_short:"At least three letters or digits, * for any",ms_none:"No station found",ms_nopos:"no position",ms_more:"{n} found, newest {k} shown",ms_loc:"locator - go to square",al_go:"Show on the map",msg_live:"Live feed",msg_kept:"Kept (14 days)",
+  stop_failed:"Stop did not take — see the log above",start_refused:"Start refused — an agent is still running",msg_all:"All",msg_rx:"Received",msg_tx:"Sent",msg_search:"Search…",msg_cs_unknown:"Not in the station registry - no position known",ms_ph:"Callsign or locator: TA3HX*, KM38",ms_short:"At least three letters or digits, * for any",ms_none:"No station found",ms_nopos:"no position",ms_more:"{n} found, newest {k} shown",ms_loc:"locator - go to square",al_go:"Show on the map",msg_live:"Live feed",msg_kept:"Kept (14 days)",
   pub_home:"Home",pub_default_title:"APRS-Agent",pub_default_sub:"Live worldwide APRS-IS monitoring — station map, regional silence detection, RF propagation",pub_live:"live",
   cap_log:"Raw APRS packets exactly as they arrive from the APRS-IS network, in real time.",
   cap_sta:"Every station heard by this receiver — type, location, frequency and whether it is currently active.",
@@ -1204,7 +1207,7 @@ const S={en:{
   tab_msg:"Mesajlar",
   msg_h_time:"Saat",msg_h_from:"Gönderen",msg_h_to:"Alıcı",msg_h_chan:"Kanal",msg_h_text:"Mesaj",
   msg_empty:"Henüz APRS mesajı yok — duyulan ve gönderilen mesajlar burada görünür.",
-  stop_failed:"Durdurma gerçekleşmedi — yukarıdaki loga bakın",start_refused:"Başlatma reddedildi — bir ajan hâlâ çalışıyor",msg_all:"Tümü",msg_rx:"Alınan",msg_tx:"Gönderilen",msg_search:"Ara…",ms_ph:"Çağrı işareti veya locator: TA3HX*, KM38",ms_short:"En az üç harf veya rakam, * herhangi",ms_none:"İstasyon bulunamadı",ms_nopos:"konum yok",ms_more:"{n} bulundu, en yeni {k} gösteriliyor",ms_loc:"locator - kareye git",al_go:"Haritada göster",msg_live:"Canlı akış",msg_kept:"Saklanan (14 gün)",
+  stop_failed:"Durdurma gerçekleşmedi — yukarıdaki loga bakın",start_refused:"Başlatma reddedildi — bir ajan hâlâ çalışıyor",msg_all:"Tümü",msg_rx:"Alınan",msg_tx:"Gönderilen",msg_search:"Ara…",msg_cs_unknown:"İstasyon kaydında yok - konumu bilinmiyor",ms_ph:"Çağrı işareti veya locator: TA3HX*, KM38",ms_short:"En az üç harf veya rakam, * herhangi",ms_none:"İstasyon bulunamadı",ms_nopos:"konum yok",ms_more:"{n} bulundu, en yeni {k} gösteriliyor",ms_loc:"locator - kareye git",al_go:"Haritada göster",msg_live:"Canlı akış",msg_kept:"Saklanan (14 gün)",
   pub_home:"Ana sayfa",pub_default_title:"APRS-Agent",pub_default_sub:"Dünya çapında canlı APRS-IS izleme — istasyon haritası, bölgesel sessizlik tespiti, RF yayılımı",pub_live:"canlı",
   cap_log:"APRS-IS ağından geldiği anda, ham APRS paketleri.",
   cap_sta:"Bu alıcının duyduğu tüm istasyonlar — tür, konum, frekans ve şu an aktif olup olmadıkları.",
@@ -1884,6 +1887,34 @@ function escA(s){return esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 // Messages view showed 2 and 3 October side by side as bare clock times.
 // Today's stamps stay short; older ones carry the date, and the year when it differs.
 function fmtClock(ts){const d=new Date(ts*1000),now=new Date();const tm=d.toLocaleTimeString(undefined,{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});if(d.toDateString()===now.toDateString())return tm;const o={day:'2-digit',month:'2-digit'};if(d.getFullYear()!==now.getFullYear())o.year='numeric';return d.toLocaleDateString(undefined,o)+' '+tm}
+// FROM and TO lead to the station. A message packet carries no position, so
+// this is the registry's last known one - where a fixed station sent from,
+// where a mobile one was last heard (the detail says when). Only names shaped
+// like a callsign are links: bulletin addresses (BLN0), services (DMWGPT,
+// MYANET) and Telegram names stay text.
+const MSG_CS_RE=/^(?:[A-Z]{1,2}[0-9]|[0-9][A-Z][0-9]?)[A-Z0-9]{0,5}[A-Z](?:-[0-9]{1,2})?$/;
+function msgCs(s){
+  const v=String(s==null?'':s);
+  return MSG_CS_RE.test(v)?'<span class="msg-cs" data-cs="'+escA(v)+'">'+esc(v)+'</span>':esc(v);
+}
+async function msgGo(el){
+  const cs=el.getAttribute('data-cs');
+  let r=null;
+  try{
+    const res=await net(fetch('/api/stations/'+encodeURIComponent(cs)));
+    if(res.ok)r=await net(res.json());
+  }catch(e){quiet(e)}
+  if(!r||!r.callsign){
+    el.classList.add('msg-cs-miss');el.title=t('msg_cs_unknown');return;
+  }
+  const pos=r.lat!=null&&r.lon!=null&&!(Math.abs(r.lat)<0.5&&Math.abs(r.lon)<0.5);
+  switchTab('map');
+  mapSearchGo({callsign:r.callsign,lat:r.lat,lon:r.lon,has_position:pos});
+}
+document.addEventListener('click',e=>{
+  const el=e.target.closest&&e.target.closest('#msg-body .msg-cs');
+  if(el&&!el.classList.contains('msg-cs-miss'))msgGo(el);
+});
 function renderMsgs(){
   const fdir=$('msg-fdir').value;
   const fs=$('msg-fsearch').value.toUpperCase();
@@ -1907,8 +1938,8 @@ function renderMsgs(){
     const bln=m.kind==='bulletin'?'<span style="color:#f5c211" title="bulletin">✦ </span>':'';
     tr.innerHTML='<td style="color:var(--dim)">'+fmtClock(m.ts)+'</td>'+
       '<td>'+arrow+'</td>'+
-      '<td style="color:'+(isTx?'var(--dim)':'var(--accent2)')+'">'+esc(m.from)+'</td>'+
-      '<td style="color:'+(isTx?'var(--accent2)':'var(--dim)')+'">'+esc(m.to)+'</td>'+
+      '<td style="color:'+(isTx?'var(--dim)':'var(--accent2)')+'">'+msgCs(m.from)+'</td>'+
+      '<td style="color:'+(isTx?'var(--accent2)':'var(--dim)')+'">'+msgCs(m.to)+'</td>'+
       '<td>'+chan+'</td>'+
       '<td style="white-space:normal;max-width:none" title="'+escA(m.text)+'">'+bln+esc(m.text)+'</td>';
     b.appendChild(tr);
