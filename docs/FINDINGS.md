@@ -6690,3 +6690,35 @@ One caution for whoever builds it: `_onset_context` measures from
 interval, so stations with different cadences show a spread even when they
 stopped together. The gate should measure `last_seen` and allow for the
 longest interval among them, as the table above does.
+
+**Correction, same day (2026-10-05).** The measurement above stands; the
+reading of it does not. A wide spread of last packets is *not* evidence that
+the stations failed independently. The operator pointed out what this
+project had reasoned through before (not found in the written record, which
+is why it was missed here): one mains failure silences stations at
+different times when some run on a UPS, a battery or solar - the
+unprotected ones stop at once, the protected ones as their reserve runs
+out, minutes to hours later, and a solar site at dusk. F-2026-08-13-14
+already recorded that a staggered onset can be one moving cause (a storm
+front). The proposed gate - alert only when the last packets fall within
+about one interval - would have demoted exactly the long, serious outages.
+**Withdrawn.** The "far apart" line `_onset_context` feeds the AI note
+carries the same error: it tells the model the stations "did NOT go down
+together", which is true, and invites "so no single outage", which is not.
+
+Two further measurements, taken to separate a backed-up outage from
+independent drop-outs, on the live alerts at 09:27 CEST:
+
+| | |
+|---|---|
+| episodes running 2 h or more | 11 |
+| ... with stations that came back during the episode | 8 (1-4 each) |
+| ... with none back | 2 (DN19, EJ88) |
+| opening cluster - stations within one interval of the first to fall silent | 1 in 8 of 12 alerts, 2-3 in FG40, KM59, DM15, OM99, JN27 |
+
+Neither decides it alone. A return argues for churn, but power restored or
+a solar site at sunrise also returns. A lone first drop argues against a
+mains cut, which should take every unprotected station at once, but a cell
+whose stations are all protected would show the same. What they can do is
+be stated as facts, beside the spread, so a reader weighs them rather than
+a rule deciding for them.

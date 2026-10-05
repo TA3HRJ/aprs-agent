@@ -63,11 +63,14 @@ What is left, in the order it is worth doing:
     server change. **Declined by the operator — no risk taken.** Do not
     re-propose unless he raises it.
 
-13. **Silence alerts that are not outages - decision open.** 98.8 % of
-    alert episodes over two weeks were stations going quiet hours apart, and
-    all 12 live alerts on 2026-10-05 spread over 1.9-19 h
-    (F-2026-10-05-03). Proposed: alert only when the silent stations' last
-    packets fall within about one beacon interval of each other, else grey.
+13. **Silence alerts and staggered onsets - decision open.** The last
+    packets of every live alert's silent stations spread over 1.9-19 h
+    (F-2026-10-05-03), but a mains failure with UPS, battery or solar
+    backup staggers the same way, so the spread does not show independence
+    and the gate first proposed is withdrawn (correction line there). What
+    is left to decide: state the opening cluster and the returns in the
+    popup and the AI note as facts, and stop the note reading "far apart"
+    as "no single outage".
 
 Everything below this block is history — kept for the reasoning, not for the
 status.
