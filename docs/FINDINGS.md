@@ -6840,3 +6840,27 @@ actually announced.
 3. **Young cells** - 40 % of onsets never meet the novelty test because the
    cell has too little history. Lowering `_RECUR_MIN_ALERTS` makes
    recurrence noisier; leaving it lets every new cell alert freely.
+
+**Lever 1 measured, same day.** The same replay, with consecutive meaning the
+next scan run (1,630 runs in 14.0 days, median 12 min apart) rather than a
+time gap, gives a baseline of 1,777 onsets, 127 a day; the live journal had
+134 `[silence] ALERT` lines on 2026-10-04, so the replay is the right size.
+
+| variant | onsets / day | fewer | cost |
+|---|---|---|---|
+| baseline | 127 | - | - |
+| A: alert only if it holds for two consecutive runs | 86 | 32 % | every alert ~12 min later; 576 one-run alerts never sent |
+| B: a re-crossing within 1 h continues the episode | 113 | 11 % | a new event within the hour in the same cell is not re-announced |
+| B within 2 h | 101 | 20 % | same, 2 h |
+| B within 3 h | 92 | 28 % | same, 3 h |
+| A + B 1 h | 79 | 38 % | both |
+| A + B 2 h | 73 | 42 % | both |
+
+What A drops is an alert that met the rule for one scan and not the next:
+some station beaconed within about twelve minutes. A mains failure does not
+end that fast, so A's loss is small; its price is the delay. B drops nothing
+but repetition. The AI side moves less than the counts: on 2026-10-04 there
+were 96 note calls and 49 cached reuses, because `_AI_NOTE_COOLDOWN_S`
+(3 h) already reuses a note on re-alert. Telegram goes out as an hourly
+digest (`silence_digest_mins = 60`), so the operator sees the count inside
+fewer messages, not fewer messages.
