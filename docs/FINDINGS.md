@@ -6540,3 +6540,77 @@ cases (four places, four plain questions), `check_lookup` one (case 10);
 **seen failing** against v3.2.143 with 4 and 1. A first version of the new
 weather cases bound the output list by closure and collected the previous
 case's resends; the check binds it per instance now.
+
+---
+
+## F-2026-10-05-01 — the silence AI timeout stays at 20 s: answers take 1 s, and the failures are outages
+
+The read F-2026-09-25-01 asked for, taken 2026-10-05 06:45 CEST over the
+journal since 2026-09-25 (v3.2.134's duration lines):
+
+| | |
+|---|---|
+| notes that arrived | **1,071** (80-126 a day) |
+| duration p50 / p90 / p99 / max | **1.1 / 1.4 / 1.9 / 3.1 s** |
+| notes over 10 s | **0** |
+| empty notes | 0 |
+| failures | **12**, all on 2026-10-01: 11 silence notes at 20.4-20.7 s and one propagation note, all "The read operation timed out" |
+
+The failures are one window, not a tail. At 21:16:56 a note arrived in
+1.3 s; from 21:32:21 to 23:06:48 every call timed out - no success in
+between; at 23:32:03 the next arrived in 2.2 s and the rest of the night ran
+at 0.8-1.1 s. That is the shape of 2026-09-14 again (27 timeouts in three
+hours, nothing either side): the provider stopped answering for about an
+hour and a half and then answered normally.
+
+**Answer to AUDIT-2026-09-15 item 10: leave it at 20 s.** The slowest
+answer in a week was 3.1 s, so the limit has six times the margin over the
+worst case and ten times over p99. A longer limit would not have saved one
+of the twelve - in an outage nothing comes back - and would have held the
+silence pass longer on each of them, delaying the next alert's notification
+(the cost F-2026-09-25-01 corrected the audit on). Each timeout already
+holds the pass 20 s; eleven of them on 2026-10-01 cost about four minutes
+of notification delay across an hour and a half, which is tolerable.
+
+If outages ever matter more than that, the lever is not the timeout but a
+short circuit: after two consecutive timeouts, skip the note for a few
+minutes and send the alert bare. Not built; nothing yet says it is needed.
+
+## F-2026-10-05-02 — a week sharing the VPS: the agent held steady, and the one OOM kill was maintenance
+
+The watch HANDOFF set on 2026-09-28, when the VPS began hosting a public web
+SDR beside the agent (memory-capped at 2 GB), read on 2026-10-05.
+
+**The agent.** The daily `[health] rss` line, by uptime:
+
+| run | at 24 h | at 48 h | at 72 h |
+|---|---|---|---|
+| started 2026-09-28 00:04 (v3.2.138) | 1,342 MB | - | - |
+| started 2026-09-29 20:03 (v3.2.139) | 1,209 MB | 1,181 MB | 1,226 MB |
+
+Flat after the first day; no growth across three days. Six restarts in the
+week, every one a `Deploy OK` (v3.2.138 to v3.2.145), none from a crash or
+the kernel. 1.43 GB resident at the read.
+
+**The neighbour.** 140 MB of its 2 GB cap at the read, no restart since
+2026-09-28 07:01, nothing about memory in its log (its only errors are
+"too many clients").
+
+**The host.** 5.7 GB of 7.9 GB available; load 0.97 / 0.71 / 0.54 on 4
+CPUs at the read (baseline 0.5-0.7). No load history is kept on the host,
+so this is two samples a week apart, not a series.
+
+**One out-of-memory kill, and it was not the agent's doing.** 2026-09-28
+01:49:13 the kernel ran a global OOM and killed a root `git` process at
+6.1 GB resident, from an interactive root session: repository housekeeping
+on the host that night, outside the agent - most likely one of the
+maintenance commands run in that session; it was not recorded at the time.
+The agent (the same PID before and after) and the neighbour were untouched.
+But a global OOM kills the largest process, and the next largest was the
+agent at about 1.3 GB.
+
+**What to do with it:** nothing for the agent. For the host: heavy
+maintenance (git gc and the like) runs memory-capped -
+`systemd-run --scope -p MemoryMax=2G nice -n19 ionice -c3 <command>` -
+so it is killed alone rather than taking the box to a global OOM. Recorded
+outside the repo too, with the host details.

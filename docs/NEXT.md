@@ -18,14 +18,10 @@ are done, WAL included (v3.2.130); package 3 is done apart from item 10; the
 host package is partly done and its details are kept outside the repository.
 What is left, in the order it is worth doing:
 
-1. **Silence AI-note timeout** (audit item 10): **measuring since v3.2.134,
-   read after 2026-10-02** with the query in F-2026-09-25-01. Every note now
-   logs its duration. The failures on record were 27 in three hours of one
-   evening and one 503, which looks like a provider incident rather than a
-   tight limit; the week decides. A longer timeout also delays the next
-   alert in the same pass, so leaving 20 s is a real answer.
-   **Early read, 2026-09-27:** 286 notes, p50 1.1 s, p99 1.8 s, max 2.1 s,
-   no failure. Ten times the margin so far.
+1. ~~**Silence AI-note timeout** (audit item 10).~~ Answered 2026-10-05:
+   leave it at 20 s. A week of notes: p99 1.9 s, max 3.1 s; the 12
+   failures were one 1.5 h provider outage, which no timeout would have
+   saved (F-2026-10-05-01).
 2. ~~**A weather reading from far away.**~~ Done in v3.2.132: past 30 km the
    answer opens with the distance and says it is not local (F-2026-09-24-04).
 3. ~~**Silent `catch` blocks in `static/index.html`.**~~ Done in v3.2.133:
