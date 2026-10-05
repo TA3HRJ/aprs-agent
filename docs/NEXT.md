@@ -68,6 +68,12 @@ What is left, in the order it is worth doing:
     the AI note, with UPS / battery / solar named; no gate (F-2026-10-05-03).
     Watch: whether the notes stop reading every spread as independence.
 
+14. **Silence alert volume - decision open.** About 125 alert onsets a
+    day; 46 % of those in established cells open on one novel station, 40 %
+    of all are young cells with no novelty test, and many re-open within
+    hours as a cell flickers across the threshold (F-2026-10-05-05). Three
+    levers listed there; the flicker one is the least risky.
+
 Everything below this block is history — kept for the reasoning, not for the
 status.
 

@@ -6788,3 +6788,55 @@ causes, as the caveat asks.
 with two habitual ones making up the count. Whether a single novel station
 should carry an alert is a detection question, not a wording one, and is
 not touched here.
+
+---
+
+## F-2026-10-05-05 — nearly half of the alerts in established cells open on a single new station, and many re-open within hours
+
+Asked after F-2026-10-05-04, where KM59 alerted on one novel station
+(YM2KF-10) among three. Measured on the 2026-10-05 04:17 backup:
+`silence_history` 2026-09-21 to 2026-10-05, replaying the alert decision at
+every stored snapshot with only the history before it - a cell with 12 or
+more earlier threshold snapshots is chronic unless a silent station's share
+of those is under 0.35 (`_NOVEL_RECURRENCE`, `_RECUR_MIN_ALERTS`). An onset
+is a snapshot that alerts after one that did not, or after a gap.
+
+| alert onsets, 14 days | 1,743 (about 125 a day) |
+|---|---|
+| in young cells (fewer than 12 earlier snapshots: no novelty test at all) | 695 (40 %) |
+| in established cells | 1,048 |
+| ... opened by exactly one novel station | **483 (46 % of established)** |
+| ... by two or more | 565 |
+
+Every single-novel onset had at least three silent stations (median 4):
+one new face and the rest the cell's habitual missing. Short-lived across
+the board - median three snapshots (about half an hour); 216 of the 483
+single-novel onsets lasted two snapshots or fewer, as did 229 of 565 with
+two or more novel and 328 of 695 in young cells.
+
+**KM59 shows the mechanism.** On 2026-10-03 it crossed the threshold at
+04:58, 09:08, 12:31, 14:55 and 19:30 with the same habitual TA2GBV,
+TA2GBV-4 and TA2OK, plus one novel station that changed (YM2ESK, then
+YM2KF-10). Between those the cell fell below the threshold - one marginal
+station beaconed - so each crossing was a new episode, a new alert and a
+new notification. A cell whose habitual three are permanently silent needs
+only one more station to dip briefly to alert again.
+
+**What the replay cannot see:** `few_sites` and `no_local_path` also demote
+a cell, and neither is stored, so these are upper bounds on what was
+actually announced.
+
+**What it suggests, not decided.** Three separate levers:
+
+1. **Re-alert flicker** - require the alert to hold for two consecutive
+   snapshots, or hold an episode open across a short dip. Costs about ten
+   minutes of delay on a real event.
+2. **One novel station** - require two novel, or a novel share of the
+   silent set. Cuts close to half of the established-cell alerts, but in
+   a mains failure the first to fall is the unprotected station, which may
+   be the one new face, and the second may follow only hours later
+   (F-2026-10-05-03, corrected). This one delays exactly the case it should
+   not.
+3. **Young cells** - 40 % of onsets never meet the novelty test because the
+   cell has too little history. Lowering `_RECUR_MIN_ALERTS` makes
+   recurrence noisier; leaving it lets every new cell alert freely.
