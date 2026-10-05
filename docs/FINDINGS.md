@@ -6614,3 +6614,79 @@ maintenance (git gc and the like) runs memory-capped -
 `systemd-run --scope -p MemoryMax=2G nice -n19 ionice -c3 <command>` -
 so it is killed alone rather than taking the box to a global OOM. Recorded
 outside the repo too, with the host details.
+
+---
+
+## F-2026-10-05-03 — almost every "regional silence" alert is stations that went quiet hours apart
+
+Asked after the alert rows became links (v3.2.147): the AI notes on the
+live alerts nearly all said the stations "went down at widely separated
+times". Measured on 2026-10-05.
+
+### Now: the 12 live alerts, from each silent station's last packet
+
+`last_seen` of every silent call, from `/api/stations/{call}`; spread =
+newest minus oldest last packet in the cell.
+
+| cell | silent / active | spread of last packets |
+|---|---|---|
+| OM99 | 11 / 23 | 19.1 h |
+| GH70 | 6 / 6 | 17.5 h |
+| OK12 | 7 / 13 | 16.8 h |
+| FF55 | 4 / 14 | 14.5 h |
+| ON70 | 3 / 4 | 14.1 h |
+| JN27 | 6 / 13 | 9.9 h |
+| FF91 | 7 / 12 | 9.8 h |
+| JM76 | 4 / 8 | 9.8 h |
+| FF97 | 5 / 9 | 8.2 h |
+| GF25 | 6 / 9 | 6.2 h |
+| RE66 | 8 / 15 | 3.1 h |
+| EJ88 | 3 / 12 | 1.9 h |
+
+**12 of 12 spread over 1.9 h or more; 10 of 12 over 6 h.** Every one is
+labelled "Regional silence (possible outage)" in red.
+
+### Fourteen days: through the AI notes
+
+`silence_history` keeps only alerting snapshots and no per-station onset,
+so the spread cannot be rebuilt from it - an attempt to infer onsets from
+the first snapshot a call appears in gave 0.0 h for all 1,855 episodes,
+which is the recording, not the radio. But since v3.2.12 (F-2026-08-12-01) the note is
+written from a measured spread (`_onset_context`: under 2 min
+"simultaneous", under 30 min "close together", else "far apart - these
+stations did NOT go down together"). Classifying the 1,530 distinct alert
+episodes that carry a note, 2026-09-21 to 2026-10-05:
+
+| what the note says | episodes |
+|---|---|
+| far apart / independent / gradual | **1,512 (98.8 %)** |
+| simultaneous or within minutes | 7 (KO19, LN05 x2, NL42 x2, and two "span 12+ h" false matches) |
+| neither | 11 |
+
+So roughly **five** episodes in two weeks look like stations failing
+together; about 1,500 were announced as possible outages.
+
+### Why
+
+`silence_cells()` calls a station silent when it was heard inside the last
+**24 h** and its gap now exceeds 3x its own beacon interval; a cell alerts
+when at least 3 such stations make half of its active ones. When they went
+quiet is never asked. Over a day, stations in any busy cell drop out one by
+one for their own reasons - a mobile parked, a phone app closed, a
+hotspot rebooted - and the 24 h window keeps each of them "silent" until
+enough have accumulated. That reads as a regional outage and is not one.
+
+### What it implies (not decided)
+
+The signature of a real outage is the opposite: last packets close
+together. A gate on the spread - alert only when the silent stations'
+last packets fall within about one beacon interval of each other, else
+demote to the grey "measured, not announced" like a chronic cell - would
+take the alert list from ~130 a day to a handful a week, with the
+notifications and AI calls that go with them.
+
+One caution for whoever builds it: `_onset_context` measures from
+`last_seen + threshold`, and the threshold is 3x each station's own
+interval, so stations with different cadences show a spread even when they
+stopped together. The gate should measure `last_seen` and allow for the
+longest interval among them, as the table above does.

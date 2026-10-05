@@ -63,6 +63,12 @@ What is left, in the order it is worth doing:
     server change. **Declined by the operator — no risk taken.** Do not
     re-propose unless he raises it.
 
+13. **Silence alerts that are not outages - decision open.** 98.8 % of
+    alert episodes over two weeks were stations going quiet hours apart, and
+    all 12 live alerts on 2026-10-05 spread over 1.9-19 h
+    (F-2026-10-05-03). Proposed: alert only when the silent stations' last
+    packets fall within about one beacon interval of each other, else grey.
+
 Everything below this block is history — kept for the reasoning, not for the
 status.
 
