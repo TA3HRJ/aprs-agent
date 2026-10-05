@@ -6876,3 +6876,58 @@ notification, the still-missing list. The map's alert list still shows the
 cell from the first scan that meets the rule, since that is the measurement.
 `tools/check_silence_episodes.py` drives it with a fake clock; **seen
 failing** against v3.2.149 (no such method).
+
+---
+
+## F-2026-10-05-06 — four flagged "long links" were one bad packet each, and a balloon poisoned five gates
+
+The operator ran four v3.2.151 propagation bundles through ChatGPT and shared
+the readings. All four answered (1) anomalous, (2) not an opening, (3) path
+not established - correct, and the bundles' caveats did their job. What none
+could see, because the bundle does not carry it, is the sender's own record:
+
+| link | km | the packet put the sender at | the station's record says |
+|---|---|---|---|
+| SV0SYH-1 -> SV2RYU-10 | 2,585 | 40.59 N 53.53 E (Caspian coast) | LoRa iGate/digi, 40.59 N 22.98 E (Thessaloniki), 12,819 packets |
+| SQ9SIM-5 -> SQ9IWE-3 | 3,883 | 26.29 N 14.03 W (Western Sahara) | mobile tracker, 50.27 N 19.13 E (Katowice), 7,518 packets |
+| LD7TG -> LA4M | 371 | 60.39 N 8.44 E | iGate on Graakallen, 63.42 N 10.26 E (Trondheim), 138,999 packets |
+| SP0LND-9 -> SK3GK-11 | 1,487 | 54.09 N 38.23 E | **"LoRa APRS Balloon DIGI"**, balloon symbol |
+
+Three are one corrupt position in an otherwise steady station - a jump of
+hundreds to thousands of km in minutes that no station makes. The fourth is
+a balloon: `PROP_MAX_ALT_M` excludes balloons only by the altitude in the
+packet, and this one sends none, so its line-of-sight reach was measured as
+propagation.
+
+**The balloon did damage.** Between 15:07 and 16:07 CEST it was flagged nine
+times at five gates, and each link was folded into that gate's baseline
+afterwards, as designed:
+
+| gate | mean at first flag | mean at a later flag |
+|---|---|---|
+| SK3GK-10 | 10.2 km | 100.1 km |
+| SK3GK-11 | 55.4 km | 139.6 km (bar 166 -> 1,363 km) |
+| SK3W-10 | 25.4 km | 96.9 km |
+| OH3ERV-L1 | 2.1 km | 61.0 km |
+| OH3KUN-L1 | 4.0 km at 53 samples | - |
+
+F-2026-08-26-01 still holds: transient poison washes out at alpha 0.05 over
+about 1,900 samples, and no reset should be written. But a quiet gate takes
+weeks to get there, and meanwhile it cannot flag a real opening. That entry's
+cure was upstream - DB0OAL healed "once the parser stopped feeding it
+impossible positions" - and so is this one's.
+
+**Also found:** the prefix table has Norway as `LA|LB|LC|LN`, but LA-LN is
+all Norway; LD7TG read as "no allocation known".
+
+**Why the check is not there now:** `ingest()` runs `rec.update_from_parsed()`
+before `_ingest_prop_link()`, so by the time a link is measured the record
+already holds the new, possibly bad, position; the previous one is gone.
+
+**What it suggests (not decided):** keep the sender's previous position and
+time before the update, and leave a link out of both the anomaly decision
+and the gate baseline when the implied speed from there is impossible
+(over ~1,200 km/h - an airliner's ground speed); leave out a sender whose
+type is `balloon` whatever its packet says about altitude; widen Norway to
+`L[A-N]`; and put the sender's type and previous position in the bundle so
+a reader can see the jump.
