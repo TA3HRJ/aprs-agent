@@ -977,6 +977,19 @@ def _cell_bounds(cell4: str) -> Optional[list[list[float]]]:
     return [[lat, lon], [lat + 1, lon + 2]]
 
 
+def callsign_query(query: str) -> "Optional[re.Pattern]":
+    """An aprs.fi-style callsign search, compiled: "*" is any run of
+    characters, "?" exactly one, case is ignored, and a query with no
+    wildcard is an exact callsign. None when the query has fewer than three
+    literal characters - "*" or "TA*" would walk the whole registry (some
+    300,000 calls) for every keystroke of every visitor to the public map."""
+    q = (query or "").strip().upper()
+    if len(re.sub(r"[*?]", "", q)) < 3 or not re.fullmatch(r"[A-Z0-9*?/-]+", q):
+        return None
+    return re.compile("".join(".*" if c == "*" else "." if c == "?"
+                              else re.escape(c) for c in q))
+
+
 class StationRecord:
     """All known data about a single station (callsign + SSID)."""
 
@@ -2162,6 +2175,42 @@ class StationDB:
     def get_one(self, callsign: str) -> Optional[dict[str, Any]]:
         rec = self._stations.get(callsign)
         return rec.to_dict() if rec else None
+
+    def search(self, query: str, exclude_base: "set", limit: int = 20
+               ) -> "tuple[int, list[dict[str, Any]]]":
+        """Callsigns matching an aprs.fi-style query, newest-heard first.
+
+        Returns (total matches, at most `limit` of them). `exclude_base` holds
+        base calls that asked not to be looked up (NOLOOKUP); they are left
+        out. A station with no position is kept and says so - the detail can
+        still be opened, there is just nowhere on the map to go.
+        """
+        pat = callsign_query(query)
+        if pat is None:
+            return 0, []
+        # Most queries start with literal characters (TA3HX*): a startswith
+        # on ~300,000 keys is a fraction of the cost of a regex on each.
+        q = query.strip().upper()
+        prefix = re.split(r"[*?]", q, maxsplit=1)[0]
+        if prefix == q:                       # no wildcard: one dict lookup
+            calls = [q] if q in self._stations else []
+        else:
+            keys = list(self._stations)       # one C-level copy, then filter
+            if prefix:
+                keys = [k for k in keys if k.startswith(prefix)]
+            calls = [k for k in keys if pat.fullmatch(k)]
+        hits = [self._stations[c] for c in calls
+                if c in self._stations and c.split("-")[0] not in exclude_base]
+        hits.sort(key=lambda r: r.last_seen or 0, reverse=True)
+        out = []
+        for r in hits[:max(0, limit)]:
+            has_pos = r.lat is not None and r.lon is not None
+            out.append({"callsign": r.callsign, "lat": r.lat, "lon": r.lon,
+                        "has_position": has_pos,
+                        "last_seen": int(r.last_seen or 0),
+                        "last_seen_ago_s": r.last_seen_ago_s,
+                        "type": r.station_type})
+        return len(hits), out
 
     def has_gated(self, callsign: str) -> bool:
         """True when this callsign has been seen gating somebody to APRS-IS.

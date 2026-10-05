@@ -143,6 +143,13 @@ a.log-btn:hover{text-decoration:none;color:var(--fg)}
 #map{flex:1;background:#1a1a1a}
 .map-sym{background:transparent;border:none}
 .clus{background:rgba(28,113,216,.85);border:2px solid #b8d4f5;border-radius:50%;color:#fff;font-weight:600;font-size:11px;text-align:center;box-sizing:border-box;cursor:pointer}
+.map-search{position:absolute;top:8px;right:8px;z-index:1001;width:220px;max-width:calc(100% - 70px)}
+.map-search input{width:100%;box-sizing:border-box;background:rgba(30,30,30,.92);color:#eee;border:1px solid #555;border-radius:6px;padding:6px 9px;font-size:13px;font-family:inherit}
+.map-search-res{margin-top:4px;background:rgba(30,30,30,.95);border:1px solid #555;border-radius:6px;max-height:50vh;overflow:auto;font-size:12px}
+.msr-row{display:flex;justify-content:space-between;gap:8px;padding:5px 9px;cursor:pointer;color:#ddd}
+.msr-row:hover{background:rgba(98,160,234,.18)}
+.msr-row span{color:#999;white-space:nowrap}
+.msr-note{padding:5px 9px;color:#999}
 .map-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888;font-size:13px;z-index:5;pointer-events:none}
 /* One bottom-anchored column so the legend and the timeline can never cover
    each other, and the legend drops to the map's edge when the timeline is
@@ -796,6 +803,15 @@ body.public #about-gw-link{display:none!important}
   <!-- MAP PANEL -->
   <div class="map-panel" id="map-view">
     <div id="map"></div>
+    <!-- Callsign search, aprs.fi style: TA3HX* finds every SSID. It asks the
+         server, which holds the whole registry, not the stations this map
+         happens to have loaded. -->
+    <div class="map-search" id="map-search-box">
+      <input id="map-search" type="search" autocomplete="off" spellcheck="false"
+             data-i="ms_ph" placeholder="Callsign, e.g. TA3HX*"
+             oninput="mapSearchInput()" onkeydown="mapSearchKey(event)">
+      <div class="map-search-res" id="map-search-res" hidden></div>
+    </div>
     <!-- Legend and timeline are stacked in one bottom-anchored column. Left to
          position themselves independently they both sat in the same band above
          the map's bottom edge, and the timeline — painted later — cut the
@@ -1035,7 +1051,7 @@ const S={en:{
   tab_msg:"Messages",
   msg_h_time:"Time",msg_h_from:"From",msg_h_to:"To",msg_h_chan:"Channel",msg_h_text:"Message",
   msg_empty:"No APRS messages yet — they appear here as they are heard or sent.",
-  stop_failed:"Stop did not take — see the log above",start_refused:"Start refused — an agent is still running",msg_all:"All",msg_rx:"Received",msg_tx:"Sent",msg_search:"Search…",msg_live:"Live feed",msg_kept:"Kept (14 days)",
+  stop_failed:"Stop did not take — see the log above",start_refused:"Start refused — an agent is still running",msg_all:"All",msg_rx:"Received",msg_tx:"Sent",msg_search:"Search…",ms_ph:"Callsign, e.g. TA3HX*",ms_short:"At least three letters or digits, * for any",ms_none:"No station found",ms_nopos:"no position",ms_more:"{n} found, newest {k} shown",msg_live:"Live feed",msg_kept:"Kept (14 days)",
   pub_home:"Home",pub_default_title:"APRS-Agent",pub_default_sub:"Live worldwide APRS-IS monitoring — station map, regional silence detection, RF propagation",pub_live:"live",
   cap_log:"Raw APRS packets exactly as they arrive from the APRS-IS network, in real time.",
   cap_sta:"Every station heard by this receiver — type, location, frequency and whether it is currently active.",
@@ -1182,7 +1198,7 @@ const S={en:{
   tab_msg:"Mesajlar",
   msg_h_time:"Saat",msg_h_from:"Gönderen",msg_h_to:"Alıcı",msg_h_chan:"Kanal",msg_h_text:"Mesaj",
   msg_empty:"Henüz APRS mesajı yok — duyulan ve gönderilen mesajlar burada görünür.",
-  stop_failed:"Durdurma gerçekleşmedi — yukarıdaki loga bakın",start_refused:"Başlatma reddedildi — bir ajan hâlâ çalışıyor",msg_all:"Tümü",msg_rx:"Alınan",msg_tx:"Gönderilen",msg_search:"Ara…",msg_live:"Canlı akış",msg_kept:"Saklanan (14 gün)",
+  stop_failed:"Durdurma gerçekleşmedi — yukarıdaki loga bakın",start_refused:"Başlatma reddedildi — bir ajan hâlâ çalışıyor",msg_all:"Tümü",msg_rx:"Alınan",msg_tx:"Gönderilen",msg_search:"Ara…",ms_ph:"Çağrı işareti, ör. TA3HX*",ms_short:"En az üç harf veya rakam, * herhangi",ms_none:"İstasyon bulunamadı",ms_nopos:"konum yok",ms_more:"{n} bulundu, en yeni {k} gösteriliyor",msg_live:"Canlı akış",msg_kept:"Saklanan (14 gün)",
   pub_home:"Ana sayfa",pub_default_title:"APRS-Agent",pub_default_sub:"Dünya çapında canlı APRS-IS izleme — istasyon haritası, bölgesel sessizlik tespiti, RF yayılımı",pub_live:"canlı",
   cap_log:"APRS-IS ağından geldiği anda, ham APRS paketleri.",
   cap_sta:"Bu alıcının duyduğu tüm istasyonlar — tür, konum, frekans ve şu an aktif olup olmadıkları.",
@@ -1604,6 +1620,55 @@ function mapPopup(r){
     h+='<br><span style="opacity:.7">'+fmtAgoLong(_ago)+'</span>';
   return h;
 }
+// Map search. Typing asks the server after a pause; Enter goes straight to a
+// single match. The answer carries at most 20 calls, newest-heard first, and
+// the total, so "TA*"-wide queries are refused server-side rather than paged.
+let msTimer=null,msSeq=0,msRows=[],msMark=null;
+function mapSearchInput(){clearTimeout(msTimer);msTimer=setTimeout(()=>mapSearchRun(false),300)}
+function mapSearchKey(e){
+  if(e.key==='Enter'){e.preventDefault();clearTimeout(msTimer);mapSearchRun(true)}
+  else if(e.key==='Escape'){$('map-search-res').hidden=true}
+}
+async function mapSearchRun(go){
+  const q=$('map-search').value.trim(),box=$('map-search-res');
+  if(!q){box.hidden=true;return}
+  const seq=++msSeq;
+  let r;
+  try{r=await api('GET','/api/search?q='+encodeURIComponent(q))}catch(e){quiet(e);return}
+  if(seq!==msSeq)return;
+  msRows=r.results||[];
+  if(!r.ok){box.innerHTML='<div class="msr-note">'+esc(t('ms_short'))+'</div>';box.hidden=false;return}
+  if(!msRows.length){box.innerHTML='<div class="msr-note">'+esc(t('ms_none'))+'</div>';box.hidden=false;return}
+  if(go&&msRows.length===1){mapSearchGo(msRows[0]);return}
+  let h='';
+  msRows.forEach((s,i)=>{
+    // Past two days the hours stop meaning anything at a glance: 247h is 10d.
+    const a=s.last_seen_ago_s;
+    const when=a==null?'':a>=172800?Math.floor(a/86400)+'d':fmtAgoLong(a);
+    h+='<div class="msr-row" data-i-row="'+i+'"><b>'+esc(s.callsign)+'</b><span>'
+      +(s.has_position?esc(when):esc(t('ms_nopos'))+(when?' · '+esc(when):''))+'</span></div>';
+  });
+  if(r.total>msRows.length)
+    h+='<div class="msr-note">'+esc(t('ms_more').replace('{n}',r.total).replace('{k}',msRows.length))+'</div>';
+  box.innerHTML=h;box.hidden=false;
+}
+function mapSearchGo(s){
+  $('map-search-res').hidden=true;
+  if(s.has_position&&map){
+    map.setView([s.lat,s.lon],Math.max(map.getZoom(),12));
+    // A ring for a few seconds: at a busy spot the station's own symbol is
+    // one of many, and the eye needs to be told which.
+    if(msMark)map.removeLayer(msMark);
+    msMark=L.circleMarker([s.lat,s.lon],{radius:16,color:'#f5c211',weight:3,fill:false}).addTo(map);
+    setTimeout(()=>{if(msMark){map.removeLayer(msMark);msMark=null}},5000);
+  }
+  showDetail({callsign:s.callsign});
+}
+document.addEventListener('click',e=>{
+  const row=e.target.closest&&e.target.closest('.msr-row');
+  if(row){const s=msRows[+row.getAttribute('data-i-row')];if(s)mapSearchGo(s);return}
+  if(!(e.target.closest&&e.target.closest('#map-search-box')))$('map-search-res').hidden=true;
+});
 function mapDetail(cs){const r=staData.find(x=>x.callsign===cs)||(vpData||[]).find(x=>x.callsign===cs)||{callsign:cs};showDetail(r)}
 // Delegated rather than bound: Leaflet rebuilds popup content from a string,
 // so a listener attached to the element would not survive the next redraw —

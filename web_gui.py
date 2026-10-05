@@ -3475,6 +3475,35 @@ async def get_station(request: web.Request) -> web.Response:
     return web.json_response(rec)
 
 
+@routes.get("/api/search")
+async def search_stations(request: web.Request) -> web.Response:
+    """The map's callsign search, aprs.fi style: TA3HX* for every SSID.
+
+    Not under /api/stations/, where the {callsign} route would take "search"
+    for a station. Stations that sent NOLOOKUP to the gateway are left out:
+    the Data note promises they are left out of other people's lookups, and
+    a search is one. The scan walks ~300,000 calls, so it runs off the loop.
+    """
+    from extensions.ai_gateway_ext import _OPTOUT_FILE
+    mgr: AgentManager = request.app["manager"]
+    q = request.query.get("q", "")
+    optout: set = set()
+    if mgr.config_path:
+        try:
+            optout = {ln.strip().upper() for ln in Path(mgr.config_path)
+                      .with_name(_OPTOUT_FILE).read_text(encoding="ascii").split()
+                      if ln.strip()}
+        except OSError:
+            pass
+    ok = station_db_module.callsign_query(q) is not None
+    total, results = (0, [])
+    if ok:
+        total, results = await asyncio.get_running_loop().run_in_executor(
+            None, mgr._station_db.search, q, optout, 20)
+    return web.json_response({"q": q, "ok": ok, "total": total,
+                              "results": results})
+
+
 @routes.get("/logo.svg")
 async def logo_svg(request: web.Request) -> web.Response:
     """The project mark, square-cropped and transparent — one file for the
@@ -3566,6 +3595,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/api/status", get_status),
         web.get("/api/stations", get_stations),
         web.get("/api/stations/{callsign}", get_station),
+        web.get("/api/search", search_stations),
         web.get("/api/silence", get_silence),
         # The evidence behind a popup, for re-analysis elsewhere. Built from
         # the same facts /api/silence and /api/missing already serve, plus the
