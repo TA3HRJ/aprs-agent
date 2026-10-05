@@ -13,8 +13,12 @@ What must hold:
   1. config.py has public_contact_email, empty by default, and the template
      documents it
   2. /api/info hands it to the page
-  3. the About box's data note is hidden by default and shown only on the
-     public page with a contact set
+  3. the About box's data note is hidden by default and shown when a contact
+     is set - on the admin page as well as the public one. 2026-10-05: the
+     operator looked for it in his own admin About, did not find it, and
+     took the change for undeployed. Both pages are the same index.html; a
+     difference should be a decision (admin controls, public read-only),
+     not an accident of where a block was pasted
   4. the note states the retention the code enforces (14 days, matching
      station_db._HISTORY_RETENTION_S) and that station records have no limit
 
@@ -54,6 +58,15 @@ def main() -> int:
     if not re.search(r"window\.PUBLIC[^;]*public_contact_email|public_contact_email[\s\S]{0,200}about-data",
                      page):
         fails.append("the note is not tied to the contact setting")
+    reveal = page.find("$('about-data').hidden=false")
+    pub_branch = page.find("if(window.PUBLIC){\n      const title")
+    if reveal < 0:
+        fails.append("nothing ever shows the data note")
+    else:
+        line = page[page.rfind("\n", 0, reveal):reveal]
+        if "window.PUBLIC" in line or (0 <= pub_branch < reveal and
+                                       reveal < page.find("}else{", pub_branch)):
+            fails.append("the data note shows on the public page only, not in admin")
     from station_db import StationDB
     days = StationDB._HISTORY_RETENTION_S // 86400
     for lang in ("en", "tr"):

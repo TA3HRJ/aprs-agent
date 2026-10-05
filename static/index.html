@@ -2949,6 +2949,12 @@ function toggleSidebar(){
     if(typeof info.ai_calls==='number'){$('about-ai-n').textContent=info.ai_calls;$('about-ai').hidden=false}
     fillGateway(info.gateway);
     renderModStatus(info.active,info.health);
+    // The data note states this program's retention; the address is the
+    // operator's own, so the note shows only when one is configured - on
+    // both pages, so the operator sees in admin what visitors see.
+    const mail=(info.public_contact_email||'').trim();
+    if(mail&&/^[^\s@<>"']+@[^\s@<>"']+$/.test(mail)){
+      const a=$('about-data-mail');a.href='mailto:'+mail;a.textContent=mail;$('about-data').hidden=false}
     if(window.PUBLIC){
       const title=(info.public_title||'').trim();
       const cs=(info.callsign||'').trim();
@@ -2957,11 +2963,6 @@ function toggleSidebar(){
       const home=(info.public_home_url||'').trim();
       const hb=$('pub-home');
       if(hb){ if(home){hb.href=home;hb.hidden=false} else {hb.hidden=true} }
-      // The data note states this program's retention; the address is the
-      // operator's own, so the note shows only when one is configured.
-      const mail=(info.public_contact_email||'').trim();
-      if(window.PUBLIC&&mail&&/^[^\s@<>"']+@[^\s@<>"']+$/.test(mail)){
-        const a=$('about-data-mail');a.href='mailto:'+mail;a.textContent=mail;$('about-data').hidden=false}
       applyPubHdr();
     }else{
       $('hdr-cfg').value=info.config_path||'';

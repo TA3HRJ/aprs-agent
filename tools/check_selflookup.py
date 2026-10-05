@@ -162,4 +162,4 @@ async def run() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.get_event_loop().run_until_complete(run()))
+    sys.exit(asyncio.run(run()))

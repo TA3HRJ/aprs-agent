@@ -176,7 +176,7 @@ async def run() -> None:
         ok("the counter wraps from 99999 to 1")
 
 
-asyncio.get_event_loop().run_until_complete(run())
+asyncio.run(run())
 if FAIL:
     print(f"\n{FAIL} failure(s)")
     sys.exit(1)
