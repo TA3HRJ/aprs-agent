@@ -7090,3 +7090,38 @@ answer says internet. `tools/check_injected_gate.py`, **seen failing** (4)
 against v3.2.153. Not done: rewriting the stored gate of records already
 silent - they keep VU3ZAG-13 until heard again, a one-off fix from the raw
 log needing a separate decision.
+
+---
+
+## F-2026-10-06-04 — the 10 min hold cut alerts as replayed; the AI note swung from "unknown" to "power outage"
+
+The two reads HANDOFF set for a full day after v3.2.150 and v3.2.148,
+taken 2026-10-06 20:30 CEST from the journal and `silence_history`.
+
+**Alert count.** `[silence] ALERT` lines: **134** on 2026-10-04, **87** in
+the 24 h from 2026-10-05 12:00 (v3.2.150 live since 11:01). -35 %, against
+-38 % (about 79) in the F-2026-10-05-05 replay. As predicted.
+
+**The AI note's verdict moved the other way, too far.** Cause labels on the
+notes of distinct alert episodes:
+
+| | notes | unknown | power_outage | other |
+|---|---|---|---|---|
+| 3 days before v3.2.148 | 372 | 365 (98 %) | 3 | 4 |
+| since v3.2.148 (2026-10-05 06:05) | 132 | 36 (27 %) | **96 (73 %)** | 0 |
+
+Before, the context told the model a wide spread "argues against one power
+or infrastructure event" and it said so 98.8 % of the time. v3.2.148 removed
+that and named UPS, battery and solar as reasons one outage staggers - and
+the notes now read "Multiple stations ... went silent over a spread of
+hours, consistent with a mains power outage" at medium confidence. Neither
+is a measurement: the same evidence (a spread, a lone first drop, some
+returns) was read one way and is now read the other. The live alerts of
+2026-10-05 showed 8 of 12 with a lone first drop and returns in 8 of 11
+long episodes - the drop-out signature at least as often as the outage
+one.
+
+**Not fixed here.** What it suggests: state the facts without the
+mechanism - or give both mechanisms equal weight and ask for `unknown`
+unless the opening cluster, the returns and the gates point the same way -
+and re-read the label mix a day later.
