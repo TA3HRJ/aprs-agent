@@ -7125,3 +7125,13 @@ one.
 mechanism - or give both mechanisms equal weight and ask for `unknown`
 unless the opening cluster, the returns and the gates point the same way -
 and re-read the label mix a day later.
+
+**Applied, v3.2.156.** `_onset_context` now gives both readings with equal
+weight - stations dropping out one by one, or one mains failure where
+stations on backup power last longer - names backup power once, generally,
+instead of listing devices, and ends: unless the spread, the opening, the
+returns and the gates point the same way, answer cause "unknown". The
+evidence bundle's timing caveat and the popup note say the same.
+`check_onset_facts` requires the generic phrase, the drop-out reading and
+the "unknown" rule, and refuses the device list; **seen failing** (8)
+against v3.2.155. Re-read the label mix a day after it deploys.

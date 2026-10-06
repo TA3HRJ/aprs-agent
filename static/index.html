@@ -991,7 +991,7 @@ const S={en:{
   sil_shared_gate:"One shared gate — its own state unknown",
   sil_backbone:"Internet-connected clients — no local witness",
   sil_no_local:"Not announced: not one of these stations was heard by an igate — every one either gated itself or dialled the APRS-IS backbone directly. Their silence is an internet or app dropout, and says nothing about this region.",
-  sil_stats:"{s} of {b} stations silent",sil_since:"Since:",sil_onset:"Stopped over {span}; {o} of {n} within {w} min of the first",sil_back:"{r} back during this alert",sil_backup:"A spread does not rule out one outage: stations on UPS, battery or solar stop later.",
+  sil_stats:"{s} of {b} stations silent",sil_since:"Since:",sil_onset:"Stopped over {span}; {o} of {n} within {w} min of the first",sil_back:"{r} back during this alert",sil_backup:"A spread fits both readings: stations dropping out one by one, or one outage where stations on backup power stop later.",
   sil_q_before:"{t} before",sil_q_after:"{t} after",
   sil_dl:"Raw data",sil_cp:"Copy as AI prompt",sil_cp_blind:"Kör kopyala",sil_cp_blind:"Copy blind",
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
@@ -1137,7 +1137,7 @@ const S={en:{
   sil_shared_gate:"Tek ortak gate — kendi durumu bilinmiyor",
   sil_backbone:"İnternete bağlı istemciler — yerel tanık yok",
   sil_no_local:"Duyurulmadı: bu istasyonların hiçbirini bir igate duymadı — her biri ya kendini gateledi ya da doğrudan APRS-IS omurgasına bağlandı. Sessizlikleri bir internet ya da uygulama kopmasıdır, bu bölge hakkında bir şey söylemez.",
-  sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",sil_onset:"{span} içinde sustular; ilk {w} dk içinde {o}/{n}",sil_back:"bu uyarı sürerken {r} geri geldi",sil_backup:"Yayılma tek bir kesintiyi dışlamaz: UPS, pil veya güneş paneliyle çalışan istasyonlar daha geç susar.",
+  sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",sil_onset:"{span} içinde sustular; ilk {w} dk içinde {o}/{n}",sil_back:"bu uyarı sürerken {r} geri geldi",sil_backup:"Yayılma iki okumaya da uyar: istasyonların tek tek susması da, yedek güçle çalışanların daha geç sustuğu tek bir kesinti de.",
   sil_q_before:"{t} önce",sil_q_after:"{t} sonra",
   sil_dl:"Ham veri",sil_cp:"AI istemi olarak kopyala",
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
@@ -2073,7 +2073,7 @@ function silPopup(c){
   if(c.since)h+=t('sil_since')+' '+fmtAgoLong(Math.max(0,Math.floor(Date.now()/1000-c.since)))+'<br>';
   // When they stopped, as facts (F-2026-10-05-03): how spread the last packets
   // are, how many went with the first, and who has come back. A wide spread is
-  // not a verdict - a mains cut staggers too, through UPS, battery and solar -
+  // not a verdict - a mains cut staggers too, through backup power -
   // so the popup says that rather than letting the number speak alone.
   if(c.onset&&c.onset.n>=2){
     const o=c.onset,sp=o.spread_s;

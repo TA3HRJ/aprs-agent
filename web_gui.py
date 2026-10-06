@@ -1536,22 +1536,32 @@ class AgentManager:
         else:
             human = (f"{spread // 3600} hours {(spread % 3600) // 60} minutes"
                      if spread >= 3600 else f"{spread // 60} minutes")
+            # Both readings, with equal weight. The first wording argued
+            # against an outage and 98.8 % of notes said "unknown"; the
+            # second listed backup devices one by one and 73 % said
+            # "power_outage" (F-2026-10-06-04). Timing alone decides neither.
             reading = (
-                "spread out. That alone does not separate independent "
-                "drop-outs from one outage: after a mains failure, stations on "
-                "UPS, battery or solar stop later than unprotected ones, minutes "
-                "to hours apart, a solar site at dusk")
+                "spread out. Timing alone fits two readings equally: stations "
+                "dropping out one by one for their own reasons, or one mains "
+                "failure where stations on backup power last longer than the "
+                "rest")
         out = (f"Last packets of the silent stations span {human} from first "
                f"to last: {reading}.\n"
                f"{f['opening']} of {f['n']} stopped within "
-               f"{max(1, f['window_s'] // 60)} minutes of the first. A mains cut "
-               f"stops every unprotected station at once; a lone first drop "
-               f"fits drop-outs, or a cell whose stations are all backed up.\n")
+               f"{max(1, f['window_s'] // 60)} minutes of the first. One mains "
+               f"failure stops every station without backup power at once; a "
+               f"lone first drop fits drop-outs, or a cell where every station "
+               f"has backup power.\n")
         back = sorted(self._silence_seen.get(c.get("cell", ""), set()) - set(calls))
         if back:
             out += (f"{len(back)} station(s) came back while this alert ran "
                     f"({', '.join(back[:5])}): that fits drop-outs, but power "
-                    f"returning or sunrise on a solar site does the same.\n")
+                    f"coming back, or backup power recovering, does the same.\n")
+        if spread >= 1800:
+            out += ("Weigh the spread, the opening, the returns and the gates "
+                    "together. Unless they point the same way, answer cause "
+                    "\"unknown\" rather than choose power_outage or a drop-out "
+                    "from timing alone.\n")
         return out
 
     def _history_context(self, c: dict) -> str:
@@ -2949,11 +2959,13 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
             "Timing does not decide the cause by itself. cell.onset gives the "
             "spread of the silent stations' last packets, how many stopped "
             "within one interval of the first (opening) and who came back "
-            "during the alert (returned). A wide spread does not show "
-            "independent causes: after a mains failure, stations on UPS, "
-            "battery or solar stop later than unprotected ones, minutes to "
-            "hours apart. A return fits drop-outs, but power coming back or "
-            "sunrise on a solar site does the same.",
+            "during the alert (returned). A wide spread fits two readings "
+            "equally: stations dropping out one by one for their own "
+            "reasons, or one mains failure where stations on backup power "
+            "stop later than the rest, minutes to hours apart. A return fits "
+            "drop-outs, but power coming back or backup power recovering "
+            "does the same. Unless the facts point one way, the cause is "
+            "unknown.",
             "Point-in-time snapshot: the cell may have recovered since "
             "generated_at. Use cell_history for what came before it, and do "
             "not infer a past outage the history does not show.",

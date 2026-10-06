@@ -100,15 +100,25 @@ def main() -> int:
     ctx = web[i:web.find("\n    def ", i + 10)] if i >= 0 else ""
     if "did NOT go down together" in ctx or "argues against one power" in ctx:
         fails.append("the AI context still reads a wide spread as independence")
-    for w in ("UPS", "battery", "solar", "onset_facts", "came back"):
+    for w in ("backup power", "onset_facts", "came back", "unknown"):
         if w not in ctx:
             fails.append("the AI context does not mention %r" % w)
+    # 2026-10-06 (F-2026-10-06-04): naming UPS, battery and solar one by one
+    # tipped the note from 98 % "unknown" to 73 % "power_outage". The
+    # mechanism is stated once, generally, beside the drop-out one.
+    for w in ("UPS", "battery", "solar"):
+        if w in ctx.split('"""', 2)[-1]:
+            fails.append("the AI context still lists %r - one generic phrase, "
+                         "beside the drop-out reading" % w)
+    if "drop-out" not in ctx:
+        fails.append("the AI context does not give the drop-out reading beside the outage one")
     k = web.find("async def get_silence_evidence")
     ev = web[k:web.find("\n@routes", k + 10)] if k >= 0 else ""
     if 'c["onset"]' not in ev:
         fails.append("the evidence bundle does not carry the onset facts")
-    if "UPS" not in ev or "since_means" not in ev:
-        fails.append("the evidence bundle does not name backup power or say what `since` is")
+    if "backup power" not in ev or "UPS" in ev or "since_means" not in ev:
+        fails.append("the evidence bundle does not name backup power (generically) "
+                     "or say what `since` is")
     if "gate_stopped_first" not in ev:
         fails.append("bundle stations do not say whether their gate fell silent first")
     page = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
@@ -116,6 +126,10 @@ def main() -> int:
     pop = page[j:page.find("\nfunction ", j + 10)] if j >= 0 else ""
     if "c.onset" not in pop or "sil_onset" not in pop:
         fails.append("the map popup does not show the onset facts")
+    import re as _re
+    for lang_key in _re.findall(r'sil_backup:"([^"]*)"', page):
+        if "UPS" in lang_key or "solar" in lang_key.lower() or "güneş" in lang_key:
+            fails.append("the popup's backup note still lists devices: %r" % lang_key[:60])
 
     for f in fails:
         print("  FAIL  " + f)
