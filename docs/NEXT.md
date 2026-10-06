@@ -74,13 +74,13 @@ What is left, in the order it is worth doing:
     and 3 (young cells) stay open (F-2026-10-05-05). Watch: the daily count
     of `[silence] ALERT` lines against 2026-10-04's 134.
 
-15. **Propagation detection - to be re-evaluated from the start, later.**
-    F-2026-10-05-06 proposed four more exclusions (impossible-speed jumps,
-    balloon by symbol, Norway L[A-N], sender record in the bundle). The
-    operator declined them for now (2026-10-05): each tightening has cut
-    the count, and four more would leave little to call propagation. The
-    whole approach - what a link has to be to count, and what an opening is
-    - gets a fresh look in a session of its own. Until then: no new rules.
+15. **Propagation - first calibration done in v3.2.153.** Against
+    dxview's paths (F-2026-10-06-01) and a 29 h replay of the raw feed
+    (F-2026-10-06-02): floor 250 km, and position jumps and balloons kept
+    out of baselines and openings. Still open: the gate rule (one gate, two
+    distant senders), 2 m vs LoRa, and a standing reference collector
+    (dxview / PSKReporter / F5LEN), which needs the operator's word before
+    any site is read on a schedule.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.

@@ -998,8 +998,8 @@ const S={en:{
   sil_ev_err:"Could not fetch the evidence for this cell.",
   prop_judged_gate:"Judged against this gate's own history — {n} samples, {r}× the {t} km bar it had to clear",
   prop_judged_gate_old:"Judged against this gate's own history — {n} samples",
-  prop_judged_floor_est:"Judged by the 300 km floor — this gate has {n} samples, but its own bar ({b} km) sits below the floor, so its history decided nothing here",
-  prop_judged_floor:"Judged by the 300 km floor alone — this gate has only {n} samples, so it has no usual reach yet",
+  prop_judged_floor_est:"Judged by the {f} km floor — this gate has {n} samples, but its own bar ({b} km) sits below the floor, so its history decided nothing here",
+  prop_suspect_jump:"Suspect: the sender’s position jumped from its last one faster than any station moves - not counted toward an opening or the gate’s baseline",prop_suspect_balloon:"Suspect: a balloon, whose height makes reach line of sight - not counted toward an opening or the gate’s baseline",prop_judged_floor:"Judged by the {f} km floor alone — this gate has only {n} samples, so it has no usual reach yet",
   ev_render_err:"The evidence arrived but the page could not show it",
   ev_copy:"Copy",
   ev_save:"Save as file",
@@ -1144,8 +1144,8 @@ const S={en:{
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
   prop_judged_gate:"Gate'in kendi geçmişine göre değerlendirildi — {n} örnek, aşması gereken {t} km eşiğinin {r} katı",
   prop_judged_gate_old:"Gate'in kendi geçmişine göre değerlendirildi — {n} örnek",
-  prop_judged_floor_est:"300 km tabanıyla değerlendirildi — bu gate'in {n} örneği var ama kendi eşiği ({b} km) tabanın altında kaldığı için geçmişi burada bir şey belirlemedi",
-  prop_judged_floor:"Yalnızca 300 km tabanıyla değerlendirildi — bu gate'in {n} örneği var, henüz bir olağanı yok",
+  prop_judged_floor_est:"{f} km tabanıyla değerlendirildi — bu gate'in {n} örneği var ama kendi eşiği ({b} km) tabanın altında kaldığı için geçmişi burada bir şey belirlemedi",
+  prop_suspect_jump:"Şüpheli: gönderenin konumu bir öncekinden hiçbir istasyonun gidemeyeceği hızla sıçradı - açılışa ve geçidin olağanına sayılmadı",prop_suspect_balloon:"Şüpheli: bir balon; yüksekliği menzili görüş hattına çeviriyor - açılışa ve geçidin olağanına sayılmadı",prop_judged_floor:"Yalnızca {f} km tabanıyla değerlendirildi — bu gate'in {n} örneği var, henüz bir olağanı yok",
   ev_render_err:"Veri geldi ama sayfa gösteremedi",
   ev_copy:"Kopyala",
   ev_save:"Dosya olarak kaydet",
@@ -2742,6 +2742,7 @@ function renderProp(links,hist){
            // actually bound. Drawn as the weaker claim it is.
            if(a.established&&a.gate_decided===false)
              return '<br><span class="prop-young">'+t('prop_judged_floor_est')
+                    .replace('{f}',a.threshold_km==null?250:Math.round(a.threshold_km))
                     .replace('{n}',a.samples)
                     .replace('{b}',a.gate_bar_km==null?'?':a.gate_bar_km)+'</span>';
            if(a.established){
@@ -2762,8 +2763,12 @@ function renderProp(links,hist){
                     .replace('{t}',Math.round(a.threshold_km))+'</span>';
            }
            return '<br><span class="prop-young">'+t('prop_judged_floor')
+                    .replace('{f}',a.threshold_km==null?250:Math.round(a.threshold_km))
                     .replace('{n}',a.samples)+'</span>';
          })()
+        // A position jump or a balloon: drawn, but kept out of the opening and
+        // the gate's baseline (F-2026-10-06-02) - say so where it is read.
+        +(l.suspect?'<br><span class="prop-young">'+esc(t('prop_suspect_'+l.suspect)||l.suspect)+'</span>':'')
         // The distance alone says nothing without the gate's own baseline and
         // the opening it belongs to, and neither is on the map.
         +'<div class="sil-ev"><a onclick="propEvidence('+args+',0,this)">⬇ '+t('sil_dl')
@@ -2783,7 +2788,7 @@ function renderProp(links,hist){
     // wide line underneath does the actual hit-testing (click AND hover)
     // while the visible line on top stays visually unobtrusive.
     const hit=L.polyline(coords,{color:col,weight:16,opacity:0}).addTo(map);
-    // Judged against the gate's own history, or only against the 300 km floor?
+    // Judged against the gate's own history, or only against the floor?
     // The second is the majority and much the weaker claim, so it is drawn as
     // the weaker line rather than identically.
     const est=!!(l.at_flag&&l.at_flag.established

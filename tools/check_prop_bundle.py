@@ -22,7 +22,7 @@ Three assertions, in the order they matter:
      bundle can show what the decision actually compared against
 
   4. the multiplier the bundle publishes divides by that threshold, and the
-     threshold is at or above the 300 km floor
+     threshold is at or above the floor (250 km since v3.2.153)
   5. neither end of a published link is off the Earth. Latitude stops at 90
      and longitude at 180, and a position outside that is not a place a
      distance can be measured to
@@ -43,7 +43,7 @@ bundle would carry no multiplier of its own to match.
 The reason the denominator moved: an EMA hugs zero on gates which mostly hear
 stations beside them, so the same 539 km read 5382x against one gate and would
 have read 2696x against its neighbour. A ratio whose denominator can approach
-zero is not a measure of anything. threshold_km folds the 300 km floor in, so
+zero is not a measure of anything. threshold_km folds the floor in, so
 it cannot.
 
 Assertion 2 has a blind spot worth knowing: on a quiet gate the flag-time and
@@ -65,7 +65,7 @@ import sys
 import urllib.parse
 import urllib.request
 
-PROP_MIN_KM = 300.0          # the absolute floor a link must clear to be flagged
+PROP_MIN_KM = 250.0          # the absolute floor a link must clear to be flagged (300 until v3.2.153)
 
 
 def _get(base: str, path: str, timeout: float = 60.0):

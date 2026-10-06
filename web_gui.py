@@ -1242,6 +1242,14 @@ class AgentManager:
                     f"from opening grouping: {bad} reports a position outside "
                     f"its own callsign allocation")
                 continue
+            # A suspect link - a position jump or a balloon - stays on the map
+            # and out of the grouping, as a contradicted position does
+            # (F-2026-10-06-02).
+            if l.get("suspect"):
+                self._log_both(
+                    f"[prop] {l['call']}->{l['gate']} {l['km']:.0f}km excluded "
+                    f"from opening grouping: suspect ({l['suspect']})")
+                continue
             # A gate that measures the same large distance every time is not
             # reporting propagation, it is reporting one fixed coordinate
             # error. Repeated, it supplies its own "second sender" and
@@ -3209,13 +3217,13 @@ def _prop_vs_baseline(link: dict, base: dict, params: dict) -> dict:
     est_threshold = 3.0 * ema
     would_survive = km >= est_threshold
     # The bar the decision actually used, off the link. Unlike the figures
-    # above it cannot approach zero — the 300 km floor is folded into it — so
+    # above it cannot approach zero — the floor is folded into it — so
     # it is the ratio this bundle and the popup quote.
     thr = at.get("threshold_km")
     bar = at.get("gate_bar_km")
     times_thr = at.get("times_threshold")
     established = bool(base.get("established"))
-    floor = float(params.get("min_km", 300.0))
+    floor = float(params.get("min_km", 250.0))
     # Three cases, because two of them were being read out in one sentence and
     # that sentence was false in the third. A gate can be established by sample
     # count while the bar its own history sets sits UNDER the floor — then

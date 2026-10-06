@@ -1235,7 +1235,18 @@ class StationDB:
     #    live worldwide feed — see the v2.10.0 calibration notes) ──
     # A link shorter than this is never anomalous, whatever the baseline:
     # normal VHF/UHF terrestrial range plus a wide margin.
-    PROP_MIN_KM = 300.0
+    #
+    # 250 since 2026-10-06. 300 was set by judgement (F-2026-08-12-03) and
+    # never calibrated; against vhf.dxview.org's paths of 250 km or more the
+    # map caught 13 % of 250-299 km, and a 29 h replay of the raw feed showed
+    # 250 doubling the openings, 44 -> 90 a day (F-2026-10-06-01, -02).
+    PROP_MIN_KM = 250.0
+    # A sender whose position moved farther than this from its previous one,
+    # faster than this, sent a corrupt or stale position, not a radio path
+    # (F-2026-10-05-06: SV0SYH-1 put itself on the Caspian, SQ9SIM-5 in the
+    # Western Sahara). Above an airliner's ground speed.
+    PROP_JUMP_KM = 100.0
+    PROP_JUMP_KMH = 1200.0
     # Links longer than this are treated as data errors (GPS garbage,
     # misconfigured coordinates) — even extreme sporadic-E stays below it.
     PROP_MAX_KM = 5000.0
@@ -1314,7 +1325,7 @@ class StationDB:
         # gates was 3, and NO gate had reached the 20 required to establish a
         # baseline. With eight releases in a day — plus an updater that checks
         # hourly — they never could. The >=20 branch was effectively dead code
-        # and the detector ran permanently on the 300 km floor alone, which I
+        # and the detector ran permanently on the floor alone (300 km then), which I
         # then measured and reported as the detector being 86% noise. It was
         # my deploy cadence. See F-43.
         #
@@ -1377,6 +1388,12 @@ class StationDB:
         callsign = parsed.get("callsign", "")
         if not callsign:
             return None
+        # Where the station was before this packet moves it - the propagation
+        # check needs it to see a position jump, and the update below
+        # overwrites it.
+        _old = self._stations.get(callsign)
+        prev = ((_old.lat, _old.lon, _old.last_seen)
+                if _old is not None and _old.lat is not None else None)
 
         if callsign not in self._stations:
             rec = StationRecord(callsign)
@@ -1394,7 +1411,7 @@ class StationDB:
         if own:
             rec.self_beacon = True
         if not own:
-            self._ingest_prop_link(parsed, rec)
+            self._ingest_prop_link(parsed, rec, prev)
             self._note_hazard(parsed, rec)
         return rec
 
@@ -1461,7 +1478,7 @@ class StationDB:
         return 6371.0 * 2 * math.asin(math.sqrt(a))
 
     def _ingest_prop_link(self, parsed: dict[str, Any],
-                          rec: StationRecord) -> None:
+                          rec: StationRecord, prev=None) -> None:
         """Measure the realised RF link of a direct, RF-gated position packet.
 
         Every qAR/qAO packet that reached its igate without digi hops is one
@@ -1517,23 +1534,47 @@ class StationDB:
                 self._prop_hist[i] += 1
                 break
 
+        # A suspect link: the sender's position jumped from its previous one
+        # at an impossible speed, or the sender is a balloon whose packet
+        # carried no altitude for PROP_MAX_ALT_M to catch. It is still drawn
+        # and flagged - the record stays - but it does not move the gate's
+        # baseline and it does not count toward an opening. Fed in, one
+        # balloon took SK3GK-11's bar from 166 to 1,363 km in an hour, and in
+        # a 29 h replay four gates went deaf below 1,000 km only from such
+        # links (F-2026-10-05-06, F-2026-10-06-02).
+        suspect = ""
+        if prev and prev[0] is not None and prev[1] is not None \
+                and not (abs(prev[0]) < 0.5 and abs(prev[1]) < 0.5):
+            jump = self._haversine_km(prev[0], prev[1], lat, lon)
+            now_ts = float(parsed.get("ts") or time.time())
+            dt = max(now_ts - float(prev[2] or 0.0), 60.0)
+            if jump > self.PROP_JUMP_KM and jump / dt * 3600.0 > self.PROP_JUMP_KMH:
+                suspect = "jump"
+        if not suspect and (rec.station_type == "balloon"
+                            or "balloon" in str(parsed.get("comment") or "").lower()):
+            suspect = "balloon"
+
         # Per-gate EMA baseline (mean + variance). The anomaly decision uses
         # the PRE-update baseline: folding the outlier in first would inflate
         # σ and let the outlier mask itself. The link still updates the
         # baseline afterwards, so a permanently misconfigured "DX" station
-        # gradually becomes that gate's normal and stops alerting.
+        # gradually becomes that gate's normal and stops alerting - unless it
+        # is suspect, which is judged against the baseline and leaves it alone.
         st = self._gate_stats.get(gate)
-        if st is None:
-            st = self._gate_stats[gate] = [0.0, dist, 0.0]
-        count, mean, var = st
-        a = self._PROP_ALPHA
-        st[0] = count + 1
-        st[1] = (1 - a) * mean + a * dist
-        st[2] = (1 - a) * var + a * (dist - mean) ** 2
-        # A gate can quietly lose the ability to flag anything at all, and
-        # this is the only place its numbers move — so it is where that gets
-        # noticed. O(1); see _update_gate_reach.
-        self._update_gate_reach(gate, st)
+        if suspect:
+            count, mean, var = st if st is not None else (0.0, dist, 0.0)
+        else:
+            if st is None:
+                st = self._gate_stats[gate] = [0.0, dist, 0.0]
+            count, mean, var = st
+            a = self._PROP_ALPHA
+            st[0] = count + 1
+            st[1] = (1 - a) * mean + a * dist
+            st[2] = (1 - a) * var + a * (dist - mean) ** 2
+            # A gate can quietly lose the ability to flag anything at all, and
+            # this is the only place its numbers move — so it is where that
+            # gets noticed. O(1); see _update_gate_reach.
+            self._update_gate_reach(gate, st)
 
         # Anomaly: beyond the absolute floor AND well beyond this gate's own
         # normal — or the gate is too new to have a normal, in which case the
@@ -1569,12 +1610,13 @@ class StationDB:
             # the line weight have been drawing since v3.2.15.
             gate_decided = gate_bar >= self.PROP_MIN_KM
             judged = ("gate baseline" if gate_decided
-                      else "300 km floor — this gate's own bar is lower")
+                      else "%d km floor — this gate's own bar is lower"
+                      % self.PROP_MIN_KM)
         else:
             gate_bar = None
             gate_decided = False
             threshold = self.PROP_MIN_KM
-            judged = "300 km floor alone"
+            judged = "%d km floor alone" % self.PROP_MIN_KM
         self._prop_anomalous += 1
         # The baseline AS IT STOOD when this flag was raised (F-16). Reading it
         # at export time instead produced two confident, opposite verdicts on
@@ -1595,7 +1637,7 @@ class StationDB:
                 # an outside reader computed a confident verdict from a circle.
                 "sigma_km": round(sigma, 1) if count else None,
                 # The gate's OWN bar, and the bar that actually applied. They
-                # differ whenever the gate's bar sits under the 300 km floor,
+                # differ whenever the gate's bar sits under the floor,
                 # which is most of the interesting cases.
                 "gate_bar_km": round(gate_bar, 1) if gate_bar is not None else None,
                 "threshold_km": round(threshold, 1),
@@ -1627,6 +1669,9 @@ class StationDB:
             },
             "s_lat": round(lat, 4), "s_lon": round(lon, 4),
             "g_lat": round(g.lat, 4), "g_lon": round(g.lon, 4),
+            # "", "jump" or "balloon": drawn, but kept out of the gate's
+            # baseline and of the opening grouping.
+            "suspect": suspect,
         })
 
     # A gate with one or two samples carries a baseline that is still mostly
@@ -1725,7 +1770,7 @@ class StationDB:
 
         The sample bar is `PROP_GEOMETRY_MIN_SAMPLES`, not `PROP_MIN_SAMPLES`.
         A young gate is exactly where this matters most: until it reaches 20
-        samples the 300 km floor decides alone, so a misplaced one flags
+        samples the floor decides alone, so a misplaced one flags
         *everything* it carries — `VE2SIL-1` flagged 10 of 10, `RA4NHY-1`
         produced 19 identical records at 1170.6 km ± 0.35 — and then goes
         permanently silent the moment its own bar is consulted. Waiting for 20
@@ -2032,8 +2077,12 @@ class StationDB:
                              "Maidenhead field within 30 minutes; one long "
                              "link alone is never an opening, because a "
                              "single misconfigured GPS can fake any distance. "
-                             "Two kinds of link are excluded from this "
-                             "grouping while remaining on the map: one whose "
+                             "Three kinds of link are excluded from this "
+                             "grouping while remaining on the map: a suspect "
+                             "one (`suspect`: the sender's position jumped "
+                             "from its previous one faster than 1200 km/h, or "
+                             "the sender is a balloon), which also leaves the "
+                             "gate's baseline alone; one whose "
                              "own position contradicts its callsign "
                              "allocation, and one sitting on the repeated "
                              "distance of a gate that measures the same "
