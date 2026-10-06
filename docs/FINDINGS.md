@@ -7031,3 +7031,52 @@ Not established: how many of the 184 new 250-300 km links a day are
 propagation rather than a high site's routine reach. The gate's own bar
 catches the latter only where it exceeds 250 km, which F-2026-08-26 put at
 about one gate in ten.
+
+---
+
+## F-2026-10-06-03 — stations injected over the internet under someone else's login were counted as radio witnesses
+
+The operator sent a screenshot of South India: five adjacent silence cells,
+four grey and one red (MJ88, "Regional silence (possible outage)").
+
+**What it was.** VU3ZAG-13 is an internet-connected Raspberry Pi Pico
+weather station near Mumbai (MK68). Besides its own beacons it sends
+position beacons for about twenty Kerala and Tamil Nadu repeaters under
+their callsigns:
+
+    VU2CSD>APRS,TCPIP*,qAS,VU3ZAG-13:!0853.45N/07636.08Er VU2CSD Repeater 145.350Mhz
+
+None of them is heard on air. When the Pico stopped (2026-10-05 07:09 CEST)
+all of them fell silent at once - same 309 s cadence, same moment - and,
+spread over MJ88, MJ89, MK80, MK81 and MK91, drew a regional pattern.
+
+**The fault.** `last_gate` takes the name after the q-construct. For
+`TCPIP*,qAS,VU3ZAG-13` that is the login that injected the packet, not an
+igate that heard anything, and `gate_independence()` only recognises the
+`T2*`/`FIRST`... servers as internet. So the four grey cells read
+"IGate failure" and MJ88, where a fifth station (VU2NXG-7) came in through
+T2GREECE and was the one novel face, read "possible outage". The same error
+F-2026-09-29-01 fixed for the test answer (`qAS` + `TCPIP*` is internet) was
+still in the silence detector.
+
+**How common.** In six hours of the raw feed, 1,945 distinct callsigns
+arrived `TCPIP*,qAS,<another login>` - 9M2PJU-1 alone carried 556,
+BrandMeister's DMR gateways (BM2222, BM2142POS) hundreds. Measured on the
+live threshold cells (2026-10-06 ~07:40 CEST), each silent station's last
+packet looked up in the 29 h log (the in-memory `last_packet` is empty
+after a restart, which made a first attempt read 3 of 250):
+
+| | |
+|---|---|
+| threshold cells / alerting | 53 / 12 |
+| silent stations, all found in the log | 254 |
+| ... last packet injected under another login | 35 (VU3ZAG-13 20, VK2FLY 2, RC3C 2, others) |
+| cells touched | 13 |
+| ... that would have no local witness at all | 10, among them **3 of the 12 alerts** (GF25, MJ88, PH57) and the four grey South India cells |
+
+**What it suggests (not decided):** treat a station whose packet came with
+`TCPIP*` as internet-gated whatever name follows the q-construct - store its
+gate as `TCPIP/<login>` so it survives a restart, count it with the
+backbone in `gate_independence()`, and say "over the internet" where the
+gateway answers "last gated by". Records already silent keep their old gate
+until heard again.
