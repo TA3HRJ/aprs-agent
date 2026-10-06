@@ -505,6 +505,7 @@ body.public #about-gw-link{display:none!important}
   <button class="hdr-btn" onclick="document.querySelectorAll('.pref-group').forEach(g=>g.classList.remove('collapsed'))" title="Expand All">+</button>
   <button class="hdr-btn" id="btn-lang" onclick="toggleLang()">TR</button>
   <button class="hdr-btn" id="btn-about" onclick="openAbout()" data-i="btn_about">About</button>
+  <button class="hdr-btn" id="btn-stats" hidden onclick="window.open('/stats/','_blank','noopener')" data-i="btn_stats">Stats</button>
   <button class="hdr-btn sb-close" onclick="document.body.classList.remove('sb-open')" title="Close">✕</button>
 </div>
 
@@ -980,7 +981,7 @@ const S={en:{
   imap_interval:"Poll interval (min)",imap_from:"From callsign",imap_allowed:"Allowed sender emails",imap_allowed_hint:"Comma-separated, empty = allow all",
   ext_enabled:"Extension Server",ext_sub:"Bidirectional TCP stream for external programs",ext_host:"Listen host",ext_port:"Listen port",
   cfg_path:"Path",status_stopped:"● Stopped",status_running:"● Running",btn_reload:"🔄 Reload",btn_save:"💾 Save",btn_start:"▶ Start",btn_stop:"■ Stop",
-  heard_label:"Last Heard",st_rx:"Received",st_tx:"Sent",st_err:"Errors",st_pk:"Packets",st_heard:"Heard",st_registry:"Registry",st_heard_reg:"Heard / Registry",st_stations:"Stations",st_calls:"Callsigns",st_uptime:"Uptime",st_lifetime:"Lifetime",btn_about:"About",
+  heard_label:"Last Heard",st_rx:"Received",st_tx:"Sent",st_err:"Errors",st_pk:"Packets",st_heard:"Heard",st_registry:"Registry",st_heard_reg:"Heard / Registry",st_stations:"Stations",st_calls:"Callsigns",st_uptime:"Uptime",st_lifetime:"Lifetime",btn_about:"About",btn_stats:"Stats",
   about_title:"About APRS-Agent",about_desc:"A multi-extension APRS-IS agent for amateur radio operators.",about_devs:"Developers",about_source:"Source:",about_infra:"Infrastructure",about_infra_detail:"Contabo VPS, Germany · Ubuntu 22.04 LTS",about_ai_calls:"AI analysis calls (lifetime):",about_gw:"Gateway:",about_gw_v:"{t} {o} today, {a} ever, {q} {qq} answered",about_gw_one:"operator",about_gw_many:"operators",about_gw_q1:"question",about_gw_qn:"questions",about_gw_link:"see the messages",about_license:"MIT License",about_close:"Close",about_data:"Data",about_data_txt:"This page shows packets already broadcast publicly on APRS-IS. Station records (callsign, last position, last heard, comment) are kept with no time limit: the map, silence detection and propagation analysis depend on knowing when and where a station was heard. APRS messages, conversations with the gateway, and silence, propagation and hazard history are kept 14 days. Questions to the gateway are passed to an AI provider to be answered. A station that sends NOLOOKUP to the gateway is left out of other people’s lookups. To ask about your data or have a record removed, write to:",
   save_ok:"Config saved.",save_err:"Save failed.",reload_ok:"Config reloaded.",no_callsign:"Enter your callsign first.",
   save_restart_hint:"⚠ The running agent won't see this change until you Stop and Start it again.",
@@ -1126,7 +1127,7 @@ const S={en:{
   imap_interval:"Yoklama aralığı (dk)",imap_from:"Gönderen çağrı işareti",imap_allowed:"İzin verilen gönderen e-postalar",imap_allowed_hint:"Virgülle ayır, boş = hepsi",
   ext_enabled:"Extension Sunucusu",ext_sub:"Harici programlar için çift yönlü TCP akışı",ext_host:"Dinleme adresi",ext_port:"Dinleme portu",
   cfg_path:"Dosya yolu",status_stopped:"● Durduruldu",status_running:"● Çalışıyor",btn_reload:"🔄 Yenile",btn_save:"💾 Kaydet",btn_start:"▶ Başlat",btn_stop:"■ Durdur",
-  heard_label:"Son Duyulan",st_rx:"Alınan",st_tx:"Gönderilen",st_err:"Hata",st_pk:"Paket",st_heard:"Duyulan",st_registry:"Kayıtlı",st_heard_reg:"Duyulan / Kayıtlı",st_stations:"İstasyon",st_calls:"Çağrı İşareti",st_uptime:"Süre",st_lifetime:"Toplam Süre",btn_about:"Hakkında",
+  heard_label:"Son Duyulan",st_rx:"Alınan",st_tx:"Gönderilen",st_err:"Hata",st_pk:"Paket",st_heard:"Duyulan",st_registry:"Kayıtlı",st_heard_reg:"Duyulan / Kayıtlı",st_stations:"İstasyon",st_calls:"Çağrı İşareti",st_uptime:"Süre",st_lifetime:"Toplam Süre",btn_about:"Hakkında",btn_stats:"İstatistik",
   about_title:"APRS-Agent Hakkında",about_desc:"Amatör radyo operatörleri için çok eklentili bir APRS-IS ajanı.",about_devs:"Geliştiriciler",about_source:"Kaynak:",about_infra:"Altyapı",about_infra_detail:"Contabo VPS, Almanya · Ubuntu 22.04 LTS",about_ai_calls:"AI analiz çağrısı (toplam):",about_gw:"Geçit:",about_gw_v:"bugün {t} operatör, toplam {a}, {q} soru yanıtlandı",about_gw_one:"operatör",about_gw_many:"operatör",about_gw_q1:"soru",about_gw_qn:"soru",about_gw_link:"mesajlara bak",about_license:"MIT Lisansı",about_close:"Kapat",about_data:"Veri",about_data_txt:"Bu sayfa, APRS-IS’te zaten herkese açık yayınlanmış paketleri gösterir. İstasyon kayıtları (çağrı işareti, son konum, son duyulma, yorum) süre sınırı olmadan tutulur: harita, sessizlik tespiti ve propagasyon analizi bir istasyonun ne zaman ve nerede duyulduğunu bilmeye dayanır. APRS mesajları, geçitle yapılan yazışmalar ve sessizlik, propagasyon ve tehlike geçmişi 14 gün tutulur. Geçide sorulan sorular cevaplanmak için bir yapay zekâ sağlayıcısına iletilir. Geçide NOLOOKUP gönderen istasyon başkalarının sorgularında gösterilmez. Verilerinizle ilgili soru veya kayıt silme talebi için:",
   save_ok:"Ayarlar kaydedildi.",save_err:"Kaydetme başarısız.",reload_ok:"Ayarlar yeniden yüklendi.",no_callsign:"Çağrı işaretinizi girin.",
   save_restart_hint:"⚠ Çalışan ajan bu değişikliği görmeyecek — Durdur'a basıp tekrar Başlat'a basmanız gerekir.",
@@ -1602,6 +1603,10 @@ function initMap(){
     maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(map);
   map.on('moveend zoomend',()=>{if(mapClusterMode)renderMap()});
+  // Leaflet listens only to the window. The gear hides the settings column
+  // and the alert lists open above the map without the window changing, and
+  // the strip the column had covered stayed without tiles (2026-10-07).
+  if(window.ResizeObserver)new ResizeObserver(()=>map.invalidateSize()).observe($('map'));
   setTimeout(()=>map.invalidateSize(),60);
   renderMap();
 }
@@ -3177,6 +3182,10 @@ function toggleSidebar(){
     }
   }catch(e){quiet(e)}
   if(!window.PUBLIC){try{const cfg=await api('GET','/api/config');loadCfg(cfg)}catch(e){quiet(e);addLog('[web] Failed to load config\n')}}
+  // A visitor report exists only where the web server in front of the panel
+  // serves one at /stats/; the app has no such route. Show the button only
+  // when it answers here - a login redirect is not the report.
+  if(!window.PUBLIC){fetch('/stats/',{method:'HEAD',cache:'no-store',redirect:'manual'}).then(r=>{if(r.ok)$('btn-stats').hidden=false}).catch(()=>{})}
   restorePanelState();restoreTab();connectWS();applyLang();
   pollSilence();setInterval(pollSilence,15000);
 })();

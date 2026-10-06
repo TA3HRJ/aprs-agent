@@ -7135,3 +7135,39 @@ evidence bundle's timing caveat and the popup note say the same.
 `check_onset_facts` requires the generic phrase, the drop-out reading and
 the "unknown" rule, and refuses the device list; **seen failing** (8)
 against v3.2.155. Re-read the label mix a day after it deploys.
+
+---
+
+## F-2026-10-07-01 — hiding the settings column left a strip of the map without tiles
+
+The operator sent a screenshot of the admin Map tab with the settings column
+hidden: the right ~360 px of the map were black. Markers and cluster
+bubbles were drawn there, the OpenStreetMap tiles were not.
+
+**The fault.** Leaflet measures its container once and afterwards listens
+only to the window's `resize` event. The gear button (`toggleSidebar()`)
+hides the column with a class on `<body>`; the window does not change size,
+so Leaflet went on believing the map had the old width. Markers are placed
+by coordinates and still land in the wider box; tiles are requested only
+for the width Leaflet knows about. The same holds for anything that resizes
+the map's box without the window - the alert and still-off-the-air lists
+opening above it change its height.
+
+**Measured** in headless Edge at 1280 px, against the page as served:
+
+| | box width | Leaflet width | tiles reach |
+|---|---|---|---|
+| column shown | 876 | 876 | 893 |
+| column hidden, before | 1256 | **876** | **893** |
+| column hidden, after | 1256 | 1256 | 1339 |
+
+The 363 px gap is the column's width, as in the screenshot. A first attempt
+in the desktop app's own browser read 900 against 1280 for **both** versions
+and proved nothing: with Claude's window minimised that page draws no
+frames, `requestAnimationFrame` never fires, and a ResizeObserver reports
+only on a frame. A test of anything layout-driven needs a page that renders.
+
+**Applied, v3.2.157.** `initMap()` puts a ResizeObserver on the map's own
+box that calls `map.invalidateSize()`, so every cause is caught, present
+and future, rather than one call added to `toggleSidebar()`.
+`tools/check_map_resize.py`, **seen failing** against v3.2.156.
