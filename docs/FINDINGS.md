@@ -6931,3 +6931,51 @@ and the gate baseline when the implied speed from there is impossible
 type is `balloon` whatever its packet says about altitude; widen Norway to
 `L[A-N]`; and put the sender's type and previous position in the bundle so
 a reader can see the jump.
+
+---
+
+## F-2026-10-06-01 — against an outside reference, the propagation map catches the long paths and misses most of 250-500 km
+
+The operator's point: the map showed many openings when it was first built,
+the rules were tightened one fault at a time, and most of it went - never
+measured against anything outside itself. A reference was looked for and a
+first snapshot compared on 2026-10-06 (about 07:00 CEST).
+
+### Reference sources surveyed
+
+| source | what | usable as |
+|---|---|---|
+| vhf.dxview.org (NG0E) | APRS-IS, 144 MHz only; per-node footprint against its own typical; `text_display?reg=...&dist=250` lists grid-to-grid paths with km | **path-level reference**, same feed as ours |
+| PSKReporter API | FT8/FT4/JT65/MSK144 reception reports with both locators; "no more often than once every five minutes" | path-level for 2 m digital, **after removing EME (JT65, thousands of km) and meteor scatter (MSK144)** |
+| cluster.f5len.org `html/144.html` | DX cluster spots, sometimes two locators and a mode tag (`:TR:`, `:ES:`, EME) | event-level corroboration only: 40 spots, 8 with two locators |
+| dxrobot.gooddx.net (feeds G7IZU) | text logs of 50/70/144 MHz Es and aurora | Es / aurora events |
+| G7IZU / LiveMUF (G7RAU) | maps from cluster spots | no data feed |
+| DXMaps (EA6VQ) | 144 MHz spots by mode | **reuse forbidden** on its page |
+| MMMonVHF | TR/ES summaries, ON4KST, PSKReporter | no API found |
+| Hepburn, F5LEN tropo forecasts | forecast images | a prior, not an observation |
+
+### The snapshot
+
+Our flagged links of the last 4 h against dxview's paths of 250 km or
+more, a match being the same pair of 4-character squares within one square
+either way:
+
+| region | 250-299 km | 300-499 km | 500 km + |
+|---|---|---|---|
+| Europe | 5 / 24 | 5 / 13 | 3 / 4 |
+| North America | 3 / 39 | 13 / 27 | 2 / 2 |
+| **all** | **8 / 63 (13 %)** | **18 / 40 (45 %)** | **5 / 6** |
+
+Examples that agree: JN64/JN74 <-> JN80 at 550 km (ours IQ7HD-1 -> 9A4QV-2/-3,
+549-551 km), IN99 <-> JO10 at 340 km (ours 327 km). Missed: JN45 <-> JN81
+790 km, JO40 <-> JN57, JN39 <-> JN26 and most of North America's 250-300 km
+paths. PSKReporter, unfiltered, matched 3 of 33 reports over 250 km - but
+those 33 were mostly EME and meteor scatter, which an APRS map should not
+match.
+
+**Reading.** The long end works. The loss is 250-500 km - exactly the range
+of ordinary 2 m tropo - and it comes from the 300 km floor, the per-gate bar
+and the requirement that a link be flagged at all. What this snapshot cannot
+say: whether the missed paths reached us and were rejected (and by which
+rule) or never reached us, because only flagged links are kept. The windows
+also differ (ours 4 h, dxview's unstated). It is one morning, not a rate.
