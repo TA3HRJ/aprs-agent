@@ -6979,3 +6979,55 @@ and the requirement that a link be flagged at all. What this snapshot cannot
 say: whether the missed paths reached us and were rejected (and by which
 rule) or never reached us, because only flagged links are kept. The windows
 also differ (ours 4 h, dxview's unstated). It is one morning, not a rate.
+
+---
+
+## F-2026-10-06-02 — replaying 29 hours of the raw feed: the 250 km floor doubles the openings; bad packets are a fifth of today's flags
+
+Follows F-2026-10-06-01, without reading any outside site. The raw log
+(`/var/log/aprs/packets.log*`, 2026-10-05 01:26 to 2026-10-06 06:37 CEST,
+9.0 M lines) was replayed read-only through the live parser and the live
+link rules, seeded with the gate baselines and station positions of the
+2026-10-05 04:17 backup. 764,883 direct RF links were measured:
+
+| km | <=100 | 100-200 | 200-250 | 250-300 | 300-500 | 500-1000 | 1000-2000 | 2000-5000 |
+|---|---|---|---|---|---|---|---|---|
+| links | 687,285 | 62,133 | 6,499 | 4,670 | 1,509 | 1,259 | 1,097 | 431 |
+
+"Suspect" = an impossible jump from the sender's own previous position
+(over 100 km at over 1,200 km/h) or a balloon (symbol `/O` or "balloon" in
+the comment, since such packets often carry no altitude): 772 jumps and
+1,369 balloon links, at 159 gates.
+
+| per day | flagged | 250-300 | suspect among them | flagged, suspects out | openings (field), suspects out | openings (gate rule) |
+|---|---|---|---|---|---|---|
+| V0 today's rules | 294 | 0 | 57 | 238 | 44.4 | 2.5 |
+| V1 floor 250 km | 481 | 187 | 59 | 422 | **90.5** | 9.0 |
+| V2 suspects kept out of the gate baseline | 365 | 0 | 124 | 241 | 45.2 | 3.3 |
+| V3 = V1 + V2 | 595 | 230 | 169 | 425 | **93.0** | 9.9 |
+
+Openings here are counted once per field per 30 min, which is not the
+live episode logic; read them as relative, not as the number the map shows.
+
+**Reading.**
+
+- **The floor is the lever.** 250 instead of 300 adds about 185 links a
+  day, all in 250-300 km - the band F-2026-10-06-01 found 13 % caught - and
+  doubles the openings (44 -> 90 a day). Most fields that gain were already
+  opening (EM 19 -> 30, JN 15 -> 26, FN 3 -> 14 under V3).
+- **A fifth of today's flags are bad packets.** 57 of 294 a day are jumps or
+  balloons; taking them out of the map's openings costs nothing real.
+- **Protecting the baseline changes little in 29 h** (+3 flags a day), but
+  it is what keeps particular gates alive: with and without the suspects,
+  SV2RYU-10's bar is 358 vs 1,941 km, OH3KUN-L1 12 vs 1,160, LU7ERZ-10 36 vs
+  1,102, OH3ERV-L1 8 vs 684 - four gates deaf below 1,000 km only because of
+  them. Over weeks the effect accumulates.
+- **The gate rule** (one gate, two distinct distant senders in 30 min) adds
+  2.5 -> 9.9 openings a day under V3. F-22 kept it "reported, not acted on"
+  because a misplaced gate would manufacture openings; that reason still
+  holds and is not answered here.
+
+Not established: how many of the 184 new 250-300 km links a day are
+propagation rather than a high site's routine reach. The gate's own bar
+catches the latter only where it exceeds 250 km, which F-2026-08-26 put at
+about one gate in ten.
