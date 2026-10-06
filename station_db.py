@@ -149,8 +149,11 @@ _BACKBONE_GATE_RE = re.compile(r"^(T2[A-Z0-9]*|FIRST|SECOND|THIRD|FOURTH|FIFTH)$
 
 
 def is_backbone_gate(gate: str) -> bool:
-    """True when the 'gate' is an APRS-IS core server rather than an igate."""
-    return bool(_BACKBONE_GATE_RE.match((gate or "").strip()))
+    """True when the 'gate' is the internet rather than an igate: an APRS-IS
+    core server, or "TCPIP/<login>" - a packet injected over the internet
+    under someone else's login (F-2026-10-06-03)."""
+    g = (gate or "").strip()
+    return g.upper().startswith("TCPIP/") or bool(_BACKBONE_GATE_RE.match(g))
 
 
 def gate_independence(gate_of: dict, calls) -> "tuple[int, int, int]":
@@ -1092,7 +1095,18 @@ class StationRecord:
         if parsed.get("object_sender"):
             self.is_object = True
         if parsed.get("gate"):
-            self.last_gate = parsed["gate"]
+            gate = parsed["gate"]
+            # A TCPIP* packet carried under another login was injected over
+            # the internet - VU3ZAG-13's weather station sends twenty
+            # repeaters' beacons that way, none of them on air. The login is
+            # not an igate that heard anything; recorded as "TCPIP/<login>"
+            # so it reads as internet everywhere, and survives a restart.
+            # Its own login (an openSPOT, a Pi-Star) stays self-gated.
+            if (parsed.get("tcpip") and not is_backbone_gate(gate)
+                    and gate.split("-")[0].upper()
+                    != str(parsed.get("callsign", "")).split("-")[0].upper()):
+                gate = "TCPIP/" + gate
+            self.last_gate = gate
         self.last_seen    = ts
         self.packet_count += 1
         self.last_packet  = parsed.get("raw", "")[:200]

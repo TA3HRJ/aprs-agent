@@ -1102,6 +1102,16 @@ class AIGateway(Extension):
                 except Exception:
                     rec = None
             gate = (rec or {}).get("last_gate") or ""
+            # A record whose last packet came over the internet - a core
+            # server, or injected under another login ("TCPIP/<login>") -
+            # was gated by nobody (F-2026-10-06-03).
+            try:
+                from station_db import is_backbone_gate
+                if gate and is_backbone_gate(gate):
+                    return ("No igate has heard you lately: your last packet "
+                            "in my records came in over the internet, not RF.")
+            except Exception:
+                pass
             if not gate:
                 return ("I cannot see which igate heard you - this message "
                         "carries no gate in its path.")

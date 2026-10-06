@@ -7080,3 +7080,13 @@ gate as `TCPIP/<login>` so it survives a restart, count it with the
 backbone in `gate_independence()`, and say "over the internet" where the
 gateway answers "last gated by". Records already silent keep their old gate
 until heard again.
+
+**Applied, v3.2.154.** `StationRecord.update_from_parsed()` records such a
+gate as `TCPIP/<login>` (own login stays self-gated; RF and T2 paths
+unchanged); `is_backbone_gate()` counts the prefix as internet, so
+`gate_independence()` puts these stations with the backbone and a cell made
+of them reads `backbone` / no local witness; the gateway's "last gated by"
+answer says internet. `tools/check_injected_gate.py`, **seen failing** (4)
+against v3.2.153. Not done: rewriting the stored gate of records already
+silent - they keep VU3ZAG-13 until heard again, a one-off fix from the raw
+log needing a separate decision.
