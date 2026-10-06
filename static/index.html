@@ -841,6 +841,7 @@ body.public #about-gw-link{display:none!important}
       <span><i style="background:#62a0ea"></i><em data-i="leg_prop2">600–1200 km</em></span>
       <span><i style="background:#dc8add"></i><em data-i="leg_prop3">&gt; 1200 km</em></span>
       <span><i style="background:#c0bfbc;opacity:.4"></i><em data-i="leg_prop_young">Faint: gate too new to have a normal</em></span>
+      <span><i style="background:repeating-linear-gradient(90deg,#8a8a8a 0 2px,transparent 2px 5px);height:3px;vertical-align:2px"></i><em data-i="leg_prop_suspect">Grey dotted: suspect - position jump or balloon</em></span>
     </div>
     <div class="map-timeline" id="map-timeline" hidden>
       <button class="tl-btn" id="tl-play" onclick="tlPlay()">▶</button>
@@ -1053,7 +1054,7 @@ const S={en:{
   miss_hint:"— no APRS signal since the time shown. Not a confirmed emergency.",
   miss_since:"no signal for",miss_total:"({t} in all)",miss_all:"show all {t}",miss_recent:"last 7 days only",
   leg_prop1:"Opening < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
-  leg_prop_young:"Faint: gate too new to have a normal",
+  leg_prop_young:"Faint: gate too new to have a normal",leg_prop_suspect:"Grey dotted: suspect - position jump or balloon",
   prop_link:"Realised RF link — possible band opening",
   tl_live:"Live",tz_local:"local",
   own_station:"your station",
@@ -1200,7 +1201,7 @@ const S={en:{
   miss_hint:"— gösterilen saatten beri APRS sinyali yok. Teyit edilmiş bir acil durum değildir.",
   miss_since:"sinyal yok:",miss_total:"(toplam {t})",miss_all:"{t} istasyonun tümünü göster",miss_recent:"yalnızca son 7 gün",
   leg_prop1:"Açılma < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
-  leg_prop_young:"Soluk: gate'in henüz bir olağanı yok",
+  leg_prop_young:"Soluk: gate'in henüz bir olağanı yok",leg_prop_suspect:"Gri noktalı: şüpheli - konum sıçraması veya balon",
   prop_link:"Gerçekleşmiş RF linki — olası bant açılması",
   tl_live:"Canlı",tz_local:"yerel",
   own_station:"kendi istasyonun",
@@ -2712,6 +2713,7 @@ function propScheduleClose(entry){
     if(!entry.pinned)entry.hit.closePopup();
   },400);
 }
+const SUSPECT_COL='#8a8a8a';
 function renderProp(links,hist){
   if(!map)return;
   // While the timeline shows a past snapshot, only HISTORICAL links (from
@@ -2793,10 +2795,13 @@ function renderProp(links,hist){
     // the weaker line rather than identically.
     const est=!!(l.at_flag&&l.at_flag.established
                  &&l.at_flag.gate_decided!==false);
-    const vis=L.polyline(coords,{color:col,weight:est?3:2,
-                                 opacity:est?0.85:0.35,
-                                 dashArray:est?'6 6':'2 8',
-                                 interactive:false}).addTo(map);
+    // A suspect link - a position jump or a balloon - is its own class: grey,
+    // thin, dotted, so it never reads as one of the coloured distance tiers.
+    // On 2026-10-06 they were half of the drawn lines (F-2026-10-06-02).
+    const vis=L.polyline(coords,l.suspect
+        ?{color:SUSPECT_COL,weight:2,opacity:0.4,dashArray:'2 5',interactive:false}
+        :{color:col,weight:est?3:2,opacity:est?0.85:0.35,
+          dashArray:est?'6 6':'2 8',interactive:false}).addTo(map);
     const entry={hit:hit,vis:vis,note:l.note||'',pinned:false,
                  remove:function(){map.removeLayer(hit);map.removeLayer(vis)}};
     hit.bindPopup(popupHtml)

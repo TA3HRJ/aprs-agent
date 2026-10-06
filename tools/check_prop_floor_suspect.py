@@ -23,6 +23,10 @@ What must hold:
      gate's baseline
   4. the same for a balloon (station type) - suspect "balloon"
   5. the opening grouping leaves suspect links out
+  6. the map draws a suspect link as its own class - grey, thin, dotted -
+     and the legend names it. Live on 2026-10-06, 105 of 200 drawn links
+     were suspect (a few stations swinging between two positions), drawn
+     in the distance colours like evidence
 
 Usage:  python tools/check_prop_floor_suspect.py
 Exit code 1 on failure.
@@ -113,6 +117,14 @@ def main() -> int:
     grp = web[web.find("kept = []"):web.find("recent = kept")]
     if 'l.get("suspect")' not in grp:
         fails.append("the opening grouping does not leave suspect links out")
+
+    page = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+    k = page.find("const est=!!(l.at_flag&&l.at_flag.established")
+    draw = page[k:k + 900]
+    if "l.suspect" not in draw or "SUSPECT_COL" not in draw:
+        fails.append("the map draws suspect links like evidence")
+    if 'data-i="leg_prop_suspect"' not in page:
+        fails.append("the legend does not name suspect links")
 
     for f in fails:
         print("  FAIL  " + f)
