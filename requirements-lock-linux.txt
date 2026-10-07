@@ -47,6 +47,14 @@
 #   requests-oauthlib, oauthlib, urllib3, charset-normalizer. Nothing else
 #   in the application imports them (checked with `pip show` here and on
 #   the VPS). Removed from the VPS venv after this tag deployed.
+#
+# 2026-10-07, v3.2.159: multidict 6.7.1 -> 6.9.1 for GHSA-54p9-h82j-f925
+#   (CVE-2026-104874): a reference leak in the C extension's items-view
+#   reflected union (`x | md.items()`) and subtraction (`md.items() - x`),
+#   unbounded memory growth when the operand is remote-controlled. Not
+#   reachable here - neither aiohttp 3.14.3, yarl nor this application uses
+#   either operation (searched on the VPS venv) - moved because it is a
+#   patch-level step with a cp310 wheel. aiohttp allows it (<7).
 
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.3
@@ -72,7 +80,7 @@ httpx==0.28.1
 idna==3.18
 jiter==0.16.0
 libipld==3.4.1
-multidict==6.7.1
+multidict==6.9.1
 openai==2.45.0
 pillow==12.3.0
 propcache==0.5.3
