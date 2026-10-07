@@ -716,6 +716,36 @@ def load_meta(path: str, key: str, default: str = "") -> str:
         con.close()
 
 
+def void_silence_history(path: str, start: float, end: float,
+                         reason: str) -> int:
+    """Move the snapshots of a period the agent could not hear out of history.
+
+    F-2026-10-07-02. Moved, not deleted: into `silence_history_void`, with the
+    reason, so nothing is lost and the move can be undone. What stays behind
+    is read as fact - by the timeline, and by the recurrence and persistence
+    tests that decide whether a new alert is news - and on 2026-10-07 the deaf
+    hours were 52 % of the stored rows. Idempotent: a second run moves nothing.
+    """
+    if not Path(path).exists():
+        return 0
+    con = _connect(path)
+    try:
+        if not con.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                           "AND name='silence_history'").fetchone():
+            return 0
+        con.execute("CREATE TABLE IF NOT EXISTS silence_history_void AS "
+                    "SELECT *, '' AS void_reason FROM silence_history WHERE 0")
+        n = con.execute("INSERT INTO silence_history_void SELECT *, ? FROM "
+                        "silence_history WHERE ts BETWEEN ? AND ?",
+                        (reason, int(start), int(end))).rowcount
+        con.execute("DELETE FROM silence_history WHERE ts BETWEEN ? AND ?",
+                    (int(start), int(end)))
+        con.commit()
+        return n
+    finally:
+        con.close()
+
+
 def silence_history_range(path: str) -> Optional[dict[str, int]]:
     """Return {"min": ts, "max": ts} of stored snapshots, or None if empty."""
     if not Path(path).exists():
@@ -1316,6 +1346,16 @@ class StationDB:
         # heard nothing for a while (APRS-IS down), it is deaf and cannot
         # judge anyone's silence.
         self.last_ingest_ts: float = 0.0
+        # F-2026-10-07-02. When this process started, so that one which never
+        # hears a packet is deaf too; and the stretch the agent has been
+        # listening, so that time it did not listen is not counted as anyone's
+        # silence. A break is (last packet before, first packet after) two
+        # packets more than _DEAF_AFTER_S apart; the first packet of a process
+        # is measured against the newest stored one. Breaks older than any
+        # station silence is judged over are dropped.
+        self.started_ts: float = time.time()
+        self.stored_newest_seen: float = 0.0
+        self._breaks: deque = deque(maxlen=200)
         # Shared get_slim() cache: the sort + per-station dict build is the
         # expensive part (O(n log n) over the whole registry) and identical
         # for every viewer regardless of their bbox/limit — with many
@@ -1421,9 +1461,18 @@ class StationDB:
             rec = self._stations[callsign]
 
         rec.update_from_parsed(parsed)
-        self.last_ingest_ts = time.time()
         if own:
             rec.self_beacon = True
+        else:
+            # Our own beacon is fed in from the outbound log line, so it says
+            # nothing about whether the feed is reaching us.
+            now = time.time()
+            prev = self.last_ingest_ts or self.stored_newest_seen
+            if prev and now - prev > self._DEAF_AFTER_S:
+                self._breaks.append((prev, now))
+                while self._breaks and self._breaks[0][1] < now - 7 * 86400:
+                    self._breaks.popleft()
+            self.last_ingest_ts = now
         if not own:
             self._ingest_prop_link(parsed, rec, prev)
             self._note_hazard(parsed, rec)
@@ -2496,6 +2545,8 @@ class StationDB:
                 except Exception:
                     pass
                 self._stations[cs] = r
+                if r.last_seen > self.stored_newest_seen:
+                    self.stored_newest_seen = r.last_seen
                 n += 1
             # Read by the caller, which does the logging. This module has no
             # print statements and this count is not a reason to start.
@@ -2718,11 +2769,50 @@ class StationDB:
         empty list. On 2026-08-14 it was not: 28 cells were announced cleared,
         two propagation events closed and five stations called back on the air,
         in the same second, because the feed had stopped for twelve minutes.
+
+        F-2026-10-07-02: a process that has heard nothing since it started is
+        deaf too, once it has been up that long - the date is then its start.
+        Before this it read `last_ingest_ts == 0` as "not deaf", and a host
+        that came up without a network opened 776 silence alerts in 5 h 40 min.
         """
-        if (self.last_ingest_ts
-                and (time.time() - self.last_ingest_ts) > self._DEAF_AFTER_S):
-            return self.last_ingest_ts
+        now = time.time()
+        if self.last_ingest_ts:
+            if now - self.last_ingest_ts > self._DEAF_AFTER_S:
+                return self.last_ingest_ts
+        elif now - self.started_ts > self._DEAF_AFTER_S:
+            return self.started_ts
         return 0.0
+
+    def _silence_clock(self, r: "StationRecord", threshold: float,
+                       now: float) -> float:
+        """The moment a station's silence is counted from (F-2026-10-07-02).
+
+        Its last packet, unless the agent stopped listening after that: then
+        the end of the break, so a station is silent only after it has been
+        listened for and not heard for its whole threshold. After the
+        2026-10-07 outage every station was judged against a packet from
+        before it - 1,355 cells met the rule at 09:16, falling as stations were
+        heard again. A station that had already crossed its threshold before
+        a break began was seen silent while we listened, and keeps that.
+
+        Every break is walked in order, not only the newest: with one known
+        break, a station listened for 1,200 s between two of them, against a
+        threshold of 1,800 s, was called silent and dated inside the first.
+        """
+        clock = r.last_seen
+        breaks = list(self._breaks)
+        if (not self.last_ingest_ts and self.stored_newest_seen
+                and now - self.stored_newest_seen > self._DEAF_AFTER_S):
+            # Started after a break and not a packet yet: the break is still
+            # going on, and nobody has been listened for since it began.
+            breaks.append((self.stored_newest_seen, now))
+        for gap_from, listen_from in breaks:
+            if listen_from <= clock:
+                continue                    # before its last packet
+            if clock + threshold <= gap_from:
+                break                       # crossed while we listened
+            clock = listen_from
+        return clock
 
     def silence_cells(
         self,
@@ -2799,7 +2889,8 @@ class StationDB:
             # this one is not.
             c["owners"].add(_call_owner(r.callsign))
             threshold = max(3.0 * r.ema_interval_s, 900.0)
-            gap = now - r.last_seen
+            clock = self._silence_clock(r, threshold, now)
+            gap = now - clock
             if gap > threshold:
                 c["silent"] += 1
                 c["silent_calls"].append(r.callsign)
@@ -2815,7 +2906,7 @@ class StationDB:
                 if r.last_gate:
                     c["gate_of"][r.callsign] = r.last_gate
                 # When this station crossed its silence threshold
-                went = r.last_seen + threshold
+                went = clock + threshold
                 if c["first_silent"] is None or went < c["first_silent"]:
                     c["first_silent"] = went
 
@@ -3070,6 +3161,7 @@ class StationDB:
         cell in a worldwide feed.
         """
         now = time.time()
+        deaf = bool(self.deaf_since())
         out: dict[str, dict[str, Any]] = {}
         for call in callsigns:
             r = self._stations.get(call)
@@ -3077,12 +3169,21 @@ class StationDB:
                 continue
             threshold = (max(3.0 * r.ema_interval_s, 900.0)
                          if r.ema_interval_s else 900.0)
+            clock = self._silence_clock(r, threshold, now)
+            silent = not deaf and (now - clock) > threshold
             out[call] = {
                 "call": call,
-                "silent": (now - r.last_seen) > threshold,
+                "silent": silent,
+                # F-2026-10-07-02. Not silent, and not heard either: we are
+                # deaf, or have not listened for its threshold since a break.
+                # The missing list reads "not silent" as heard again, and with
+                # the clock above that would call every station on it back on
+                # the air the moment the feed returned - F-35's false
+                # retractions again, from the other side.
+                "unknown": not silent and (deaf or clock > r.last_seen),
                 # When it crossed its own threshold, not when it was last
                 # heard: that is the point it became noteworthy.
-                "since": int(r.last_seen + threshold),
+                "since": int(clock + threshold),
                 "last_seen": int(r.last_seen),
                 "type": r.station_type,
                 "lat": r.lat,

@@ -7224,6 +7224,37 @@ agent did not listen was counted as time the stations were silent.
 4. The false entries on the missing list and in the history snapshots of
    2026-10-07 03:31-09:13 are not cleaned yet.
 
+**Fixed in v3.2.158**, all four points, with one change to the draft.
+
+1. `deaf_since()`: nothing heard and up longer than `_DEAF_AFTER_S` is
+   deaf, dated from the start. Not deaf in the first ten minutes, as
+   drafted - the offline checks build a registry and judge it at once. The
+   agent's own beacon, fed in from the outbound log, no longer counts as
+   hearing.
+2. `_silence_clock()`: a break is two packets more than `_DEAF_AFTER_S`
+   apart, the first packet of a process measured against the newest stored
+   one; a station's clock moves to the end of each break it did not cross
+   its threshold before. **The draft knew only the newest break, and the
+   check showed why that is wrong:** a station listened for 1,200 s between
+   two breaks, against a 1,800 s threshold, was called silent and dated
+   inside the first. Every break is walked now (kept 7 days, at most 200).
+   Started after a break with no packet yet, nobody is silent.
+3. `silence_state()` adds `unknown` - deaf, or not yet listened for since a
+   break - and `_heard_again()` keeps such a station on the missing list.
+4. `_DEAF_PERIODS` holds 2026-10-07 03:31-09:45 CEST (to 09:45 because the
+   09:27 and 09:39 snapshots, 255 and 43 cells, were point 2's effect).
+   At every start, idempotently: missing-list entries flagged inside it
+   leave the list and are kept under meta `missing_voided`; episodes opened
+   in it are dropped; history rows are moved to `silence_history_void`.
+   Measured before the deploy, read-only: **23,773 of 45,742 stored rows
+   (52 %)** were from the deaf hours - and the history is what the
+   recurrence test reads to call a new alert "the same thing again" - plus
+   **1,768 of 3,440** missing-list entries, and **965** episodes the deaf
+   process had checkpointed, restored at 09:13.
+
+`tools/check_unheard_time.py`: failed 6 ways on v3.2.157, and point 8 (the
+void) fails with either half of it removed.
+
 ---
 
 ## F-2026-10-07-03 — user documentation had become the project's working notes

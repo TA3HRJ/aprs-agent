@@ -237,6 +237,25 @@ _cells_cache: "tuple[float, float, list]" = (0.0, 0.0, [])
 _CELLS_MIN_TTL_S = 10.0
 
 
+# Periods a process recorded silence it could not hear, before the deaf guard
+# covered a process that never heard a packet (F-2026-10-07-02): the host came
+# up without a network 03:31-09:13 CEST, and until 09:45 stations were judged
+# against packets from before it. (start, end, reason), epoch seconds.
+_DEAF_PERIODS = [
+    (1791336660, 1791359100, "F-2026-10-07-02"),
+]
+
+
+def _heard_again(st) -> bool:
+    """Whether a station on the missing list has left it (F-2026-10-07-02).
+
+    Gone from the registry, or neither silent nor unknown. Unknown - while we
+    are deaf, or before a station has been listened for since a break in the
+    feed - keeps it on the list: nobody has heard it.
+    """
+    return st is None or not (st["silent"] or st.get("unknown"))
+
+
 async def silence_cells_cached(db, history_path: str = "") -> list:
     """silence_cells() off the event loop, shared by every caller.
 
@@ -652,6 +671,7 @@ class AgentManager:
                     self._sta_db_path, "missing_stations", "{}")))
         except Exception:
             pass
+        self._void_deaf_periods()
         # AI-note cooldown cache: cell/region -> (note, generated_ts). A cell
         # that recovers and re-alerts minutes later doesn't need a fresh AI
         # read — the previous verdict is reused within _AI_NOTE_COOLDOWN_S,
@@ -865,6 +885,50 @@ class AgentManager:
                     json.dumps(self._station_db.export_gate_stats()))
         except Exception as e:
             print(f"[station-db] uptime save failed: {e}", file=sys.__stderr__)
+
+    def _void_deaf_periods(self) -> None:
+        """Take what a deaf process recorded out of the record (F-2026-10-07-02).
+
+        Runs at every start and is idempotent: the periods are in the past and
+        the deaf guard now keeps new ones from being recorded. Missing-list
+        entries flagged inside a period are removed and kept under the
+        `missing_voided` meta key; open episodes started inside one are
+        dropped; history snapshots are moved to `silence_history_void`.
+        """
+        for start, end, reason in _DEAF_PERIODS:
+            gone = {c: m for c, m in self._missing.items()
+                    if start <= float(m.get("flagged", 0)) <= end}
+            if gone:
+                try:
+                    kept = json.loads(station_db_module.load_meta(
+                        self._sta_db_path, "missing_voided", "{}"))
+                    kept.update(gone)
+                    station_db_module.save_meta(
+                        self._sta_db_path, "missing_voided", json.dumps(kept))
+                except Exception as e:
+                    print(f"[silence] could not keep voided missing entries, "
+                          f"left in place: {e}", file=sys.stderr)
+                    continue
+                for c in gone:
+                    del self._missing[c]
+                station_db_module.save_meta(
+                    self._sta_db_path, "missing_stations",
+                    json.dumps(self._missing))
+            eps = [c for c, t in self._silence_active.items()
+                   if start <= float(t) <= end]
+            for c in eps:
+                self._silence_active.pop(c, None)
+                self._silence_ai_notes.pop(c, None)
+            try:
+                n = station_db_module.void_silence_history(
+                    self._sta_db_path, start, end, reason)
+            except Exception as e:
+                n = 0
+                print(f"[silence] history void failed: {e}", file=sys.stderr)
+            if gone or eps or n:
+                print(f"[silence] {reason}: voided {len(gone)} missing-list "
+                      f"entries, {len(eps)} episodes, {n} history rows "
+                      f"recorded while deaf", file=sys.stderr)
 
     @staticmethod
     def _log_both(msg: str) -> None:
@@ -1158,8 +1222,7 @@ class AgentManager:
                     except Exception:
                         state = {}
                     for call in list(self._missing):
-                        st = state.get(call)
-                        if st is None or not st["silent"]:
+                        if _heard_again(state.get(call)):
                             del self._missing[call]
                             self._log_both(f"[silence] back on the air: {call}")
 
@@ -3035,7 +3098,7 @@ async def get_missing(request: web.Request) -> web.Response:
     out = []
     for call, meta in mgr._missing.items():
         st = state.get(call)
-        if not st or not st["silent"]:
+        if not st or _heard_again(st):
             continue
         out.append({**st, "cell": meta.get("cell", ""),
                     "flagged": int(meta.get("flagged", 0))})
