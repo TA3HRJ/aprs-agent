@@ -81,6 +81,12 @@ What is left, in the order it is worth doing:
     distant senders), 2 m vs LoRa, and a standing reference collector
     (dxview / PSKReporter / F5LEN), which needs the operator's word before
     any site is read on a schedule.
+16. **Silence after the agent's own deafness (F-2026-10-07-02) - next.**
+    A process that never heard a packet is not treated as deaf (776 false
+    alerts on 2026-10-07), and time the agent did not listen counts as
+    station silence. The four-point draft is in the finding; the operator
+    approved drafting it, implementation not yet. Also: clean the false
+    missing-list entries and mark the 03:31-09:13 snapshots.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.

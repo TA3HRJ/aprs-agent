@@ -7171,3 +7171,55 @@ only on a frame. A test of anything layout-driven needs a page that renders.
 box that calls `map.invalidateSize()`, so every cause is caught, present
 and future, rather than one call added to `toggleSidebar()`.
 `tools/check_map_resize.py`, **seen failing** against v3.2.156.
+
+---
+
+## F-2026-10-07-02 — an agent that never heard a packet was not deaf: 776 false silence alerts
+
+The host came up without a network for about 5 h 40 min after an automatic
+kernel-update reboot (an OS fault, recorded outside the repository). The
+agent started and ran the whole time. It heard nothing.
+
+**What it did:** F-2026-08-14-35's rule is that with no feed nothing is
+judged - "if we have heard nothing for ten minutes, everyone looks silent and
+none of it is true". The guard reads
+
+```python
+if (self.last_ingest_ts
+        and (time.time() - self.last_ingest_ts) > self._DEAF_AFTER_S):
+```
+
+and `last_ingest_ts` is 0 until the first packet. A process that has never
+heard anything is therefore **not** deaf. Measured from the journal:
+
+| boot | network | `[silence] ALERT` | `feed deaf` lines |
+|---|---|---|---|
+| 03:31-08:23 | none | **747** | 0 |
+| 08:24-09:11 | none | **29** | 0 |
+| 09:13- | yes | 0 by 09:40 | 0 |
+
+Plus a false `[prop] cleared: EM` at 03:47. Telegram, the AI notes and
+Bluesky could not reach anything, so nothing left the host - by luck, not by
+design. But the episodes and the missing list were persisted: the restart
+with network restored the list, and the first scan logged **8,070** "back on
+the air" (6,813 of them at 09:29), each a station the deaf process had put
+there. Entries not yet heard again are still on it, and the history
+snapshots of those five hours hold alerts that never happened.
+
+**Second, separate effect.** Once the feed returned, every station was
+judged against a last packet from before the outage: 1,355 cells met the
+silence rule at 09:16, 93 at 09:40, as stations were heard again. Time the
+agent did not listen was counted as time the stations were silent.
+
+**What it suggests (not applied):**
+1. Deaf also when nothing has been heard since the process started and it
+   started more than `_DEAF_AFTER_S` ago - the F-35 rule with its hole
+   closed.
+2. After a deaf period, or a gap between the newest stored `last_seen` and
+   the first packet of this process longer than `_DEAF_AFTER_S`, a
+   station's silence clock starts no earlier than the end of that period:
+   silent only after being listened for and not heard for 3x its interval.
+3. A missing-list station not heard since such a period is "unknown", not
+   "back on the air" - otherwise point 2 repeats F-35's false retractions.
+4. The false entries on the missing list and in the history snapshots of
+   2026-10-07 03:31-09:13 are not cleaned yet.
