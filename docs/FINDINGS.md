@@ -7358,3 +7358,46 @@ measures its first packet against the former, not against `last_seen`.
 Known deaf periods are loaded as breaks: `_DEAF_PERIODS` gains 11:02:12 ->
 23:12:28, whose record is void until 23:50. `check_unheard_time.py` case 9:
 an 8 h break with the own beacon fresh in the registry.
+
+---
+
+## F-2026-10-07-06 — after a break the map went empty, and said nothing about why
+
+**Source:** operator, 23:2x: "every alert is gone, the chronic purple cells
+too - something is wrong, I think the rule is" · **Verdict:** our fault;
+the rule was right in direction and too slow, and the page was silent
+
+After F-2026-10-07-05 the live map held **1** cell where the night before
+held about a dozen alerts plus grey and purple ones. Measured on an online
+backup of the live database at 23:30, 18 minutes after the feed returned,
+four rules on the same data:
+
+| rule | silent stations | cells meeting the rule | alerts |
+|---|---|---|---|
+| A no breaks (to v3.2.157) | 8,639 | 163 | 81 |
+| B 3 intervals after a break (v3.2.158-161) | 1,008 | 1 | 1 |
+| C 1 interval after a break | 1,296 | 4 | 1 |
+| D total time listened | 1,164 | 3 | 2 |
+
+Of the 7,634 stations A called silent and B did not, **7,246 were last
+heard 09:13-11:02** - alive just before F-2026-10-07-04's deaf hours, and
+not heard since only because they beacon slowly (median interval 67 min).
+A's 163 cells were mostly false. But B made each of them wait three
+intervals: the median would have been judged at 02:32, the 90th percentile
+at 06:17; with one interval, 00:18 and 01:34. And the map showed the
+emptiness as an all-clear - F-35's mistake again, from the other side.
+
+**Fixed in v3.2.162** (the operator chose both):
+- `_silence_walk()`: after a break a station is silent once its whole gap
+  exceeds its threshold and it has been listened for one interval (at
+  least 15 min) since the break. The 3x margin is for jitter while we
+  listen throughout; an alive station is heard within an interval of the
+  feed returning. The 09:16 flood of F-2026-10-07-02 came minutes after the
+  break, inside that interval. Cost: just after a break, one missed beacon
+  can show a station silent where it normally takes two.
+- `/api/silence` carries `awaiting` and `listening_since`; the map's amber
+  bar says the feed came back at that time and how many stations are not
+  judged yet, rather than leaving an empty map to read as nothing silent.
+
+On the same snapshot the new rule gives 9 cells and 7,144 awaiting.
+`check_unheard_time.py` fails 3 ways on v3.2.161.

@@ -2897,13 +2897,20 @@ async def get_silence(request: web.Request) -> web.Response:
     # when, and that whatever cells it is showing are the last ones we could
     # actually vouch for.
     deaf_since = mgr._station_db.deaf_since()
+    awaiting = getattr(mgr._station_db, "silence_awaiting", (0, 0.0))
     return web.json_response({"cells": cells,
                               # How many were measured, so the filter above is
                               # visible rather than something a reader has to
                               # infer from a number that quietly got smaller.
                               "cells_measured": len(all_cells),
                               "deaf": bool(deaf_since),
-                              "deaf_since": int(deaf_since)})
+                              "deaf_since": int(deaf_since),
+                              # F-2026-10-07-06: after a break, stations not
+                              # heard since are not judged until listened for
+                              # one interval. Their number and the break's
+                              # end, so the map can say so.
+                              "awaiting": int(awaiting[0]),
+                              "listening_since": int(awaiting[1])})
 
 
 @routes.get("/api/silence/evidence")

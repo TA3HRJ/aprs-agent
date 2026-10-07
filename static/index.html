@@ -1008,6 +1008,7 @@ const S={en:{
   ev_hint:"Already selected — Ctrl+C also works",
   ev_manual:"Could not copy automatically — the text is selected, press Ctrl+C.",
   deaf_bar:"⚠ No APRS-IS feed for {m} min — silence detection is paused. Nothing is being judged right now; any cells shown are the last confirmed reading, not the current one.",
+  await_bar:"ℹ The feed came back at {t} after a break. {n} stations not heard since are not judged yet: each is, once it has been listened for one beacon interval — so cells return over the next hour or two, not all at once.",
   sil_suspect:"⚠ {n} of the {s} silent stations report a position their own beacon cannot be trusted about — a US callsign at an eastern longitude, the known hotspot misconfiguration. This cell may not describe the region it is drawn on.",
   sil_few_sites_one:"Not announced: all {s} silent callsigns belong to one operator. A single site losing power looks exactly like this, and it is not news about a region.",
   sil_few_sites:"Not announced: the {s} silent callsigns belong to only {n} operators. Equipment at that few sites cannot fail independently, so this is not news about a region.",
@@ -1154,6 +1155,7 @@ const S={en:{
   ev_hint:"Metin zaten seçili — Ctrl+C de çalışır",
   ev_manual:"Otomatik kopyalanamadı — metin seçili, Ctrl+C ile alın.",
   deaf_bar:"⚠ {m} dakikadır APRS-IS beslemesi yok — sessizlik tespiti duraklatıldı. Şu anda hiçbir şey yargılanmıyor; görünen hücreler güncel değil, son doğrulanmış okumadır.",
+  await_bar:"ℹ Besleme bir kesintiden sonra {t}'de geri geldi. O zamandan beri duyulmayan {n} istasyon henüz değerlendirilmedi: her biri bir beacon aralığı dinlendikten sonra değerlendirilir — hücreler bir anda değil, önümüzdeki bir-iki saat içinde geri gelir.",
   sil_suspect:"⚠ Susan {s} istasyondan {n} tanesi, kendi işaretinin güvenilir olmadığı bir konum bildiriyor — doğu boylamında bir ABD çağrı işareti, bilinen hotspot yapılandırma hatası. Bu hücre, çizildiği bölgeyi anlatmıyor olabilir.",
   sil_few_sites_one:"Duyurulmadı: susan {s} çağrı işaretinin hepsi tek bir operatöre ait. Tek bir sahanın elektriği gitse tam olarak böyle görünür ve bu, bir bölge hakkında haber değildir.",
   sil_few_sites:"Duyurulmadı: susan {s} çağrı işareti yalnızca {n} operatöre ait. Bu kadar az sahadaki cihazlar birbirinden bağımsız arızalanamaz, dolayısıyla bu bir bölge haberi değildir.",
@@ -2641,6 +2643,13 @@ function renderAlerts(cells){
 function renderDeaf(meta){
   const b=$('deaf-bar');
   if(!b)return;
+  if(meta&&!meta.deaf&&meta.awaiting>0&&meta.listening_since){
+    // F-2026-10-07-06: after a break, an emptier map is "not judged yet",
+    // not "nothing is silent". Say which.
+    b.textContent=t('await_bar').replace('{t}',fmtClock(meta.listening_since))
+      .replace('{n}',meta.awaiting.toLocaleString());
+    b.hidden=false;return;
+  }
   if(!meta||!meta.deaf){b.hidden=true;b.textContent='';return}
   const mins=meta.deaf_since
     ? Math.max(1,Math.round((Date.now()/1000-meta.deaf_since)/60)) : 0;

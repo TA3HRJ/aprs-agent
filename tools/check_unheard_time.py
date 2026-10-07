@@ -18,8 +18,10 @@ What must hold (StationDB and web_gui._heard_again, on a fake clock):
      one, more than _DEAF_AFTER_S before the next packet - a station's
      silence clock starts at the end of the break: right after it nothing
      is silent, after the station's threshold of listening it is, dated
-     from the end of the break plus the threshold; and across two breaks
-     the stretch between them is not enough on its own
+     from the end of the break plus one interval (900 s floor) - F-2026-
+     10-07-06; the first version waited three - and a stretch between two
+     breaks shorter than an interval is not enough on its own; silence_cells
+     publishes how many stations are not judged yet (silence_awaiting)
   3. a station that had crossed its threshold before the break began keeps
      its silence; one heard after the break is judged as always
   4. started after a break and no packet yet: nobody is silent
@@ -162,9 +164,10 @@ def main() -> int:
         if "TA1AAA-1" not in s or not a.get("silent") or a.get("unknown"):
             fails.append("listened for longer than its threshold and not heard, "
                          "still not silent")
-        elif a.get("since") != int(gap_end + 1800):
+        elif a.get("since") != int(gap_end + 900):
             fails.append("silence dated %r - expected the end of the break plus "
-                         "the threshold, %r" % (a.get("since"), int(gap_end + 1800)))
+                         "one interval (900 s floor), %r"
+                         % (a.get("since"), int(gap_end + 900)))
         if b.get("silent") or b.get("unknown") or not web_gui._heard_again(b):
             fails.append("heard after the break, yet silent=%r unknown=%r"
                          % (b.get("silent"), b.get("unknown")))
@@ -192,14 +195,51 @@ def main() -> int:
         db._stations["TA1AAA-1"] = rec("TA1AAA-1", T0 - 60)
         db.ingest(packet("TA9ZZZ-1"))
         hear(db, T0 + 3600)                  # break 1 ends
-        hear(db, T0 + 3600 + 600)
-        hear(db, T0 + 3600 + 1200)           # 1,200 s listened, then
+        hear(db, T0 + 3600 + 300)
+        hear(db, T0 + 3600 + 600)            # 600 s listened, then
         hear(db, T0 + 7200)                  # break 2 ends
         hear(db, T0 + 7200 + 60)
         st = db.silence_state(["TA1AAA-1"]).get("TA1AAA-1") or {}
         if "TA1AAA-1" in silent_calls(db) or st.get("silent"):
-            fails.append("listened 1,200 s between two breaks against a 1,800 s "
-                         "threshold, judged silent (dated %r)" % st.get("since"))
+            fails.append("listened 600 s between two breaks, less than one "
+                         "900 s interval, judged silent (dated %r)" % st.get("since"))
+        if not st.get("unknown"):
+            fails.append("unheard across two breaks and not yet listened for an "
+                         "interval, but not `unknown`")
+        hear(db, T0 + 7200 + 600)
+        hear(db, T0 + 7200 + 960)
+        if "TA1AAA-1" not in silent_calls(db):
+            fails.append("listened one interval after the second break and "
+                         "still not silent")
+        if db.silence_awaiting[0] != 0:
+            fails.append("awaiting still %r once judged" % (db.silence_awaiting,))
+
+        # 2b · the walk dates silence inside a listened stretch long enough
+        clock[0] = T0
+        db = station_db_module.StationDB()
+        db._stations["TA1AAA-1"] = rec("TA1AAA-1", T0 - 60)
+        db.ingest(packet("TA9ZZZ-1"))
+        hear(db, T0 + 3600)                  # break 1 ends
+        for k in range(1, 4):
+            hear(db, T0 + 3600 + 400 * k)    # 1,200 s listened, then
+        hear(db, T0 + 7200)                  # break 2 ends
+        hear(db, T0 + 7200 + 60)
+        st = db.silence_state(["TA1AAA-1"]).get("TA1AAA-1") or {}
+        if not st.get("silent") or st.get("since") != int(T0 + 3600 + 900):
+            fails.append("listened 1,200 s between two breaks, past one interval:"
+                         " silent=%r since=%r, expected since %r"
+                         % (st.get("silent"), st.get("since"), int(T0 + 4500)))
+
+        # 6b · the map is told how many are not judged yet
+        clock[0] = T0
+        db = station_db_module.StationDB()
+        db._stations["TA1AAA-1"] = rec("TA1AAA-1", T0 - 60)
+        db.ingest(packet("TA9ZZZ-1"))
+        hear(db, T0 + 3600)
+        silent_calls(db)
+        if db.silence_awaiting != (1, T0 + 3600):
+            fails.append("silence_awaiting %r, expected (1, end of the break)"
+                         % (db.silence_awaiting,))
 
         # 5 · a quick restart is no break
         clock[0] = T0

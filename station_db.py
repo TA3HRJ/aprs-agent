@@ -1356,6 +1356,9 @@ class StationDB:
         self.started_ts: float = time.time()
         self.stored_newest_seen: float = 0.0
         self._breaks: deque = deque(maxlen=200)
+        # (stations unheard across a break and not yet judged, newest break
+        # end) from the last silence_cells() walk.
+        self.silence_awaiting: tuple = (0, 0.0)
         # Shared get_slim() cache: the sort + per-station dict build is the
         # expensive part (O(n log n) over the whole registry) and identical
         # for every viewer regardless of their bbox/limit — with many
@@ -2809,36 +2812,51 @@ class StationDB:
     def export_breaks(self) -> list:
         return [list(b) for b in self._breaks]
 
-    def _silence_clock(self, r: "StationRecord", threshold: float,
-                       now: float) -> float:
-        """The moment a station's silence is counted from (F-2026-10-07-02).
+    def _silence_walk(self, r: "StationRecord", threshold: float,
+                      now: float) -> tuple[float, float]:
+        """(clock, listen_from) for one station (F-2026-10-07-02, -06).
 
-        Its last packet, unless the agent stopped listening after that: then
-        the end of the break, so a station is silent only after it has been
-        listened for and not heard for its whole threshold. After the
-        2026-10-07 outage every station was judged against a packet from
-        before it - 1,355 cells met the rule at 09:16, falling as stations were
-        heard again. A station that had already crossed its threshold before
-        a break began was seen silent while we listened, and keeps that.
+        `clock` is chosen so that the station is silent when now - clock >
+        threshold, and clock + threshold is when it became so. `listen_from` is
+        the end of the newest break after its last packet that it had not
+        already crossed its threshold before, or 0.
 
-        Every break is walked in order, not only the newest: with one known
-        break, a station listened for 1,200 s between two of them, against a
-        threshold of 1,800 s, was called silent and dated inside the first.
+        After a break a station is silent once its whole gap exceeds its
+        threshold AND it has been listened for one beacon interval (at least
+        15 min) since the break - not three. A station alive through the break
+        is heard again within an interval; the 3x margin is for jitter while
+        we listen throughout. The first version waited 3x after every break:
+        eight hours after F-2026-10-07-04 the map was empty, 7,246 of the
+        unjudged stations last heard just before it, and the median one would
+        have waited until 02:32 rather than 00:18 (F-2026-10-07-06).
+
+        A station that had already become silent before a break began keeps
+        that. Every break is walked in order, not only the newest.
         """
-        clock = r.last_seen
         breaks = list(self._breaks)
         if (not self.last_ingest_ts and self.stored_newest_seen
                 and now - self.stored_newest_seen > self._DEAF_AFTER_S):
             # Started after a break and not a packet yet: the break is still
             # going on, and nobody has been listened for since it began.
             breaks.append((self.stored_newest_seen, now))
-        for gap_from, listen_from in breaks:
-            if listen_from <= clock:
+        interval = max(r.ema_interval_s or 0.0, 900.0)
+        listen_from = 0.0
+        for gap_from, lf in breaks:
+            if lf <= r.last_seen:
                 continue                    # before its last packet
-            if clock + threshold <= gap_from:
-                break                       # crossed while we listened
-            clock = listen_from
-        return clock
+            since = r.last_seen + threshold
+            if listen_from:
+                since = max(since, listen_from + interval)
+            if since <= gap_from:
+                break                       # became silent while we listened
+            listen_from = lf
+        if not listen_from:
+            return r.last_seen, 0.0
+        return max(r.last_seen, listen_from + interval - threshold), listen_from
+
+    def _silence_clock(self, r: "StationRecord", threshold: float,
+                       now: float) -> float:
+        return self._silence_walk(r, threshold, now)[0]
 
     def silence_cells(
         self,
@@ -2877,6 +2895,7 @@ class StationDB:
             return (now - g.last_seen) < 1800    # heard in last 30 min
 
         cells: dict[str, dict[str, Any]] = {}
+        awaiting, newest_break = 0, 0.0
         # list() snapshot — also called from executor threads (history
         # snapshots) while the event loop mutates the dict.
         for r in list(self._stations.values()):
@@ -2915,8 +2934,13 @@ class StationDB:
             # this one is not.
             c["owners"].add(_call_owner(r.callsign))
             threshold = max(3.0 * r.ema_interval_s, 900.0)
-            clock = self._silence_clock(r, threshold, now)
+            clock, listen_from = self._silence_walk(r, threshold, now)
             gap = now - clock
+            if gap <= threshold and listen_from                     and now - r.last_seen > threshold:
+                # Unheard across a break, not yet listened for an interval
+                # since: neither silent nor heard (F-2026-10-07-06).
+                awaiting += 1
+                newest_break = max(newest_break, listen_from)
             if gap > threshold:
                 c["silent"] += 1
                 c["silent_calls"].append(r.callsign)
@@ -2935,6 +2959,10 @@ class StationDB:
                 went = clock + threshold
                 if c["first_silent"] is None or went < c["first_silent"]:
                     c["first_silent"] = went
+
+        # Published for the map, which must not read an empty list after a
+        # break as "nothing is silent" (F-2026-10-07-06, as F-35 for deafness).
+        self.silence_awaiting = (awaiting, newest_break)
 
         # Only consulted when a history path is supplied. record_silence_history
         # deliberately does not supply one: what it stores must stay the raw
@@ -3195,7 +3223,7 @@ class StationDB:
                 continue
             threshold = (max(3.0 * r.ema_interval_s, 900.0)
                          if r.ema_interval_s else 900.0)
-            clock = self._silence_clock(r, threshold, now)
+            clock, listen_from = self._silence_walk(r, threshold, now)
             silent = not deaf and (now - clock) > threshold
             out[call] = {
                 "call": call,
@@ -3206,7 +3234,8 @@ class StationDB:
                 # the clock above that would call every station on it back on
                 # the air the moment the feed returned - F-35's false
                 # retractions again, from the other side.
-                "unknown": not silent and (deaf or clock > r.last_seen),
+                "unknown": not silent and (deaf or (
+                    bool(listen_from) and now - r.last_seen > threshold)),
                 # When it crossed its own threshold, not when it was last
                 # heard: that is the point it became noteworthy.
                 "since": int(clock + threshold),
