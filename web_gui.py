@@ -598,6 +598,8 @@ class AgentManager:
         # at. Entries leave this dict when the station is heard again.
         # callsign -> {"cell": str, "flagged": float}
         self._missing: dict[str, dict] = {}
+        # Ingest failures by exception type (F-2026-10-07-04).
+        self._ingest_errors: dict[str, int] = {}
         # Digest mode: alerts queued here between flushes (list of (ts, cell
         # dict, ai note)); lost on restart, same as the episode state above.
         self._silence_pending: list = []
@@ -2190,14 +2192,35 @@ class AgentManager:
                 new.append(msg)
         return new
 
+    def _ingest_line(self, raw_line: str, own: bool = False) -> None:
+        """One packet into the registry; its failure stays with that packet.
+
+        F-2026-10-07-04: v3.2.158 raised on the first gated packet, and the
+        exception ended broadcast_logs - the task that feeds every packet to
+        the registry, the map and the stats - seconds after each start. The
+        agent stayed connected and counted nothing for four hours. Each kind
+        of failure goes to the journal with its traceback the first time,
+        then is counted, so a fault is loud once and never fatal.
+        """
+        try:
+            self._station_db.ingest(raw_line, own=own)
+        except Exception as e:
+            key = type(e).__name__
+            n = self._ingest_errors.get(key, 0) + 1
+            self._ingest_errors[key] = n
+            if n == 1 or n % 10000 == 0:
+                print(f"[station-db] ingest failed ({key} x{n}): {e} | "
+                      f"{raw_line[:160]}\n{traceback.format_exc()}",
+                      file=sys.__stderr__)
+
     def _track_stations(self, text: str) -> None:
         now = time.time()
         for raw_line in _SRC_LINE_RE.findall(text):
-            self._station_db.ingest(raw_line)
+            self._ingest_line(raw_line)
         # The agent's own beacon never comes back through APRS-IS, so feed it
         # into the registry from the outbound log line (map-only, no counters).
         for raw_line in _OWN_BEACON_RE.findall(text):
-            self._station_db.ingest(raw_line, own=True)
+            self._ingest_line(raw_line, own=True)
         for call in _SRC_CALL_RE.findall(text):
             self._pkt_count += 1
             if call not in self._seen_calls:
@@ -2276,10 +2299,21 @@ class AgentManager:
             if messages:
                 text = "".join(messages)
                 text = re.sub(r"\x1b\[[0-9;]*m", "", text)
-                self._track_stations(text)
-                self._count_log_lines(text)
+                # A failure here used to end this task for the life of the
+                # process (F-2026-10-07-04). The log still goes out.
+                try:
+                    self._track_stations(text)
+                    self._count_log_lines(text)
+                except Exception:
+                    print("[log] tracking failed, log stream continues\n"
+                          + traceback.format_exc(), file=sys.__stderr__)
                 payloads.append({"type": "log", "text": text})
-                new_msgs = self._track_messages(text)
+                try:
+                    new_msgs = self._track_messages(text)
+                except Exception:
+                    new_msgs = []
+                    print("[log] message tracking failed\n"
+                          + traceback.format_exc(), file=sys.__stderr__)
                 if new_msgs:
                     payloads.append({"type": "msgs", "msgs": new_msgs})
 

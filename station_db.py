@@ -1466,10 +1466,14 @@ class StationDB:
         else:
             # Our own beacon is fed in from the outbound log line, so it says
             # nothing about whether the feed is reaching us.
+            # Not `prev`: that name is the station's previous position, and
+            # v3.2.158 overwrote it here with a timestamp - the propagation
+            # check then failed on the first gated packet and took the log
+            # task with it (F-2026-10-07-04).
             now = time.time()
-            prev = self.last_ingest_ts or self.stored_newest_seen
-            if prev and now - prev > self._DEAF_AFTER_S:
-                self._breaks.append((prev, now))
+            last_heard = self.last_ingest_ts or self.stored_newest_seen
+            if last_heard and now - last_heard > self._DEAF_AFTER_S:
+                self._breaks.append((last_heard, now))
                 while self._breaks and self._breaks[0][1] < now - 7 * 86400:
                     self._breaks.popleft()
             self.last_ingest_ts = now

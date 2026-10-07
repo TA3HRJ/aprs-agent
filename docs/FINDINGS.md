@@ -7299,3 +7299,39 @@ credited there on purpose; it was undone before anything was pushed.
 **Not covered:** `docs/` - HANDOFF, FINDINGS, NEXT, the audits and release
 drafts - is a working record in a public repository by design, outage
 notes and decisions included.
+
+---
+
+## F-2026-10-07-04 — v3.2.158 stopped the live agent hearing anything after its first seconds
+
+**Source:** found while reading the AI-note label mix · **Verdict:** our fault, mine
+
+v3.2.158 added the break bookkeeping to `StationDB.ingest()` and named its
+timestamp `prev`. In that function `prev` already held the station's
+previous position, `(lat, lon, last_seen)`, passed on to
+`_ingest_prop_link()`. The first packet gated over RF by a gate with a known
+position raised `TypeError: 'float' object is not subscriptable` there.
+`_track_stations()` runs inside `broadcast_logs()` with no guard, so the
+exception ended that task: no packet reached the registry, the map, the
+stats, the silence watch or the propagation watch again, while the APRS-IS
+connection stayed up and the extensions (the AI gateway among them) kept
+working on their own path.
+
+Measured live at 15:14: `/api/counters` `packets: 0`, `/api/silence`
+`deaf: true` since 15:01:26, 14 s after the start; the 11:01 start the same
+at 11:02:12. **No silence snapshot from 11:02 to the fix**, no
+`[silence] ALERT`. The deaf guard did what F-2026-10-07-02 built it for -
+the process heard nothing, so it judged nothing - which is why this showed
+as silence rather than as false alerts.
+
+Why nothing caught it: `check_unheard_time.py` ingested packets only from
+gates the registry had never heard, so `_ingest_prop_link` returned before
+reading `prev`. The outside uptime check would have - it requires the packet
+count to grow - but GitHub's scheduler had not run it since 07:43 UTC.
+
+**Fixed in v3.2.160:** the name is `last_heard`; `_ingest_line()` keeps one
+packet's failure to that packet (journal with traceback the first time, then
+counted by type); `broadcast_logs()` runs the trackers inside a try so the
+log stream outlives them. `tools/check_ingest_survives.py` ingests a moving
+station through a gate with a known position; on v3.2.159 it fails 4 ways,
+the first with the live error verbatim.
