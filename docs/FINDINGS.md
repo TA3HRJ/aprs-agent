@@ -7223,3 +7223,48 @@ agent did not listen was counted as time the stations were silent.
    "back on the air" - otherwise point 2 repeats F-35's false retractions.
 4. The false entries on the missing list and in the history snapshots of
    2026-10-07 03:31-09:13 are not cleaned yet.
+
+---
+
+## F-2026-10-07-03 — user documentation had become the project's working notes
+
+**Source:** operator, "check the GitHub READMEs" · **Verdict:** our fault
+
+Everything committed here is published, and the README, HELP, LICENSE and
+config template are read by people who run the software. Found on
+2026-10-07:
+
+| what | where |
+|---|---|
+| development history inside user documentation | README feature rows of 3,816 and 2,771 characters: "before they did, no gate ever reached...", figures from one day's feed, the release that removed the PWA cache, the journald measurement in the logger example |
+| a measurement and a finding id | `aprsconfig.toml.template`, the callsign comment |
+| an internal note filed as documentation | `docs/README-pending.md`, a record of how a README decision was taken |
+
+**Fix:** the README rows say what the software does and how to set it; the
+template comment keeps the advice and loses the anecdote; the note is
+removed. `tools/check_public_text.py`, run on every push by
+`.github/workflows/public-text.yml`, fails on (1) an identifier the operator
+has asked to keep out of the repository, in any tracked file - held as
+SHA-256 hashes, so the check does not publish what it guards - (2) finding ids, working-note names, the live instance's hosts and paths,
+or the assistant, in README, HELP, LICENSE and the config template, and (3)
+a README line past 2,000 characters. Seen failing on the old text before it
+passed.
+
+**What the request was about.** The details of a second user's account on
+the project's server - login, home directory, service, key comment, the
+address it logs in from, the site it serves - were discussed while it was
+set up. Searched for every one of them: the working tree, all commits on
+all branches (`git log --all -S`) and every GitHub release note. **None
+were ever in the repository**; they live in the operator's own notes
+outside it. They are the check's list now, so they cannot arrive unnoticed.
+Probed: each is caught in context, and neither the authors' credits nor the
+Turkish "art arda" trips it.
+
+**Correction, same day.** The first pass also removed TA3EKM's name and
+GitHub links from the README, LICENSE and About box, reading "a username"
+in the request as his. He is one of the program's main authors and is
+credited there on purpose; it was undone before anything was pushed.
+
+**Not covered:** `docs/` - HANDOFF, FINDINGS, NEXT, the audits and release
+drafts - is a working record in a public repository by design, outage
+notes and decisions included.

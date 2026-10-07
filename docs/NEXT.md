@@ -263,8 +263,9 @@ decision that releases lag deliberately.
 | README · line 26 | option 1 |
 | GitHub Release + badge | **cut after all** — see below |
 
-The record of what changed and why is in
-[README-pending.md](README-pending.md), kept rather than deleted.
+The record of what changed and why was `docs/README-pending.md`; removed
+2026-10-07 as an internal note in a public repository - it is in the git
+history before that date.
 
 ### GitHub levelled with the demo — v3.2.25
 

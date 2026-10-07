@@ -1,0 +1,21 @@
+name: Public text check
+
+# Everything in this repository is published. Fails a push that puts a private
+# identifier in any tracked file, or internal notes (finding ids, working-note
+# names, the live instance's hosts) in the files written for users.
+# tools/check_public_text.py says what it tests and how to add an identifier.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  public-text:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Check public text
+        run: python tools/check_public_text.py
