@@ -2787,6 +2787,28 @@ class StationDB:
             return self.started_ts
         return 0.0
 
+    def add_break(self, gap_from: float, listen_from: float) -> None:
+        """Record a stretch the agent did not hear, kept in time order.
+
+        F-2026-10-07-05: breaks lived only in memory and were found only by
+        comparing the first packet with the newest stored `last_seen` - which
+        the agent's own beacon keeps fresh every 15 minutes whether anything is
+        heard or not. After eight deaf hours the restart saw no break at all and
+        946 cells alerted. Breaks are now checkpointed and restored, and known
+        deaf periods are added here at start-up.
+        """
+        if not (gap_from and listen_from and listen_from > gap_from):
+            return
+        b = (float(gap_from), float(listen_from))
+        if b in self._breaks:
+            return
+        merged = sorted(list(self._breaks) + [b])
+        self._breaks.clear()
+        self._breaks.extend(merged)
+
+    def export_breaks(self) -> list:
+        return [list(b) for b in self._breaks]
+
     def _silence_clock(self, r: "StationRecord", threshold: float,
                        now: float) -> float:
         """The moment a station's silence is counted from (F-2026-10-07-02).

@@ -7335,3 +7335,26 @@ counted by type); `broadcast_logs()` runs the trackers inside a try so the
 log stream outlives them. `tools/check_ingest_survives.py` ingests a moving
 station through a gate with a known position; on v3.2.159 it fails 4 ways,
 the first with the live error verbatim.
+
+---
+
+## F-2026-10-07-05 — the agent's own beacon hid an eight-hour break, and 946 cells alerted
+
+**Source:** checked after v3.2.160 deployed at 23:12 · **Verdict:** our fault, mine
+
+v3.2.160 heard again at 23:12:28 after F-2026-10-07-04's eight deaf hours,
+and within a minute `/api/silence` had **946 alerting cells, 27,982 silent
+stations** - everyone judged against a packet from before 11:02. F-2026-10-07-02
+point 2 was written for exactly this and did not fire: a break was found by
+comparing the first packet with the newest stored `last_seen`, and the
+agent's own Fixed Beacon, fed into the registry from the outbound log every
+15 minutes whether or not anything is heard, kept that value fresh. I saw
+this edge while writing v3.2.158 and judged it minor; no check had a beacon
+in it.
+
+**Fixed in v3.2.161:** the checkpoint stores `last_ingest_ts` - the last
+packet really heard - and the list of breaks; a restart restores both and
+measures its first packet against the former, not against `last_seen`.
+Known deaf periods are loaded as breaks: `_DEAF_PERIODS` gains 11:02:12 ->
+23:12:28, whose record is void until 23:50. `check_unheard_time.py` case 9:
+an 8 h break with the own beacon fresh in the registry.

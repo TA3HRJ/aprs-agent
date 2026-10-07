@@ -237,12 +237,18 @@ _cells_cache: "tuple[float, float, list]" = (0.0, 0.0, [])
 _CELLS_MIN_TTL_S = 10.0
 
 
-# Periods a process recorded silence it could not hear, before the deaf guard
-# covered a process that never heard a packet (F-2026-10-07-02): the host came
-# up without a network 03:31-09:13 CEST, and until 09:45 stations were judged
-# against packets from before it. (start, end, reason), epoch seconds.
+# Periods the agent did not hear the feed, and how long what it recorded about
+# silence afterwards is void. (gap_from, listen_from, void_until, reason),
+# epoch seconds. Each is loaded as a break in the feed at start-up, and the
+# record from gap_from to void_until is taken out of the record.
+#   F-2026-10-07-02: the host came up without a network, 03:31-09:13 CEST;
+#     until 09:45 stations were judged against packets from before it.
+#   F-2026-10-07-04/05: v3.2.158's ingest fault ended the log task 11:02:12;
+#     v3.2.160 heard again at 23:12:28 but knew no break, and judged everyone
+#     against packets from before 11:02 until the next release.
 _DEAF_PERIODS = [
-    (1791336660, 1791359100, "F-2026-10-07-02"),
+    (1791336660, 1791357225, 1791359100, "F-2026-10-07-02"),
+    (1791363732, 1791407548, 1791409800, "F-2026-10-07-05"),
 ]
 
 
@@ -540,6 +546,7 @@ class AgentManager:
             Path(config_path).resolve().with_name("aprs_stations.db"))
         try:
             n = self._station_db.load_sqlite(self._sta_db_path)
+            self._restore_feed_breaks()
             if n:
                 print(f"[station-db] Restored {n} stations from "
                       f"{self._sta_db_path}", file=sys.__stderr__)
@@ -875,6 +882,16 @@ class AgentManager:
             station_db_module.save_meta(
                 self._sta_db_path, "missing_stations",
                 json.dumps(self._missing))
+            # F-2026-10-07-05: when the feed was last really heard, and the
+            # breaks in it. The newest stored last_seen cannot say either - our
+            # own beacon refreshes it while nothing is heard.
+            if self._station_db.last_ingest_ts:
+                station_db_module.save_meta(
+                    self._sta_db_path, "last_ingest_ts",
+                    str(self._station_db.last_ingest_ts))
+            station_db_module.save_meta(
+                self._sta_db_path, "feed_breaks",
+                json.dumps(self._station_db.export_breaks()))
             # Not on every 60 s checkpoint: this one grows with the gate
             # count (2,000+ on the worldwide feed) while the others are a
             # handful of keys. Five minutes of lost baseline movement is
@@ -888,6 +905,30 @@ class AgentManager:
         except Exception as e:
             print(f"[station-db] uptime save failed: {e}", file=sys.__stderr__)
 
+    def _restore_feed_breaks(self) -> None:
+        """Breaks in the feed survive a restart (F-2026-10-07-05).
+
+        The last time anything was really heard comes from the checkpoint, not
+        from the newest stored last_seen, which our own beacon keeps fresh.
+        Known deaf periods count as breaks too.
+        """
+        db = self._station_db
+        try:
+            heard = float(station_db_module.load_meta(
+                self._sta_db_path, "last_ingest_ts", "0") or 0)
+            if heard:
+                db.stored_newest_seen = heard
+        except (ValueError, TypeError):
+            pass
+        try:
+            for a, b in json.loads(station_db_module.load_meta(
+                    self._sta_db_path, "feed_breaks", "[]")):
+                db.add_break(a, b)
+        except Exception:
+            pass
+        for gap_from, listen_from, _, _ in _DEAF_PERIODS:
+            db.add_break(gap_from, listen_from)
+
     def _void_deaf_periods(self) -> None:
         """Take what a deaf process recorded out of the record (F-2026-10-07-02).
 
@@ -897,7 +938,7 @@ class AgentManager:
         `missing_voided` meta key; open episodes started inside one are
         dropped; history snapshots are moved to `silence_history_void`.
         """
-        for start, end, reason in _DEAF_PERIODS:
+        for start, _, end, reason in _DEAF_PERIODS:
             gone = {c: m for c, m in self._missing.items()
                     if start <= float(m.get("flagged", 0)) <= end}
             if gone:

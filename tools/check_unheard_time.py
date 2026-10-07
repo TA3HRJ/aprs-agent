@@ -243,7 +243,7 @@ def main() -> int:
         con.commit()
         con.close()
         old_periods = web_gui._DEAF_PERIODS
-        web_gui._DEAF_PERIODS = [(a0, a1, why)]
+        web_gui._DEAF_PERIODS = [(a0, a0, a1, why)]
         m = types.SimpleNamespace(
             _sta_db_path=path,
             _missing={"IN-1": {"cell": "BB11", "flagged": 1500},
@@ -269,6 +269,30 @@ def main() -> int:
                          % (sorted(m._missing), sorted(stored), sorted(kept)))
         if set(m._silence_active) != {"DD33"} or set(m._silence_ai_notes) != {"DD33"}:
             fails.append("episodes void: %r" % sorted(m._silence_active))
+
+        # 9 · our own beacon must not hide a break (F-2026-10-07-05)
+        path = os.path.join(tmp, "d.db")
+        station_db_module.save_meta(path, "last_ingest_ts", str(T0))
+        station_db_module.save_meta(path, "feed_breaks", "[]")
+        time.time = fake_time
+        clock[0] = T0 + 8 * 3600
+        db = station_db_module.StationDB()
+        db._stations["TA1AAA-1"] = rec("TA1AAA-1", T0 - 60)
+        db.stored_newest_seen = T0 + 8 * 3600 - 300     # the own beacon's
+        old_periods = web_gui._DEAF_PERIODS
+        web_gui._DEAF_PERIODS = [(T0 - 100, T0 - 50, T0, "TEST")]
+        try:
+            web_gui.AgentManager._restore_feed_breaks(
+                types.SimpleNamespace(_station_db=db, _sta_db_path=path))
+        finally:
+            web_gui._DEAF_PERIODS = old_periods
+        if (T0 - 100, T0 - 50) not in list(db._breaks):
+            fails.append("a known deaf period was not loaded as a break")
+        db.ingest(packet("TA9ZZZ-1"))
+        hear(db, T0 + 8 * 3600 + 120)
+        if "TA1AAA-1" in silent_calls(db):
+            fails.append("8 h deaf with our own beacon fresh in the registry: "
+                         "the break was missed and the station judged silent")
     except Exception as e:                      # a missing attribute is a fail
         fails.append("%s: %s" % (type(e).__name__, e))
     finally:
