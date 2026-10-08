@@ -19,6 +19,9 @@ __pycache__/
 # ── Virtual environments
 venv/
 .venv/
+# venv312/ and any other side-by-side interpreter (2026-10-08: the server runs
+# 3.12 from /opt/aprs-agent/venv312 beside the old 3.10 venv)
+venv*/
 env/
 .env/
 

@@ -57,7 +57,8 @@ def main(argv: list[str]) -> int:
     files: list[Path] = []
     for r in roots:
         files.extend([r] if r.is_file() else sorted(r.rglob("*.py")))
-    files = [f for f in files if ".venv" not in f.parts and "venv" not in f.parts
+    files = [f for f in files if not any(p.startswith(("venv", ".venv")) for p in f.parts)
+             and ".venv" not in f.parts and "venv" not in f.parts
              and "build" not in f.parts and "dist" not in f.parts]
 
     problems: list[str] = []
