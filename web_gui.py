@@ -20,6 +20,7 @@ import gzip
 import hashlib
 import json
 import math
+import os
 import queue
 import re
 import sys
@@ -607,6 +608,11 @@ class AgentManager:
         self._missing: dict[str, dict] = {}
         # Ingest failures by exception type (F-2026-10-07-04).
         self._ingest_errors: dict[str, int] = {}
+        # AUDIT-2026-10-08 F1/F2: when the log task last went round, when each
+        # kept-alive loop died, and which health notices are outstanding.
+        self._beat: float = time.time()
+        self._loop_deaths: dict[str, list] = {}
+        self._health_sent: dict[str, float] = {}
         # Digest mode: alerts queued here between flushes (list of (ts, cell
         # dict, ai note)); lost on restart, same as the episode state above.
         self._silence_pending: list = []
@@ -1027,6 +1033,126 @@ class AgentManager:
 
         task.add_done_callback(_done)
 
+    # A loop that dies is restarted after this long, doubling to the cap; a
+    # run longer than _RESTART_RESET_S starts the next wait from the bottom.
+    _RESTART_DELAY_S = 5.0
+    _RESTART_CAP_S = 300.0
+    _RESTART_RESET_S = 600.0
+
+    async def _keep_alive(self, name: str, factory) -> None:
+        """Run a loop forever: when it dies, say so and start it again.
+
+        AUDIT-2026-10-08 F1. _supervise() made a death audible and left the
+        loop dead, and it wrapped three loops of the six that matter. On
+        2026-10-07 the unwrapped one - broadcast_logs, which feeds every packet
+        to the registry - died seconds after each start, and the agent stayed
+        connected and counted nothing for twelve hours (F-2026-10-07-04).
+        """
+        delay = self._RESTART_DELAY_S
+        while True:
+            started = time.time()
+            try:
+                await factory()
+                self._log_both(f"[{name}] LOOP EXITED without an error - it has "
+                               f"no return path; restarting in {delay:.0f}s")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                self._log_both(f"[{name}] LOOP DIED: {type(e).__name__}: {e}; "
+                               f"restarting in {delay:.0f}s")
+                self._log_both(traceback.format_exc())
+            deaths = self._loop_deaths.setdefault(name, [])
+            deaths.append(time.time())
+            del deaths[:-20]
+            if time.time() - started > self._RESTART_RESET_S:
+                delay = self._RESTART_DELAY_S
+            await asyncio.sleep(delay)
+            self._log_both(f"[{name}] loop restarted")
+            delay = min(delay * 2, self._RESTART_CAP_S)
+
+    def keep_running(self, name: str, factory) -> "asyncio.Task":
+        task = asyncio.create_task(self._keep_alive(name, factory))
+        self._supervise(task, name)
+        return task
+
+    # Seconds without a turn of the log task before the process gives up
+    # (F2). The task turns every 0.5 s; three minutes is not a slow turn.
+    _STALL_EXIT_S = 180.0
+
+    def start_watchdog(self) -> bool:
+        """A thread that ends the process if the log task stops turning.
+
+        AUDIT-2026-10-08 F2. A thread, because a hung event loop cannot notice
+        that it is hung. Only under systemd (INVOCATION_ID set, Restart=always
+        in the unit): on a desktop install nobody would start the app again,
+        so there it never exits.
+        """
+        if not os.environ.get("INVOCATION_ID"):
+            return False
+
+        def _watch() -> None:
+            while True:
+                time.sleep(30)
+                stalled = time.time() - self._beat
+                if stalled > self._STALL_EXIT_S:
+                    print(f"[health] log task has not turned for "
+                          f"{stalled:.0f}s - exiting so systemd restarts us",
+                          file=sys.__stderr__, flush=True)
+                    os._exit(70)
+
+        threading.Thread(target=_watch, name="watchdog", daemon=True).start()
+        return True
+
+    # Deaf this long, or a loop dead this often, and the operator is told.
+    _HEALTH_DEAF_S = 900.0
+    _HEALTH_DEATHS = 3
+    _HEALTH_DEATHS_WINDOW_S = 1800.0
+
+    async def _health_loop(self, config: dict) -> None:
+        """Tell the operator when the agent itself is not well (F2).
+
+        Its deafness was in the log only, and the outside check runs every
+        few hours and mails. Sent on the monitor's notify channel; when the
+        network is what failed this fails too, and says so in the log.
+        """
+        channel = config.get("monitor", {}).get("notify_channel", "")
+        while True:
+            await asyncio.sleep(60)
+            for msg in self._health_notes(time.time()):
+                self._log_both(f"[health] {msg}")
+                if channel:
+                    try:
+                        await self._send_notification(msg, channel, config)
+                    except Exception as e:
+                        self._log_both(f"[health] notice not sent: {e}")
+
+    def _health_notes(self, now: float) -> list:
+        """The notices due now; each condition is told once, and its end."""
+        notes = []
+        deaf = self._station_db.deaf_since() if self.running else 0.0
+        if deaf and now - deaf > self._HEALTH_DEAF_S:
+            if "deaf" not in self._health_sent:
+                self._health_sent["deaf"] = now
+                notes.append(
+                    "APRS-Agent: no packet heard since %s (%d min) - silence "
+                    "detection is paused." % (
+                        time.strftime("%H:%M", time.localtime(deaf)),
+                        (now - deaf) // 60))
+        elif "deaf" in self._health_sent and not deaf:
+            gone = now - self._health_sent.pop("deaf")
+            notes.append("APRS-Agent: hearing the feed again (the notice "
+                         "went out %d min ago)." % (gone // 60))
+        for name, deaths in self._loop_deaths.items():
+            recent = [t for t in deaths
+                      if now - t < self._HEALTH_DEATHS_WINDOW_S]
+            key = "loop:" + name
+            if (len(recent) >= self._HEALTH_DEATHS
+                    and now - self._health_sent.get(key, 0) > 3600):
+                self._health_sent[key] = now
+                notes.append("APRS-Agent: the %s loop died %d times in 30 "
+                             "min - see the journal." % (name, len(recent)))
+        return notes
+
     # _deepseek_peak_hour() was removed in v3.2.98 — see F-2026-08-28-01.
     # It gated the silence and propagation AI notes on UTC 01:00-04:00 and
     # 06:00-10:00, and its docstring called itself dormant. It was not: 359
@@ -1097,14 +1223,13 @@ class AgentManager:
 
         # Silence watch is always on: detection is cheap, and AI/notification
         # steps degrade gracefully when their configs are missing.
-        self._supervise(asyncio.create_task(self._silence_watch_loop(config)),
-                        "silence")
+        self.keep_running("silence", lambda: self._silence_watch_loop(config))
+        self.keep_running("health", lambda: self._health_loop(config))
         self._log_both("[silence] Silence watch started (first scan in 15m)")
 
         mon_cfg = config.get("monitor", {})
         if mon_cfg.get("enabled") and config.get("repeater_db_path", "").strip():
-            self._supervise(asyncio.create_task(self._monitor_loop(config)),
-                            "monitor")
+            self.keep_running("monitor", lambda: self._monitor_loop(config))
             print("[monitor] Repeater monitor started", file=sys.stderr)
         elif mon_cfg.get("enabled"):
             print("[monitor] WARNING: monitor enabled but repeater_db_path not set", file=sys.stderr)
@@ -1116,9 +1241,8 @@ class AgentManager:
             # enabled too — matches the silence/propagation ai_ok fix
             # (same reasoning: a provider string alone is not "configured").
             if ai_ext.get("enabled") and (ai_ext.get("provider") or ai_ext.get("base_url")):
-                self._supervise(
-                    asyncio.create_task(self._ai_analysis_loop(config)),
-                    "station-ai")
+                self.keep_running("station-ai",
+                                  lambda: self._ai_analysis_loop(config))
                 hours = sai_cfg.get("interval_hours", 24)
                 print(f"[station-ai] AI analysis started (every {hours}h, first run in 10m)", file=sys.stderr)
             else:
@@ -2329,6 +2453,7 @@ class AgentManager:
 
     async def broadcast_logs(self) -> None:
         while True:
+            self._beat = time.time()
             messages = []
             try:
                 while True:
@@ -3985,8 +4110,14 @@ async def _persist_loop(mgr: "AgentManager") -> None:
 
 async def on_startup(app: web.Application) -> None:
     mgr: AgentManager = app["manager"]
-    app["log_task"] = asyncio.create_task(mgr.broadcast_logs())
-    app["persist_task"] = asyncio.create_task(_persist_loop(mgr))
+    # Kept running, not merely started (AUDIT-2026-10-08 F1): the log task is
+    # the one whose death cost twelve hours on 2026-10-07.
+    app["log_task"] = mgr.keep_running("log", mgr.broadcast_logs)
+    app["persist_task"] = mgr.keep_running("persist", lambda: _persist_loop(mgr))
+    if mgr.start_watchdog():
+        print("[health] watchdog on: a log task stalled for "
+              f"{mgr._STALL_EXIT_S:.0f}s ends the process for systemd",
+              file=sys.__stderr__)
     # Build the silence-cell cache once, in the background, so the first
     # operator request after a restart is not the one that pays for it. Cold,
     # that rebuild costs about a second on a large registry — long enough for

@@ -70,7 +70,8 @@ class FixedBeacon(Extension):
         """Receive the outbound queue and start the beacon loop."""
         self._queue = queue
         if not self._task_started:
-            asyncio.create_task(self._beacon_loop())
+            # Held: a task nothing refers to can be collected mid-flight.
+            self._beacon_task = asyncio.create_task(self._beacon_loop())
             self._task_started = True
 
     async def handle(self, line: str) -> Optional[bytes]:
@@ -83,8 +84,14 @@ class FixedBeacon(Extension):
         interval_seconds = cfg.get("beacon_interval_mins", 15) * 60
 
         while True:
-            await self._send_beacon()
-            await self._send_status()
+            # AUDIT-2026-10-08 F1: one failed send used to end the loop for
+            # the life of the process, with nothing said.
+            try:
+                await self._send_beacon()
+                await self._send_status()
+            except Exception as e:
+                self.error(f"beacon failed, next in {interval_seconds // 60} "
+                           f"min: {type(e).__name__}: {e}")
             await asyncio.sleep(interval_seconds)
 
     async def _send_status(self) -> None:

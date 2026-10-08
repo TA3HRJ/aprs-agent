@@ -870,7 +870,8 @@ class AIGateway(Extension):
         self._own_writer = q
         if not self._status_started:
             self._status_started = True
-            asyncio.create_task(self._status_loop())
+            # Held: a task nothing refers to can be collected mid-flight.
+            self._status_task = asyncio.create_task(self._status_loop())
 
     async def _status_loop(self) -> None:
         """Say, on the network itself, who operates this service.
@@ -882,9 +883,17 @@ class AIGateway(Extension):
         other service callsign puts that. Empty text = no status sent.
         """
         while True:
-            cfg = self._live_config()
-            mins = int(cfg.get("status_interval_mins", 0) or 0)
-            text = (cfg.get("status_text") or "").strip()
+            # AUDIT-2026-10-08 F1: a setting that is not a number, edited live
+            # in the admin screen, used to end this loop for good.
+            try:
+                cfg = self._live_config()
+                mins = int(cfg.get("status_interval_mins", 0) or 0)
+                text = (cfg.get("status_text") or "").strip()
+            except Exception as e:
+                self.error(f"status settings unreadable, retrying in 5 min: "
+                           f"{type(e).__name__}: {e}")
+                await asyncio.sleep(300)
+                continue
             if mins <= 0 or not text or not self._own_writer:
                 await asyncio.sleep(300)
                 continue

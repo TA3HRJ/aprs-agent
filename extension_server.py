@@ -180,5 +180,6 @@ def start(config: dict) -> ConStore:
         async with server:
             await server.serve_forever()
 
-    asyncio.create_task(_serve())
+    # Held on the store: a task nothing refers to can be collected mid-flight.
+    store.serve_task = asyncio.create_task(_serve())
     return store

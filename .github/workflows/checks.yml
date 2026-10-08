@@ -1,0 +1,40 @@
+name: Offline checks
+
+# Every tools/check_*.py that needs no running server, on every push, on the
+# Python the server runs (AUDIT-2026-10-08 F4). Until this, 56 checks ran only
+# when someone remembered to run them. check_prop_bundle talks to a live
+# agent and stays manual.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install, as the server does
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -c requirements-lock-linux.txt
+      - name: Run every offline check
+        run: |
+          failed=""
+          for f in tools/check_*.py; do
+            [ "$f" = tools/check_prop_bundle.py ] && continue
+            echo "::group::$f"
+            if ! python "$f"; then failed="$failed $f"; fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::failed:$failed"
+            exit 1
+          fi
