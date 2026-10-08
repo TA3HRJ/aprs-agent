@@ -7155,6 +7155,28 @@ such episode occurred in the 40. The label carries no information until one
 does. Ways to find out: wait for a real one, or run the note prompt once on
 a constructed tight-onset case (a few AI calls). No change made.
 
+**Probed 2026-10-08 23:xx with constructed alerts** - a real AgentManager on
+the host, its registry replaced by 8 silent and 6 heard stations in one
+square, three gates heard a minute earlier, the live AI settings (3 calls):
+
+| case | onset | note |
+|---|---|---|
+| A | all 8 within 2 min, none back | `power_outage/medium` |
+| B | 6 of 8 within 15 min, 2 trailing 3 h later, none back | **`unknown/low`** |
+| C | over 9 h 20 min, 1 of 8 in the opening | `unknown/low` |
+
+A and C are right. **B is the case F-2026-10-05-03 was about** - unprotected
+stations stop together, those on UPS, battery or solar trail by hours - and
+the note calls it unknown: the spread is over 30 min, so v3.2.156's line
+"unless the spread, the opening, the returns and the gates point the same
+way, answer unknown" is added, and the model reads a 3 h spread as mixed
+even with 75 % in the opening and no returns. The 40 live notes could not
+show this; no such episode occurred.
+
+Suggested (not applied): decide "they point the same way" in code - most of
+the silent set (at least 3 and about two thirds) in the opening window and
+none back - and say so in the prompt instead of the unknown rule.
+
 ---
 
 ## F-2026-10-07-01 — hiding the settings column left a strip of the map without tiles
