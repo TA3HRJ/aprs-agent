@@ -65,6 +65,18 @@ predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
 
 ## Releasing to Windows
 
+**Published 2026-10-08: [v3.2.165](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.165)**
+— `aprs-agent-v3.2.165.zip`, 59.8 MiB, 248 files, sha256
+`9C833A9226C4FC7A7ADEEFF40478A08150F210458B5B8367DDFB46612DE4F965`. Notes in
+`docs/RELEASE-v3.2.165-draft.md`. Level with the VPS. Built from a clean
+export of the tag with the tag's own pin file (multidict 6.9.1); all 124
+exported files matched their blobs, the 22 shipped repository files matched
+the tag, both executables carry 3.2.165. Against v3.2.130: same 248 names,
+18 CRC differences, all explained in the draft. The v3.2.158-159 ingest
+fault never reached a Windows build.
+
+The v3.2.130 block below is history.
+
 **Published 2026-09-24: [v3.2.130](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.130)**
 — `aprs-agent-v3.2.130.zip`, 59.7 MiB, 248 files, sha256
 `CD8D8356A7A151BE32EB426B14F65924327B21A46AF5AE2BC6870821F660C156`. Notes in
