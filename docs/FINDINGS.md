@@ -7136,6 +7136,25 @@ evidence bundle's timing caveat and the popup note say the same.
 the "unknown" rule, and refuses the device list; **seen failing** (8)
 against v3.2.155. Re-read the label mix a day after it deploys.
 
+**Re-read 2026-10-08 22:45, after v3.2.156** - first note per (cell, since),
+the deaf hours of 2026-10-07 left out (their rows are voided):
+
+| | notes | label |
+|---|---|---|
+| 3 days before v3.2.148 | 356 | 98 % `unknown/low` |
+| v3.2.148 -> v3.2.156 | 125 | 80 % `power_outage/medium` |
+| v3.2.156, before the outage | 18 | **100 % `unknown/low`** |
+| v3.2.156, since the feed came back (23.6 h) | 22 | **100 % `unknown/low`** |
+
+The swing reversed completely. On this sample `unknown` is defensible: the
+notes state spreads of 7.5-21 h (17 of 40 give one) and only one opening
+cluster (2 of 6) - not the shape of one mains failure, where most stations
+drop together and only those on backup power trail. What the sample cannot
+show is whether the note says `power_outage` when the facts do agree: no
+such episode occurred in the 40. The label carries no information until one
+does. Ways to find out: wait for a real one, or run the note prompt once on
+a constructed tight-onset case (a few AI calls). No change made.
+
 ---
 
 ## F-2026-10-07-01 — hiding the settings column left a strip of the map without tiles
