@@ -7401,3 +7401,36 @@ emptiness as an all-clear - F-35's mistake again, from the other side.
 
 On the same snapshot the new rule gives 9 cells and 7,144 awaiting.
 `check_unheard_time.py` fails 3 ways on v3.2.161.
+
+---
+
+## F-2026-10-08-01 — the 250 km floor did not double the openings; it lengthened them
+
+**Source:** the read HANDOFF set for a day after v3.2.153 · **Verdict:**
+measurement, no change
+
+F-2026-10-06-02's replay predicted openings about 44 -> 90 a day with the
+floor at 250 km. Read live on 2026-10-08 06:33 CEST from `prop_history` and
+the journal's `[prop] OPENING` / `cleared` lines. The floor went live with
+v3.2.154 at 2026-10-06 08:04; 2026-10-07 03:31-09:13 and 11:02-23:12 are
+left out as not listened (F-2026-10-07-02, -04).
+
+| | openings | listened | a day | episode median | episode mean |
+|---|---|---|---|---|---|
+| before (09-22/24 -> 10-06 08:04) | 486 | 292 h | **39.9** | 40 min | 56 min |
+| after | 43 | 28.6 h | **36.0** | 45 min | 107 min |
+
+- **The floor works:** 34 of the 91 links in the new openings (37 %) are
+  250-300 km, and 23 of 43 openings would not exist without them.
+- **The count did not move.** Before, it ranged 22-50 a day. The replay
+  counted once per field per 30 min and said itself that it was not the
+  live episode logic; live, more links keep a field's episode open longer
+  instead of opening new ones - mean duration doubled, and the time some
+  opening is open rose from about 2,260 to 3,770 minutes a day.
+- **Openings that need no 250-300 km link fell** to about 17 a day. Not
+  established why. Candidates, unverified: v3.2.153 keeps suspect links
+  (jumps, balloons) out of openings - 105 of 200 live links were suspect
+  on 2026-10-06 - and v3.2.154 counts injected-station gates as internet.
+
+Small sample: 28.6 listened hours, 42 closed episodes. Re-read over full
+days once the feed has been steady (from 2026-10-08).
