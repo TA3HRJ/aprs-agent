@@ -2626,6 +2626,13 @@ class StationDB:
                   c["since"], ai_notes.get(c["cell"], "")) for c in cells])
             con.execute("DELETE FROM silence_history WHERE ts < ?",
                         (now - self._HISTORY_RETENTION_S,))
+            # The voided rows keep the history's retention (AUDIT-2026-10-08
+            # F8): kept so a void can be undone, not forever.
+            try:
+                con.execute("DELETE FROM silence_history_void WHERE ts < ?",
+                            (now - self._HISTORY_RETENTION_S,))
+            except sqlite3.OperationalError:
+                pass                        # no void table yet
             con.commit()
             return len(cells)
         finally:

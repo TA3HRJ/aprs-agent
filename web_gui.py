@@ -2194,6 +2194,10 @@ class AgentManager:
             req = urllib.request.Request(url, data=payload,
                                          headers={"Content-Type": "application/json"})
             await loop.run_in_executor(None, lambda: urllib.request.urlopen(req, timeout=10))
+            # AUDIT-2026-10-08 F7: a send that worked left no trace, so
+            # whether an alert reached anyone could not be checked afterwards.
+            print(f"[notify] telegram: sent, {len(msg)} chars: "
+                  f"{msg.splitlines()[0][:70] if msg else ''}", file=sys.__stderr__)
         elif channel == "smtp":
             smtp_cfg = config.get("extensions", {}).get("smtp", {})
             server_port = smtp_cfg.get("smtp_server", "")
@@ -2219,6 +2223,9 @@ class AgentManager:
                         s.login(username, password)
                     s.sendmail(envelope_from, recipients, mime.as_string())
             await loop.run_in_executor(None, _send)
+            print(f"[notify] smtp: sent to {len(recipients)} recipient(s), "
+                  f"{len(msg)} chars: {msg.splitlines()[0][:70] if msg else ''}",
+                  file=sys.__stderr__)
 
     def _build_channel_map(self, config: dict) -> dict[str, str]:
         """Map callsigns to the bridge they belong to, so each message can be

@@ -18,6 +18,7 @@ What must hold:
   4. _health_notes(): deaf past _HEALTH_DEAF_S is told once, and its end;
      a loop dying _HEALTH_DEATHS times in the window is told once an hour
   5. the watchdog thread starts only under systemd (INVOCATION_ID)
+  6. a notification that was sent says so in the journal (F7)
 
 Usage:  python tools/check_loops_survive.py
 Exit code 1 on failure.
@@ -136,6 +137,11 @@ def main() -> int:
     if len(n4) != 1 or "log loop died 3 times" not in n4[0] or n5:
         fails.append("repeated deaths not told once an hour: %r, then %r"
                      % (n4, n5))
+
+    # 6 · a notification that went out leaves a line (F7)
+    ns = inspect.getsource(AM._send_notification)
+    if "[notify] telegram: sent" not in ns or "[notify] smtp: sent" not in ns:
+        fails.append("a successful notification leaves no trace")
 
     # 5 · watchdog only under systemd
     saved = os.environ.pop("INVOCATION_ID", None)

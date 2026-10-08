@@ -309,6 +309,13 @@ def main() -> int:
                          % (sorted(m._missing), sorted(stored), sorted(kept)))
         if set(m._silence_active) != {"DD33"} or set(m._silence_ai_notes) != {"DD33"}:
             fails.append("episodes void: %r" % sorted(m._silence_active))
+        # 8b · voided rows keep the history's retention (AUDIT-2026-10-08 F8)
+        station_db_module.StationDB().record_silence_history(path)
+        con = station_db_module._connect(path)
+        left_void = con.execute("SELECT COUNT(*) FROM silence_history_void").fetchone()[0]
+        con.close()
+        if left_void:
+            fails.append("voided rows older than the retention were kept: %d" % left_void)
 
         # 9 · our own beacon must not hide a break (F-2026-10-07-05)
         path = os.path.join(tmp, "d.db")
