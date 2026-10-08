@@ -88,6 +88,12 @@ What is left, in the order it is worth doing:
     Watch: the first restart after a long break - no `[silence] ALERT` in
     the first scan, no mass "back on the air".
 
+17. **AUDIT-2026-10-08** - [AUDIT-2026-10-08.md](AUDIT-2026-10-08.md) is
+    the plan now: F1-F4 first (task supervision with restart, an on-host
+    watchdog, a deploy check that requires packets, every offline check in
+    CI), then the controlled reboot test, optimisation O1-O5 and interface
+    U1-U7. The operator approved F1-F4 and the reboot on 2026-10-08.
+
 Everything below this block is history — kept for the reasoning, not for the
 status.
 
