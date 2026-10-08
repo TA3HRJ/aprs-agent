@@ -188,7 +188,10 @@ body.public .stat-bar .cell.diag{display:none!important}
    screen — measured at 375 px, 351 px of furniture stood above a 328 px
    map. Worth reading once, not on every visit: it collapses to one line
    and opens on tap. */
-.tab-caption.clamp{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;position:relative;padding-right:28px}
+/* One line with an ellipsis, not -webkit-line-clamp: with the clamp the second
+   line showed through the bottom padding, cut in half, at every width
+   (AUDIT-2026-10-08 U2). */
+.tab-caption.clamp{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;position:relative;padding-right:28px}
 .tab-caption.clamp::after{content:"▾";position:absolute;right:12px;top:6px;opacity:.75}
 .tab-caption.open{cursor:pointer;position:relative;padding-right:28px}
 .tab-caption.open::after{content:"▴";position:absolute;right:12px;top:6px;opacity:.75}
@@ -209,6 +212,8 @@ body.public .stat-bar .cell.diag{display:none!important}
 /* Sits above the alert list and deliberately does not look like it: an alert
    is something we measured, this is us admitting we cannot measure. Amber, not
    red — nothing out there is known to be wrong. */
+.map-legend .leg-opt{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.map-legend .leg-opt input{margin:0}
 .deaf-bar{padding:7px 14px;border-bottom:1px solid var(--border2);font-size:12px;
   background:rgba(245,194,17,.12);color:#f5c211;line-height:1.45}
 .alert-row{display:flex;gap:8px;align-items:baseline;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px;cursor:pointer}
@@ -235,6 +240,8 @@ body.public .stat-bar .cell.diag{display:none!important}
 .msg-cs-miss{opacity:.55;cursor:default;text-decoration:line-through}
 .miss-call:hover,.miss-cell:hover{text-decoration:underline}
 .miss-toggle{color:#8ab4f8;margin-left:6px}
+.miss-cellhdr{padding:6px 14px 2px;font-size:10px;font-weight:bold;letter-spacing:.04em;color:#f5c211;cursor:pointer;border-top:1px solid rgba(255,255,255,.06)}
+.miss-cellhdr:hover{text-decoration:underline}
 .sil-quake{color:#f5c211;font-size:11px}
 /* Evidence actions sit at the foot of the popup, under a rule: they are about
    the popup's data, not more of it. */
@@ -456,6 +463,13 @@ body.public #about-gw-link{display:none!important}
      "heard / registry" — both numbers kept, which is what that split was
      for, and the bar is 4+4 again with its rules lined up. */
   .stat-bar .cell.reg{display:none}
+  /* A visitor's bar is five cells on a phone, and the fifth sat alone on a
+     second row. This run's uptime is the operator's figure; Lifetime is the
+     one a visitor reads. Four cells, one row (AUDIT-2026-10-08 U4). */
+  body.public .stat-bar .cell.up{display:none}
+  /* The amber bar ran to 102 px on a phone. One line, tap to read it all
+     (U3), as the tab caption does. */
+  .deaf-bar:not(.open){white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
   .stat-bar .cell.hr .v{font-size:12px;letter-spacing:-.2px}
   .stat-bar .dk-l{display:none}
   .stat-bar .mo-l{display:inline}
@@ -843,6 +857,7 @@ body.public #about-gw-link{display:none!important}
       <span><i style="background:#dc8add"></i><em data-i="leg_prop3">&gt; 1200 km</em></span>
       <span><i style="background:#c0bfbc;opacity:.4"></i><em data-i="leg_prop_young">Faint: gate too new to have a normal</em></span>
       <span><i style="background:repeating-linear-gradient(90deg,#8a8a8a 0 2px,transparent 2px 5px);height:3px;vertical-align:2px"></i><em data-i="leg_prop_suspect">Grey dotted: suspect - position jump or balloon</em></span>
+      <label class="leg-opt"><input type="checkbox" id="leg-suspect" checked><em data-i="leg_show_suspect">Show suspect links</em></label>
     </div>
     <div class="map-timeline" id="map-timeline" hidden>
       <button class="tl-btn" id="tl-play" onclick="tlPlay()">▶</button>
@@ -868,7 +883,7 @@ body.public #about-gw-link{display:none!important}
     <div class="cell hr"><div class="v" id="xST">0</div><div class="l"><span class="dk-l" data-i="st_heard">Heard</span><span class="mo-l" data-i="st_heard_reg">Heard / Registry</span></div></div>
       <div class="cell reg"><div class="v" id="xRG">0</div><div class="l" data-i="st_registry">Registry</div></div>
     <div class="cell"><div class="v" id="xCS">0</div><div class="l" data-i="st_calls">Callsigns</div></div>
-    <div class="cell"><div class="v" id="xUP">—</div><div class="l" data-i="st_uptime">Uptime</div></div>
+    <div class="cell up"><div class="v" id="xUP">—</div><div class="l" data-i="st_uptime">Uptime</div></div>
     <div class="cell"><div class="v" id="xLF">—</div><div class="l" data-i="st_lifetime">Lifetime</div></div>
   </div>
 </div>
@@ -1054,9 +1069,9 @@ const S={en:{
   miss_sum:"{n} stations still off the air",miss_sum_one:"1 station still off the air",
   miss_title:"Still off the air ({n})",
   miss_hint:"— no APRS signal since the time shown. Not a confirmed emergency.",
-  miss_since:"no signal for",miss_total:"({t} in all)",miss_all:"show all {t}",miss_recent:"last 7 days only",
+  miss_since:"no signal for",miss_total:"({t} in all)",miss_all:"show all {t}",miss_recent:"last 7 days only",miss_by_cell:"group by square",miss_by_time:"sort by time",
   leg_prop1:"Opening < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
-  leg_prop_young:"Faint: gate too new to have a normal",leg_prop_suspect:"Grey dotted: suspect - position jump or balloon",
+  leg_prop_young:"Faint: gate too new to have a normal",leg_show_suspect:"Show suspect links",leg_prop_suspect:"Grey dotted: suspect - position jump or balloon",
   prop_link:"Realised RF link — possible band opening",
   tl_live:"Live",tz_local:"local",
   own_station:"your station",
@@ -1155,7 +1170,7 @@ const S={en:{
   ev_hint:"Metin zaten seçili — Ctrl+C de çalışır",
   ev_manual:"Otomatik kopyalanamadı — metin seçili, Ctrl+C ile alın.",
   deaf_bar:"⚠ {m} dakikadır APRS-IS beslemesi yok — sessizlik tespiti duraklatıldı. Şu anda hiçbir şey yargılanmıyor; görünen hücreler güncel değil, son doğrulanmış okumadır.",
-  await_bar:"ℹ Besleme bir kesintiden sonra {t}'de geri geldi. O zamandan beri duyulmayan {n} istasyon henüz değerlendirilmedi: her biri bir beacon aralığı dinlendikten sonra değerlendirilir — hücreler bir anda değil, önümüzdeki bir-iki saat içinde geri gelir.",
+  await_bar:"ℹ Besleme bir kesintiden sonra geri geldi (saat {t}). O zamandan beri duyulmayan {n} istasyon henüz değerlendirilmedi: her biri bir beacon aralığı dinlendikten sonra değerlendirilir — hücreler bir anda değil, önümüzdeki bir-iki saat içinde geri gelir.",
   sil_suspect:"⚠ Susan {s} istasyondan {n} tanesi, kendi işaretinin güvenilir olmadığı bir konum bildiriyor — doğu boylamında bir ABD çağrı işareti, bilinen hotspot yapılandırma hatası. Bu hücre, çizildiği bölgeyi anlatmıyor olabilir.",
   sil_few_sites_one:"Duyurulmadı: susan {s} çağrı işaretinin hepsi tek bir operatöre ait. Tek bir sahanın elektriği gitse tam olarak böyle görünür ve bu, bir bölge hakkında haber değildir.",
   sil_few_sites:"Duyurulmadı: susan {s} çağrı işareti yalnızca {n} operatöre ait. Bu kadar az sahadaki cihazlar birbirinden bağımsız arızalanamaz, dolayısıyla bu bir bölge haberi değildir.",
@@ -1202,9 +1217,9 @@ const S={en:{
   miss_sum:"{n} istasyon hâlâ yayında değil",miss_sum_one:"1 istasyon hâlâ yayında değil",
   miss_title:"Hâlâ yayında değil ({n})",
   miss_hint:"— gösterilen saatten beri APRS sinyali yok. Teyit edilmiş bir acil durum değildir.",
-  miss_since:"sinyal yok:",miss_total:"(toplam {t})",miss_all:"{t} istasyonun tümünü göster",miss_recent:"yalnızca son 7 gün",
+  miss_since:"sinyal yok:",miss_total:"(toplam {t})",miss_all:"{t} istasyonun tümünü göster",miss_recent:"yalnızca son 7 gün",miss_by_cell:"kareye göre grupla",miss_by_time:"zamana göre sırala",
   leg_prop1:"Açılma < 600 km",leg_prop2:"600–1200 km",leg_prop3:"> 1200 km",
-  leg_prop_young:"Soluk: gate'in henüz bir olağanı yok",leg_prop_suspect:"Gri noktalı: şüpheli - konum sıçraması veya balon",
+  leg_prop_young:"Soluk: gate'in henüz bir olağanı yok",leg_show_suspect:"Şüpheli bağlantıları göster",leg_prop_suspect:"Gri noktalı: şüpheli - konum sıçraması veya balon",
   prop_link:"Gerçekleşmiş RF linki — olası bant açılması",
   tl_live:"Canlı",tz_local:"yerel",
   own_station:"kendi istasyonun",
@@ -1490,18 +1505,15 @@ function updCaption(){
   const k={log:'cap_log',sta:'cap_sta',map:'cap_map'}[activeTab];
   if(!k){c.hidden=true;return}
   c.textContent=t(k);c.hidden=false;
-  // Collapsed on narrow screens only; the desktop line already fits.
-  if(window.innerWidth<=700){
-    if(!c.dataset.wired){
-      c.dataset.wired='1';
-      c.addEventListener('click',function(){
-        c.classList.toggle('clamp');c.classList.toggle('open');
-      });
-    }
-    if(!c.classList.contains('open'))c.classList.add('clamp');
-  }else{
-    c.classList.remove('clamp','open');
+  // Collapsed at every width: at 800 px "the desktop line already fits" was
+  // two lines, the second cut in half (AUDIT-2026-10-08 U2).
+  if(!c.dataset.wired){
+    c.dataset.wired='1';
+    c.addEventListener('click',function(){
+      c.classList.toggle('clamp');c.classList.toggle('open');
+    });
   }
+  if(!c.classList.contains('open'))c.classList.add('clamp');
 }
 
 // ── Stations ──
@@ -1600,7 +1612,10 @@ function initMap(){
     return;
   }
   $('map-hint').hidden=true;
-  map=L.map('map').setView([39.0,35.0],6);
+  // No dragging past the poles: beyond them there are no tiles, only a dark
+  // band (AUDIT-2026-10-08 U1). East-west stays open; the tiles wrap.
+  map=L.map('map',{maxBounds:[[-85.06,-1080],[85.06,1080]],maxBoundsViscosity:1})
+    .setView([39.0,35.0],6);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(map);
@@ -1608,9 +1623,21 @@ function initMap(){
   // Leaflet listens only to the window. The gear hides the settings column
   // and the alert lists open above the map without the window changing, and
   // the strip the column had covered stayed without tiles (2026-10-07).
-  if(window.ResizeObserver)new ResizeObserver(()=>map.invalidateSize()).observe($('map'));
-  setTimeout(()=>map.invalidateSize(),60);
+  if(window.ResizeObserver)new ResizeObserver(()=>{map.invalidateSize();fitWorldZoom()}).observe($('map'));
+  setTimeout(()=>{map.invalidateSize();fitWorldZoom()},60);
+  fitWorldZoom();
   renderMap();
+}
+// AUDIT-2026-10-08 U1. Fitting every station worldwide took the map to zoom
+// 0 - a world 256 px wide in a 1280 x 413 box, dark bands on both sides and
+// above. The least zoom is the one at which the world covers the box.
+function fitWorldZoom(){
+  if(!map)return;
+  const s=map.getSize();
+  if(!s.x||!s.y)return;
+  const z=Math.max(0,Math.ceil(Math.log2(Math.max(s.x,s.y)/256)));
+  map.setMinZoom(z);
+  if(map.getZoom()<z)map.setZoom(z);
 }
 function mapIcon(r){
   return L.divIcon({html:aprsSym(r),className:'map-sym',iconSize:[24,24],iconAnchor:[12,12],popupAnchor:[0,-10]});
@@ -2553,6 +2580,10 @@ function restorePanelState(){
 // when each was added; the rest is one click away, and the choice is kept.
 const MISS_RECENT_S=7*86400;
 let missAll=false;try{missAll=localStorage.getItem('aprs.missAll')==='1'}catch(e){}
+// AUDIT-2026-10-08 U7: 1,601 entries, 341 over a month old. Grouped by
+// square, a cell that lost several stations reads as one event, not as rows
+// scattered through a time-sorted list. Remembered per browser.
+let missByCell=false;try{missByCell=localStorage.getItem('aprs.missByCell')==='1'}catch(e){}
 let missRows=[],missLast=[];
 function renderMissing(list){
   const p=$('miss-panel'),s=$('miss-sum');
@@ -2565,7 +2596,7 @@ function renderMissing(list){
   }
   const now=Date.now()/1000;
   const recent=list.filter(m=>now-(m.flagged||m.last_seen||0)<=MISS_RECENT_S);
-  const shown=missAll?list:recent;
+  let shown=missAll?list:recent;
   const more=list.length>recent.length?' '+t('miss_total').replace('{t}',list.length):'';
   if(s){
     s.textContent='🟡 '+t(recent.length===1?'miss_sum_one':'miss_sum').replace('{n}',recent.length)+more
@@ -2576,9 +2607,22 @@ function renderMissing(list){
        +' <span class="miss-hint">'+t('miss_hint')+'</span>';
   if(list.length>recent.length)
     h+=' <a href="#" class="miss-toggle">'+esc(missAll?t('miss_recent'):t('miss_all').replace('{t}',list.length))+'</a>';
+  h+=' <a href="#" class="miss-toggle miss-group">'+esc(missByCell?t('miss_by_time'):t('miss_by_cell'))+'</a>';
   h+='</div>';
+  if(missByCell){
+    const n={};shown.forEach(m=>{const c=m.cell||'';n[c]=(n[c]||0)+1});
+    shown=shown.slice().sort((a,b)=>(n[b.cell||'']-n[a.cell||''])
+      ||String(a.cell||'').localeCompare(String(b.cell||''))||a.last_seen-b.last_seen);
+    var missN=n;
+  }
   missRows=shown;
+  let lastCell=null;
   shown.forEach((m,i)=>{
+    if(missByCell&&(m.cell||'')!==lastCell){
+      lastCell=m.cell||'';
+      h+='<div class="miss-cellhdr"'+(lastCell?' data-loc="'+escA(lastCell)+'"':'')+'>'
+        +esc(lastCell||'?')+' · '+missN[lastCell]+'</div>';
+    }
     h+='<div class="miss-row">'
       +'<span class="miss-call" data-miss="'+i+'" title="'+escA(t('al_go'))+'">'+esc(m.call)+'</span>'
       +'<span class="miss-dur">'+t('miss_since')+' '
@@ -2604,6 +2648,9 @@ function missGo(el){
 }
 document.addEventListener('click',e=>{
   const tg=e.target.closest&&e.target.closest('#miss-panel .miss-toggle');
+  if(tg&&tg.classList.contains('miss-group')){e.preventDefault();missByCell=!missByCell;
+    try{localStorage.setItem('aprs.missByCell',missByCell?'1':'0')}catch(x){}
+    renderMissing(missLast);return}
   if(tg){e.preventDefault();missAll=!missAll;
     try{localStorage.setItem('aprs.missAll',missAll?'1':'0')}catch(x){}
     renderMissing(missLast);return}
@@ -2643,6 +2690,10 @@ function renderAlerts(cells){
 function renderDeaf(meta){
   const b=$('deaf-bar');
   if(!b)return;
+  if(!b.dataset.wired){
+    b.dataset.wired='1';
+    b.addEventListener('click',()=>b.classList.toggle('open'));
+  }
   if(meta&&!meta.deaf&&meta.awaiting>0&&meta.listening_since){
     // F-2026-10-07-06: after a break, an emptier map is "not judged yet",
     // not "nothing is silent". Say which.
@@ -2728,8 +2779,22 @@ function propScheduleClose(entry){
   },400);
 }
 const SUSPECT_COL='#8a8a8a';
+// AUDIT-2026-10-08 U5: suspect links are about half of what is drawn
+// (F-2026-10-08-01: 42 % of flags). Shown by default, faint as before; a
+// visitor who only wants the evidence can hide them, and it is remembered.
+let propShowSuspect=true;
+try{propShowSuspect=localStorage.getItem('aprs.showSuspect')!=='0'}catch(e){}
+let propLast=null;
+document.addEventListener('change',e=>{
+  if(!e.target||e.target.id!=='leg-suspect')return;
+  propShowSuspect=e.target.checked;
+  try{localStorage.setItem('aprs.showSuspect',propShowSuspect?'1':'0')}catch(x){}
+  if(propLast)renderProp(propLast[0],propLast[1]);
+});
 function renderProp(links,hist){
   if(!map)return;
+  propLast=[links,hist];
+  const cb=$('leg-suspect');if(cb)cb.checked=propShowSuspect;
   // While the timeline shows a past snapshot, only HISTORICAL links (from
   // /api/prop/history near the scrubbed time) may be drawn — live lines
   // over a past snapshot would lie, and vice versa.
@@ -2737,6 +2802,7 @@ function renderProp(links,hist){
   const now=Date.now()/1000,seen={};
   for(const l of links){
     if(!hist&&now-l.ts>PROP_SHOW_S)continue;
+    if(l.suspect&&!propShowSuspect)continue;
     const k=l.call+'|'+l.gate+'|'+l.ts;
     seen[k]=1;
     const col=propColor(l.km);

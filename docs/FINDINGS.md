@@ -7463,3 +7463,26 @@ replay 30. On the same 37.7 h:
 - **Suspect links: 344 of 816 flagged links (42 %)**, 343 position jumps
   and 1 balloon. Keeping them out of grouping costs about 4.5 openings a
   day (-13 %); 14 of the 60 openings with them kept in carried one.
+
+---
+
+## F-2026-10-08-02 — the registry's memory, and what compressing the feed log buys
+
+**Source:** AUDIT-2026-10-08 O2 and O4 · **Verdict:** measurement; O2 no
+change, O4 applied
+
+**Memory (O2).** The live process sits at 0.5-1.3 GB RSS. Loading last
+night's backup (302,658 stations) under `tracemalloc`: **350 MB** for the
+registry (≈1.2 KB a station: the row values kept 139 MB, the records 109 MB,
+the decoded `hour_counts` lists 88 MB) and **105 MB** for the map's slim
+cache (302,658 dicts of 11 keys). `StationRecord` already has `__slots__`,
+so the audit's first idea was done long ago. What is left - `hour_counts` as
+an array, the slim cache as tuples - would save about 100 MB, a tenth of
+RSS, on a host with 5.5 GB free. Not worth the risk; not done. The slim
+rebuild took 1.95 s on this workstation (F-36's 7.85 s tail not reproduced).
+
+**Feed log (O4).** `log_compress` (new, default off) gzips each rotated
+copy in a thread. On the host the five existing 200 MB copies became 76 MB
+each - **2.6:1**, not the 4:1 first guessed - 1.1 GB -> 482 MB. Set there to
+`log_backups = 28`, about a week (a copy fills in about 6 h), about 2.1 GB.
+`tools/replay_feed.py` reads `.gz` as it is.

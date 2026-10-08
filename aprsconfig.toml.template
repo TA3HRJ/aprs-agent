@@ -211,6 +211,9 @@ log_file = ""
 # Rotate the file above at this size, and keep this many rotated copies.
 log_max_mb = 50
 log_backups = 3
+# Compress each rotated copy with gzip, in the background (about 2.6:1 on a
+# full feed). tools/replay_feed.py reads .gz copies as they are.
+log_compress = false
 
 
 # --- Fixed Beacon ---

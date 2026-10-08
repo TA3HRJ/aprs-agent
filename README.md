@@ -228,6 +228,7 @@ keyword_filter = []                              # only log packets containing t
 log_file    = ""                                 # e.g. "/var/log/aprs/packets.log"
 log_max_mb  = 50                                 # rotate at this size
 log_backups = 3                                  # keep this many rotated files
+log_compress = false                             # gzip rotated files (about 2.6:1)
 ```
 
 Startup lines, warnings and errors from every extension still go to the

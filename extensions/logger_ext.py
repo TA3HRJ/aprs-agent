@@ -9,9 +9,13 @@ Developed by TA3HX & TA3PKS
 from __future__ import annotations
 
 
+import gzip
 import logging
 import logging.handlers
 import os
+import shutil
+import sys
+import threading
 from typing import Optional
 
 
@@ -44,6 +48,32 @@ def get_data_type_identifier(line: str) -> str:
     return ""
 
 
+def _gzip_rotator(source: str, dest: str) -> None:
+    """Rotate, then compress the rotated file off the event loop.
+
+    AUDIT-2026-10-08 O4. The handler rotates inside a logging call on the
+    event loop; compressing 200 MB there would stall everything for seconds.
+    The rename is instant, and a thread does the rest. A full-feed log
+    compresses about 2.6:1 (200 MB -> 76 MB, measured 2026-10-08), so a week
+    of feed fits in about 2 GB.
+    """
+    plain = dest + ".rotating"           # never the name of an older file
+    os.replace(source, plain)
+
+    def _compress() -> None:
+        try:
+            with open(plain, "rb") as fi, gzip.open(dest + ".part", "wb",
+                                                    compresslevel=6) as fo:
+                shutil.copyfileobj(fi, fo, 1 << 20)
+            os.replace(dest + ".part", dest)
+            os.remove(plain)
+        except Exception as e:
+            print(f"[logger] compressing {plain} failed, left as is: {e}",
+                  file=sys.__stderr__)
+
+    threading.Thread(target=_compress, name="logzip", daemon=True).start()
+
+
 class Logger(Extension):
     """Logs APRS packets to the terminal. Runs as a background (spawnable) task."""
 
@@ -59,12 +89,15 @@ class Logger(Extension):
                 # Rotates on its own terms instead of competing with every
                 # other service for room in the system journal.
                 h = logging.handlers.RotatingFileHandler(
-                    path, maxBytes=int(config.get("log_max_mb", 50)) * 1024 * 1024,
+                    path, maxBytes=int(float(config.get("log_max_mb", 50)) * 1024 * 1024),
                     backupCount=int(config.get("log_backups", 3)),
                     encoding="utf-8",
                 )
                 h.setFormatter(logging.Formatter(
                     "%(asctime)s %(message)s", "%Y-%m-%dT%H:%M:%S"))
+                if config.get("log_compress"):
+                    h.namer = lambda name: name + ".gz"
+                    h.rotator = _gzip_rotator
                 lg = logging.getLogger("aprs.packetfeed")
                 lg.setLevel(logging.INFO)
                 lg.propagate = False        # never climb back into stderr

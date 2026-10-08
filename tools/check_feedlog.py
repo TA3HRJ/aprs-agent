@@ -22,6 +22,8 @@ So the boundary this check defends is narrow and easy to erase by accident:
   4. with log_file set, packets land in the file
   5. with log_file unset, no file is written and nothing raises
   6. an unwritable path degrades to Live-Log-only instead of killing the agent
+  7. with log_compress, rotated files are gzipped (off the event loop) and
+     capped at log_backups; nothing is left half-written
 
 Usage:  python tools/check_feedlog.py
 Exit code 1 on failure.
@@ -130,6 +132,38 @@ async def run() -> int:
     if not ok:
         problems.append("an unwritable log_file stopped the Live Log too")
     print("  %-28s hala calisiyor=%s" % ("bozuk log_file yolu", ok))
+
+    # 7 - log_compress: rotated files are gzipped off the loop, the plain
+    # rotation leftovers are removed, and nothing is lost (AUDIT-2026-10-08 O4)
+    import gzip as _gz
+    import logging as _lg
+    import time as _t
+    zpath = os.path.join(tmp, "z", "packets.log")
+    with Capture():
+        lg = Logger(cfg(log_file=zpath, log_max_mb=0.002, log_backups=3,
+                        log_compress=True))
+        for i in range(60):
+            await lg.handle(PACKET + " #%03d" % i)
+    for _ in range(50):
+        names = sorted(os.listdir(os.path.dirname(zpath)))
+        if not any(n.endswith((".rotating", ".part")) for n in names):
+            break
+        _t.sleep(0.1)
+    gzs = [n for n in names if n.endswith(".gz")]
+    seen = ""
+    for n in gzs:
+        with _gz.open(os.path.join(tmp, "z", n), "rt", encoding="utf-8") as f:
+            seen += f.read()
+    with open(zpath, encoding="utf-8") as f:
+        seen += f.read()
+    if not gzs or any(n.endswith((".rotating", ".part")) for n in names):
+        problems.append("log_compress: rotated files %r" % names)
+    elif "#059" not in seen or len(gzs) > 3:
+        problems.append("log_compress: newest packet missing or backups not "
+                        "capped: %r" % names)
+    for h in list(_lg.getLogger("aprs.packetfeed").handlers):
+        h.close()
+    print("  %-28s %s" % ("log_compress", names))
 
     print()
     for p in problems:

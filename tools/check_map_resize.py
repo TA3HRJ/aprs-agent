@@ -39,7 +39,10 @@ def main() -> int:
     body = page[i:page.find("\nfunction ", i + 10)] if i >= 0 else ""
     if not body:
         fails.append("initMap() not found")
-    obs = re.search(r"new ResizeObserver\(\s*\(\)\s*=>\s*map\.invalidateSize\(\)\s*\)"
+    # The callback may do more than invalidate - since AUDIT-2026-10-08 U1 it
+    # also recomputes the least zoom - but it must invalidate.
+    obs = re.search(r"new ResizeObserver\(\s*\(\)\s*=>\s*(?:map\.invalidateSize\(\)"
+                    r"|\{[^{}]*map\.invalidateSize\(\)[^{}]*\})\s*\)"
                     r"\.observe\(\s*\$\('map'\)\s*\)", body)
     if not obs:
         fails.append("initMap() does not observe #map with a ResizeObserver "

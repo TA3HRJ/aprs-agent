@@ -480,6 +480,42 @@
     </table>
   </div>
 
+  <div class="card" id="rules-tr">
+    <div class="card-title">⚖️ Bir uyarı ve bir açılım nasıl belirlenir</div>
+    <p><strong>Sessiz istasyon.</strong> Son paketinden bu yana kendi beacon
+      aralığının <strong>3 katı</strong> (en az 15 dakika) geçmiş, son
+      <strong>24 saat</strong> içinde duyulmuş ve en az 5 paketi olan sabit bir
+      istasyon. Hareketli istasyonlar, APRS nesneleri, hava servisi uyarıları
+      ve ajanın kendi beacon'ı hiç sayılmaz.</p>
+    <p><strong>Kare kuralı.</strong> Bir karede en az <strong>3</strong> istasyon
+      sessiz ve operatörlerin en az <strong>yarısı</strong> sessiz olmalı; aynı
+      operatörün birden çok SSID'si tek operatör sayılır.</p>
+    <p><strong>Uyarı haber demektir.</strong> Kuralı karşılayan bir kare,
+      sessizleri o karenin zaten alışık olduğu istasyonlarsa, çok az farklı
+      operatöre aitse ya da hiçbir yerel igate onları hiç duymamışsa haritada
+      gri veya mor kalır; uyarı listesine ve bildirimlere girmez.</p>
+    <p><strong>Zamanlama.</strong> Uyarı, kural <strong>10 dakika</strong>
+      kesintisiz karşılandığında açılır; <strong>1 saatten</strong> kısa bir
+      düşüş aynı olayın parçası sayılır.</p>
+    <p><strong>Ajan dinleyemediğinde.</strong> <strong>10 dakika</strong> hiç
+      paket gelmezse hiçbir şey değerlendirilmez ve sarı şerit bunu söyler.
+      Besleme bir kesintiden sonra dönünce, o zamandan beri duyulmayan
+      istasyonlar <strong>bir beacon aralığı</strong> (en az 15 dakika)
+      dinlenene kadar değerlendirilmez; sarı şerit kaç istasyonun beklediğini
+      yazar. Dinlenmeyen süre hiçbir istasyonun sessizliği sayılmaz.</p>
+    <p><strong>Hâlâ yayında değil listesi.</strong> Bir uyarıda susan
+      istasyonlar, yeniden duyulana kadar listede kalır. Varsayılan görünüm
+      son 7 gündür; liste kareye göre gruplanabilir.</p>
+    <p><strong>Bir propagasyon açılımı.</strong> RF ile gelen bir bağlantı,
+      en az <strong>250 km</strong> ise ve geçidin olağan menzilini (ortalamasının
+      3 katı) aşıyorsa işaretlenir. Aynı Maidenhead alanında
+      <strong>30 dakika</strong> içinde en az iki farklı göndericiden işaretli
+      bağlantı gelirse açılım sayılır. Konumu bir öncekinden imkânsız hızla
+      sıçrayan istasyonların ve balonların bağlantıları <em>şüphelidir</em>:
+      gri noktalı çizilir, açılıma sayılmaz ve lejanttan gizlenebilir. Çağrı
+      işaretinin ülkesiyle çelişen konumlar da sayılmaz.</p>
+  </div>
+
   <div class="card">
     <div class="card-title">🔔 Röle İzleyici</div>
     <p>
@@ -1286,6 +1322,44 @@
         <td><span class="badge opt">Optional</span></td>
       </tr>
     </table>
+  </div>
+
+  <div class="card" id="rules-en">
+    <div class="card-title">⚖️ How an alert and an opening are decided</div>
+    <p><strong>A silent station.</strong> A fixed station whose last packet is
+      older than <strong>3 times</strong> its own beacon interval (at least 15
+      minutes), heard within the last <strong>24 hours</strong>, with at least 5
+      packets. Moving stations, APRS objects, weather-service warnings and the
+      agent's own beacon are never counted.</p>
+    <p><strong>The square rule.</strong> At least <strong>3</strong> stations
+      in a square are silent and at least <strong>half</strong> of its
+      operators; several SSIDs of one operator count as one.</p>
+    <p><strong>An alert is news.</strong> A square that meets the rule stays
+      grey or purple on the map, off the alert list and the notifications, when
+      its silent stations are ones it habitually misses, belong to too few
+      separate operators, or were never heard by any local igate.</p>
+    <p><strong>Timing.</strong> An alert opens once the rule has held for
+      <strong>10 minutes</strong> without a break; a dip shorter than
+      <strong>an hour</strong> is part of the same event.</p>
+    <p><strong>When the agent cannot hear.</strong> With no packet for
+      <strong>10 minutes</strong> nothing is judged, and the amber bar says so.
+      When the feed returns after a break, stations not heard since are not
+      judged until they have been listened for <strong>one beacon
+      interval</strong> (at least 15 minutes); the amber bar says how many are
+      waiting. Time the agent did not listen never counts as a station's
+      silence.</p>
+    <p><strong>The still-missing list.</strong> Stations that fell silent in an
+      alert stay on it until they are heard again. The default view is the last
+      7 days, and the list can be grouped by square.</p>
+    <p><strong>A propagation opening.</strong> A link that arrived over RF is
+      flagged when it is at least <strong>250 km</strong> and beyond its gate's
+      usual reach (3 times its average). Flagged links from at least two
+      different senders in one Maidenhead field within <strong>30
+      minutes</strong> make an opening. Links from stations whose position
+      jumped faster than anything moves, and from balloons, are
+      <em>suspect</em>: drawn grey and dotted, never counted, and hideable from
+      the legend. Positions that contradict their callsign's country are not
+      counted either.</p>
   </div>
 
   <div class="card">

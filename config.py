@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.164"
+VERSION = "3.2.165"
 
 # ── Secret handling for the HTTP API ────────────────────────────────────────
 # print_config()'s masking below is for human eyes: it keeps the first and last
@@ -198,6 +198,7 @@ DEFAULTS: dict[str, Any] = {
             "log_file": "",
             "log_max_mb": 50,
             "log_backups": 3,
+            "log_compress": False,
         },
         "fixed_beacon": {
             "enabled": False,
