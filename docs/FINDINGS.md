@@ -7434,3 +7434,32 @@ left out as not listened (F-2026-10-07-02, -04).
 
 Small sample: 28.6 listened hours, 42 closed episodes. Re-read over full
 days once the feed has been steady (from 2026-10-08).
+
+**Correction, 2026-10-08 (same day): the floor does add openings; the
+before/after comparison was confounded, and two readings above are wrong.**
+The raw feed `/var/log/aprs/packets.log*` (2026-10-06 16:55 -> 2026-10-08
+06:37, 9.9 M lines, after the floor went live) was replayed locally through
+the live `ingest()` and the live opening logic (5-min scans, 30-min window,
+one episode per field), seeded with the 2026-10-06 04:17 backup. Checked
+against the live record: in the hours the agent listened, live 27 openings,
+replay 30. On the same 37.7 h:
+
+| | floor 300 km | floor 250 km |
+|---|---|---|
+| suspect links in grouping | **24.8 a day** (the old rules) | 38.2 |
+| suspect links out | 19.7 | **33.7** (live now) |
+
+- **The floor adds about 70 %** of openings (19.7 -> 33.7), not 100 % as the
+  replay of F-2026-10-06-02 counted it. "The count did not move" above is
+  wrong: these days were quieter - the old rules give 24.8 a day on them
+  against 39.9 live over the two weeks before.
+- **"23 of 43 openings would not exist without 250-300 km links" was a bad
+  counterfactual:** under a 300 km floor many of them open later, on the
+  next long link. The same-period count is the right one.
+- **Episodes did not lengthen, they multiplied:** floor 250 vs 300 on the
+  same links, 52 vs 30 episodes, median 38 vs 50 min, mean 60 vs 64; the
+  time some field is open is +62 % (1,975 vs 1,221 min a day). The live
+  mean of 107 min above came from a few long episodes in a small sample.
+- **Suspect links: 344 of 816 flagged links (42 %)**, 343 position jumps
+  and 1 balloon. Keeping them out of grouping costs about 4.5 openings a
+  day (-13 %); 14 of the 60 openings with them kept in carried one.
