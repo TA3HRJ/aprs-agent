@@ -7177,6 +7177,16 @@ Suggested (not applied): decide "they point the same way" in code - most of
 the silent set (at least 3 and about two thirds) in the opening window and
 none back - and say so in the prompt instead of the unknown rule.
 
+**Applied, v3.2.166.** `_onset_context` decides "they point the same way" -
+the opening holds at least 3 and two thirds of the silent set, and none came
+back - and says so ("6 of 8 stopped together and none came back - the shape
+of one mains failure, with the stations on backup power trailing"); the
+unknown rule is kept for every other wide spread. The same three constructed
+cases through the live AI settings: A `power_outage/medium`, **B
+`power_outage/medium`** (was `unknown/low`), C `unknown/low`.
+`check_onset_facts` holds A, B, C and B with one station back; seen failing
+on B against v3.2.165.
+
 ---
 
 ## F-2026-10-07-01 — hiding the settings column left a strip of the map without tiles

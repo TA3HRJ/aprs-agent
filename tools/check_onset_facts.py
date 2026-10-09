@@ -131,6 +131,36 @@ def main() -> int:
         if "UPS" in lang_key or "solar" in lang_key.lower() or "güneş" in lang_key:
             fails.append("the popup's backup note still lists devices: %r" % lang_key[:60])
 
+    # F-2026-10-06-04, probed 2026-10-08: the three constructed alerts. A
+    # tight onset, and one with backup-power stragglers, are stated as
+    # agreeing; a spread with one early drop keeps the unknown rule.
+    import types
+    import web_gui as _wg
+    def onset(drops, back=()):
+        d = StationDB()
+        calls = []
+        for i, ago in enumerate(drops):
+            c = "CC1A%02d" % i
+            put(d, c, ago, 600)
+            calls.append(c)
+        m = types.SimpleNamespace(_station_db=d,
+                                  _silence_seen={"KM38": set(calls) | set(back)})
+        return _wg.AgentManager._onset_context(m, {"cell": "KM38",
+                                                    "silent_calls": calls})
+    A = onset([2400 + 20 * i for i in range(8)])
+    B = onset([14400 + 40 * i for i in range(6)] + [3600, 3300])
+    C = onset([36000, 28000, 22000, 17000, 12000, 8000, 5000, 2400])
+    Bb = onset([14400 + 40 * i for i in range(6)] + [3600, 3300], back=("CC1Z00",))
+    if "unknown" in A:
+        fails.append("a 2-minute onset carries the unknown rule")
+    if "point the same way: 6 of 8" not in B or '"unknown"' in B:
+        fails.append("6 of 8 together and 2 trailing, none back, is not stated as "
+                     "agreeing: %r" % B[-160:])
+    if '"unknown"' not in C or "point the same way:" in C:
+        fails.append("a 9 h spread with one early drop lost the unknown rule")
+    if '"unknown"' not in Bb:
+        fails.append("with a station back, the same onset is still called agreeing")
+
     for f in fails:
         print("  FAIL  " + f)
     if fails:

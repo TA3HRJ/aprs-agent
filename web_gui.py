@@ -1787,7 +1787,18 @@ class AgentManager:
             out += (f"{len(back)} station(s) came back while this alert ran "
                     f"({', '.join(back[:5])}): that fits drop-outs, but power "
                     f"coming back, or backup power recovering, does the same.\n")
-        if spread >= 1800:
+        # F-2026-10-06-04, probed 2026-10-08: with 6 of 8 stopping inside 15
+        # min, 2 trailing 3 h later and none back - one mains failure with
+        # backup power trailing - the note still answered "unknown": the
+        # model was asked to decide whether the facts "point the same way"
+        # and read a 3 h spread as mixed. Whether they do is decided here.
+        agree = (f["opening"] >= max(3, -(-2 * f["n"] // 3)) and not back)
+        if spread >= 1800 and agree:
+            out += (f"Here they point the same way: {f['opening']} of {f['n']} "
+                    f"stopped together and none came back - the shape of one "
+                    f"mains failure, with the stations on backup power "
+                    f"trailing. That is not mixed timing.\n")
+        elif spread >= 1800:
             out += ("Weigh the spread, the opening, the returns and the gates "
                     "together. Unless they point the same way, answer cause "
                     "\"unknown\" rather than choose power_outage or a drop-out "
