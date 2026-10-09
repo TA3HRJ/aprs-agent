@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>APRS-Agent</title>
 <meta name="theme-color" content="#242424">
+<!-- aprsagent.com family theme (2026-10-10): light by default whatever the system
+     prefers; the old dark look is the "dark" theme, one click away and remembered. -->
+<script>(function(){var t=null;try{t=localStorage.getItem("theme")}catch(e){}
+var d=document.documentElement;d.dataset.theme=t==="dark"?"dark":"light";
+if(d.dataset.theme==="light"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.content="#f6f3ea"}})();</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" href="/favicon.ico">
@@ -504,6 +509,92 @@ body.public #about-gw-link{display:none!important}
   .side-header{padding-top:calc(8px + env(safe-area-inset-top));flex-wrap:wrap}
   .hdr-btn{min-height:36px;padding:8px 14px;font-size:14px}
 }
+
+/* ════ aprsagent.com family LIGHT theme (2026-10-10) ════════════════════════
+   Additive and scoped: everything above is untouched and is what the dark
+   theme shows - the look this page had until now. Delete this block and the
+   first-paint script in <head> and the page is what it was. Colours drawn ON
+   the map (cells, links, search marks) are not themed: the tiles are light in
+   both themes. */
+.thm{display:inline-flex;align-items:center;justify-content:center;width:32px;height:28px;padding:0;
+  border:1px solid var(--fg);border-radius:0;background:transparent;color:var(--dim);cursor:pointer;flex:none}
+.thm:hover{color:var(--fg);background:var(--card)}
+.thm svg{width:15px;height:15px;display:block}
+:root[data-theme="dark"] .thm .i-moon,:root:not([data-theme="dark"]) .thm .i-sun{display:none}
+:root[data-theme="light"]{
+  --bg:#f6f3ea;--sidebar:#efebdf;--view:#fdfbf5;
+  --card:rgba(34,32,26,.05);--fg:#22201a;--fg2:#3f3a31;
+  --dim:#635c50;--border:#d9d2c2;--border2:#c6bda8;
+  --accent:#b0413e;--accent-fg:#fdfbf5;--accent2:#24506e;
+  --success:#2e7d4f;--warn:#8a5a0c;--error:#b3261e;--r:2px;
+}
+:root[data-theme="light"] .sidebar::-webkit-scrollbar-thumb,
+:root[data-theme="light"] .log-view::-webkit-scrollbar-thumb,
+:root[data-theme="light"] .sta-table-wrap::-webkit-scrollbar-thumb{background:rgba(34,32,26,.18)}
+:root[data-theme="light"] .entry-row input:focus,:root[data-theme="light"] .entry-row select:focus{box-shadow:0 0 0 2px rgba(176,65,62,.22)}
+:root[data-theme="light"] .entry-row input::placeholder{color:rgba(34,32,26,.35)}
+:root[data-theme="light"] .adw-switch span{background:rgba(34,32,26,.2)}
+:root[data-theme="light"] .ll:hover{background:rgba(34,32,26,.04)}
+:root[data-theme="light"] .ll.msg{color:#24506e}
+:root[data-theme="light"] .ll.pos{color:#2e7d4f}
+:root[data-theme="light"] .ll.ai-rx{background:rgba(36,80,110,.07)}
+:root[data-theme="light"] .ll.ai-resp{color:#754d9e}
+:root[data-theme="light"] #map{background:#efebdf}
+:root[data-theme="light"] .map-search input{background:rgba(253,251,245,.96);color:#22201a;border-color:#c6bda8}
+:root[data-theme="light"] .map-search-res{background:rgba(253,251,245,.98);border-color:#c6bda8}
+:root[data-theme="light"] .msr-row{color:#22201a}
+:root[data-theme="light"] .msr-row:hover{background:rgba(36,80,110,.1)}
+:root[data-theme="light"] .msr-row span,:root[data-theme="light"] .msr-note,:root[data-theme="light"] .map-hint{color:#635c50}
+:root[data-theme="light"] .map-legend{background:rgba(253,251,245,.93);border:1px solid #d9d2c2}
+:root[data-theme="light"] .map-legend em{color:#3f3a31}
+:root[data-theme="light"] .legend-toggle{background:rgba(253,251,245,.93);color:#3f3a31;border-color:#c6bda8}
+:root[data-theme="light"] .pub-live.on{color:#2e7d4f}
+:root[data-theme="light"] .pub-live.on .dot,:root[data-theme="light"] .mod-status .mb.on .dot{background:#2e7d4f}
+:root[data-theme="light"] .mod-status .mb.warn .dot{background:#b57a18}
+:root[data-theme="light"] .mod-status .mb.bad .dot{background:#b3261e}
+:root[data-theme="light"] .tab-caption{background:rgba(36,80,110,.07);color:#24506e}
+:root[data-theme="light"] .deaf-bar{background:rgba(181,122,24,.12);color:#7a4f0a}
+:root[data-theme="light"] .alert-row,:root[data-theme="light"] .miss-row{border-bottom-color:rgba(34,32,26,.07)}
+:root[data-theme="light"] .alert-row:hover{background:rgba(34,32,26,.05)}
+:root[data-theme="light"] .alert-cell{color:#b3261e}
+:root[data-theme="light"] .alert-cell.ig{color:#8a5a0c}
+:root[data-theme="light"] .alert-cell.sg{color:#a84f00}
+:root[data-theme="light"] .alert-ai,:root[data-theme="light"] .prop-est,:root[data-theme="light"] .s-freq{color:#2e7d4f}
+:root[data-theme="light"] .miss-head,:root[data-theme="light"] .miss-call,:root[data-theme="light"] .miss-cellhdr,
+:root[data-theme="light"] .sil-quake,:root[data-theme="light"] .sil-suspect,:root[data-theme="light"] .tl-label.hist{color:#8a5a0c}
+:root[data-theme="light"] .miss-cellhdr{border-top-color:rgba(34,32,26,.08)}
+:root[data-theme="light"] .miss-dur,:root[data-theme="light"] .sil-novel{color:#b3261e}
+:root[data-theme="light"] .miss-toggle,:root[data-theme="light"] .sil-ev a,
+:root[data-theme="light"] .cs-link,:root[data-theme="light"] .cs-ext{color:#24506e}
+:root[data-theme="light"] .sil-ev{border-top-color:#d9d2c2}
+:root[data-theme="light"] .sil-chronic,:root[data-theme="light"] .prop-young{color:#635c50}
+:root[data-theme="light"] .sil-onset{color:#3f3a31}
+:root[data-theme="light"] .sil-toast{background:#fdfbf5;color:#22201a;border-color:#c6bda8}
+:root[data-theme="light"] .ev-modal,:root[data-theme="light"] .sta-modal,:root[data-theme="light"] .modal-bg{background:rgba(34,32,26,.45)}
+:root[data-theme="light"] .ev-box{background:#fdfbf5;border-color:#c6bda8;box-shadow:0 8px 32px rgba(34,32,26,.25)}
+:root[data-theme="light"] .ev-head,:root[data-theme="light"] .ev-foot{border-color:#d9d2c2}
+:root[data-theme="light"] .ev-head button,:root[data-theme="light"] .ev-hint,:root[data-theme="light"] .tl-ends{color:#635c50}
+:root[data-theme="light"] .ev-text{background:#f6f3ea;color:#22201a}
+:root[data-theme="light"] .ev-foot button,:root[data-theme="light"] .tl-btn{background:#efebdf;color:#22201a;border-color:#c6bda8}
+:root[data-theme="light"] .ev-foot button:hover,:root[data-theme="light"] .tl-btn:hover{background:#e6e0d1}
+:root[data-theme="light"] .map-timeline{background:rgba(253,251,245,.93);border:1px solid #d9d2c2}
+:root[data-theme="light"] .tl-wrap input[type=range]{accent-color:#b0413e}
+:root[data-theme="light"] .tl-ticks{background-color:#d9d2c2}
+:root[data-theme="light"] .tl-label{color:#3f3a31}
+:root[data-theme="light"] .leaflet-popup-content-wrapper,:root[data-theme="light"] .leaflet-popup-tip{background:#fdfbf5;color:#22201a}
+:root[data-theme="light"] .leaflet-popup-scrolled{border-color:#d9d2c2}
+:root[data-theme="light"] .leaflet-container a.leaflet-popup-close-button{color:#635c50}
+:root[data-theme="light"] table.sta td{border-bottom-color:rgba(34,32,26,.07)}
+:root[data-theme="light"] table.sta tr:hover td{background:rgba(34,32,26,.04)}
+:root[data-theme="light"] .alert-sum{background:rgba(176,65,62,.1);color:#b3261e}
+:root[data-theme="light"] .miss-sum{background:rgba(181,122,24,.12);color:#7a4f0a}
+:root[data-theme="light"] #full-feed-warn{background:#f3e7c4!important;color:#5c4a12!important}
+/* colours written inline by the page's own code, light-tinted for dark paper */
+:root[data-theme="light"] [style*="color:#f5c211"]{color:#8a5a0c!important}
+:root[data-theme="light"] [style*="color:#8ff0a4"],:root[data-theme="light"] [style*="color:#57e389"]{color:#2e7d4f!important}
+:root[data-theme="light"] [style*="color:#62a0ea"],:root[data-theme="light"] [style*="color:#8ab4f8"]{color:#24506e!important}
+:root[data-theme="light"] .leaflet-popup [style*="color:#2ec27e"]{color:#1f7a49!important}
+:root[data-theme="light"] .leaflet-popup [style*="color:#dc8add"]{color:#8a3f9a!important}
 </style>
 </head>
 <body>
@@ -517,6 +608,7 @@ body.public #about-gw-link{display:none!important}
   <span class="ws-dot" id="ws-dot"></span>
   <button class="hdr-btn" onclick="document.querySelectorAll('.pref-group').forEach(g=>g.classList.add('collapsed'))" title="Collapse All">−</button>
   <button class="hdr-btn" onclick="document.querySelectorAll('.pref-group').forEach(g=>g.classList.remove('collapsed'))" title="Expand All">+</button>
+  <button class="hdr-btn thm" type="button" data-thm title="Açık / koyu tema · Light / dark theme" aria-label="Açık / koyu tema · Light / dark theme"><svg class="i-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z"/></svg><svg class="i-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 .8v2M8 13.2v2M.8 8h2M13.2 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M2.9 13.1l1.4-1.4M11.7 4.3l1.4-1.4"/></svg></button>
   <button class="hdr-btn" id="btn-lang" onclick="toggleLang()">TR</button>
   <button class="hdr-btn" id="btn-about" onclick="openAbout()" data-i="btn_about">About</button>
   <button class="hdr-btn" id="btn-stats" hidden onclick="window.open('/stats/','_blank','noopener')" data-i="btn_stats">Stats</button>
@@ -701,6 +793,7 @@ body.public #about-gw-link{display:none!important}
            often the only thing an operator publishes, and it should not carry
            a link to somebody else's site by default. -->
       <a class="log-btn" id="pub-home" data-i="pub_home" href="#" hidden>Home</a>
+      <button class="log-btn thm" type="button" data-thm title="Açık / koyu tema · Light / dark theme" aria-label="Açık / koyu tema · Light / dark theme"><svg class="i-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z"/></svg><svg class="i-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 .8v2M8 13.2v2M.8 8h2M13.2 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M2.9 13.1l1.4-1.4M11.7 4.3l1.4-1.4"/></svg></button>
       <button class="log-btn" id="pub-lang" onclick="toggleLang()">TR</button>
       <button class="log-btn" onclick="openAbout()" data-i="btn_about">About</button>
     </div>
@@ -3264,6 +3357,16 @@ function toggleSidebar(){
   restorePanelState();restoreTab();connectWS();applyLang();
   pollSilence();setInterval(pollSilence,15000);
 })();
+</script>
+<script>
+/* aprsagent.com family theme button: light unless chosen, the choice remembered */
+document.addEventListener('click',function(e){
+  var b=e.target.closest&&e.target.closest('[data-thm]');if(!b)return;
+  var r=document.documentElement,n=r.dataset.theme==='dark'?'light':'dark';
+  r.dataset.theme=n;try{localStorage.setItem('theme',n)}catch(x){}
+  var m=document.querySelector('meta[name="theme-color"]');
+  if(m)m.content=n==='dark'?'#242424':'#f6f3ea';
+});
 </script>
 </body>
 </html>

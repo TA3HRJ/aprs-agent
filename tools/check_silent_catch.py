@@ -51,7 +51,10 @@ HARMLESS = {"$"}
 
 def script_text(html: str) -> tuple[str, int]:
     """The inline script, and the line it starts on."""
-    m = re.search(r"<script>(.*?)</script>", html, re.S)
+    # The longest one: since 2026-10-10 a two-line theme script runs first in
+    # <head> and another sits before </body>; the page's own code is the big one.
+    ms = list(re.finditer(r"<script>(.*?)</script>", html, re.S))
+    m = max(ms, key=lambda x: len(x.group(1))) if ms else None
     if not m:
         raise SystemExit("FAIL: no inline <script> in static/index.html")
     return m.group(1), html.count("\n", 0, m.start(1)) + 1
