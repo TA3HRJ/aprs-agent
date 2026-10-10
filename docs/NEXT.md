@@ -94,6 +94,15 @@ What is left, in the order it is worth doing:
     CI), then the controlled reboot test, optimisation O1-O5 and interface
     U1-U7. The operator approved F1-F4 and the reboot on 2026-10-08.
 
+18. **A view anchored on a large quake - not decided.** The Panama M7.7
+    (F-2026-10-10-01) silenced 13 of 85 fixed stations in the half-hour
+    after it, the most in 3.5 days (median 1), spread over four cells none
+    of which met the cell rule. Shape: on M6.5+ (USGS feed already cached),
+    the stations within R km that were heard in the hour before, how many
+    went quiet past their own threshold, against the same measure at
+    ordinary hours. Cost: a new feature, a few hours; the baseline needs the
+    raw feed or a stored rate. The operator chose fixes 1 and 2 only.
+
 Everything below this block is history — kept for the reasoning, not for the
 status.
 

@@ -358,15 +358,24 @@ def _fetch_quakes() -> list:
         return data
 
 
-def _quakes_near(lat: float, lon: float, since_ts: float) -> list:
+def _quakes_near(lat: float, lon: float, since_ts: float,
+                 until_ts: "float | None" = None) -> list:
     """Quakes close enough, and recent enough, to be a candidate cause for a
-    silence that began at since_ts. Ordered strongest-and-nearest first."""
+    silence that began at since_ts. Ordered strongest-and-nearest first.
+
+    until_ts is the last silent station's last packet. A quake up to then can
+    still have stopped the later stations; only one after every station had
+    already stopped explains none of them. Bounded by since_ts alone, a quake
+    10 minutes after the FIRST station crossed its threshold was dropped
+    whatever followed it - the Panama M7.7 reached EJ88's alert by four
+    minutes (F-2026-10-10-01)."""
+    upper = max(since_ts, until_ts or 0.0) + 600
     out = []
     # Cache only — never fetches. Warmed off-loop by the silence watch loop;
     # until it has been warmed this returns nothing, which is the correct
     # degradation (no quake context) rather than a stalled request.
     for q in _quake_cache[1]:
-        if not (since_ts - _QUAKE_WINDOW_S <= q["ts"] <= since_ts + 600):
+        if not (since_ts - _QUAKE_WINDOW_S <= q["ts"] <= upper):
             continue
         try:
             d = StationDB._haversine_km(lat, lon, q["lat"], q["lon"])
@@ -378,14 +387,30 @@ def _quakes_near(lat: float, lon: float, since_ts: float) -> list:
     return out[:3]
 
 
-def _cell_quakes(cell: str, since_ts: "float | None") -> list:
+def _cell_quakes(cell: str, since_ts: "float | None",
+                 until_ts: "float | None" = None) -> list:
     """Quake candidates for a Maidenhead cell, measured from its centre."""
     b = station_db_module._cell_bounds(cell)
     if not b or not since_ts:
         return []
     lat = (b[0][0] + b[1][0]) / 2.0
     lon = (b[0][1] + b[1][1]) / 2.0
-    return _quakes_near(lat, lon, since_ts)
+    return _quakes_near(lat, lon, since_ts, until_ts)
+
+
+def _alert_quakes(c: dict) -> list:
+    """Quake candidates for one silence cell, up to its last silent station's
+    last packet. Every reader of a cell asks through this, so the map, the
+    evidence file, the AI note and both Telegram formats name the same ones."""
+    return _cell_quakes(c["cell"], c.get("since"), c.get("last_stop"))
+
+
+# A quake this strong, or this close, is named in the AI note's summary
+# whatever the note concludes (F-2026-10-10-01). Weaker, farther candidates
+# stay in the prompt as evidence without the demand: in Chile or Japan an
+# M4.6 400 km away is a daily event and would crowd out everything else.
+_QUAKE_NAME_MAG = 6.0
+_QUAKE_NAME_KM = 100
 
 
 def _gate_evidence(mgr: "AgentManager", c: dict) -> dict:
@@ -493,7 +518,7 @@ def _quake_evidence(c: dict) -> list:
     """
     out = []
     since = c.get("since")
-    for q in _cell_quakes(c["cell"], since):
+    for q in _alert_quakes(c):
         e = dict(q)
         if since:
             # Positive = the quake happened before the silence began.
@@ -1676,24 +1701,55 @@ class AgentManager:
                     + "\n".join(act_lines) + "\n")
         return out
 
-    @staticmethod
-    def _quake_context(c: dict) -> str:
+    def _quake_context(self, c: dict) -> str:
         """Earthquake candidates as a prompt fragment. Deliberately phrased
         as evidence, not a conclusion: a quake nearby does not prove it
         caused the silence, and the model should still be able to answer
         'event_expired' or 'igate_failure' when the rest of the picture
-        says so."""
-        qs = _cell_quakes(c["cell"], c.get("since"))
+        says so.
+
+        F-2026-10-10-01: the Panama M7.7 was matched to EJ88, 266 km away,
+        and the note answered "[unknown/low]" from timing alone without
+        naming it: the onset block's unknown rule comes first and nothing
+        here asked for the quake to be weighed. So each quake now says how
+        many of the silent stations had already stopped before it (it cannot
+        explain those), and a strong or close one must be named.
+        """
+        qs = _alert_quakes(c)
         if not qs:
             return ""
+        last = []
+        db = getattr(self, "_station_db", None)
+        for call in c.get("silent_calls") or []:
+            r = db._stations.get(call) if db is not None else None
+            if r is not None and r.last_seen:
+                last.append(r.last_seen)
         lines = []
+        strong = None
         for q in qs:
             before = int((c["since"] - q["ts"]) / 60) if c.get("since") else 0
             when = (f"{before} minutes before the silence began"
                     if before >= 0 else f"{-before} minutes after")
-            lines.append(f"  - {_fmt_quake(q)}, {when}")
-        return ("Recent seismic activity near this cell (USGS):\n"
-                + "\n".join(lines) + "\n")
+            line = f"  - {_fmt_quake(q)}, {when}"
+            if last:
+                pre = sum(1 for t in last if t < q["ts"])
+                line += (f"; {pre} of {len(last)} silent stations had already "
+                         f"stopped before it, {len(last) - pre} stopped after")
+            lines.append(line)
+            if strong is None and (q["mag"] >= _QUAKE_NAME_MAG
+                                   or q["dist_km"] <= _QUAKE_NAME_KM):
+                strong = q
+        out = ("Recent seismic activity near this cell (USGS):\n"
+               + "\n".join(lines) + "\n"
+               "A quake can cut mains power or damage sites across a wide area, "
+               "so it is a candidate cause for the stations that stopped after "
+               "it - a power failure it caused is cause power_outage - and no "
+               "cause for those that stopped before it.\n")
+        if strong is not None:
+            out += (f"Whatever cause you answer, name the quake in the summary "
+                    f"(M{strong['mag']}, {strong['dist_km']} km) and say "
+                    f"whether the timing fits it.\n")
+        return out
 
     def _silence_episodes(self, alerting: set, now: float
                           ) -> "tuple[list, list]":
@@ -1956,7 +2012,7 @@ class AgentManager:
                f"{c['silent']} of {c['baseline']} stations silent "
                f"({int(c['ratio'] * 100)}%)\n{cause}\n"
                f"Stations: {', '.join(c['silent_calls'][:8])}")
-        for q in _cell_quakes(c["cell"], c.get("since")):
+        for q in _alert_quakes(c):
             msg += f"\n🌍 {_fmt_quake(q)}"
         if note:
             msg += f"\nAI: {note}"
@@ -1980,6 +2036,15 @@ class AgentManager:
                    else "")
             line = (f"{icon} {hhmm} {c['cell']} — {c['silent']}/"
                     f"{c['baseline']} silent{tag}")
+            # The strongest candidate only: a digest can carry a dozen cells.
+            # The host sends digests, and until F-2026-10-10-01 they carried
+            # no quake at all - an M7.7 266 km from EJ88 reached the map
+            # popup and nothing the operator's phone showed.
+            qs = _alert_quakes(c)
+            if qs:
+                line += f"\n   🌍 {_fmt_quake(qs[0])}"
+                if len(qs) > 1:
+                    line += f" (+{len(qs) - 1} more)"
             if note:
                 line += f"\n   AI: {note}"
             lines.append(line)
@@ -3024,7 +3089,7 @@ async def get_silence(request: web.Request) -> web.Response:
             c["since"] = int(episode_start)
         # Only alerting cells: _cell_quakes is cheap (one shared cached feed)
         # but the payload is not, on a worldwide feed.
-        c["quakes"] = _cell_quakes(c["cell"], c.get("since")) if c["alert"] else []
+        c["quakes"] = _alert_quakes(c) if c["alert"] else []
         # When they stopped, as facts: spread and opening from the last
         # packets, and who has come back while the alert ran. Alerting cells
         # only - a handful, each a dict lookup per silent station.

@@ -7537,3 +7537,78 @@ copy in a thread. On the host the five existing 200 MB copies became 76 MB
 each - **2.6:1**, not the 4:1 first guessed - 1.1 GB -> 482 MB. Set there to
 `log_backups = 28`, about a week (a copy fills in about 6 h), about 2.1 GB.
 `tools/replay_feed.py` reads `.gz` as it is.
+
+---
+
+## F-2026-10-10-01 — the Panama M7.7: a real but small drop, and the quake left out of what the operator reads
+
+**Source:** operator, 2026-10-10: "a big quake in Panama yesterday; power cuts
+alone should have taken beacons down, but no outage shows - is it our
+algorithm?" · **Verdict:** detection right by its rule; three of our faults in
+what reaches the operator; one design limit
+
+**The event.** USGS: M7.7, 2026-10-09 17:56:06 UTC, 7.59 N 80.77 W (Azuero
+peninsula, 13 km deep), PAGER red, then M6.6, M6.0 and a dozen M5+ overnight.
+The agent was listening: the last feed break was 2026-10-07.
+
+**What the beacons did.** From the raw feed log (`/var/log/aprs/packets.log*`,
+HP/HO sources, objects out), 102 Panamanian stations were heard in the hour
+before the quake. **15** then went quiet for longer than their own threshold
+(and 30 min); 2 were mobiles, so **13 fixed stations**, most back within 1-2 h.
+Same measure every 30 min over 3.5 days, feed breaks excluded, 115 anchors:
+median 1 fixed station going quiet, p90 4, **the quake half-hour 13 of 85
+(15 %) and the next 12 - the two highest.** A real signal, and small: 85 % kept
+beaconing, among them all four stations within 40 km of the epicentre
+(HP1GDP-4, HP1COO-4, HP1UPR-2, HP1UPR-15).
+
+**Why no big outage showed.** The 13 fell in four cells - FJ09 6, EJ88 3,
+EJ98 2, FJ08 2 - none near half its operators (FJ09: 3 operators of about
+25). The per-cell rule (>= 3 silent, >= 50 % of operators) is right not to
+call any of them a regional outage. It still alerted EJ88 at 20:12 UTC
+(3/12, two of the three silent since before the quake), EJ98 at 02:23 and
+FJ09 at 08:03 the next morning.
+
+**Our faults.**
+
+1. **The digest drops the quake.** `_format_silence_msg` adds a `🌍` line per
+   USGS candidate; `_format_silence_digest`, which the host sends
+   (`silence_digest_mins = 60`), does not. The 22:39 and 23:39 CEST digests
+   that carried EJ88 said nothing about an M7.7 266 km away.
+2. **The AI note left it out.** Run on the host with the alert's own `since`
+   values, `_cell_quakes` returns the M7.7 for EJ88 (266 km), EJ98 (105 km)
+   and FJ09 (288 km), so `_quake_context` was in the prompt. The note
+   answered `[unknown/low]` with a timing-only sentence: the onset block's
+   "answer cause unknown rather than choose ... from timing alone" stands
+   above the quake lines, and the cause list has no earthquake.
+3. **The quake reached EJ88 by four minutes.** A candidate had to fall
+   before `since` + 10 min, and `since` is when the FIRST silent station
+   crossed its threshold - here HP3AXL, silent since before the quake, at
+   18:00:20 against the quake's 17:56:06. A quake after that is dropped
+   whatever stops after it, from the map popup, the evidence file, the note
+   and Telegram alike. Found by the probe below: its EJ88-shaped case had no
+   quake in the prompt at all.
+
+**Design limit.** A drop spread thinly over neighbouring cells - here 15 % of
+a country's stations in the half-hour after a red-alert quake - meets no
+cell's rule. Only a view anchored on the event (stations within R km of a
+large quake, quiet-rate against their own baseline) would show it. Not built;
+NEXT 18.
+
+**Applied, v3.2.168.** All quake matching goes through `_alert_quakes`: a
+candidate may fall up to the LAST silent station's last packet (`last_stop`,
+new in the cell entry) + 10 min, not the first one's threshold. The digest
+line carries the strongest candidate (`+N more`). The prompt's quake block
+says per quake how many silent stations had already stopped before it, that
+a quake is a candidate only for those after it and that a power failure it
+caused is `power_outage`; for M6+ or within 100 km it asks for the quake to
+be named in the summary. `check_quake_reaches.py` fails 4 ways on v3.2.167.
+
+Probed on the host with the live AI settings, constructed EJ88 alerts (3 of
+9 silent), one AI call each:
+
+| case | v3.2.167 | v3.2.168 |
+|---|---|---|
+| E  EJ88's timing: 2 stopped before the M7.7, 1 after | no quake in the prompt; `unknown/low`, timing only | `unknown/low`, "2 stopping before and 1 after the M7.7 quake 266 km away" |
+| F  3 of 3 within 10 min, just after it | `power_outage/medium`, names it | `power_outage/medium`, names it |
+| G  EJ88's timing, no quake | `unknown/low` | `unknown/low` |
+| W  EJ88's timing, an M4.6 453 km away | `unknown/low` (not matched) | `unknown/low`, not named |

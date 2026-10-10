@@ -2933,6 +2933,7 @@ class StationDB:
                 "cell": cell, "baseline": 0, "silent": 0,
                 "silent_calls": [], "gate_of": {}, "first_silent": None,
                 "suspect_position": 0, "pos": {}, "owners": set(),
+                "last_stop": 0.0,
             })
             c["baseline"] += 1
             # The ratio's denominator in operators. A set add and a string
@@ -2966,6 +2967,9 @@ class StationDB:
                 went = clock + threshold
                 if c["first_silent"] is None or went < c["first_silent"]:
                     c["first_silent"] = went
+                # The newest last packet among the silent: an event after it
+                # cannot have silenced any of them (F-2026-10-10-01).
+                c["last_stop"] = max(c["last_stop"], r.last_seen)
 
         # Published for the map, which must not read an empty list after a
         # break as "nothing is silent" (F-2026-10-07-06, as F-35 for deafness).
@@ -3148,6 +3152,10 @@ class StationDB:
                 "few_sites": few_sites,
                 "no_local_path": no_local_path,
                 "since": int(c["first_silent"]) if c["first_silent"] else None,
+                # The last silent station's last packet. `since` is when the
+                # FIRST one crossed its threshold; a quake between the two can
+                # still be the cause of every later stop (F-2026-10-10-01).
+                "last_stop": int(c["last_stop"]) if c["last_stop"] else None,
                 "bounds": b,
             }
             if history_path:
