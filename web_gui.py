@@ -619,8 +619,10 @@ class AgentManager:
             if bad:
                 # Written before positions were validated anywhere. Saying it
                 # out loud is how anyone learns the stored data had them.
-                print(f"[station-db] dropped {bad} stored position(s) that "
-                      f"were not on Earth", file=sys.__stderr__)
+                print(f"[station-db] dropped {bad} stored position(s): off "
+                      f"Earth, placeholders or misread (F-2026-10-10-03); "
+                      f"the values are in meta positions_voided",
+                      file=sys.__stderr__)
         except Exception as e:
             print(f"[station-db] SQLite load failed: {e}", file=sys.__stderr__)
         # Lifelong uptime: seconds accumulated by every previous run. The

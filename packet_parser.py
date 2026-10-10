@@ -511,6 +511,56 @@ def _on_earth(lat: float, lon: float) -> bool:
     return -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0
 
 
+# Web Mercator draws to here; nobody lives north of 83.7 N (Kaffeklubben).
+_MAX_NORTH = 85.0511
+
+
+def _plausible(lat: float, lon: float) -> bool:
+    """On Earth, and not a placeholder for "no position" (F-2026-10-10-03).
+
+    0/0 within half a degree is a GPS without a fix or a device never set up:
+    1,787 records sat there, 1,647 of them on exactly 0/0, and propagation
+    already refused them. 90/180 is the other placeholder (9000.00N/18000.00E,
+    and 9000.00S/18000.00E on Australian fire-service objects). North of what
+    Mercator can draw there is no station, only misreads and placeholders: 63
+    records, none real. The South Pole is real - NZSP beacons -90/0 from
+    Amundsen-Scott - so only the 90/180 pair is refused there.
+    """
+    if not _on_earth(lat, lon):
+        return False
+    if abs(lat) < 0.5 and abs(lon) < 0.5:
+        return False
+    if abs(lat) == 90.0 and abs(lon) == 180.0:
+        return False
+    return lat <= _MAX_NORTH
+
+
+def _valid_stamp(s: str) -> bool:
+    """Six digits that can be an APRS timestamp, DHM or HMS."""
+    a, b, c = int(s[:2]), int(s[2:4]), int(s[4:6])
+    return (1 <= a <= 31 and b <= 23 and c <= 59) or (a <= 23 and b <= 59 and c <= 59)
+
+
+def _read_where_it_starts(raw_line: str, i: int) -> bool:
+    """Whether a position found at raw_line[i] starts where a position can.
+
+    The pattern is searched, not anchored, so in a malformed field it finds a
+    valid-looking part: KC8HFO-D's 38806.60N read as 88 06.60 N, I4IFL-D's
+    4420668800.00N as 88 00.00 N (F-2026-10-10-03). Matches inside a longer
+    run of digits were 0.07 % of position packets in a day, from 54 sources,
+    and two shapes of them read the right place: an object timestamp that lost
+    its z or h (F4ETJ-1 *0915514526.39N, NEVAMO *1111113751.65N) and one
+    leading zero (K2ILH-2 *111111z04257.33N). Those are kept; the rest are not
+    positions.
+    """
+    j = i
+    while j > 0 and raw_line[j - 1].isdigit():
+        j -= 1
+    run = raw_line[j:i]
+    return (not run or run == "0"
+            or (len(run) == 6 and _valid_stamp(run)))
+
+
 def classify_symbol(table: str, symbol: str) -> str:
     """Return station type string for an APRS symbol table+code pair.
 
@@ -580,6 +630,18 @@ def parse_message(raw_line: str) -> Optional[dict[str, Any]]:
         "kind": kind,
         "ts": int(time.time()),
     }
+
+
+def misread_position(text: str) -> "tuple[float, float] | None":
+    """The position the unanchored pattern used to read from `text`, when the
+    anchored rule now refuses it; otherwise None. For records stored before
+    F-2026-10-10-03: if a station's stored position is exactly this value, it
+    came from the misread and is dropped at load."""
+    pm = _RE_POS_UNCOMP.search(text or "")
+    if not pm or _read_where_it_starts(text, pm.start(1)):
+        return None
+    return (_ddmm_to_decimal(pm.group(1), pm.group(2), pm.group(3)),
+            _ddmm_to_decimal(pm.group(5), pm.group(6), pm.group(7)))
 
 
 def parse_packet(raw_line: str) -> dict[str, Any]:
@@ -677,7 +739,12 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
         lon = _ddmm_to_decimal(pm.group(5), pm.group(6), pm.group(7))
         tbl = pm.group(4)
         sym = pm.group(8)
-        if _on_earth(lat, lon):
+        if not _read_where_it_starts(raw_line, pm.start(1)):
+            # A position is sent, and it cannot be read: say so, rather than
+            # "no position" - the station does send one (F-2026-10-10-03).
+            result["position_invalid"] = True
+            result["position_unreadable"] = True
+        elif _plausible(lat, lon):
             result["lat"] = lat
             result["lon"] = lon
             result["locator"] = _latlon_to_locator(lat, lon)
@@ -701,7 +768,7 @@ def parse_packet(raw_line: str) -> dict[str, Any]:
         comp = _decode_compressed(info)
         if comp:
             tbl, sym, lat, lon = comp
-            if _on_earth(lat, lon):
+            if _plausible(lat, lon):
                 result["lat"] = lat
                 result["lon"] = lon
                 result["locator"] = _latlon_to_locator(lat, lon)

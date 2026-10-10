@@ -23,8 +23,10 @@ from packet_parser import (
     STATION_ICON,
     _latlon_to_locator,
     _on_earth,
+    _plausible,
     classify_symbol,
     looks_like_callsign,
+    misread_position,
     parse_packet,
 )
 
@@ -1072,11 +1074,15 @@ class StationRecord:
         "hour_counts",     # packets heard per local hour-of-day (diurnal profile)
         "self_beacon",     # True = this agent's own Fixed Beacon (see below)
         "is_object",       # True = APRS Object packet (event advisory, not infra)
+        "position_unreadable",  # sends a position we cannot read (F-2026-10-10-03)
     )
 
     def __init__(self, callsign: str) -> None:
         self.callsign    = callsign
         self.base_call   = callsign.split("-")[0]
+        # In memory only: re-derived at load from the stored packet text, and
+        # by the next packet anyway.
+        self.position_unreadable = False
         self.station_type: str = "unknown"
         self.icon: str = STATION_ICON["unknown"]
         self.symbol: str = ""          # APRS symbol code (e.g. '#')
@@ -1177,6 +1183,10 @@ class StationRecord:
         for field in ("lat", "lon", "locator"):
             if field in parsed and getattr(self, field) in (None, ""):
                 setattr(self, field, parsed[field])
+        if "lat" in parsed:
+            self.position_unreadable = False
+        elif parsed.get("position_unreadable") and self.lat is None:
+            self.position_unreadable = True
 
         # Prefer DB freq/tone; fill in from APRS if missing
         for field in ("freq_mhz", "tone_hz", "offset_mhz"):
@@ -2347,6 +2357,10 @@ class StationDB:
             has_pos = r.lat is not None and r.lon is not None
             out.append({"callsign": r.callsign, "lat": r.lat, "lon": r.lon,
                         "has_position": has_pos,
+                        # Sends a position we cannot read, as against none at
+                        # all (F-2026-10-10-03).
+                        "position_unreadable": bool(
+                            not has_pos and r.position_unreadable),
                         "last_seen": int(r.last_seen or 0),
                         "last_seen_ago_s": r.last_seen_ago_s,
                         "type": r.station_type})
@@ -2523,6 +2537,7 @@ class StationDB:
                 "SELECT " + ",".join(self._SQL_COLS) + " FROM stations")
             n = 0
             dropped = 0
+            voided: dict = {}
             for row in cur:
                 d = dict(zip(self._SQL_COLS, row))
                 cs = d["callsign"]
@@ -2543,13 +2558,33 @@ class StationDB:
                 # locator of every position-less station, which the repeater
                 # database can supply without any lat/lon being parsed.
                 r.locator = d["locator"] or ""
+                # F-2026-10-10-03: a placeholder (0/0, 90/180, north of what
+                # Mercator draws) is no position, and neither is the value the
+                # unanchored pattern used to read from a malformed field - when
+                # the stored packet text still shows that is where it came
+                # from. Every one dropped is kept in meta `positions_voided`.
+                misread = misread_position(d["comment"] or "")
                 if d["lat"] is None or d["lon"] is None:
-                    pass                        # never had one
-                elif _on_earth(float(d["lat"]), float(d["lon"])):
-                    r.lat, r.lon = d["lat"], d["lon"]
+                    r.position_unreadable = misread is not None
                 else:
-                    r.locator = ""              # derived from the bad fix
-                    dropped += 1
+                    lat, lon = float(d["lat"]), float(d["lon"])
+                    # Misread first: KC8HFO-D's 88 N is also north of the
+                    # map, but what it needs is the label "unreadable".
+                    if (misread is not None
+                            and abs(misread[0] - lat) < 1e-4
+                            and abs(misread[1] - lon) < 1e-4):
+                        why = "misread"
+                    else:
+                        why = ("" if _plausible(lat, lon)
+                               else "off earth" if not _on_earth(lat, lon)
+                               else "placeholder")
+                    if not why:
+                        r.lat, r.lon = d["lat"], d["lon"]
+                    else:
+                        voided[cs] = [d["lat"], d["lon"], r.locator, why]
+                        r.locator = ""          # derived from the bad fix
+                        r.position_unreadable = why == "misread"
+                        dropped += 1
                 r.symbol       = d["symbol"] or ""
                 r.symbol_table = d["symbol_table"] or ""
                 r.symbol_overlay = d["symbol_overlay"] or ""
@@ -2579,6 +2614,22 @@ class StationDB:
             # Read by the caller, which does the logging. This module has no
             # print statements and this count is not a reason to start.
             self.load_dropped_positions = dropped
+            if voided:
+                # Merged, not replaced: rows are rewritten only when their
+                # station is saved again, so a later start can drop the same
+                # row once more - and an earlier start may have dropped others.
+                try:
+                    con.execute("CREATE TABLE IF NOT EXISTS meta "
+                                "(key TEXT PRIMARY KEY, value TEXT)")
+                    got = con.execute("SELECT value FROM meta WHERE "
+                                      "key='positions_voided'").fetchone()
+                    old = json.loads(got[0]) if got and got[0] else {}
+                    old.update(voided)
+                    con.execute("INSERT OR REPLACE INTO meta VALUES (?,?)",
+                                ("positions_voided", json.dumps(old)))
+                    con.commit()
+                except (sqlite3.Error, ValueError):
+                    pass
             return n
         except sqlite3.Error:
             return 0

@@ -107,8 +107,12 @@ What is left, in the order it is worth doing:
     ordinary hours. Cost: a new feature, a few hours; the baseline needs the
     raw feed or a stored rate. The operator chose fixes 1 and 2 only.
 
-19. **Positions at the pole - recorded, not decided** (F-2026-10-10-03).
-    The operator is hesitant about fixing it. Three separable pieces:
+19. **Positions at the pole - done in v3.2.170** (F-2026-10-10-03): (a),
+    (b) as the 90/180 pair, 0/0 and north of the map, the load-time cleanup
+    with `positions_voided`, "position unreadable", the scale and the name
+    list. Not done: clamping the viewport fetch - nothing is north of the
+    map any more. Watch the startup line "dropped N stored position(s)".
+    What was planned:
     (a) parser: accept a match inside a digit run only for the benign
     shapes measured (a 6-digit timestamp missing its `z`, one leading `0`),
     otherwise drop the position - about an hour with a check, and it moves

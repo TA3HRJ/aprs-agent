@@ -57,7 +57,12 @@ CASES = [
     ("live failure",         "!9305.58N/98652.54E>rig",      False),
     ("lat just over",        "!9000.01N/02706.00E>rig",      False),
     ("lon just over",        "!3826.00N/18000.01E>rig",      False),
-    ("lat exactly 90",       "!9000.00N/02706.00E>rig",      True),
+    # The boundary stays inclusive at the South Pole, which is real (NZSP
+    # beacons -90/0 from Amundsen-Scott). 90 N is on Earth but no position
+    # since F-2026-10-10-03: north of what Mercator draws, 63 stored records,
+    # none of them really there - placeholders and misreads.
+    ("lat exactly 90 S",     "!9000.00S/02706.00E>rig",      True),
+    ("lat 90 N, off the map", "!9000.00N/02706.00E>rig",     False),
     ("lon exactly 180",      "!3826.00N/18000.00E>rig",      True),
     ("ordinary position",    "!3826.00N/02706.00E>rig",      True),
     ("southern/western",     "!3826.00S/02706.00W>rig",      True),

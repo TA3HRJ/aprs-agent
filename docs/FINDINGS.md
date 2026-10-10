@@ -7708,3 +7708,33 @@ level shown, only +/-.
 "at" 88 N heard by its own gate is a long link) and to silence cells.
 
 Options and their cost: NEXT 19.
+
+**Also found while measuring.** The South Pole is real: NZSP beacons -90/0
+from Amundsen-Scott, so "90 is a placeholder" would have been wrong; the
+placeholder is the 90/180 pair (also 9000.00S/18000.00E on Australian
+fire-service objects). And 1,787 records sat at 0/0 (1,647 exactly), 530
+heard in the last week - GPS without a fix, devices never set up; propagation
+already refused them, the map drew them.
+
+**Applied, v3.2.170** (the operator: "start the work"). A match inside a
+digit run is a position only after a valid 6-digit timestamp that lost its
+letter or after one leading `0`; otherwise the packet has no position and is
+marked `position_unreadable`. `_plausible()` refuses 0/0 within half a
+degree, the 90/180 pair and anything north of 85.0511 N; the South Pole and
+84 N stay. Positions are written only while a station has none
+(`update_from_parsed`), so the parser alone would have left every stored
+misread in place: at load a stored position is dropped when it is a
+placeholder, or exactly the value the old rule reads from the stored packet
+text (`misread_position`); every dropped value goes to meta
+`positions_voided` (lat, lon, locator, reason), merged across starts. On a
+copy of the live registry (308,141): **2,020 dropped - 1,845 placeholders,
+175 misreads**, 605 of them heard in the last week; 193 stations now read
+"position unreadable" in the map search. Misreads were not only at the pole:
+CT5HPY-12 stood in the South Atlantic, E20DNK in Gabon, BH1OFP in the Red
+Sea. One day of feed: 2,315 packets unreadable, 9,720 placeholders or off the
+map. Five stations between 84 and 85 N stay drawn - their text says 84 and
+the map can draw it. The map shows a metric scale under the zoom buttons,
+and from zoom 9 stations on one point are one badge with their names listed
+(each opens the station). `check_positions.py` fails 21 ways on v3.2.169;
+`check_coords.py` now holds the inclusive boundary at 90 S, and 90 N as no
+position.
