@@ -427,20 +427,61 @@ def _quake_watch_radius(mag: float) -> float:
 
 
 def _quake_watch_public(watches) -> list:
-    """The watches the map is given: PAGER yellow and above, once measured."""
+    """The watches the map is given: PAGER yellow and above, counted or not.
+
+    Until v3.2.173 only counted ones: the Panama M7.7, M6.6 and M6.0 were
+    watched and never drawn, because the ring went live 20 h after the first
+    and the 3 h count was long over. A quake the agent was not counting for
+    is still drawn, marked `measured: false`."""
     out = []
     for w in watches:
-        r = w.get("result")
-        if w.get("alert") not in _PAGER_SHOWN or not r:
+        if w.get("alert") not in _PAGER_SHOWN or not w.get("ts"):
             continue
+        r = w.get("result")
         e = {k: w.get(k) for k in ("id", "mag", "place", "depth_km", "alert",
                                    "lat", "lon", "ts", "radius_km")}
         e["ts"] = int(e["ts"] or 0)
         e["interrupted"] = bool(w.get("interrupted"))
         e["first_scan"] = int(w.get("first_scan") or 0)
-        e.update(r)
+        e["measured"] = bool(r)
+        if r:
+            e.update(r)
         out.append(e)
     out.sort(key=lambda e: -e["ts"])
+    return out
+
+
+# What a watch keeps across a restart (meta `quake_watches`). The day the
+# ring shipped the agent restarted four times; a restart inside a quake's
+# first 3 h used to drop its count and start again from nothing.
+_QW_KEEP = ("id", "lat", "lon", "ts", "mag", "place", "depth_km", "alert",
+            "radius_km", "first_scan", "interrupted", "result")
+
+
+def _quake_watches_dump(watches: dict) -> str:
+    out = {}
+    for k, w in watches.items():
+        d = {f: w[f] for f in _QW_KEEP if w.get(f) is not None}
+        d["quiet"] = sorted(w.get("quiet") or ())
+        d["far_quiet"] = sorted(w.get("far_quiet") or ())
+        out[k] = d
+    return json.dumps(out)
+
+
+def _quake_watches_load(text: str, now: float) -> dict:
+    """Watches from meta, those still inside their 24 h, sets restored."""
+    try:
+        raw = json.loads(text or "{}")
+    except ValueError:
+        return {}
+    out = {}
+    for k, d in (raw.items() if isinstance(raw, dict) else ()):
+        if (not isinstance(d, dict) or not d.get("ts")
+                or now - float(d["ts"]) > _QUAKE_WINDOW_S):
+            continue
+        d["quiet"] = set(d.get("quiet") or ())
+        d["far_quiet"] = set(d.get("far_quiet") or ())
+        out[k] = d
     return out
 
 
@@ -658,6 +699,18 @@ class AgentManager:
         # 24 h and counts for 3; a restart inside those 3 h starts counting
         # again from its first scan, which the map says ("counted from").
         self._quake_watches: dict[str, dict] = {}
+        self._qw_saved = ""
+        try:
+            self._quake_watches = _quake_watches_load(
+                station_db_module.load_meta(self._sta_db_path,
+                                            "quake_watches", "{}"),
+                time.time())
+            if self._quake_watches:
+                print(f"[quake] restored {len(self._quake_watches)} "
+                      f"watch(es)", file=sys.__stderr__)
+        except Exception as e:
+            print(f"[quake] could not restore watches: {e}",
+                  file=sys.__stderr__)
         # Every station seen silent in a cell during its current alert episode.
         # Those no longer silent have come back while the alert ran - one of the
         # facts that separate drop-outs from an outage (F-2026-10-05-03). Kept
@@ -1779,6 +1832,14 @@ class AgentManager:
             del self._quake_watches[k]
         self._station_db.quake_watch_scan(list(self._quake_watches.values()),
                                           now)
+        dump = _quake_watches_dump(self._quake_watches)
+        if dump != self._qw_saved and self._sta_db_path:
+            try:
+                station_db_module.save_meta(self._sta_db_path,
+                                            "quake_watches", dump)
+                self._qw_saved = dump
+            except Exception as e:
+                self._log_both(f"[quake] could not save watches: {e}")
 
     def _quake_context(self, c: dict) -> str:
         """Earthquake candidates as a prompt fragment. Deliberately phrased

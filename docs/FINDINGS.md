@@ -7793,3 +7793,26 @@ at 50.01 N are not the default and stay.
 0/0 and 90/180; the load-time cleanup of F-2026-10-10-03 drops the stored
 ones into `positions_voided`. `check_positions.py` holds the default and a
 point one hundredth of a minute off it, which stays.
+
+---
+
+## F-2026-10-10-06 — the quake ring never drew the quakes it was built for
+
+**Source:** operator, 2026-10-10 evening, a screenshot of Panama: "how many
+days is the quake ring shown? No seismic event is drawn in Panama now." ·
+**Verdict:** our design; fixed in v3.2.173
+
+The ring is kept 24 h after a quake but drawn only once counted, and counting
+runs in the quake's first 3 h. v3.2.169 went live at 16:02 CEST, 20 h after
+the M7.7 and 10 h after the M6.0: the log shows "[quake] watching M7.7" and
+"watching M6.6", and nothing was drawn - the count was long over. Then each
+of the day's three further releases restarted the agent, and a watch lived
+in memory only: a restart inside a quake's first 3 h would have dropped its
+count and started again from nothing.
+
+**Applied, v3.2.173.** A PAGER yellow+ quake inside its 24 h is drawn whether
+or not it was counted; one that was not is grey and dotted, and says the
+agent was not running in its first 3 h (`measured: false` in `/api/silence`).
+Watches are written to meta `quake_watches` whenever they change, quiet sets
+included, and restored at start (those older than 24 h dropped).
+`check_quake_watch.py` items 8 and 9 fail on v3.2.172.

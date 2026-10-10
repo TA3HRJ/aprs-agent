@@ -25,6 +25,13 @@ What must hold:
   6. /api/silence publishes watches for PAGER yellow, orange and red only;
      the radius is 150 km below M7, 300 km to M7.9, 500 km from M8
   7. the map draws them, in both languages, and HELP explains them in both
+  8. a PAGER yellow+ quake the agent was not counting for - deployed, or
+     down, during its first 3 h - is still drawn, as not measured. The
+     Panama M7.7, M6.6 and M6.0 were all watched and none was drawn: v3.2.169
+     went live 20 h after the first (2026-10-10)
+  9. a watch survives a restart: dumped to meta `quake_watches` every scan
+     and restored at start with its quiet sets, older than 24 h dropped.
+     The day the ring shipped the agent restarted four times
 
 Usage:  python tools/check_quake_watch.py
 Exit code 1 on failure.
@@ -127,6 +134,29 @@ def main() -> int:
         pub = [x["id"] for x in wg._quake_watch_public(ws)]
         if pub != ["yellow", "orange", "red"]:
             fails.append("6: published %r, expected yellow, orange, red" % pub)
+        ws2 = [dict(watch(), id="m", alert="yellow", mag=6.6, place="x",
+                    result={"n": 40, "k": 2, "unusual": False}),
+               dict(watch(), id="u", alert="orange", mag=6.0, place="y")]
+        got = {x["id"]: x for x in wg._quake_watch_public(ws2)}
+        if "u" not in got:
+            fails.append("8: a yellow+ quake without a count is not published")
+        elif got["u"].get("measured") is not False or got["m"].get("measured") is not True:
+            fails.append("8: measured is %r / %r, expected True for the counted one, "
+                         "False for the other" % (got["m"].get("measured"), got["u"].get("measured")))
+
+        w9 = dict(watch(), id="p", alert="red", mag=7.7, place="z", first_scan=T + 60,
+                  quiet={"HP1AA", "HP1AB"}, far_quiet={"XX1A"},
+                  result={"n": 85, "k": 2, "unusual": False})
+        old = dict(watch(), id="o", ts=NOW - 25 * 3600, alert="yellow", mag=6.1)
+        back = wg._quake_watches_load(wg._quake_watches_dump({"p": w9, "o": old}), NOW)
+        r9 = back.get("p") or {}
+        if "o" in back:
+            fails.append("9: a watch older than 24 h was restored")
+        if r9.get("quiet") != {"HP1AA", "HP1AB"} or r9.get("far_quiet") != {"XX1A"}:
+            fails.append("9: the quiet sets did not survive: %r / %r"
+                         % (r9.get("quiet"), r9.get("far_quiet")))
+        if (r9.get("result") or {}).get("n") != 85 or r9.get("first_scan") != T + 60:
+            fails.append("9: the result or first scan did not survive")
         radii = [wg._quake_watch_radius(m) for m in (6.0, 6.9, 7.0, 7.9, 8.0)]
         if radii != [150.0, 150.0, 300.0, 300.0, 500.0]:
             fails.append("6: radius by magnitude %r" % radii)
@@ -138,6 +168,13 @@ def main() -> int:
         fails.append("7: the map has no renderQuakeWatch")
     if page.count("qw_title:") != 2:
         fails.append("7: qw_title is not in both languages (%d)" % page.count("qw_title:"))
+    if page.count("qw_unmeasured:") != 2:
+        fails.append("8: the map does not say, in both languages, that a quake was not measured")
+    if "measured===false" not in page:
+        fails.append("8: renderQuakeWatch does not draw an unmeasured quake")
+    web = (ROOT / "web_gui.py").read_text(encoding="utf-8")
+    if web.count('"quake_watches"') < 2:
+        fails.append("9: the watches are not saved to and restored from meta")
     help_ = (ROOT / "HELP.html").read_text(encoding="utf-8")
     if 'id="quake-tr"' not in help_ or 'id="quake-en"' not in help_:
         fails.append("7: HELP does not explain the quake watch in both languages")

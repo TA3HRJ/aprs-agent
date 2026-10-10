@@ -1119,6 +1119,7 @@ const S={en:{
   qw_interrupted:"The agent could not hear for part of this time - not judged",
   qw_counting:"Still counting: the 3 h are not over",qw_from:"Counted from {t} after the quake (when the agent first saw it)",
   qw_note:"A count, not an outage report: it says how many stopped, not why. Silence cells are judged separately.",
+  qw_unmeasured:"Not counted: the agent was not running in the first 3 h after this quake, so how many stations went quiet is not known.",
   leg_quake:"Dashed ring: stations gone quiet around a PAGER yellow+ quake",
   prop_judged_gate:"Judged against this gate's own history — {n} samples, {r}× the {t} km bar it had to clear",
   prop_judged_gate_old:"Judged against this gate's own history — {n} samples",
@@ -1275,6 +1276,7 @@ const S={en:{
   qw_interrupted:"Ajan bu sürenin bir kısmında dinleyemedi - değerlendirilmedi",
   qw_counting:"Sayım sürüyor: 3 saat dolmadı",qw_from:"Depremden {t} sonrasından sayıldı (ajanın onu ilk gördüğü an)",
   qw_note:"Bir sayım, kesinti bildirimi değil: kaç istasyonun sustuğunu söyler, nedenini değil. Sessizlik hücreleri ayrıca değerlendirilir.",
+  qw_unmeasured:"Sayılmadı: ajan bu depremden sonraki ilk 3 saatte çalışmıyordu, kaç istasyonun sustuğu bilinmiyor.",
   leg_quake:"Kesikli halka: PAGER sarı ve üstü bir depremin çevresinde susan istasyonlar",
   prop_judged_gate:"Gate'in kendi geçmişine göre değerlendirildi — {n} örnek, aşması gereken {t} km eşiğinin {r} katı",
   prop_judged_gate_old:"Gate'in kendi geçmişine göre değerlendirildi — {n} örnek",
@@ -2895,6 +2897,9 @@ function qwPopup(w){
   if(w.place)h+='<br>'+esc(w.place);
   h+='<br><span class="qw-dim">'+t('qw_pager').replace('{a}',t(QW_PAGER[w.alert]||'qw_yellow'))+' · '
     +t('qw_ago').replace('{t}',fmtAgoLong(Math.max(0,Math.round(Date.now()/1000-w.ts))))+'</span>';
+  // Drawn though not counted: the agent was down, or not yet released, in
+  // the quake's first 3 h (the Panama quakes were never drawn for that).
+  if(w.measured===false)return h+'<br><span class="qw-dim">'+t('qw_unmeasured')+'</span><br><span class="qw-dim">'+t('qw_note')+'</span>';
   h+='<br>'+t('qw_stats').replace('{r}',w.radius_km).replace('{k}',w.k).replace('{n}',w.n);
   if(w.interrupted)h+='<br><span class="qw-dim">'+t('qw_interrupted')+'</span>';
   else if(w.n<10)h+='<br><span class="qw-dim">'+t('qw_few')+'</span>';
@@ -2919,7 +2924,7 @@ function renderQuakeWatch(list){
   for(const w of list){
     seen[w.id]=1;
     const col=w.unusual?'#e66100':'#77767b';
-    const ring={color:col,weight:1.5,dashArray:'6 6',fillColor:col,
+    const ring={color:col,weight:1.5,dashArray:w.measured===false?'2 6':'6 6',fillColor:col,
                 fillOpacity:w.unusual?0.06:0.02,interactive:false};
     const dot={color:col,weight:2,fillColor:col,fillOpacity:0.9};
     let q=qwRings[w.id];

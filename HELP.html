@@ -514,7 +514,10 @@
       tıklayınca sayılar görünür. Bu bir sayımdır, kesinti bildirimi değil:
       kaç istasyonun sustuğunu söyler, nedenini değil; bildirim de gönderilmez.
       Kare kuralı bölgenin çoğunun susmasını arar; bir deprem ise birkaç kareye
-      yayılmış daha küçük bir kaybı da getirebilir — halka bunu gösterir.</p>
+      yayılmış daha küçük bir kaybı da getirebilir — halka bunu gösterir.
+      Ajan depremden sonraki ilk 3 saatte çalışmıyorduysa halka yine çizilir,
+      gri ve noktalı, "sayılmadı" diyerek; süren bir sayım yeniden başlatmada
+      kaybolmaz.</p>
     <p><strong>Hâlâ yayında değil listesi.</strong> Bir uyarıda susan
       istasyonlar, yeniden duyulana kadar listede kalır. Varsayılan görünüm
       son 7 gündür; liste kareye göre gruplanabilir.</p>
@@ -1372,7 +1375,9 @@
       report: it says how many stopped, not why, and sends no notification.
       The cell rule looks for most of one square going quiet; a quake can also
       bring a smaller loss spread over several squares, and the ring shows
-      that.</p>
+      that. If the agent was not running in the first 3 hours after the quake,
+      the ring is still drawn, grey and dotted, saying it was not counted; a
+      count in progress survives a restart.</p>
     <p><strong>The still-missing list.</strong> Stations that fell silent in an
       alert stay on it until they are heard again. The default view is the last
       7 days, and the list can be grouped by square.</p>
