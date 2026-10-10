@@ -532,6 +532,12 @@ def _plausible(lat: float, lon: float) -> bool:
         return False
     if abs(lat) == 90.0 and abs(lon) == 180.0:
         return False
+    # Pi-Star's default, 5000.00N/00300.00W: a hotspot whose position was
+    # never set. 1,983 of them in the registry, 790 heard in a day - from
+    # Turkey, the US, Israel - all in the English Channel, the biggest badge
+    # on the map of Europe (F-2026-10-10-05). Exactly this point; open sea.
+    if abs(lat - 50.0) < 1e-6 and abs(lon + 3.0) < 1e-6:
+        return False
     return lat <= _MAX_NORTH
 
 

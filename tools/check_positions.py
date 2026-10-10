@@ -15,7 +15,9 @@ What must hold:
   1. a match inside a digit run is a position only after a valid 6-digit
      timestamp missing its letter, or after one leading 0; otherwise the
      packet has no position and is marked unreadable
-  2. 0/0 (within half a degree), the 90/180 placeholder and anything north
+  2. 0/0 (within half a degree), the 90/180 placeholder, the Pi-Star default
+     (exactly 50 N 3 W: 1,983 hotspots, 790 heard in a day, from Turkey,
+     the US, Israel... all in the English Channel) and anything north
      of what Mercator draws (85.0511 N) are no position; the South Pole is
      one (NZSP sends -90/0 from Amundsen-Scott); 84 N is still drawn
   3. at load, a stored position the new rules reject - a placeholder, or the
@@ -59,6 +61,8 @@ LINES = {
     "VA3OTL-B": ("!8418.84ND04631.43W&RNG0030 440 Voice", 84 + 18.84 / 60, False),
     "XX0NOR": ("!8606.00N/01000.00E-north of Mercator", None, False),
     "TA3HX-5": ("!3827.37N/02706.25ExAPRS-Agent iGate", 38 + 27.37 / 60, False),
+    "TB3ALL-N": ("!5000.00ND00300.00W&/A=000000 70cm MMDVM Voice (NXDN)", None, False),
+    "XX0SEA": ("!5000.00N/00300.01W-one hundredth off the default", 50.0, False),
 }
 
 
@@ -91,6 +95,7 @@ def main() -> int:
     row("KC8HFO-D", 88 + 6.60 / 60, -(81 + 13.80 / 60), LINES["KC8HFO-D"][0])
     row("KK7MFU-10", 90.0, 180.0, LINES["KK7MFU-10"][0])
     row("KC5SQD-8", 0.0, 0.0, LINES["KC5SQD-8"][0])
+    row("TB3ALL-N", 50.0, -3.0, LINES["TB3ALL-N"][0])
     row("NZSP", -90.0, 0.0, LINES["NZSP"][0])
     row("TA3HX-5", 38.456, 27.104, LINES["TA3HX-5"][0])
     # stored from an earlier good packet; the latest text is malformed: keep
@@ -100,7 +105,7 @@ def main() -> int:
     db = sdb.StationDB()
     db.load_sqlite(str(tmp))
     s = db._stations
-    for call in ("KC8HFO-D", "KK7MFU-10", "KC5SQD-8"):
+    for call in ("KC8HFO-D", "KK7MFU-10", "KC5SQD-8", "TB3ALL-N"):
         if s[call].lat is not None:
             fails.append("3: %s kept its stored position %r" % (call, s[call].lat))
     for call in ("NZSP", "TA3HX-5", "KD5NDU-B"):
@@ -112,7 +117,7 @@ def main() -> int:
     got = con.execute("SELECT value FROM meta WHERE key='positions_voided'").fetchone()
     con.close()
     voided = json.loads(got[0]) if got else {}
-    if set(voided) != {"KC8HFO-D", "KK7MFU-10", "KC5SQD-8"}:
+    if set(voided) != {"KC8HFO-D", "KK7MFU-10", "KC5SQD-8", "TB3ALL-N"}:
         fails.append("3: positions_voided holds %r" % sorted(voided))
     elif abs(voided["KC8HFO-D"][0] - 88.11) > 0.01:
         fails.append("3: the voided KC8HFO-D row does not keep its old latitude")

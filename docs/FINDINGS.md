@@ -7773,3 +7773,23 @@ row. From zoom 9 every station is drawn as before, by age: heard within 24 h
 full, 1-10 days half, older faint - the full ones are what the badge counted.
 The legend says both. `/api/clusters` is not under `/api/stations/`, where
 `{callsign}` would take it. `check_map_clusters.py` fails 7 ways on v3.2.170.
+
+---
+
+## F-2026-10-10-05 — 1,983 hotspots in the English Channel
+
+**Source:** found while verifying v3.2.171 on the live map · **Verdict:** a
+placeholder; applied in v3.2.172 at the operator's word ("Ekle")
+
+The biggest badge over Europe, once the badges counted the area, was 793
+stations at exactly 50.000 N 3.000 W - open sea off Devon. They send
+`5000.00N/00300.00W`, Pi-Star's default: MMDVM voice hotspots whose position
+was never set. The registry held **1,983** at that point (790 heard in the
+last 24 h) - gateways and their D-Star/C4FM/NXDN repeater objects from
+Turkey (TB3ALL-N, TB1MCO-N), the US, Israel and elsewhere. Two more records
+at 50.01 N are not the default and stay.
+
+**Applied, v3.2.172.** `_plausible()` refuses exactly 50.0/-3.0, as it does
+0/0 and 90/180; the load-time cleanup of F-2026-10-10-03 drops the stored
+ones into `positions_voided`. `check_positions.py` holds the default and a
+point one hundredth of a minute off it, which stays.
