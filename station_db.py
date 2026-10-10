@@ -2314,6 +2314,52 @@ class StationDB:
             rows = rows[:limit]
         return rows, total
 
+    def slim_clusters(
+        self, bbox: "tuple[float, float, float, float]", cell_deg: float,
+        max_age_s: float,
+    ) -> "tuple[list[dict[str, Any]], int]":
+        """The map's badges below zoom 9 (2026-10-10): every station of the
+        box heard within max_age_s, bucketed on a cell_deg grid. Returns
+        ([{"n", "lat", "lon"} per bucket, a lone station as its own slim row
+        with n=1], stations counted).
+
+        Until now the browser bucketed `/api/stations?limit=3000&bbox=`, most
+        recently heard first. Over Europe that was the last two minutes - about
+        3,000 of the 29,014 heard there in 24 h - and under 3,000 it was the
+        whole registry of the area, dead stations included: one badge, two
+        meanings. Counted here there is no cap, and the answer is a few
+        hundred buckets instead of thousands of rows.
+        """
+        s, w, n, e = bbox
+        cut = time.time() - max_age_s
+        cell = max(float(cell_deg), 1e-4)
+        buckets: dict = {}
+        total = 0
+        for r in self._slim_all():
+            if (r.get("last_seen") or 0) < cut:
+                break                       # most recently heard first
+            lat, lon = r.get("lat"), r.get("lon")
+            if (lat is None or lon is None
+                    or not (s <= lat <= n and w <= lon <= e)):
+                continue
+            total += 1
+            k = (math.floor(lat / cell), math.floor(lon / cell))
+            b = buckets.get(k)
+            if b is None:
+                buckets[k] = [1, lat, lon, r]
+            else:
+                b[0] += 1
+                b[1] += lat
+                b[2] += lon
+        out = []
+        for cnt, slat, slon, first in buckets.values():
+            if cnt == 1:
+                out.append(dict(first, n=1))
+            else:
+                out.append({"n": cnt, "lat": round(slat / cnt, 5),
+                            "lon": round(slon / cnt, 5)})
+        return out, total
+
     def slim_cache_token(self) -> str:
         """Cheap version stamp for the current get_slim() base — changes
         exactly when _slim_all() would recompute. Used for ETag: identical

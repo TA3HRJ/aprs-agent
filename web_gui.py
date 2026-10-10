@@ -3136,6 +3136,44 @@ async def get_stations(request: web.Request) -> web.Response:
         headers={"ETag": etag})
 
 
+# The map's badges count the stations heard in the last 24 h (2026-10-10).
+# Close up every station is drawn, by age - that part is the browser's.
+_MAP_WINDOW_S = 86400
+
+
+@routes.get("/api/clusters")
+async def get_clusters(request: web.Request) -> web.Response:
+    """Map badges below zoom 9: every station of the view heard within the
+    window, bucketed on the client's grid, counted here rather than from a
+    3,000-row sample (StationDB.slim_clusters). Not under /api/stations/:
+    /api/stations/{callsign} would take "clusters" for a callsign."""
+    mgr: AgentManager = request.app["manager"]
+    try:
+        s, w, n, e = (float(x) for x in
+                      request.query.get("bbox", "").split(","))
+        cell = float(request.query.get("cell", "1"))
+        win = int(request.query.get("max_age", _MAP_WINDOW_S))
+    except (ValueError, TypeError):
+        return web.json_response(
+            {"error": "bbox=south,west,north,east and cell are required"},
+            status=400)
+    # A grid of at most ~256 cells across the view whatever is asked for: the
+    # answer is bounded by the cells, not by the stations in them.
+    cell = min(max(cell, (n - s) / 256.0, (e - w) / 256.0, 0.01), 45.0)
+    win = min(max(win, 60), 30 * 86400)
+    db = mgr._station_db
+    async with _get_slim_lock():
+        await asyncio.get_event_loop().run_in_executor(None, db._slim_all)
+    etag = f'"{db.slim_cache_token()}-c-{cell}-{win}-{s},{w},{n},{e}"'
+    if request.headers.get("If-None-Match") == etag:
+        return web.Response(status=304, headers={"ETag": etag})
+    clusters, total = await asyncio.get_event_loop().run_in_executor(
+        None, db.slim_clusters, (s, w, n, e), cell, win)
+    return web.json_response(
+        {"clusters": clusters, "count": total, "window_s": win},
+        headers={"ETag": etag})
+
+
 @routes.get("/api/silence")
 async def get_silence(request: web.Request) -> web.Response:
     """Maidenhead cells with recently-silent station clusters (map overlay)."""
@@ -4165,6 +4203,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/api/status", get_status),
         web.get("/api/stations", get_stations),
         web.get("/api/stations/{callsign}", get_station),
+        web.get("/api/clusters", get_clusters),
         web.get("/api/search", search_stations),
         web.get("/api/silence", get_silence),
         # The evidence behind a popup, for re-analysis elsewhere. Built from

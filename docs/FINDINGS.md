@@ -7738,3 +7738,38 @@ and from zoom 9 stations on one point are one badge with their names listed
 (each opens the station). `check_positions.py` fails 21 ways on v3.2.169;
 `check_coords.py` now holds the inclusive boundary at 90 S, and 90 N as no
 position.
+
+---
+
+## F-2026-10-10-04 — the map's badges counted the last two minutes of a continent
+
+**Source:** operator, 2026-10-10, a screenshot of Europe with badges of 151,
+187, 165: "are the beacons in this region really this few?" · **Verdict:**
+our fault, twice over; fixed in v3.2.171
+
+**Measured** (live registry, the screenshot's area 25-72 N, 25 W-75 E):
+16,749 stations heard in 15 min, 23,515 in 1 h, **29,014 in 24 h**, 40,735 in
+7 days, 104,699 in the registry. The badges summed to about **3,000**.
+
+**Why.** Below zoom 9 the browser bucketed `/api/stations?limit=3000&bbox=`,
+most recently heard first: over Europe the last two minutes. The cap came in
+v2.9.1 (2026-07-19) for the zoom-9 view, where an area rarely holds 3,000;
+v3.2.42 (2026-08-15) moved the badges onto that request to fix Izmir showing
+2 - the global list was the last 74 seconds - and wrote "zoomed right out both
+are capped and it is a wash" without measuring at that scale. And under 3,000
+the same request returned the area's whole registry, dead stations included:
+one badge, two meanings, neither "stations here".
+
+**The close-up view is not the same question.** Zoom 10 over Izmir holds 225
+stations: 27 heard in 24 h, 61 in 10 days, 125 in 30. Drawing the ones heard
+ten days ago is what this map does that others do not, and the operator wants
+it kept: his boat, last heard 671 h ago before its LoRa came ashore, stands
+where it was last seen.
+
+**Applied, v3.2.171.** Below zoom 9 the server counts (`/api/clusters`,
+`StationDB.slim_clusters`): every station of the view heard in the last 24 h,
+bucketed on the browser's grid, no cap; a lone station comes back as its own
+row. From zoom 9 every station is drawn as before, by age: heard within 24 h
+full, 1-10 days half, older faint - the full ones are what the badge counted.
+The legend says both. `/api/clusters` is not under `/api/stations/`, where
+`{callsign}` would take it. `check_map_clusters.py` fails 7 ways on v3.2.170.
