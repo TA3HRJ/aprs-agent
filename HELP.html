@@ -503,6 +503,18 @@
       istasyonlar <strong>bir beacon aralığı</strong> (en az 15 dakika)
       dinlenene kadar değerlendirilmez; sarı şerit kaç istasyonun beklediğini
       yazar. Dinlenmeyen süre hiçbir istasyonun sessizliği sayılmaz.</p>
+    <p id="quake-tr"><strong>Deprem halkası.</strong> USGS'nin PAGER düzeyi
+      <strong>sarı</strong> ya da üstü olan bir depremin çevresine kesikli bir
+      halka çizilir: M7'nin altında 150 km, M7-7.9 için 300 km, M8 ve üstünde
+      500 km. Halka, depremde yayında olan sabit istasyonlardan kaçının sonraki
+      <strong>3 saatte</strong> kendi eşiğini aşarak sustuğunu sayar ve bunu
+      dünyanın geri kalanında aynı anda susanların oranıyla karşılaştırır. En
+      az 5 istasyon sustuysa ve fark rastlantıyla açıklanamayacak kadar büyükse
+      (p &lt; 0,0001) halka turuncu olur, değilse gri kalır. Merkezdeki noktaya
+      tıklayınca sayılar görünür. Bu bir sayımdır, kesinti bildirimi değil:
+      kaç istasyonun sustuğunu söyler, nedenini değil; bildirim de gönderilmez.
+      Kare kuralı bölgenin çoğunun susmasını arar; bir deprem ise birkaç kareye
+      yayılmış daha küçük bir kaybı da getirebilir — halka bunu gösterir.</p>
     <p><strong>Hâlâ yayında değil listesi.</strong> Bir uyarıda susan
       istasyonlar, yeniden duyulana kadar listede kalır. Varsayılan görünüm
       son 7 gündür; liste kareye göre gruplanabilir.</p>
@@ -1348,6 +1360,19 @@
       interval</strong> (at least 15 minutes); the amber bar says how many are
       waiting. Time the agent did not listen never counts as a station's
       silence.</p>
+    <p id="quake-en"><strong>Quake ring.</strong> Around a quake that USGS
+      PAGER rates <strong>yellow</strong> or above, a dashed ring is drawn:
+      150 km below M7, 300 km for M7-7.9, 500 km from M8. It counts how many
+      of the fixed stations on the air when the quake struck went quiet past
+      their own threshold in the <strong>3 hours</strong> after it, and
+      compares that with the share going quiet in the rest of the world at the
+      same moment. With at least 5 gone quiet and a difference chance cannot
+      explain (p &lt; 0.0001) the ring turns orange; otherwise it stays grey.
+      The dot at the epicentre shows the numbers. It is a count, not an outage
+      report: it says how many stopped, not why, and sends no notification.
+      The cell rule looks for most of one square going quiet; a quake can also
+      bring a smaller loss spread over several squares, and the ring shows
+      that.</p>
     <p><strong>The still-missing list.</strong> Stations that fell silent in an
       alert stay on it until they are heard again. The default view is the last
       7 days, and the list can be grouped by square.</p>

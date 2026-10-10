@@ -248,6 +248,8 @@ body.public .stat-bar .cell.diag{display:none!important}
 .miss-cellhdr{padding:6px 14px 2px;font-size:10px;font-weight:bold;letter-spacing:.04em;color:#f5c211;cursor:pointer;border-top:1px solid rgba(255,255,255,.06)}
 .miss-cellhdr:hover{text-decoration:underline}
 .sil-quake{color:#f5c211;font-size:11px}
+.qw-hot{color:#ff9b4a;font-weight:bold}
+.qw-dim{opacity:.75;font-size:11px}
 /* Evidence actions sit at the foot of the popup, under a rule: they are about
    the popup's data, not more of it. */
 .sil-ev{margin-top:6px;padding-top:5px;border-top:1px solid #454545;display:flex;gap:10px;font-size:11px}
@@ -589,6 +591,7 @@ body.public #about-gw-link{display:none!important}
 :root[data-theme="light"] .alert-sum{background:rgba(176,65,62,.1);color:#b3261e}
 :root[data-theme="light"] .miss-sum{background:rgba(181,122,24,.12);color:#7a4f0a}
 :root[data-theme="light"] #full-feed-warn{background:#f3e7c4!important;color:#5c4a12!important}
+:root[data-theme="light"] .qw-hot{color:#a84f00}
 /* colours written inline by the page's own code, light-tinted for dark paper */
 :root[data-theme="light"] [style*="color:#f5c211"]{color:#8a5a0c!important}
 :root[data-theme="light"] [style*="color:#8ff0a4"],:root[data-theme="light"] [style*="color:#57e389"]{color:#2e7d4f!important}
@@ -949,6 +952,7 @@ body.public #about-gw-link{display:none!important}
       <span><i style="background:#62a0ea"></i><em data-i="leg_prop2">600–1200 km</em></span>
       <span><i style="background:#dc8add"></i><em data-i="leg_prop3">&gt; 1200 km</em></span>
       <span><i style="background:#c0bfbc;opacity:.4"></i><em data-i="leg_prop_young">Faint: gate too new to have a normal</em></span>
+      <span id="leg-quake" hidden><i style="background:transparent;border:1.5px dashed #e66100;border-radius:50%"></i><em data-i="leg_quake">Dashed ring: stations gone quiet around a PAGER yellow+ quake</em></span>
       <span><i style="background:repeating-linear-gradient(90deg,#8a8a8a 0 2px,transparent 2px 5px);height:3px;vertical-align:2px"></i><em data-i="leg_prop_suspect">Grey dotted: suspect - position jump or balloon</em></span>
       <label class="leg-opt"><input type="checkbox" id="leg-suspect" checked><em data-i="leg_show_suspect">Show suspect links</em></label>
     </div>
@@ -1106,6 +1110,15 @@ const S={en:{
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
   sil_ev_err:"Could not fetch the evidence for this cell.",
+  qw_title:"M{m} earthquake",qw_pager:"USGS PAGER {a}",qw_yellow:"yellow",qw_orange:"orange",qw_red:"red",qw_ago:"{t} ago",
+  qw_stats:"Within {r} km, {k} of {n} fixed stations on the air when it struck went quiet in the 3 h after it",
+  qw_exp:"The rest of the world, at the same moment, would give {e}",
+  qw_unusual:"More than chance explains (p = {p})",qw_normal:"Within ordinary variation (p = {p})",
+  qw_few:"Too few stations here to judge",qw_back:"{b} back since",
+  qw_interrupted:"The agent could not hear for part of this time - not judged",
+  qw_counting:"Still counting: the 3 h are not over",qw_from:"Counted from {t} after the quake (when the agent first saw it)",
+  qw_note:"A count, not an outage report: it says how many stopped, not why. Silence cells are judged separately.",
+  leg_quake:"Dashed ring: stations gone quiet around a PAGER yellow+ quake",
   prop_judged_gate:"Judged against this gate's own history — {n} samples, {r}× the {t} km bar it had to clear",
   prop_judged_gate_old:"Judged against this gate's own history — {n} samples",
   prop_judged_floor_est:"Judged by the {f} km floor — this gate has {n} samples, but its own bar ({b} km) sits below the floor, so its history decided nothing here",
@@ -1253,6 +1266,15 @@ const S={en:{
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
   sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
   sil_ev_err:"Bu hücrenin ham verisi alınamadı.",
+  qw_title:"M{m} deprem",qw_pager:"USGS PAGER {a}",qw_yellow:"sarı",qw_orange:"turuncu",qw_red:"kırmızı",qw_ago:"{t} önce",
+  qw_stats:"{r} km içinde, depremde yayında olan {n} sabit istasyondan {k} tanesi sonraki 3 saatte sustu",
+  qw_exp:"Dünyanın geri kalanı, aynı anda, {e} verirdi",
+  qw_unusual:"Rastlantının açıklayabileceğinden fazla (p = {p})",qw_normal:"Olağan dalgalanma içinde (p = {p})",
+  qw_few:"Burada değerlendirmeye yetecek istasyon yok",qw_back:"{b} tanesi geri geldi",
+  qw_interrupted:"Ajan bu sürenin bir kısmında dinleyemedi - değerlendirilmedi",
+  qw_counting:"Sayım sürüyor: 3 saat dolmadı",qw_from:"Depremden {t} sonrasından sayıldı (ajanın onu ilk gördüğü an)",
+  qw_note:"Bir sayım, kesinti bildirimi değil: kaç istasyonun sustuğunu söyler, nedenini değil. Sessizlik hücreleri ayrıca değerlendirilir.",
+  leg_quake:"Kesikli halka: PAGER sarı ve üstü bir depremin çevresinde susan istasyonlar",
   prop_judged_gate:"Gate'in kendi geçmişine göre değerlendirildi — {n} örnek, aşması gereken {t} km eşiğinin {r} katı",
   prop_judged_gate_old:"Gate'in kendi geçmişine göre değerlendirildi — {n} örnek",
   prop_judged_floor_est:"{f} km tabanıyla değerlendirildi — bu gate'in {n} örneği var ama kendi eşiği ({b} km) tabanın altında kaldığı için geçmişi burada bir şey belirlemedi",
@@ -2800,9 +2822,68 @@ function renderDeaf(meta){
   b.textContent=t('deaf_bar').replace('{m}',mins);
   b.hidden=false;
 }
+// ── Quake watch (F-2026-10-10-02) ──
+// Around a PAGER yellow+ quake: how many fixed stations on the air when it
+// struck went quiet in the 3 h after it, against the rest of the world at the
+// same moment. A count, not a cell and not an alert. The ring is not
+// clickable - 300 km of it would swallow the clicks meant for the silence
+// cells inside it - the epicentre dot carries the popup.
+let qwRings={};
+const QW_PAGER={yellow:'qw_yellow',orange:'qw_orange',red:'qw_red'};
+function qwP(p){return p<0.001?Number(p).toExponential(0):Number(p).toFixed(3)}
+function qwPopup(w){
+  let h='<b>'+t('qw_title').replace('{m}',w.mag)+'</b>';
+  if(w.place)h+='<br>'+esc(w.place);
+  h+='<br><span class="qw-dim">'+t('qw_pager').replace('{a}',t(QW_PAGER[w.alert]||'qw_yellow'))+' · '
+    +t('qw_ago').replace('{t}',fmtAgoLong(Math.max(0,Math.round(Date.now()/1000-w.ts))))+'</span>';
+  h+='<br>'+t('qw_stats').replace('{r}',w.radius_km).replace('{k}',w.k).replace('{n}',w.n);
+  if(w.interrupted)h+='<br><span class="qw-dim">'+t('qw_interrupted')+'</span>';
+  else if(w.n<10)h+='<br><span class="qw-dim">'+t('qw_few')+'</span>';
+  else{
+    h+='<br>'+t('qw_exp').replace('{e}',w.expected);
+    h+='<br>'+(w.unusual?'<span class="qw-hot">'+t('qw_unusual').replace('{p}',qwP(w.p))+'</span>'
+                        :t('qw_normal').replace('{p}',qwP(w.p)));
+  }
+  if(w.back)h+=' · '+t('qw_back').replace('{b}',w.back);
+  if(!w.done)h+='<br><span class="qw-dim">'+t('qw_counting')+'</span>';
+  if(w.first_scan&&w.first_scan-w.ts>1200)
+    h+='<br><span class="qw-dim">'+t('qw_from').replace('{t}',fmtAgoLong(w.first_scan-w.ts))+'</span>';
+  if(w.quiet_calls&&w.quiet_calls.length)
+    h+='<br><span style="opacity:.7;font-size:11px">'+esc(w.quiet_calls.join(', '))+'</span>';
+  h+='<br><span class="qw-dim">'+t('qw_note')+'</span>';
+  return h;
+}
+function renderQuakeWatch(list){
+  const leg=document.getElementById('leg-quake');if(leg)leg.hidden=!list.length;
+  if(!map)return;
+  const seen={};
+  for(const w of list){
+    seen[w.id]=1;
+    const col=w.unusual?'#e66100':'#77767b';
+    const ring={color:col,weight:1.5,dashArray:'6 6',fillColor:col,
+                fillOpacity:w.unusual?0.06:0.02,interactive:false};
+    const dot={color:col,weight:2,fillColor:col,fillOpacity:0.9};
+    let q=qwRings[w.id];
+    if(q){
+      q.ring.setLatLng([w.lat,w.lon]);q.ring.setRadius(w.radius_km*1000);q.ring.setStyle(ring);
+      q.dot.setLatLng([w.lat,w.lon]);q.dot.setStyle(dot);q.dot.setPopupContent(qwPopup(w));
+    }else{
+      qwRings[w.id]={
+        ring:L.circle([w.lat,w.lon],Object.assign({radius:w.radius_km*1000},ring)).addTo(map),
+        dot:L.circleMarker([w.lat,w.lon],Object.assign({radius:6},dot)).addTo(map)
+          .bindPopup(qwPopup(w),{maxWidth:Math.min(340,window.innerWidth-48),
+                                 maxHeight:Math.min(280,Math.floor(window.innerHeight*0.45))})};
+      qwRings[w.id].ring.bringToBack();
+    }
+  }
+  for(const id in qwRings){
+    if(!seen[id]){map.removeLayer(qwRings[id].ring);map.removeLayer(qwRings[id].dot);delete qwRings[id]}
+  }
+}
 function renderSilence(cells,meta){
   renderDeaf(meta);
   renderAlerts(cells);
+  renderQuakeWatch((meta&&meta.quake_watch)||[]);
   if(!map)return;
   const seen={};
   for(const c of cells){

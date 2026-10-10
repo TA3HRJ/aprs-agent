@@ -387,6 +387,27 @@ def suspect_position(rec) -> bool:
 _NWS_PRODUCT_RE = re.compile(r":\s*NWS-WARN\s*:", re.IGNORECASE)
 
 
+def binom_tail(k: int, n: int, p: float) -> float:
+    """P(X >= k) for X ~ Binomial(n, p), summed in log space. The quake watch's
+    test (F-2026-10-10-02): k stations quiet near a quake out of n, when the
+    rest of the world lost a share p of its own at the same moment."""
+    if k <= 0:
+        return 1.0
+    if n <= 0 or k > n or p <= 0.0:
+        return 0.0
+    if p >= 1.0:
+        return 1.0
+    lp, lq, base = math.log(p), math.log1p(-p), math.lgamma(n + 1)
+    total = 0.0
+    for x in range(k, n + 1):
+        t = (base - math.lgamma(x + 1) - math.lgamma(n - x + 1)
+             + x * lp + (n - x) * lq)
+        total += math.exp(t)
+        if t < -60 and x > n * p:
+            break                   # past the mode, the rest cannot matter
+    return min(1.0, total)
+
+
 def is_event_broadcast(rec) -> bool:
     """True for a station whose transmissions are events, not a heartbeat.
 
@@ -3186,6 +3207,105 @@ class StationDB:
         out.sort(key=lambda x: (-int(x["alert"]), -int(x["threshold_met"]),
                                 -x["ratio"]))
         return out
+
+    # ── Quake-anchored watch (NEXT 18, F-2026-10-10-02) ──────────────────────
+    # The cell rule asks whether most of one square fell silent. The Panama
+    # M7.7 silenced 10 of 85 fixed stations within 300 km in the hour after
+    # it, spread over four squares, and no square met the rule. This asks the
+    # other question: around one large quake, how many stations that were on
+    # the air went quiet, against the rest of the world at the same moment.
+    # Replayed on the raw feed: Panama p = 3e-6; 1 of 300 random places and
+    # times under 1e-4.
+    QUAKE_WATCH_S = 3 * 3600      # stations are counted for this long after it
+    QUAKE_FAR_KM = 1000.0         # the comparison: every station farther away
+    QUAKE_UNUSUAL_P = 1e-4
+    QUAKE_UNUSUAL_MIN = 5
+
+    def quake_watch_scan(self, watches: list, now: float) -> None:
+        """Advance quake watches by one scan, in place.
+
+        A watch is a dict with id, lat, lon, ts (the quake) and radius_km. Each
+        scan inside QUAKE_WATCH_S of the quake adds the stations quiet at that
+        moment to its cumulative set, near and far, and rewrites
+        `w["result"]`. A station counts when it was on the air at the quake -
+        known before it, and heard within its own threshold before it - and
+        quiet means what it means for the cell rule: past its threshold, with
+        time the agent did not listen left out (_silence_walk). Cumulative,
+        because the Panama stations came back within one to two hours; a
+        snapshot three hours on found 3 of the 10.
+
+        A scan while the agent cannot hear judges nothing and marks the watch
+        interrupted; an interrupted watch is not called unusual.
+        """
+        live = [w for w in watches
+                if w["ts"] <= now <= w["ts"] + self.QUAKE_WATCH_S + 600]
+        if not live:
+            return
+        if self.deaf_since():
+            for w in live:
+                w["interrupted"] = True
+            return
+        for w in live:
+            w.setdefault("quiet", set())
+            w.setdefault("far_quiet", set())
+            w["_n"] = w["_far_n"] = 0
+            w["_quiet_now"] = set()
+            # A cheap latitude test before the haversine: the far set is
+            # most of the world, the near set a few hundred stations.
+            w["_dlat"] = w["radius_km"] / 111.0
+        for r in list(self._stations.values()):
+            if (r.self_beacon or r.is_object or is_event_broadcast(r)
+                    or r.station_type in self._MOBILE_TYPES
+                    or r.packet_count < 5 or r.lat is None or r.lon is None
+                    or r.ema_interval_s is None or not r.first_seen
+                    or not self._matches_feed(r.callsign)):
+                continue
+            threshold = max(3.0 * r.ema_interval_s, 900.0)
+            quiet = None
+            for w in live:
+                if r.first_seen >= w["ts"] or r.last_seen < w["ts"] - threshold:
+                    continue                # not on the air when it struck
+                if abs(r.lat - w["lat"]) <= w["_dlat"]:
+                    d = self._haversine_km(w["lat"], w["lon"], r.lat, r.lon)
+                    near = d <= w["radius_km"]
+                    far = d > self.QUAKE_FAR_KM
+                else:
+                    near = False
+                    far = (abs(r.lat - w["lat"]) * 111.0 > self.QUAKE_FAR_KM
+                           or self._haversine_km(w["lat"], w["lon"], r.lat,
+                                                 r.lon) > self.QUAKE_FAR_KM)
+                if not (near or far):
+                    continue
+                if quiet is None:
+                    clock, _ = self._silence_walk(r, threshold, now)
+                    quiet = now - clock > threshold
+                if near:
+                    w["_n"] += 1
+                    if quiet:
+                        w["quiet"].add(r.callsign)
+                        w["_quiet_now"].add(r.callsign)
+                else:
+                    w["_far_n"] += 1
+                    if quiet:
+                        w["far_quiet"].add(r.callsign)
+        for w in live:
+            n, k = w["_n"], len(w["quiet"])
+            fn, fk = w["_far_n"], len(w["far_quiet"])
+            p0 = fk / fn if fn else 0.0
+            pv = binom_tail(k, n, p0) if n else 1.0
+            w["result"] = {
+                "n": n, "k": k,
+                # The same share as the rest of the world, in stations here.
+                "expected": round(n * p0, 1),
+                "p": pv,
+                "unusual": bool(k >= self.QUAKE_UNUSUAL_MIN
+                                and pv < self.QUAKE_UNUSUAL_P
+                                and not w.get("interrupted")),
+                "back": len(w["quiet"] - w["_quiet_now"]),
+                "quiet_calls": sorted(w["quiet"])[:20],
+                "measured_until": int(now),
+                "done": now - w["ts"] >= self.QUAKE_WATCH_S,
+            }
 
     def onset_facts(self, callsigns) -> dict[str, Any]:
         """When a cell's silent stations stopped, as facts rather than a verdict.

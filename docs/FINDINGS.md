@@ -7612,3 +7612,54 @@ Probed on the host with the live AI settings, constructed EJ88 alerts (3 of
 | F  3 of 3 within 10 min, just after it | `power_outage/medium`, names it | `power_outage/medium`, names it |
 | G  EJ88's timing, no quake | `unknown/low` | `unknown/low` |
 | W  EJ88's timing, an M4.6 453 km away | `unknown/low` (not matched) | `unknown/low`, not named |
+
+---
+
+## F-2026-10-10-02 — a quake's spread-out loss, measured against the rest of the world
+
+**Source:** NEXT 18, after F-2026-10-10-01; the operator chose map only and
+USGS PAGER yellow and above · **Verdict:** measurement, then applied
+
+**Question.** Around one large quake, did the stations that were on the air
+go quiet more than chance explains - whatever squares they fall in?
+
+**Measure** (`tools/quake_watch_replay.py`, the raw feed log of 2026-10-06
+22:39 to 10-10 15:09, 66,187 fixed stations eligible by the cell rule's own
+exclusions). Near: fixed stations within R of the epicentre, heard within
+their own threshold before the quake. Quiet: past their threshold at the
+evaluation time E - as a snapshot at E, or cumulatively at any moment up to
+E. Expected: the same share among every station farther than 1,000 km, same
+moment. Test: binomial upper tail.
+
+| Panama, cumulative | 30 min | 60 min | 3 h |
+|---|---|---|---|
+| M7.7, 150 km | 0/20 | 2/20, p 0.05 | 3/20, p 0.01 |
+| **M7.7, 300 km** | 3/85, p 0.08 | **10/85, exp 1.5, p 3e-6** | 11/85, exp 2.1, p 1e-5 |
+| M7.7, 500 km | 4/118 | 11/118, p 8e-6 | 12/118, p 5e-5 |
+| M6.6, 300 km | 2/76 | 4/76, p 0.05 | 6/76, p 0.014 |
+| M6.0, 300 km | 1/71 | 2/71 | 2/71 |
+
+The snapshot found 7/84 at 60 min (p 3e-5) and only 3/84 at 3 h: the
+stations came back within one to two hours, so the count has to be
+cumulative.
+
+**Ordinary hours.** 300 random places with at least 15 fixed stations within
+150 km, at random times away from Panama and from the deaf minutes. R 300 km,
+cumulative: p < 1e-4 at 60 min **1 of 300**, at 3 h 3 of 300; the 60 min one
+is 102 of 677 stations around G1OHH-N, 2026-10-09 00:33 UTC - a real regional
+event, not chance. At 500 km and 3 h it is 11 of 300: wider rings catch more
+of the world's own outages.
+
+**Applied, v3.2.169.** `StationDB.quake_watch_scan()` counts cumulatively
+for 3 h after each USGS quake from M5.5 (watched from the first scan that
+sees it - PAGER arrives later), near against farther than 1,000 km;
+unusual = at least 5 quiet and p < 1e-4; a deaf scan marks the watch
+interrupted and it is not judged. `/api/silence` carries `quake_watch` for
+PAGER yellow, orange and red; the map draws a dashed ring (150 km below M7,
+300 km to M7.9, 500 km from M8 - only 300 measured), orange when unusual,
+grey otherwise, not clickable so the cells inside stay reachable; the dot at
+the epicentre opens the numbers. No notification, as chosen. One scan over
+the live registry (308,005 records) takes 0.4 s, only while a quake is
+inside its 3 h. A restart inside those 3 h counts again from its first scan,
+and the popup says from when. `check_quake_watch.py` fails 5 ways on
+v3.2.168.

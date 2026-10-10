@@ -348,6 +348,11 @@ def _fetch_quakes() -> list:
                 "depth_km": (round(float(g[2])) if len(g) > 2
                              and g[2] is not None else None),
                 "lat": float(g[1]), "lon": float(g[0]),
+                # The quake watch keys on the event and shows only PAGER
+                # yellow and above (F-2026-10-10-02). PAGER arrives tens of
+                # minutes to hours after the event and can be revised.
+                "id": f.get("id") or "",
+                "alert": p.get("alert"),
             })
         _quake_cache = (now, out)
         return out
@@ -403,6 +408,40 @@ def _alert_quakes(c: dict) -> list:
     last packet. Every reader of a cell asks through this, so the map, the
     evidence file, the AI note and both Telegram formats name the same ones."""
     return _cell_quakes(c["cell"], c.get("since"), c.get("last_stop"))
+
+
+# ── Quake-anchored watch (NEXT 18, F-2026-10-10-02) ──────────────────────────
+# Every quake from M5.5 is watched from the first scan that sees it, because
+# PAGER comes later and stations that went quiet and came back in the meantime
+# would be lost; the map shows only PAGER yellow and above - the operator's
+# choice, 2026-10-10: map only, yellow and up.
+_QUAKE_WATCH_MIN_MAG = 5.5
+_PAGER_SHOWN = ("yellow", "orange", "red")
+
+
+def _quake_watch_radius(mag: float) -> float:
+    """Where stations are counted. 300 km is where the Panama M7.7 measured
+    best (cumulative at 60 min: p = 3e-6; 8e-6 at 500 km, 0.05 at 150);
+    the other two are the same scale stepped by magnitude, not measured."""
+    return 500.0 if mag >= 8.0 else 300.0 if mag >= 7.0 else 150.0
+
+
+def _quake_watch_public(watches) -> list:
+    """The watches the map is given: PAGER yellow and above, once measured."""
+    out = []
+    for w in watches:
+        r = w.get("result")
+        if w.get("alert") not in _PAGER_SHOWN or not r:
+            continue
+        e = {k: w.get(k) for k in ("id", "mag", "place", "depth_km", "alert",
+                                   "lat", "lon", "ts", "radius_km")}
+        e["ts"] = int(e["ts"] or 0)
+        e["interrupted"] = bool(w.get("interrupted"))
+        e["first_scan"] = int(w.get("first_scan") or 0)
+        e.update(r)
+        out.append(e)
+    out.sort(key=lambda e: -e["ts"])
+    return out
 
 
 # A quake this strong, or this close, is named in the AI note's summary
@@ -613,6 +652,10 @@ class AgentManager:
         # Silence watch (Phase 4): active alert episodes + AI assessments
         self._silence_active: dict[str, float] = {}
         self._silence_ai_notes: dict[str, str] = {}
+        # USGS event id -> watch (F-2026-10-10-02). In memory: a watch lives
+        # 24 h and counts for 3; a restart inside those 3 h starts counting
+        # again from its first scan, which the map says ("counted from").
+        self._quake_watches: dict[str, dict] = {}
         # Every station seen silent in a cell during its current alert episode.
         # Those no longer silent have come back while the alert ran - one of the
         # facts that separate drop-outs from an outage (F-2026-10-05-03). Kept
@@ -1333,6 +1376,14 @@ class AgentManager:
                         None, _fetch_quakes)
                 except Exception:
                     pass
+                # The quake watch walks the registry once per scan while a
+                # quake is inside its 3 h. Before the deaf branch below, so a
+                # deaf scan can mark the watch interrupted.
+                try:
+                    await asyncio.get_running_loop().run_in_executor(
+                        None, self._quake_watch_scan)
+                except Exception as e:
+                    self._log_both(f"[quake] watch scan failed: {e}")
                 # Off the loop like everything else: this loop runs beside the
                 # HTTP handlers, so a synchronous scan here stalls them too.
                 cells = await silence_cells_cached(self._station_db, self._sta_db_path)
@@ -1700,6 +1751,32 @@ class AgentManager:
             out += (f"Stations in the same cell still active: {act_n}, e.g.\n"
                     + "\n".join(act_lines) + "\n")
         return out
+
+    def _quake_watch_scan(self) -> None:
+        """Open a watch for every recent M5.5+ quake, refresh what USGS now
+        says about it (magnitude, place, PAGER level), drop it after 24 h, and
+        let the registry count. BLOCKING - run in the executor."""
+        now = time.time()
+        for q in _quake_cache[1]:
+            if (q["mag"] < _QUAKE_WATCH_MIN_MAG or not q.get("id")
+                    or not (0 <= now - q["ts"] <= _QUAKE_WINDOW_S)):
+                continue
+            w = self._quake_watches.get(q["id"])
+            if w is None:
+                w = self._quake_watches[q["id"]] = {
+                    "id": q["id"], "first_scan": now}
+                if q["mag"] >= 6.5:
+                    self._log_both(f"[quake] watching M{q['mag']} "
+                                   f"{q['place']}")
+            w.update(lat=q["lat"], lon=q["lon"], ts=q["ts"], mag=q["mag"],
+                     place=q["place"], depth_km=q.get("depth_km"),
+                     alert=q.get("alert"),
+                     radius_km=_quake_watch_radius(q["mag"]))
+        for k in [k for k, w in self._quake_watches.items()
+                  if now - w["ts"] > _QUAKE_WINDOW_S]:
+            del self._quake_watches[k]
+        self._station_db.quake_watch_scan(list(self._quake_watches.values()),
+                                          now)
 
     def _quake_context(self, c: dict) -> str:
         """Earthquake candidates as a prompt fragment. Deliberately phrased
@@ -3118,7 +3195,12 @@ async def get_silence(request: web.Request) -> web.Response:
                               # one interval. Their number and the break's
                               # end, so the map can say so.
                               "awaiting": int(awaiting[0]),
-                              "listening_since": int(awaiting[1])})
+                              "listening_since": int(awaiting[1]),
+                              # F-2026-10-10-02: around a PAGER yellow+ quake,
+                              # how many stations went quiet against the rest
+                              # of the world. Not a cell, not an alert.
+                              "quake_watch": _quake_watch_public(
+                                  list(mgr._quake_watches.values()))})
 
 
 @routes.get("/api/silence/evidence")

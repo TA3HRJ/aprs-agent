@@ -94,7 +94,11 @@ What is left, in the order it is worth doing:
     CI), then the controlled reboot test, optimisation O1-O5 and interface
     U1-U7. The operator approved F1-F4 and the reboot on 2026-10-08.
 
-18. **A view anchored on a large quake - not decided.** The Panama M7.7
+18. **A view anchored on a large quake - shipped in v3.2.169**
+    (F-2026-10-10-02): map only, PAGER yellow and above, as the operator
+    chose. Watch the first real yellow+ quake where there are stations: ring
+    colour, counts, and whether 150 and 500 km (not measured) behave.
+    What it was: the Panama M7.7
     (F-2026-10-10-01) silenced 13 of 85 fixed stations in the half-hour
     after it, the most in 3.5 days (median 1), spread over four cells none
     of which met the cell rule. Shape: on M6.5+ (USGS feed already cached),
