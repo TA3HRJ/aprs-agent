@@ -7663,3 +7663,48 @@ the live registry (308,005 records) takes 0.4 s, only while a quake is
 inside its 3 h. A restart inside those 3 h counts again from its first scan,
 and the popup says from when. `check_quake_watch.py` fails 5 ways on
 v3.2.168.
+
+---
+
+## F-2026-10-10-03 — stations at the North Pole: placeholders, misread latitudes, and a map that cannot draw there
+
+**Source:** operator, 2026-10-10, three screenshots of the public map over
+Greenland: a cluster of 8, zoomed in a cluster of 62, zoomed further one
+icon with 61 more under it. "These count errors were always there, at the
+pole they get absurd. A zoom control, no zoom level. No way to tell the
+stations apart by name. Probably a long job; I am hesitant about fixing it,
+but it is worth recording." · **Verdict:** measured, recorded, not fixed
+
+**Who is there.** The registry holds 63 stations at 84 N or more, 17 heard
+in the last 24 h. None is at the pole:
+
+- **Placeholder positions.** `9000.00N/18000.00E` (and `W`): KK7MFU-10,
+  W4AHI-10 ("RX-only iGate"), DL7AF-7, HB9FZW and others - a station saying
+  "no position" in a position field. `_on_earth` accepts 90/180, and 0/0
+  too (BG5HNP-0 sends `00000.00N/00000.00E`).
+- **Misread latitudes.** `_RE_POS_UNCOMP` is searched, not anchored, so in a
+  malformed field it finds a valid-looking part: KC8HFO-D `38806.60N`
+  (38 06.60 with a stray digit) reads as 88 06.60; AA5PD-B `28540.47N` as
+  85 40.47; I4IFL-D `4420668800.00N` as 88 00.00.
+
+**How often** (one day of raw feed, 7.0 M lines, 4.71 M with a position):
+**3,298 position packets (0.07 %) from 54 sources** were matched inside a
+longer digit run; **284** of them land at 84 N or more. Not all are wrong:
+F4ETJ-1 (570 packets) and NEVAMO put an object timestamp without its `z`
+(`0915514526.39N`) and K2ILH-2 a leading `0` (`04257.33N`) - the match
+reads their true position. MMDVM gateways with a stray digit (KC8HFO-D,
+I4IFL-D, EA5HJU-D `373618.60N`, VK2JEH-N, VK3RHD-D) read a false one. A
+plain "not after a digit" rule would drop the right ones with the wrong.
+
+**Why the counts jump.** Web Mercator stops at 85.05 N. Below zoom 9 the
+map buckets the stations of the visible area, fetched with the view's
+bounds padded by 20 %; whether that padding reaches 90 N decides whether
+the 60-odd pole stations are in the count - 8 in one view, 62 in the next.
+From zoom 9 there is no clustering: identical coordinates stack under one
+icon, with no spiderfy and no list of names. There is no scale or zoom
+level shown, only +/-.
+
+**Not measured:** what the misread positions do to propagation (a station
+"at" 88 N heard by its own gate is a long link) and to silence cells.
+
+Options and their cost: NEXT 19.
