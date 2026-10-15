@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import gzip
 import hashlib
+import html
 import json
 import math
 import os
@@ -66,13 +67,45 @@ _DAY_CACHE = {"Cache-Control": "public, max-age=86400"}
 # to ask. A conditional GET on a 17 KB file is cheap; being wrong for a
 # day is not.
 _REVALIDATE = {"Cache-Control": "public, no-cache"}
+# Leaflet is served from here, not from unpkg.com (2026-10-15): one outside
+# host fewer that every visitor's address reaches, and no second DNS lookup
+# and TLS handshake on a first visit (unpkg cost 0.25-0.4 s of that, measured
+# from Turkey). The name carries the version, so a year's cache is safe. The
+# files match Leaflet's published SRI hashes.
+_IMMUTABLE = {"Cache-Control": "public, max-age=31536000, immutable"}
+_LEAFLET = {"leaflet-1.9.4.js": "application/javascript",
+            "leaflet-1.9.4.css": "text/css"}
 
 # In-memory gzip cache for index.html, keyed by file mtime/size so edits
 # during development are picked up automatically.
 _GZ_CACHE: dict = {}
 
 
-def _gzipped_index(public: bool = False) -> tuple[bytes, bytes, str]:
+def _gzipped_asset(name: str) -> tuple[bytes, bytes]:
+    """(raw, gzipped) bytes of a file in static/, compressed once per mtime."""
+    path = _STATIC_DIR / name
+    st = path.stat()
+    key = (st.st_mtime_ns, st.st_size)
+    cached = _GZ_CACHE.get("asset:" + name)
+    if not cached or cached[0] != key:
+        raw = path.read_bytes()
+        cached = (key, raw, gzip.compress(raw, 9))
+        _GZ_CACHE["asset:" + name] = cached
+    return cached[1], cached[2]
+
+
+def _public_base(request: "web.Request", cfg: dict) -> str:
+    """The public page's own address, ending in '/'. The configured one when
+    it is an http(s) URL, otherwise the scheme and host this request used."""
+    base = str(cfg.get("public_base_url", "") or "").strip()
+    if not re.match(r"^https?://[^\s/]+", base):
+        proto = request.headers.get("X-Forwarded-Proto", request.scheme)
+        base = f"{proto}://{request.host}/"
+    return base if base.endswith("/") else base + "/"
+
+
+def _gzipped_index(public: bool = False,
+                   canonical: str = "") -> tuple[bytes, bytes, str]:
     """Return (raw_html, gzipped_html, etag).
 
     Injects the running version as window.BUILD, which is how an already-open
@@ -87,7 +120,7 @@ def _gzipped_index(public: bool = False) -> tuple[bytes, bytes, str]:
     # bumps VERSION without touching index.html would otherwise keep serving
     # a page that reports the previous build, and the page would either never
     # notice the update or never stop noticing it.
-    key = (st.st_mtime_ns, st.st_size, cfg_module.VERSION)
+    key = (st.st_mtime_ns, st.st_size, cfg_module.VERSION, canonical)
     ck = "index-pub" if public else "index"
     cached = _GZ_CACHE.get(ck)
     if not cached or cached[0] != key:
@@ -95,9 +128,17 @@ def _gzipped_index(public: bool = False) -> tuple[bytes, bytes, str]:
         inject = b'<script>window.BUILD="' + cfg_module.VERSION.encode() + b'"'
         if public:
             inject += b";window.PUBLIC=true"
-        raw = raw.replace(b"</head>", inject + b"</script></head>", 1)
+        inject += b"</script>"
+        if canonical:
+            # One page under several names (map.aprsagent.com, the duckdns
+            # name, query strings) is one page to a search engine.
+            inject += (b'<link rel="canonical" href="'
+                       + canonical.replace('"', "%22").encode() + b'">')
+        raw = raw.replace(b"</head>", inject + b"</head>", 1)
         body = gzip.compress(raw, 9)
         suffix = "-p" if public else ""
+        if canonical:
+            suffix += "-" + hashlib.sha1(canonical.encode()).hexdigest()[:8]
         etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}-{cfg_module.VERSION}{suffix}"'
         cached = (key, raw, body, etag)
         _GZ_CACHE[ck] = cached
@@ -2766,7 +2807,15 @@ routes = web.RouteTableDef()
 
 
 def _index_response(request: web.Request, public: bool) -> web.Response:
-    raw, gz_body, etag = _gzipped_index(public)
+    canonical = ""
+    if public:
+        try:
+            cfg = request.app["manager"].get_config()
+        except Exception:
+            cfg = {}
+        if str(cfg.get("public_base_url", "") or "").strip():
+            canonical = _public_base(request, cfg)
+    raw, gz_body, etag = _gzipped_index(public, canonical)
     if request.headers.get("If-None-Match") == etag:
         return web.Response(status=304, headers={**_NO_CACHE, "ETag": etag})
     if "gzip" in request.headers.get("Accept-Encoding", ""):
@@ -2808,6 +2857,114 @@ async def pwa_icon(request: web.Request) -> web.Response:
     if size not in ("192", "512"):
         raise web.HTTPNotFound()
     return web.FileResponse(_STATIC_DIR / f"icon-{size}.png", headers=_REVALIDATE)
+
+
+@routes.get(r"/{name:leaflet-1\.9\.4\.(?:js|css)}")
+async def leaflet_asset(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    ctype = _LEAFLET.get(name)
+    if not ctype or not (_STATIC_DIR / name).exists():
+        raise web.HTTPNotFound()
+    raw, gz_body = _gzipped_asset(name)
+    if "gzip" in request.headers.get("Accept-Encoding", ""):
+        return web.Response(body=gz_body, content_type=ctype, charset="utf-8",
+                            headers={**_IMMUTABLE, "Content-Encoding": "gzip",
+                                     "Vary": "Accept-Encoding"})
+    return web.Response(body=raw, content_type=ctype, charset="utf-8",
+                        headers={**_IMMUTABLE, "Vary": "Accept-Encoding"})
+
+
+# ── What crawlers read on the public page ───────────────────────────────────
+# Public app only: the admin page is nobody's to index.
+
+async def public_robots(request: web.Request) -> web.Response:
+    base = _public_base(request, request.app["manager"].get_config())
+    # The API and the socket are the page's plumbing, not pages.
+    body = ("User-agent: *\nDisallow: /api/\nDisallow: /ws\n\n"
+            f"Sitemap: {base}sitemap.xml\n")
+    return web.Response(text=body, content_type="text/plain",
+                        headers=_DAY_CACHE)
+
+
+async def public_sitemap(request: web.Request) -> web.Response:
+    base = _public_base(request, request.app["manager"].get_config())
+    body = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            f"  <url><loc>{html.escape(base)}</loc>"
+            "<changefreq>always</changefreq></url>\n"
+            "</urlset>\n")
+    return web.Response(text=body, content_type="application/xml",
+                        headers=_DAY_CACHE)
+
+
+async def public_llms(request: web.Request) -> web.Response:
+    """llms.txt: what this page is, in plain text, for a language model."""
+    cfg = request.app["manager"].get_config()
+    title = str(cfg.get("public_title", "") or "").strip() or "APRS-Agent"
+    lines = [
+        f"# {title}",
+        "",
+        "> A live, read-only map of the APRS-IS feed: stations and their last",
+        "> positions, regional silence that may mean a power or network outage,",
+        "> and RF propagation openings between stations and igates.",
+        "",
+        "- Everything shown is what amateur radio stations already broadcast",
+        "  publicly on APRS. Station records are kept with no time limit;",
+        "  messages and silence, propagation and hazard history for 14 days.",
+        "- Software: APRS-Agent, open source (MIT):"
+        " https://github.com/TA3HRJ/aprs-agent",
+    ]
+    for label, key in (("Home", "public_home_url"),
+                       ("Privacy", "public_privacy_url")):
+        v = str(cfg.get(key, "") or "").strip()
+        if re.match(r"^https?://\S+$", v):
+            lines.append(f"- {label}: {v}")
+    mail = str(cfg.get("public_contact_email", "") or "").strip()
+    if re.match(r"^[^\s@<>\"']+@[^\s@<>\"']+$", mail):
+        lines.append(f"- Data contact: {mail}")
+    return web.Response(text="\n".join(lines) + "\n", content_type="text/plain",
+                        charset="utf-8", headers=_DAY_CACHE)
+
+
+# A page, not "404: Not Found" in plain text, for a person who mistyped an
+# address - in the family's paper colours, both languages, one link back.
+_NOT_FOUND_HTML = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>404 - APRS-Agent</title>
+<style>
+:root{--bg:#f6f3ea;--fg:#22201a;--fg2:#635c50;--accent:#b0413e;--link:#24506e;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1a16;--fg:#ece6d8;--fg2:#b3aa98;
+--accent:#d0605c;--link:#8fb6d4}}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);
+color:var(--fg);font:16px/1.6 var(--sans);padding:24px;box-sizing:border-box}
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:5px;
+background:repeating-linear-gradient(45deg,#b0413e 0 9px,var(--bg) 9px 18px,
+#24506e 18px 27px,var(--bg) 27px 36px)}
+main{max-width:30em}
+.code{font:700 64px/1 var(--mono);color:var(--accent);margin:0 0 12px}
+p{margin:.3em 0;color:var(--fg2)} a{color:var(--link)}
+</style></head><body><main>
+<p class="code">404</p>
+<p><b style="color:var(--fg)">Nothing here.</b> The address may be mistyped.</p>
+<p lang="tr"><b style="color:var(--fg)">Burada bir şey yok.</b> Adres yanlış yazılmış olabilir.</p>
+<p style="margin-top:1em"><a href="/">&larr; Live map / Canlı harita</a></p>
+</main></body></html>
+"""
+
+
+@web.middleware
+async def _public_not_found(request: web.Request, handler):
+    """A person's mistyped address gets a page; the API keeps its plain 404."""
+    try:
+        return await handler(request)
+    except web.HTTPNotFound:
+        if request.method != "GET" or request.path.startswith(("/api/", "/ws")):
+            raise
+        return web.Response(status=404, text=_NOT_FOUND_HTML,
+                            content_type="text/html", headers=_NO_CACHE)
 
 
 @routes.get("/api/info")
@@ -2868,6 +3025,7 @@ async def info(request: web.Request) -> web.Response:
         "public_subtitle": cfg.get("public_subtitle", ""),
         "public_home_url": cfg.get("public_home_url", ""),
         "public_contact_email": cfg.get("public_contact_email", ""),
+        "public_privacy_url": cfg.get("public_privacy_url", ""),
         # Which modules are actually doing something right now — none of
         # this is sensitive (no keys/paths), so it's exposed on the public
         # app too. Kept separate from the "Running" action bar, which the
@@ -4247,7 +4405,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
     registered here — this port can be exposed to the internet while the main
     admin port stays on the local network.
     """
-    papp = web.Application()
+    papp = web.Application(middlewares=[_public_not_found])
     papp["manager"] = mgr
     papp["public"] = True
     papp.add_routes([
@@ -4258,6 +4416,10 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/icon-{size}.png", pwa_icon),
         web.get("/favicon.ico", favicon),
         web.get("/logo.svg", logo_svg),
+        web.get(r"/{name:leaflet-1\.9\.4\.(?:js|css)}", leaflet_asset),
+        web.get("/robots.txt", public_robots),
+        web.get("/sitemap.xml", public_sitemap),
+        web.get("/llms.txt", public_llms),
         web.get("/aprs-symbols-24-{table}.png", symbols),
         web.get("/api/info", info),
         web.get("/api/counters", counters),

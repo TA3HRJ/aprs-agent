@@ -7816,3 +7816,82 @@ agent was not running in its first 3 h (`measured: false` in `/api/silence`).
 Watches are written to meta `quake_watches` whenever they change, quiet sets
 included, and restored at start (those older than 24 h dropped).
 `check_quake_watch.py` items 8 and 9 fail on v3.2.172.
+
+---
+
+## F-2026-10-15-01 — a provider call hung for fifteen minutes, twice, and the question went unanswered
+
+**Source:** journal review of DMWGPT traffic 2026-10-08 → 15, asked for by the
+operator ("DMWGPT mesajlarında sorunlar olmuştu") · **Verdict:** our fault;
+fixed in v3.2.174
+
+```
+05:38:48  RX from KE2AHQ-8: what is the speed limit on rt 78 in nj
+05:53:48  AI query failed: TypeError: 'NoneType' object is not subscriptable
+05:57:10  RX from KE2AHQ-8: what is the speed limit on rt 78 in nj
+06:12:11  AI query failed: TypeError: 'NoneType' object is not subscriptable
+```
+
+Exactly 900 s each time, and the sender heard nothing at all. Two faults of
+ours, and one of the provider's that they let through:
+
+- **No timeout of ours on the OpenAI-compatible call.** The client was built
+  with a bare `httpx.Client()`, so the OpenAI library's own default applied -
+  ten minutes, retried twice. Answers normally take 1-6 s (the same week's
+  log: 0 to 9 s from RX to TX). The Anthropic path already had 20 s.
+- **A 200 with no answer in it was read as if it had one.** `resp.choices`
+  was `None`; `resp.choices[0].message.content.strip()` raised a TypeError
+  that named nothing. An empty list or a `None` content would have raised an
+  IndexError or AttributeError instead - three spellings of one event.
+- **After the failure the question stayed filed as "waiting on the model"**,
+  with an empty cached answer, for the 10 min of the dedup entry. A retry of
+  the same message number in that time was swallowed as the retry the cache
+  exists to absorb - for a call that had already ended.
+
+The second question at 05:57 was asked afresh only because it came after
+the 120 s text-dedup window with a new number; the radio's own retries of
+the first would not have been.
+
+**Applied, v3.2.174.** `_AI_TIMEOUT_S = 30` on both the httpx client and the
+OpenAI client, `max_retries=1` - at worst about a minute. A response without
+an answer raises `RuntimeError("the provider returned no answer")`. When an
+ask produces nothing, its dedup entry is dropped, so a retry asks again.
+`check_ai_failure.py` items 1-3 fail on v3.2.173 (timeout None, retries 2,
+the three exception spellings, and a retry swallowed: provider asked once,
+no reply).
+
+**Not changed:** a failed ask still sends the station nothing. Whether a
+short "the AI did not answer, try again" notice is better than silence on
+air is the operator's call, not a fix.
+
+---
+
+## F-2026-10-15-02 — asked what SWR 2.5 means, the model gave the figures of SWR 1.5
+
+**Source:** the same review; the operator's own questions from TA3HX-4 while
+the Yaesu poster was being made · **Verdict:** a model error on arithmetic;
+taken away from the model in v3.2.174
+
+```
+08:34:58  RX from TA3HX-4: What does SWR 2.5 mean?
+          SWR 2.5 means about 4 percent of forward power is reflected;
+          around 1.5 dB mismatch loss. Usable, but tune for lower.
+08:36:55  RX from TA3HX-4: SWR 2.5 ne demek?
+          SWR 2.5, ileri gucun yaklasik yuzde 4'unun yansidigi anlamina
+          gelir; kayip 1.5 dB civari. ...
+```
+
+|Γ| = (2.5 − 1)/(2.5 + 1) = 0.43, so 18.4 % is reflected and the mismatch
+loss is 0.88 dB. Four percent is SWR 1.5. Wrong in both languages, and it is
+the example question printed on all three DMWGPT posters - the one people
+copy. The 2026-10-11 answer to TA3EKM-7 was vague and not wrong.
+
+**Applied, v3.2.174.** `_swr_answer()` answers an SWR figure before the model
+is asked, like the test answer: reflected share, mismatch loss and a one-line
+verdict (≤1.5 good, ≤2 acceptable, ≤3 usable but some radios cut power,
+above that check the antenna first), in Turkish when the question is. Only
+for questions about what a figure means or whether it is acceptable; "how do
+I lower SWR 2.5", "why", "what is the SWR test procedure" still reach the
+model. A first draft read every English question as Turkish - under `re.I`
+the letter "İ" also matches a plain "i" - and split "0.9 --" / "dB." across
+two parts; both are fixed and held by `check_ai_failure.py` item 4.

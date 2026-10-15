@@ -20,6 +20,7 @@ Reaches the air through the own-writer channel from TA3PKS's extension design.
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import re
 import time
@@ -563,6 +564,70 @@ def _test_answer(question: str, sender_full: str, raw_line: str) -> "Optional[st
             "report." % (sender_full, where))
 
 
+# "What does SWR 2.5 mean?" is arithmetic, and the model got it wrong: on
+# 2026-10-15 it told TA3HX-4, in English and then in Turkish, that SWR 2.5
+# reflects "about 4 percent" of the power with "1.5 dB" mismatch loss. The
+# true figures are 18% and 0.9 dB (4% is SWR 1.5). It is also the question on
+# the DMWGPT poster, so it is the one people copy.
+_SWR_VALUE = re.compile(r"\bV?SWR\b\s*(?:OF|IS|=|:|DEGERI|DEĞERİ)?\s*"
+                        r"(\d{1,2}(?:[.,]\d{1,2})?)(?:\s*:\s*1)?\b", re.I)
+# What the sender wants to know about it - its meaning, or whether it is
+# acceptable. "How do I lower SWR 2.5" is a different question for the model.
+_SWR_ASK = re.compile(
+    r"\b(?:MEAN\w*|EXPLAIN|WHAT|OK|OKAY|GOOD|BAD|HIGH|SAFE|ACCEPTABLE|"
+    r"NED[İI]R|DEMEK\w*|ANLAM\w*|[İI]Y[İI]|K[ÖO]T[ÜU]|Y[ÜU]KSEK|NORMAL)\b", re.I)
+_SWR_NOT = re.compile(
+    r"\b(?:HOW|WHY|FIX|LOWER|REDUCE|IMPROVE|TUNE|NASIL|NEDEN|D[ÜU][SŞ][ÜU]R\w*|"
+    r"AYARLA\w*)\b", re.I)
+# Turkish letters are matched case-sensitively: under re.I, "İ" also matches
+# a plain "i", and every English question came out Turkish.
+_TURKISH_LETTER = re.compile(r"[çğıöşüÇĞİÖŞÜ]")
+_TURKISH_HINT = re.compile(
+    r"\b(?:NED[İI]R|NE|DEMEK\w*|ANLAM\w*|M[İIUÜ]|[İI]Y[İI]|"
+    r"K[ÖO]T[ÜU]|Y[ÜU]KSEK|DE[GĞ]ER\w*)\b", re.I)
+
+
+def _swr_answer(question: str) -> "Optional[str]":
+    """The meaning of an SWR figure, computed rather than asked for."""
+    if len(question) > 60 or _SWR_NOT.search(question):
+        return None
+    m = _SWR_VALUE.search(question)
+    if not m:
+        return None
+    if not _SWR_ASK.search(question) and len(question.strip(" ?")) > 12:
+        return None
+    swr = float(m.group(1).replace(",", "."))
+    if swr < 1.0 or swr > 50.0:
+        return None
+    gamma = (swr - 1.0) / (swr + 1.0)
+    refl = gamma * gamma
+    loss = -10.0 * math.log10(1.0 - refl)
+    shown = ("%g" % swr)
+    pct = ("%.1f" % (refl * 100)) if refl < 0.01 else ("%.0f" % (refl * 100))
+    db = ("%.2f" % loss) if loss < 0.1 else ("%.1f" % loss)
+    tr = bool(_TURKISH_LETTER.search(question) or _TURKISH_HINT.search(question))
+    if swr <= 1.5:
+        verdict = ("Iyi uyum." if tr else "Good match.")
+    elif swr <= 2.0:
+        verdict = ("Cogu kullanim icin kabul edilebilir." if tr
+                   else "Acceptable for most use.")
+    elif swr <= 3.0:
+        verdict = ("Kullanilabilir ama iyilestirilmeli; bazi telsizler gucu "
+                   "dusurur." if tr else
+                   "Usable, but worth improving; some radios cut power.")
+    else:
+        verdict = ("Yuksek - tam guce cikmadan anten ve hatti kontrol edin."
+                   if tr else
+                   "High - check antenna and feed line before full power.")
+    if tr:
+        return ("SWR %s: yansiyan guc %%%s, uyumsuzluk kaybi %s dB. %s"
+                % (shown, pct, db, verdict))
+    # Short enough that the split between parts never lands between a figure
+    # and its unit ("0.9 --" / "dB." was the first draft on air).
+    return ("SWR %s: %s%% of power reflected, %s dB mismatch loss. %s"
+            % (shown, pct, db, verdict))
+
+
 def _split_message(text: str, max_parts: int) -> list[str]:
     if len(text) <= 64:
         return [text]
@@ -644,6 +709,11 @@ _PART_GAP_S = 5.0               # between parts
 # identical to one it passed in the last 30 s as a duplicate, so the first
 # resend cannot come sooner than that or it never reaches the air.
 _RETRY_GAPS_S = (40.0, 60.0, 120.0)
+# How long one provider call may take. The OpenAI client's own default is ten
+# minutes and it retries twice; on 2026-10-15 KE2AHQ-8's question hung for
+# exactly 900 s, twice, before failing - answers normally take 1-6 s, and
+# nobody at a radio waits a quarter of an hour.
+_AI_TIMEOUT_S = 30.0
 _RF_QCONS = {"qAR", "qAr", "qAO", "qAo"}   # gated from RF, not typed online
 
 
@@ -1498,11 +1568,13 @@ class AIGateway(Extension):
                         if b.get("type") == "text"
                     ).strip()
             from openai import OpenAI
-            with httpx.Client() as http_client:
+            with httpx.Client(timeout=_AI_TIMEOUT_S) as http_client:
                 client = OpenAI(
                     api_key=api_key,
                     base_url=base_url,
                     http_client=http_client,
+                    timeout=_AI_TIMEOUT_S,
+                    max_retries=1,
                 )
                 extra_body = {}
                 if provider == "deepseek":
@@ -1519,7 +1591,13 @@ class AIGateway(Extension):
                     + turns + [{"role": "user", "content": question}],
                     extra_body=extra_body,
                 )
-                return resp.choices[0].message.content.strip()
+                # KE2AHQ-8, 2026-10-15: a 200 with no answer in it, read as
+                # "'NoneType' object is not subscriptable". Say what it was.
+                choice = resp.choices[0] if resp.choices else None
+                content = choice.message.content if choice and choice.message else None
+                if not content:
+                    raise RuntimeError("the provider returned no answer")
+                return content.strip()
 
         try:
             answer = await loop.run_in_executor(None, _do_ask)
@@ -1841,6 +1919,8 @@ class AIGateway(Extension):
         # it, and the packet header already says who is asking.
         answer = _test_answer(question, sender_full, line)
         if answer is None:
+            answer = _swr_answer(question)
+        if answer is None:
             answer = self._optout_command(question, sender_base)
         if answer is None:
             answer = self._misaddressed(question, sender_base, my_call)
@@ -1875,6 +1955,11 @@ class AIGateway(Extension):
             # left waiting, and that is the thing the badge has to be able to
             # say out loud.
             self.mark_broken("asked, but produced no answer")
+            # The question was filed as "waiting on the model" with an empty
+            # answer, and a retry of it is swallowed as long as that entry
+            # lives - ten minutes of silence after the failure, for a
+            # question nobody is working on any more. Let a retry ask again.
+            self._processed.pop(dedup_key, None)
             return None
 
         self.log(f"AI response: {answer}")
