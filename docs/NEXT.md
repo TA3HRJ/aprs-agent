@@ -123,6 +123,19 @@ What is left, in the order it is worth doing:
     at high zoom, and clamping the viewport fetch to what Mercator draws -
     an hour or two, all in static/index.html.
 
+20. **When the AI does not answer - the operator's call.** v3.2.174 bounds a
+    provider call to about a minute and lets a retry ask again
+    (F-2026-10-15-01), but a failed ask still sends the station nothing.
+    A short notice ("the AI did not answer - try again later") would cost
+    one transmission per failure and end the silence that is
+    indistinguishable from a dead gateway. Not done without a yes.
+21. **DMR return path** - 2026-10-12 both radios' `TEST`s reached DMWGPT
+    over BrandMeister and the replies reached APRS-IS, but nothing was acked
+    or shown on the radio, while BM2841-10 acked other stations. Not a code
+    fault; record and next test outside the repo (`DMR-BRIDGE-2026-09-10.md`).
+    The landing page still says DMR is "not tested"; it now is, and the
+    answer does not come back.
+
 Everything below this block is history — kept for the reasoning, not for the
 status.
 

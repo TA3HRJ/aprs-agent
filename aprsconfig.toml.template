@@ -85,6 +85,13 @@ public_home_url = ""
 # history for 14 days, NOLOOKUP) and where to ask for a record to be removed.
 # Empty = no data note.
 public_contact_email = ""
+# Optional: the public page's own address, e.g. "https://map.example.org/".
+# Used as the page's canonical URL and in /sitemap.xml and /robots.txt when
+# the page answers under several names. Empty = the address of each request.
+public_base_url = ""
+# Optional: a privacy notice. When set, the About box links to it beside the
+# data contact. Empty = no link.
+public_privacy_url = ""
 
 
 # =============================================================================
