@@ -21,7 +21,15 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.175"
+VERSION = "3.2.176"
+
+# The APRS destination ("tocall") on every packet this program sends -
+# message replies, acks, bridged messages, status and the beacon. APRAGT is
+# registered to APRS-Agent in the APRS device identification list
+# (aprsorg/aprs-deviceid#368, allocated 2026-10-18). Before that replies went
+# out as the generic APRS ("unknown") and the beacon as AP4GNT, which was
+# registered to nobody.
+TOCALL = "APRAGT"
 
 # ── Secret handling for the HTTP API ────────────────────────────────────────
 # print_config()'s masking below is for human eyes: it keeps the first and last

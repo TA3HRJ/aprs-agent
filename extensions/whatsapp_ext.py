@@ -33,6 +33,7 @@ from typing import Optional
 import aprslib
 
 from . import Extension
+from config import TOCALL
 from config import strip_ssid
 
 _GRAPH_API = "https://graph.facebook.com/v25.0"
@@ -153,7 +154,9 @@ class WhatsApp(Extension):
         msg_id = packet.get("msgNo", "")
         if not msg_id:
             return None
-        ack = f"{recipient}>{sender_full},{path}::{sender_full:<9}:ack{msg_id}\r\n"
+        # From the alias that was addressed, to the sender. It used to carry
+        # the sender's callsign as its tocall and the question's own path.
+        ack = f"{recipient}>{TOCALL},TCPIP*::{sender_full:<9}:ack{msg_id}\r\n"
         return ack.encode("utf-8")
 
     # ── Inbound: WhatsApp webhook → APRS ──
@@ -212,6 +215,6 @@ class WhatsApp(Extension):
             self.error("no own_writer queue")
             return
         mid = self._next_msg_id()
-        pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
+        pkt = f"{from_call}>{TOCALL},TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
         await self._queue.put(pkt.encode("utf-8"))
         self.log(f"TX to APRS: {to_call} {message}")

@@ -27,6 +27,7 @@ from typing import Optional
 import aprslib
 
 from . import Extension
+from config import TOCALL
 from config import strip_ssid
 
 
@@ -157,9 +158,9 @@ class SmtpEmailer(Extension):
         if not msg_id:
             return None
 
-        path = ",".join(packet.get("path", []))
-        dest = packet.get("to", "")
-        ack = f"{dest}>{sender_full},{path}::{sender_full:<9}:ack{msg_id}\r\n"
+        # From the alias that was addressed, to the sender. It used to be
+        # built as <the question's tocall>><sender>,<the question's path>.
+        ack = f"{recipient}>{TOCALL},TCPIP*::{sender_full:<9}:ack{msg_id}\r\n"
         return ack.encode("utf-8")
 
     def _send_email(

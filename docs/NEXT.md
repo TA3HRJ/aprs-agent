@@ -34,7 +34,9 @@ What is left, in the order it is worth doing:
 6. **Propagation alerts as a subscription**, asked for publicly. It would be
    the first time the gateway starts traffic rather than answering it, which
    is an etiquette question before it is a code one.
-7. **A registered tocall — waiting on the registry.** DMWGPT and the bridges
+7. ~~**A registered tocall.**~~ Done in v3.2.176: `APRAGT` allocated
+   2026-10-18 and used on every packet (`config.TOCALL`); the bridges' acks
+   rebuilt on the way (F-2026-10-19-01). What was planned: DMWGPT and the bridges
    send with the generic `APRS` ("Unknown" in the device-id list) and the
    fixed beacon with `AP4GNT`, which is registered to nobody. `APRAGT`
    requested on 2026-09-27 as

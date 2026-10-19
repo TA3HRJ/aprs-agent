@@ -31,7 +31,7 @@ from typing import Optional
 import aprslib
 
 from . import Extension
-from config import strip_ssid, resolve_ai_api_key
+from config import TOCALL, strip_ssid, resolve_ai_api_key
 from packet_parser import looks_like_callsign
 
 _TR_MAP = str.maketrans(
@@ -969,7 +969,7 @@ class AIGateway(Extension):
                 continue
             call = cfg.get("callsign", "").upper()
             if call:
-                pkt = f"{call}>APRS,TCPIP*:>{_to_ascii(text)[:62]}" + _CRLF
+                pkt = f"{call}>{TOCALL},TCPIP*:>{_to_ascii(text)[:62]}" + _CRLF
                 try:
                     await self._own_writer.put(pkt.encode("utf-8"))
                     # Logged on success, not only on failure: this packet is
@@ -1640,7 +1640,7 @@ class AIGateway(Extension):
             self.error("no own_writer queue — cannot send reply")
             return
         mid = self._next_msg_id()
-        pkt = f"{from_call}>APRS,TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
+        pkt = f"{from_call}>{TOCALL},TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
         await self._own_writer.put(pkt.encode("utf-8"))
         if _RETRY_GAPS_S:
             key = (to_call.upper(), str(mid))
@@ -1843,7 +1843,7 @@ class AIGateway(Extension):
         # own AI call. Observed live: an 11s cold-start DeepSeek call led to
         # 3 retries 12-13s apart, 3 separate AI answers, for one question.
         if msg_id and self._own_writer:
-            ack = f"{my_call}>APRS,TCPIP*::{sender_full:<9}:ack{msg_id}\r\n"
+            ack = f"{my_call}>{TOCALL},TCPIP*::{sender_full:<9}:ack{msg_id}\r\n"
             await self._own_writer.put(ack.encode("utf-8"))
 
         prefix = cfg.get("trigger_prefix", "").upper()

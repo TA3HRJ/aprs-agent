@@ -26,6 +26,7 @@ import asyncio
 from typing import Optional
 
 from . import Extension
+from config import TOCALL
 
 
 class FixedBeacon(Extension):
@@ -110,7 +111,7 @@ class FixedBeacon(Extension):
         if not text:
             return
         ssid = self._config.get("ssid", "N0CALL-10").upper()
-        packet = f"{ssid}>AP4GNT,TCPIP*:>{text[:62]}\r\n"
+        packet = f"{ssid}>{TOCALL},TCPIP*:>{text[:62]}\r\n"
         await self._queue.put(packet.encode("utf-8"))
         self.log(f"status sent: {packet.strip()}")
 
@@ -128,9 +129,9 @@ class FixedBeacon(Extension):
         comment = cfg.get("comment", "APRS-Agent")
 
         # APRS position beacon format:
-        # SSID>AP4GNT,TCPIP*,qAC,APRSAGENT:!LATTSTLONS COMMENT
+        # SSID>APRAGT,TCPIP*,qAC,<login>:!LATTSTLONS COMMENT
         packet = (
-            f"{ssid}>AP4GNT,TCPIP*:"
+            f"{ssid}>{TOCALL},TCPIP*:"
             f"!{lat}{symbol_table}{lon}{symbol}{comment}\r\n"
         )
 

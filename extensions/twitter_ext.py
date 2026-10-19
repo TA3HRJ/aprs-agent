@@ -34,6 +34,7 @@ except ImportError:
     tweepy = None
 
 from . import Extension
+from config import TOCALL
 from config import strip_ssid
 
 
@@ -158,5 +159,7 @@ class Twitter(Extension):
         if not msg_id:
             return None
 
-        ack = f"{recipient}>{sender_full},{path}::{sender_full:<9}:ack{msg_id}\r\n"
+        # From the alias that was addressed, to the sender. It used to carry
+        # the sender's callsign as its tocall and the question's own path.
+        ack = f"{recipient}>{TOCALL},TCPIP*::{sender_full:<9}:ack{msg_id}\r\n"
         return ack.encode("utf-8")

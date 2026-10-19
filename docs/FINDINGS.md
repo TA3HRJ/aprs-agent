@@ -7895,3 +7895,40 @@ I lower SWR 2.5", "why", "what is the SWR test procedure" still reach the
 model. A first draft read every English question as Turkish - under `re.I`
 the letter "İ" also matches a plain "i" - and split "0.9 --" / "dB." across
 two parts; both are fixed and held by `check_ai_failure.py` item 4.
+
+---
+
+## F-2026-10-19-01 — the bridges' acks named the sender as their own tocall
+
+**Source:** reading every packet builder for the APRAGT change
+(aprsorg/aprs-deviceid#368, allocated 2026-10-18) · **Verdict:** inherited
+code; fixed in v3.2.176
+
+The Telegram, WhatsApp, Bluesky and Twitter bridges built the ack for a
+message they had relayed as
+
+```
+TGSEND>TA3HX-7,WIDE1-1,qAR,TA3HX-10::TA3HX-7  :ack12
+       ~~~~~~~ ~~~~~~~~~~~~~~~~~~~~
+       tocall  the question's own path, q-construct included
+```
+
+- the sender's callsign where the destination belongs, and a path copied
+from the incoming packet with another igate's q-construct in it. The e-mail
+bridge's was stranger still: its source was the question's tocall
+(`APDR16>TA3HX-7,...`). An ack is a message from the alias that was
+addressed, and APRS-IS adds its own path: `TGSEND>APRAGT,TCPIP*::TA3HX-7
+:ack12`. Whether any of these ever reached a radio is not known - the raw
+feed logs hold about three days, and no bridge carried traffic in them.
+
+**Applied, v3.2.176.** One constant, `config.TOCALL = "APRAGT"`, on every
+packet the program sends - gateway answers, acks and status, the fixed
+beacon (was `AP4GNT`), the bridges' messages (were `APRS`) - and every bridge
+ack in the form above. `check_tocall.py` fails on v3.2.175: `config.TOCALL`
+missing, eight literal tocalls, the gateway sending `APRS`, the beacon
+`AP4GNT`, five malformed acks.
+
+Seen while looking: the e-mail bridge listens on `EMAIL`, which is also the
+address of the public APRS e-mail service (VE7ZIO-EM answers it). It acts
+only for the operator's own callsigns, so for anyone else nothing changes;
+for the operator, both may answer the same message. Not changed.
