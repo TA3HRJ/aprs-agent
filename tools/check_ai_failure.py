@@ -2,17 +2,13 @@
 """Fail if a provider that hangs or answers empty leaves a sender in silence,
 or if an SWR figure is sent to the model to be got wrong.
 
-2026-10-15 05:38: KE2AHQ-8 asked "what is the speed limit on rt 78 in nj".
-The provider call hung for exactly 900 s and failed with "TypeError:
-'NoneType' object is not subscriptable"; asked again, the same. The OpenAI
-client was built with no timeout of ours, so its own ten minutes and two
-retries applied, and a 200 with no answer in it was read as if it had one.
-After a failure the question stayed filed as "waiting on the model", so the
-radio's own retries of it were swallowed for ten minutes more.
+F-2026-10-15-01: a provider call could hang for the OpenAI client's own
+ten minutes, twice; a 200 with no answer in it raised a TypeError; and after
+a failure the question stayed filed as "waiting on the model", so retries of
+it were swallowed for ten minutes more.
 
-The same morning TA3HX-4 asked "What does SWR 2.5 mean?" and "SWR 2.5 ne
-demek?" and was told, twice, that about 4% of the power is reflected with
-1.5 dB loss. It is 18% and 0.9 dB - and it is the question on the poster.
+F-2026-10-15-02: asked what SWR 2.5 means, the model gave the figures of
+SWR 1.5 (4%, 1.5 dB; it is 18%, 0.9 dB).
 
 What must hold:
 
@@ -116,7 +112,7 @@ async def main() -> int:
         MODE["resp"] = mode
         SEEN.clear()
         gw, errors = gateway([])
-        ans = await gw._ask_ai("hello", sender="KE2AHQ-8")
+        ans = await gw._ask_ai("hello", sender="W1ABC-8")
         kw = SEEN.get("kw", {})
         t = kw.get("timeout")
         if t is None or float(t) > 60:
@@ -135,15 +131,15 @@ async def main() -> int:
     SEEN.clear()
     sent: list = []
     gw, _ = gateway(sent)
-    line = ("KE2AHQ-8>APDR16,TCPIP*,qAC,T2X::DMWGPT   :"
-            "what is the speed limit on rt 78 in nj{12")
+    line = ("W1ABC-8>APDR16,TCPIP*,qAC,T2X::DMWGPT   :"
+            "what is the speed limit here{12")
     _OFFSET["s"] = 0.0
     await gw.handle(line)
     MODE["resp"] = "ok"
     _OFFSET["s"] = 45.0                  # the radio retries the same number
     await gw.handle(line)
     _OFFSET["s"] = 0.0
-    got = replies(sent, "KE2AHQ-8")
+    got = replies(sent, "W1ABC-8")
     print(f"  failed, then retried: provider asked {SEEN.get('calls', 0)} times, "
           f"{len(got)} reply")
     if SEEN.get("calls", 0) != 2 or not got:

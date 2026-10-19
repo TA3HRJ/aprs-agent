@@ -239,9 +239,8 @@ async def run() -> int:
         problems.append("the propagation question cost a model call")
 
     # 8 - the provenance tail must not cost a second packet on its own.
-    # KR4OII-9 asked "IGATE near me" on 2026-09-25; the answer was 72
-    # characters and went out as two packets, the second carrying only
-    # "feed only." (F-2026-09-27-01). A listing that fits one packet with a
+    # A 72-character answer went out as two packets, the second carrying
+    # only "feed only." (F-2026-09-27-01). A listing that fits one packet with a
     # short tail gets the short tail; one that fits either way keeps the
     # sentence, and one too long for a packet anyway keeps it too.
     class TwoIgates(FakeDB):

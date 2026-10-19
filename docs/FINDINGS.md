@@ -7,6 +7,12 @@ before anyone wrote it down.
 Entries are appended, never rewritten. A finding that turns out to be mistaken
 gets a correction line, not a deletion — see F-2026-08-12-07 for why.
 
+Other stations are not named. Callsigns other than this project's own appear
+as `STNnnn` pseudonyms, one per base callsign with the SSID kept, so that
+"several SSIDs of one station" still reads as such (replaced 2026-10-19). New
+entries follow the same rule. Public services cited as sources keep their
+names.
+
 ---
 
 ## How a finding gets made
@@ -79,11 +85,11 @@ per-station figures in the same bundle:
 
 | station | silent for |
 |---|---|
-| F4LCL-13 | 42 min |
-| F4MES-R | 3.4 h |
-| F4MES-B | 3.4 h |
-| F4BNZ-9 | 4.2 h |
-| F4DYK | 11.4 h |
+| STN001-13 | 42 min |
+| STN002-R | 3.4 h |
+| STN002-B | 3.4 h |
+| STN003-9 | 4.2 h |
+| STN004 | 11.4 h |
 
 A power cut produces near-simultaneous onset. A spread from 42 minutes to 11
 hours is the opposite signature. DeepSeek repeated "aynı anda" in its headline
@@ -95,7 +101,7 @@ simultaneity, and the spread belongs in the bundle as its own field
 (`onset_spread_s`, or earliest/latest onset) so no reader can miss it.
 
 ### F-2026-08-12-02 — an unestablished gate baseline invites the opposite reading
-**Source:** DeepSeek, propagation link HB9EM-10 → DJ8KL-2 · **Verdict:** our fault
+**Source:** DeepSeek, propagation link STN005-10 → STN006-2 · **Verdict:** our fault
 
 The bundle reported `samples: 4, established: false, mean_km: 924.7,
 sigma_km: 127.6`. DeepSeek reasoned from the mean anyway and concluded the gate
@@ -113,7 +119,7 @@ meaningful yet and that the absolute floor made the decision. Handing over
 numbers with only a quiet flag beside them is an invitation to misread.
 
 **Addendum — `established: true` is misleading too.** A later reading
-(KC7YRA-9, gate at 5 samples, mean 2041.6 km) makes the arithmetic plain: the
+(STN007-9, gate at 5 samples, mean 2041.6 km) makes the arithmetic plain: the
 EMA is seeded with the first distance ever seen and moves at alpha 0.05, so
 after five samples the "mean" is still essentially that first packet. Alpha
 0.05 needs roughly 20 samples to travel two thirds of the way to a new level
@@ -255,7 +261,7 @@ positions manufacture large apparent distances, and it puts a number on it.
 
 Five of the ten most extreme ratios are `contradicted`.
 
-**One station accounts for four of them.** `DL5RBZ-9`, a German callsign,
+**One station accounts for four of them.** `STN008-9`, a German callsign,
 reported **57.97 N, 37.08 E** — near Tver, Russia — at flag time, and produced
 four ~1,900 km links to three Bavarian gates 23 km apart from each other. The
 registry now holds it in Bavaria and consistent. A station does not move 1,900
@@ -266,7 +272,7 @@ recording:
 
 1. The cross-tab said `contradicted`, so I wrote that the sender had a bad
    position — true, but unsupported at that point.
-2. I checked the registry, found `DL5RBZ-9` consistent in Bavaria, and concluded
+2. I checked the registry, found `STN008-9` consistent in Bavaria, and concluded
    the *gates* were at fault. Wrong.
 3. Only the link's own stored coordinates settled it. The registry has moved on;
    the link kept what was true when the flag was raised.
@@ -286,7 +292,7 @@ unexplainable.
   link; `unknown` stays, or a thin patch in the prefix table would silence real
   openings.
 
-Tested against the case above: `DL5RBZ-9` reporting from Russia no longer
+Tested against the case above: `STN008-9` reporting from Russia no longer
 combines with an honest second sender to manufacture an opening, and the
 exclusion is logged with its reason. Two honest senders still produce one; an
 unrecognised prefix still produces one.
@@ -295,17 +301,17 @@ unrecognised prefix still produces one.
 **Source:** verifying F-44 against live links · **Verdict:** our fault · **Open, small**
 
 The first live batch of `position_corroboration` returned one `contradicted`:
-`OE9XVI-6`, an Austrian callsign for Vorarlberg, reporting from **50.88 N,
+`STN009-6`, an Austrian callsign for Vorarlberg, reporting from **50.88 N,
 12.13 E** — Saxony, 360 km north. The Austria box was checked first and is
 correct; the position really is in Germany.
 
 The record explains itself:
 
 ```
-comment: {'source': 'DB0SLF', 'destination': 'OE9XVI-6', 'path': ['AP...
+comment: {'source': 'STN010', 'destination': 'STN009-6', 'path': ['AP...
 ```
 
-A third-party packet. `DB0SLF` is the station that actually holds that
+A third-party packet. `STN010` is the station that actually holds that
 position, and it was filed under the outer callsign.
 
 **Scale, measured before calling it urgent:** 172,301 stations carry a comment,
@@ -314,9 +320,9 @@ an inner `source` that differs from the callsign it was stored under. Thirty
 records in a hundred thousand — real, and not an emergency.
 
 ```
-DB0SDA    <- ON3HJM-7      PY2KO-10  <- PU2NVX
-OE9XVI-6  <- DB0SLF        EA1HJA    <- EB1LA-1
-NE1CU-10  <- W1DMR-11      IQ3FX-11  <- IV3CTT-10
+STN011    <- STN012-7      STN013-10  <- STN014
+STN009-6  <- STN010        STN015    <- STN016-1
+STN017-10  <- STN018-11      STN019-11  <- STN020-10
 ```
 
 **The point worth keeping is not the bug.** It is that a field built to answer
@@ -406,8 +412,8 @@ because the rule is wrong, but because the state it needs cannot accumulate.
 Station records, cadence history and lifetime uptime all persist. Gate
 baselines, the input to every propagation judgement, do not.
 
-**The demonstration, unintentionally exact.** The same link, `EA6CA-3 →
-ED6ZAB-4`, exported an hour apart:
+**The demonstration, unintentionally exact.** The same link, `STN021-3 →
+STN022-4`, exported an hour apart:
 
 | | samples | ema_km | ratio | would flag if established |
 |---|---|---|---|---|
@@ -747,7 +753,7 @@ three consumers read it that way. At 09:17:12 on 2026-08-14, within one second:
 |---|---|
 | `/api/silence` → map | dropped all 2,130 cells |
 | monitor loop | logged **28** `[silence] cleared` and **2** `[prop] cleared` |
-| monitor loop | logged **5** `[silence] back on the air` — `BD1EOE-7`, `LU1HVK-R`, `BI7ALG-7`, `ARSTRA`, `HELIO` |
+| monitor loop | logged **5** `[silence] back on the air` — `STN023-7`, `STN024-R`, `STN025-7`, `ARSTRA`, `HELIO` |
 | `/api/silence/evidence?cell=NM58` | **404** `"no current silence data for NM58"` |
 
 Nothing had ended. Nobody came back on the air. The feed came back.
@@ -830,14 +836,14 @@ reconnect after it.
 ### F-2026-08-14-33 — NM58: a cell that exists only because of two counting errors
 **Source:** operator, "the box is near Mongolia and the callsigns are American" · **Verdict:** ours to count, not ours to parse
 
-A grey chronic cell in western China, 4 of 4 silent, holding `KC9SIO-B`,
-`KC9SIO-D`, `KC9SIO-N`, `N3ARY-N`. Verified against live data:
+A grey chronic cell in western China, 4 of 4 silent, holding `STN026-B`,
+`STN026-D`, `STN026-N`, `STN027-N`. Verified against live data:
 
 ```
-KC9SIO-B  38.76N  90.799E   gateway   gated by KC9SIO-BS
-KC9SIO-D  38.80N  90.799E   gateway   gated by KC9SIO-DS
-KC9SIO-N  38.80N  90.799E   gateway   gated by KC9SIO-NS
-N3ARY-N   38.48N  90.42E    gateway   gated by N3ARY-NS
+STN026-B  38.76N  90.799E   gateway   gated by STN026-BS
+STN026-D  38.80N  90.799E   gateway   gated by STN026-DS
+STN026-N  38.80N  90.799E   gateway   gated by STN026-NS
+STN027-N   38.48N  90.42E    gateway   gated by STN027-NS
 ```
 
 **Two independent errors stack to produce this cell.**
@@ -848,7 +854,7 @@ radios. Collapsed to owners the cell is **2 of 4**, below `min_silent = 3`, and
 would never appear at all. This is F-25 with a concrete live case, and it is
 ours to fix.
 
-*Two — the longitude sign.* KC9SIO is an Illinois callsign and N3ARY is US
+*Two — the longitude sign.* STN026 is an Illinois callsign and STN027 is US
 east-coast; 38.6 N / 90.2 **W** is St. Louis. These gateways beacon **+90.8**
 where they mean **−90.8**, a missing minus in the gateway's configuration,
 which lands them in western China.
@@ -874,8 +880,8 @@ the raw beacon reads straight out of the registry:
 
 | record | info field | result |
 |---|---|---|
-| `KC9SIO-B` hotspot | `!3845.58ND09047.94E&RNG0001/A=000010` | 90.799 **E** → NM58, western China |
-| `KC9SIO-1` tracker | `/190018z3845.57N/09047.93W-PHG2051` | 90.799 **W** → EM48os, Missouri |
+| `STN026-B` hotspot | `!3845.58ND09047.94E&RNG0001/A=000010` | 90.799 **E** → NM58, western China |
+| `STN026-1` tracker | `/190018z3845.57N/09047.93W-PHG2051` | 90.799 **W** → EM48os, Missouri |
 
 One operator, one site, the same coordinate to two decimal minutes, opposite
 hemispheres. The parser is decoding exactly what was sent. **Not our bug —
@@ -888,11 +894,11 @@ objects and non-amateur identifiers, so 178 is the number to quote.
 
 **Two details the original entry did not have.**
 
-- The cell holds a *fourth* record, `KC9SIO B` with a space — the same hotspot
-  re-beaconed as an APRS Object by `KC9SIO-GS`. It is already excluded by
+- The cell holds a *fourth* record, `STN026 B` with a space — the same hotspot
+  re-beaconed as an APRS Object by `STN026-GS`. It is already excluded by
   `is_object`, which is that exclusion doing its job.
-- Every one of them is **self-gated**: `KC9SIO-B` arrives via `KC9SIO-BS`, `-D`
-  via `-DS`, `-N` via `-NS`, `N3ARY-N` via `N3ARY-NS`. The gate is the station's
+- Every one of them is **self-gated**: `STN026-B` arrives via `STN026-BS`, `-D`
+  via `-DS`, `-N` via `-NS`, `STN027-N` via `STN027-NS`. The gate is the station's
   own APRS-IS uplink, so `shared_gate` can never fire here — four beacons
   sharing one power supply present as four distinct gates. That is the sharpest
   form of F-25 so far: **a gate count does not measure independence when a
@@ -1002,7 +1008,7 @@ direction after being burned once by tuning on thin data):
 
 - `recurrence` per silent station and `novel_stations` in the cell and the
   bundle, so the verdict can be checked rather than taken
-- the popup names them: *"New here: BI1PZJ-3 — normally not among this cell's
+- the popup names them: *"New here: STN028-3 — normally not among this cell's
   missing stations"*, which is the sentence an operator can act on
 - the AI prompt gets the same, named, instead of inferring from how often the
   cell alerts
@@ -1459,7 +1465,7 @@ the proximity rule and one of them is alerting. That list, after a few days,
 is the evidence for whether 200 m is the right radius and whether the rule
 should ever be applied rather than printed.
 
-In EN03 all four silent stations use gate `AE5PL-WX`, and two pairs are
+In EN03 all four silent stations use gate `STN029-WX`, and two pairs are
 effectively co-located — 43.78/-99.90 with 43.77/-99.88, and 43.69/-99.89 with
 43.68/-99.89. The gate is **healthy**, last heard 720 s ago.
 
@@ -1508,9 +1514,9 @@ independent confirmations. They are one correlated observation of one area,
 which is precisely why it was informative.
 
 ### F-2026-08-13-24 — `mean_km` and `sigma_km` are not a mean and a σ, and every reader has computed with them
-**Source:** four propagation readings (VE7EPT-5 ×2, WA7GMX-8, KC7YRA-9) · **Verdict:** our fault
+**Source:** four propagation readings (STN030-5 ×2, STN031-8, STN007-9) · **Verdict:** our fault
 
-`WA7GMX-8` reported `samples: 6, mean 1466.2, sigma 0.0` on a 1466.2 km link.
+`STN031-8` reported `samples: 6, mean 1466.2, sigma 0.0` on a 1466.2 km link.
 The reading concluded, reasonably, that all six samples must be at the identical
 distance. They need not be. From station_db.py:755:
 
@@ -1565,15 +1571,15 @@ An established gate is unchanged: it keeps `mean_km`, `sigma_km` and the real
 threshold, because there it genuinely has them.
 
 ### F-2026-08-13-23 — a gate that is almost always anomalous is probably misplaced, not remarkable
-**Source:** four consecutive readings, gate VE7EPT-5 · **Verdict:** our fault
+**Source:** four consecutive readings, gate STN030-5 · **Verdict:** our fault
 
-The fourth reading of the same gate makes the arithmetic speak. `VE7EPT-5`
+The fourth reading of the same gate makes the arithmetic speak. `STN030-5`
 reports `samples: 6` in every one of them — six links ever measured — while
 those four readings are themselves four anomalous links through it:
 
 ```
-W7BSB-1   1080.5 km      NA7Q-1     997.8 km
-KC7YRA-9  2131.9 km      KC7YRA-9  2077.8 km
+STN032-1   1080.5 km      STN033-1     997.8 km
+STN007-9  2131.9 km      STN007-9  2077.8 km
 ```
 
 **Four of its six links are anomalies.** That is not how a receiver behaves. A
@@ -1611,12 +1617,12 @@ sender it hears. The two must ship together: group by gate, and disqualify
 gates whose anomalous fraction says they are the problem.
 
 ### F-2026-08-13-22 — the opening rule groups by midpoint, so it misses the clearest openings
-**Source:** three consecutive readings, gate VE7EPT-5 · **Verdict:** our fault
+**Source:** three consecutive readings, gate STN030-5 · **Verdict:** our fault
 
 ```
-W7BSB-1   -> VE7EPT-5   1080.5 km   opening: null
-NA7Q-1    -> VE7EPT-5    997.8 km   opening: null
-KC7YRA-9  -> VE7EPT-5   2131.9 km   opening: null
+STN032-1   -> STN030-5   1080.5 km   opening: null
+STN033-1    -> STN030-5    997.8 km   opening: null
+STN007-9  -> STN030-5   2131.9 km   opening: null
 ```
 
 Three distinct senders, one receiver, all three anomalous, none of them an
@@ -1652,7 +1658,7 @@ and sized in one query. It also explains part of F-09 — some of those
 declined to see.
 
 ### F-2026-08-13-21 — one outlier blinds a gate: `mean + 4σ` defeats itself
-**Source:** external reading, propagation link EA5URX-7 → EA5CKO-10 · **Verdict:** our fault
+**Source:** external reading, propagation link STN034-7 → STN035-10 · **Verdict:** our fault
 
 ```
 gate_baseline : mean 274.6 km,  sigma 839.2 km,  threshold 3631.5 km
@@ -1686,7 +1692,7 @@ mean with σ, a cap on how far σ may exceed the mean, or working in log
 distance, where the spread of RF path lengths is better behaved. All are
 detection changes and none should be picked without the data F-16 unlocks.
 
-**Also, a second instance of F-18.** `EA5URX-7` carries a Spanish prefix while
+**Also, a second instance of F-18.** `STN034-7` carries a Spanish prefix while
 reporting a mid-Atlantic position, gated to eastern Spain. The reader gave the
 physical path 55% — appropriately low, since 3,369 km of terrestrial VHF is
 not a thing. A stale or wrong position explains it far more comfortably, and a
@@ -1699,10 +1705,10 @@ All three noticed the same thing, unprompted, and it is a detection defect
 rather than a presentation one:
 
 ```
-R6YBU     44.61267, 40.06567
-R6YBU-D   44.61267, 40.06567   gate_of -> R6YBU
-R6YBU-Y   44.61267, 40.06567   gate_of -> R6YBU
-R6HABA-10 (elsewhere in the cell, different untracked gate)
+STN036     44.61267, 40.06567
+STN036-D   44.61267, 40.06567   gate_of -> STN036
+STN036-Y   44.61267, 40.06567   gate_of -> STN036
+STN037-10 (elsewhere in the cell, different untracked gate)
 ```
 
 Three of the four "silent stations" are one physical site with three SSIDs.
@@ -1730,7 +1736,7 @@ number decides whether this is a tidy-up or the main story behind F-17. Run it
 before writing anything.
 
 **A second observation from a later reading of the same cell**, and it may be a
-finding of its own. `R6YBU-D` and `R6YBU-Y` are absent in **305 of 305**
+finding of its own. `STN036-D` and `STN036-Y` are absent in **305 of 305**
 snapshots — not merely often, but *every single time a snapshot was taken*.
 Yet they qualify for the baseline, which requires at least five packets and a
 sighting inside the last 24 hours.
@@ -1886,13 +1892,13 @@ That is the right scope — the pile-up was ours to cause and ours to stop.
   nothing does not.
 
 ### F-2026-08-13-18 — the callsign says one country, the position says another
-**Source:** Gemini (inferred), propagation link HB9UFL-8 → OH7LZB-12 · **Verdict:** a field we could add
+**Source:** Gemini (inferred), propagation link STN038-8 → STN039-12 · **Verdict:** a field we could add
 
 Three models read the same link. Two concluded the RF path was "plausible but
 unverifiable"; one went further and noticed something checkable:
 
 > The callsign prefix `HB9` belongs to Switzerland. However, the self-reported
-> sender coordinates (55.73° N, 10.05° E) place `HB9UFL-8` in Denmark.
+> sender coordinates (55.73° N, 10.05° E) place `STN038-8` in Denmark.
 
 The gate is in central Finland. A 1,265 km terrestrial VHF path is
 extraordinary; a misconfigured or stale position is ordinary. Every propagation
@@ -1925,7 +1931,7 @@ sharply:
 
 OM72 has **494 stored snapshots and all 494 are alerting**. The cell has been
 in alert state for its entire recorded history. The same calls recur —
-BH6ALJ-6 in 429 of them, BH6AJG-15 in 423, BG3OTT-11 in 421 — with onsets
+STN040-6 in 429 of them, STN041-15 in 423, STN042-11 in 421 — with onsets
 scattered across tens of hours and no shared gate.
 
 Our `alert` flag answers "does this cell currently satisfy min_silent and
@@ -1987,7 +1993,7 @@ earlier, did not mention weather at all. A caveat that closes the inference
 behaves differently from one that names the source.
 
 ### F-2026-08-13-16 — the gate baseline in the bundle is not the one the decision was made against
-**Source:** ChatGPT, propagation link IW4EGP-2 → IV3HQC-10 · **Verdict:** our fault
+**Source:** ChatGPT, propagation link STN043-2 → STN044-10 · **Verdict:** our fault
 **Fix this with F-03: they need the same field.**
 
 ```
@@ -2025,7 +2031,7 @@ both, and neither is urgent enough to rush.
 
 Same bundle, three readings. ChatGPT (~95%) and Gemini (85–90%) both opened
 with `cell_history` — **567 of 567 snapshots alerting** across roughly two
-weeks, with `BH6AJW-8` alone silent in 511 of them — and correctly called it
+weeks, with `STN045-8` alone silent in 511 of them — and correctly called it
 chronic non-visibility. DeepSeek (82%) said severe weather, and never mentioned
 `cell_history` at all. A storm does not last a fortnight.
 
@@ -2050,7 +2056,7 @@ the source.
 
 **The one to leave alone.** It also built a west-to-east storm track from the
 onset times. Checked against the data, that trend is *partly real* — four of
-five fit, one steps westward — and one duration was misread (BD6ITP-11 is 6.6 h
+five fit, one steps westward — and one duration was misread (STN046-11 is 6.6 h
 silent, not the 4.1 h quoted). But the pattern being real does not matter here,
 because the fourteen-day history makes any single-event explanation impossible.
 The failure is not seeing a pattern; it is not looking at the field that made
@@ -2077,20 +2083,20 @@ They were right, and the server knew the answer exactly:
 
 ```
 CALL        LAST GATE     LAST SEEN
-R3P-1       R3XBI         20:40:11
-R3P-2       R3XBI         20:40:11
-R3XBI-11    R3XBI         20:40:03
-R3XBI-12    R3XBI         20:40:04
-R3XBI-13    R3XBI         20:40:05
-R3XBI-9     R3XBI         20:40:02
-RC3XI-1     R3XBI         20:40:06
-RK3X-1      R3XBI         20:40:07
+STN047-1       STN048         20:40:11
+STN047-2       STN048         20:40:11
+STN048-11    STN048         20:40:03
+STN048-12    STN048         20:40:04
+STN048-13    STN048         20:40:05
+STN048-9     STN048         20:40:02
+STN049-1     STN048         20:40:06
+STN050-1      STN048         20:40:07
 
-distinct gates among the eight: {'R3XBI': 8}
-gate R3XBI: NOT TRACKED in the registry
+distinct gates among the eight: {'STN048': 8}
+gate STN048: NOT TRACKED in the registry
 ```
 
-All eight arrive through one igate. And the same operator's `R3XBI-10` was
+All eight arrive through one igate. And the same operator's `STN048-10` was
 **still on the air** 444 seconds earlier through a different gate
 (`T2CSNGRAD`). One path died; the region did not. A single row of data
 falsifies the power-outage reading, and it is not in the bundle.
@@ -2172,7 +2178,7 @@ pass never depends on hand-editing JSON. Until then: blank the entire block,
 not just the note.
 
 ### F-2026-08-12-09 — `opening: null` says "not part of an opening" when it means "I did not look far enough back"
-**Source:** ChatGPT, propagation link EA3GKP-10 → CQ0PSI-3 · **Verdict:** our fault
+**Source:** ChatGPT, propagation link STN051-10 → STN052-3 · **Verdict:** our fault
 
 The reading was clean — no invention, correct arithmetic, and it refused to
 call an opening on one sender. Its closing line asked for exactly the thing
@@ -2181,9 +2187,9 @@ within 30 minutes*.
 
 That data existed and the bundle did not carry it.
 
-- An IM opening **was** recorded at 20:25 with senders `EA3GKP` and `ED8YAC` —
+- An IM opening **was** recorded at 20:25 with senders `STN051` and `STN053` —
   the same sender as the exported link.
-- A stored event containing that exact `EA3GKP-10 → CQ0PSI-3` link exists at
+- A stored event containing that exact `STN051-10 → STN052-3` link exists at
   ts 1786562388. The exported link is ts 1786569244, **1.9 hours later**.
   `find_prop_event` searches ±1 hour, missed it, and reported `opening: null`.
 - At the time of export, field IM held **9 anomalous links from 5 distinct
@@ -2215,8 +2221,8 @@ Belongs in the same batch as F-03: both need the same part of the propagation
 data, and neither should be rushed.
 
 **A live instance to check when this is worked.** Two consecutive readings
-covered the same gate, `VE7EPT-5`, reached by **two different senders** —
-`W7BSB-1` at 1080.5 km and `NA7Q-1` at 997.8 km. Both were flagged anomalous;
+covered the same gate, `STN030-5`, reached by **two different senders** —
+`STN032-1` at 1080.5 km and `STN033-1` at 997.8 km. Both were flagged anomalous;
 both reported `opening: null`. Two distinct senders is exactly what the opening
 rule asks for, so either their link midpoints fell in different Maidenhead
 fields (the rule genuinely unmet, and the bundle should say which field each
@@ -2297,7 +2303,7 @@ silent" can be one igate or one power strip. There are now 14 days of
 
 ### F-2026-08-16-01 — the bundle's gate baseline is created by the event it is used to judge
 
-An outside reading of `EA5URX-7 ⇄ EA5JFX-10` (538.2 km) reasoned carefully and
+An outside reading of `STN034-7 ⇄ STN054-10` (538.2 km) reasoned carefully and
 reached a confident verdict from numbers the link itself had written.
 
 The popup said **5382.0× its usual reach**. The bundle in the same request said
@@ -2330,7 +2336,7 @@ reading live and nobody checked it. A fix applied to one route is not a fix.
 is an EMA (α = 0.05) of the gate's link distances. A gate that mostly hears
 stations beside it sits at ~0.1 km, so any real link yields a four-digit
 multiplier. 5382× measures how near zero the denominator is, not how unusual
-the link is — the neighbouring gate `EA5CKO-10`, ema 0.2, would have shown
+the link is — the neighbouring gate `STN035-10`, ema 0.2, would have shown
 2696× for the same 539 km. **Two adjacent gates, one event, a factor of two
 between the headlines.**
 
@@ -2635,7 +2641,7 @@ of diagnostics, which is what this finding was about.
 ## F-2026-08-22-01 — a gate can be "established" and still be judged by the floor
 
 Found by building the test for F-2026-08-16-01, not by a reading. Reconstructing
-the EA5URX case offline printed this:
+the STN034 case offline printed this:
 
 ```
 samples 40, ema 0.1 km, gate_bar 0.3 km, threshold 300.0 km
@@ -2717,9 +2723,9 @@ repeat**, because the same station beacons from the same spot and is flagged
 again each time:
 
 ```
-W0ZC-15    -> RA4NHY-1    19 records
-XE2BNC-1   -> KF6NYM-15    7 records, all at an identical 373.9 km
-CQ0PMJ-3   -> ED1ZAX-3     3
+STN055-15    -> STN056-1    19 records
+STN057-1   -> STN058-15    7 records, all at an identical 373.9 km
+STN059-3   -> STN060-3     3
 ```
 
 So link A's `at_flag` was being compared with link B's `gate_baseline`, and the
@@ -2741,7 +2747,7 @@ repeat count for a sender→gate pair. Nineteen records of one pair at one
 distance is not nineteen findings, and the map draws the same line nineteen
 times.
 
-`XE2BNC-1 → KF6NYM-15` is a calibration case for F-2026-08-12-03: 373.9 km
+`STN057-1 → STN058-15` is a calibration case for F-2026-08-12-03: 373.9 km
 against a gate whose own bar sits at 300–366 km, flagged, which lifts the bar,
 which it then clears again. A gate oscillating around its own threshold.
 
@@ -2749,7 +2755,7 @@ which it then clears again. A gate oscillating around its own threshold.
 
 ## F-2026-08-24-01 — 4646 km measured to a point that does not exist
 
-An evidence bundle for DG2MMB-12 -> DB0OAL, exported at v3.2.83, reported an
+An evidence bundle for STN061-12 -> STN062, exported at v3.2.83, reported an
 anomalous RF link of 4646.2 km. **Every part of the bundle's own machinery was
 sound.** Package B's head had landed and it showed: `at_flag` carried `sigma_km`
 and `threshold_km`, `gate_baseline` was flag-time and said so, its sample count
@@ -2844,7 +2850,7 @@ figure disagreed with a query run ten minutes earlier. `check_coords.py` now
 holds the distinction: a position-less row must not be counted, and must keep
 its locator.
 
-**Still open — the poisoned baseline.** DB0OAL's own figures show the damage
+**Still open — the poisoned baseline.** STN062's own figures show the damage
 already done: mean 317.8 km and sigma 1019.6 km at flag time, and nine samples
 later mean 1518.6 km, sigma 2167.5 km. For an EMA at alpha = 0.05 to move that
 far in nine steps, the arriving samples must average about **3565 km** — so
@@ -2875,9 +2881,9 @@ regressed; see F-2026-08-25-02 for why the sample decided it.
 Measured on the live feed, 2026-08-25:
 
 ```
-SV6NMP-9 -> SV1TNT-10: asked for ts 1787652150, answered 1787652439  (+289 s)
-SV6NMP-9 -> SV1TNT-10: asked for ts 1787652166, answered 1787652439  (+273 s)
-SV6NMP-9 -> SV1TNT-10: asked for ts 1787652181, answered 1787652439  (+258 s)
+STN063-9 -> STN064-10: asked for ts 1787652150, answered 1787652439  (+289 s)
+STN063-9 -> STN064-10: asked for ts 1787652166, answered 1787652439  (+273 s)
+STN063-9 -> STN064-10: asked for ts 1787652181, answered 1787652439  (+258 s)
 ```
 
 Six consecutive requests, one answer. That pair beacons about every 15 s, which
@@ -2969,8 +2975,8 @@ an endpoint off the Earth. Run across all 400 endpoints of a 200-link sample on
 The worst link in the same sample:
 
 ```
-SV6NMP-9  38.4232 N,  22.4882 E   (Greece)
-SV1TNT-10 55.2734 N, -41.0935 W   (open North Atlantic)
+STN063-9  38.4232 N,  22.4882 E   (Greece)
+STN064-10 55.2734 N, -41.0935 W   (open North Atlantic)
                                    4984.0 km, 17 records in a 7.4 h window
 ```
 
@@ -3018,7 +3024,7 @@ gate = station_db_module.position_corroboration(
 Run against the gate in question it returns exactly what it should:
 
 ```
-SV1TNT-10 -> consistent: False, region: Greece,
+STN064-10 -> consistent: False, region: Greece,
              'position falls OUTSIDE the area this prefix is allocated to'
 ```
 
@@ -3045,7 +3051,7 @@ baseline. The comment beside the update states the intent plainly:
 That is deliberate self-healing for a misconfigured **sender**. For a
 misconfigured **gate** it inverts: every link through it is inflated, the
 baseline climbs, and real openings at that gate become undetectable. Same
-failure as the poisoned DB0OAL baseline in the open question at the end of
+failure as the poisoned STN062 baseline in the open question at the end of
 F-2026-08-24-01, arriving through the gate's own position rather than its
 senders'.
 
@@ -3057,29 +3063,29 @@ a fresh 174-link pool, 90 distinct gates:
 | position contradicts own callsign prefix | **2** |
 | every link through the gate flagged, AND baseline under 20 samples | **7** |
 
-Both prefix hits are almost certainly legitimate: `SA3MHZ-10` and `SM0JLZ-2`,
+Both prefix hits are almost certainly legitimate: `STN065-10` and `STN066-2`,
 Swedish callsigns reporting from 38.2 N, 0.5 W — Alicante. Swedish operators
 wintering on the Costa Blanca is the single most ordinary explanation there is,
 and it is the exact ambiguity the corroboration note already describes. A test
 with a 2.3% hit rate whose every hit is a false positive is not a test.
 
-What separates SV1TNT-10 is not that its prefix disagrees — it is that the
+What separates STN064-10 is not that its prefix disagrees — it is that the
 position is in the open ocean, and "is this on land" needs a landmask this
 project has no reason to carry.
 
 **F-23's own instrument does the job without any geography.** The anomalous
 fraction alone is not enough — it catches genuine consecutive openings at
-mature gates (`HS5AC-10` at samples 5979–5980, `IZ0FKE-8` at 1739–1740, both
+mature gates (`STN067-10` at samples 5979–5980, `STN068-8` at 1739–1740, both
 2 of 2). Paired with a young baseline it isolates the shape:
 
 ```
-LB4CD-7     14 flags of 14 links   samples  6-19   max  333 km
-VE2SIL-1    10 flags of 10 links   samples 10-19   max 2044 km
-LZ2AB        8 flags of  8 links   samples  0- 7   max  388 km
-KE0TTZ-14    5 flags of  5 links   samples  4- 8   max  447 km
+STN069-7     14 flags of 14 links   samples  6-19   max  333 km
+STN070-1    10 flags of 10 links   samples 10-19   max 2044 km
+STN071        8 flags of  8 links   samples  0- 7   max  388 km
+STN072-14    5 flags of  5 links   samples  4- 8   max  447 km
 ```
 
-`LB4CD-7` is the clearest: fourteen consecutive links, every one flagged, none
+`STN069-7` is the clearest: fourteen consecutive links, every one flagged, none
 further than 333 km. A gate that hears nothing closer than the floor is either
 somewhere very strange or not where it says it is.
 
@@ -3150,14 +3156,14 @@ answerable from `meta.prop_gate_stats`, which persists `[samples, mean, var]`
 for every gate — **8,422 of them, 7,316 established**. No polling, no waiting
 for the ring to refill.
 
-### DB0OAL recovered on its own
+### STN062 recovered on its own
 
 The question recorded it at mean 1518.6 km, sigma 2167.5 km, nine samples after
 the flag, and asked whether that gate would ever flag a real opening again.
 Measured 2026-08-26:
 
 ```
-DB0OAL   samples=1935   mean=96.8 km   sigma=37.1 km   own bar=290.5 km
+STN062   samples=1935   mean=96.8 km   sigma=37.1 km   own bar=290.5 km
 ```
 
 Below the 300 km floor. The EMA at alpha = 0.05 washed it out over roughly
@@ -3167,10 +3173,10 @@ self-limiting.
 
 ### But it does not heal when the gate's own position is the fault
 
-`SV1TNT-10`, the gate from F-2026-08-25-03, sitting at 55.27 N / 41.09 W:
+`STN064-10`, the gate from F-2026-08-25-03, sitting at 55.27 N / 41.09 W:
 
 ```
-SV1TNT-10   samples=77   mean=4979.4 km   sigma=4.7 km   own bar=14938.1 km
+STN064-10   samples=77   mean=4979.4 km   sigma=4.7 km   own bar=14938.1 km
 ```
 
 Its mean is 16 km under the 5000 km ceiling and its sigma is **4.7 km**. Every
@@ -3193,8 +3199,8 @@ watched crossing over inside one 7.4 h window:
 
 | gate | in the anomaly pool | now | |
 |---|---|---|---|
-| `VE2SIL-1` | 10 flags of 10 links, samples 10–19 | samples 23, bar 5778 km | **deaf** |
-| `LB4CD-7` | 14 flags of 14 links, samples 6–19 | samples 21, bar 1001 km | silent — it hears nothing past 334 km |
+| `STN070-1` | 10 flags of 10 links, samples 10–19 | samples 23, bar 5778 km | **deaf** |
+| `STN069-7` | 14 flags of 14 links, samples 6–19 | samples 21, bar 1001 km | silent — it hears nothing past 334 km |
 
 Both flagged *everything* while young, because the floor decided; the moment
 they crossed 20 samples their own bar was already above anything they would
@@ -3208,22 +3214,22 @@ DX has spread. Of the 45 established gates with a mean at or above 1,000 km,
 **13 have a sigma under 10% of that mean** and 32 have honest variance:
 
 ```
-LU9DCE      n=514   mean=1694.9   sigma=  0.0   cv=0.000
-KC3WJU-2    n=793   mean=1250.5   sigma=  0.4   cv=0.000
-CE4PLU-12   n=111   mean=1390.2   sigma=  0.0   cv=0.000
-SV1TNT-10   n= 77   mean=4979.4   sigma=  4.7   cv=0.001
-KG7OKR-10   n= 96   mean=3162.7   sigma=  2.6   cv=0.001
-KH2SR       n= 32   mean=3104.3   sigma=  2.9   cv=0.001
+STN073      n=514   mean=1694.9   sigma=  0.0   cv=0.000
+STN074-2    n=793   mean=1250.5   sigma=  0.4   cv=0.000
+STN075-12   n=111   mean=1390.2   sigma=  0.0   cv=0.000
+STN064-10   n= 77   mean=4979.4   sigma=  4.7   cv=0.001
+STN076-10   n= 96   mean=3162.7   sigma=  2.6   cv=0.001
+STN077       n= 32   mean=3104.3   sigma=  2.9   cv=0.001
 ```
 
 against, for contrast:
 
 ```
-WA7GMX-8    n=299   mean=2019.6   sigma=1012.7  cv=0.50
-W7BMH-7     n= 35   mean=2286.8   sigma= 824.3  cv=0.36
+STN031-8    n=299   mean=2019.6   sigma=1012.7  cv=0.50
+STN078-7     n= 35   mean=2286.8   sigma= 824.3  cv=0.36
 ```
 
-`KC3WJU-2` is the one to read twice: **793 links, all at 1250.5 km ± 0.4 km.**
+`STN074-2` is the one to read twice: **793 links, all at 1250.5 km ± 0.4 km.**
 No propagation mechanism produces that. Neither does a busy gate. It is one
 fixed geometry, repeated, and 1250 km is far past terrestrial VHF — so one of
 the two positions in it is wrong.
@@ -3274,11 +3280,11 @@ A reset makes the gate young again: under `PROP_MIN_SAMPLES` its own bar is
 never consulted and the 300 km floor decides alone. So the question is simply
 whether its typical link clears 300 km.
 
-**All 25 of 25 do.** Median 6.8× the floor, lowest 1.4× (`SR9NRA`), highest
-16.6× (`SV1TNT-10`). Every one of them would go from flagging *nothing* to
+**All 25 of 25 do.** Median 6.8× the floor, lowest 1.4× (`STN079`), highest
+16.6× (`STN064-10`). Every one of them would go from flagging *nothing* to
 flagging essentially *everything it carries*.
 
-`SV1TNT-10` is the case that makes it concrete. It sits in the open Atlantic
+`STN064-10` is the case that makes it concrete. It sits in the open Atlantic
 and every link it measures returns ~4984 km to that phantom position. Reset it
 and all of them are anomalies again — the 17-records-in-one-window flood that
 started this whole thread. **The reset does not repair the gate; it inverts the
@@ -3318,7 +3324,7 @@ release exactly the population that should not be released.
 What is wrong with it is not the outcome but the mechanism: it is accidental,
 undocumented until v3.2.88, and it arrives late — a gate must reach 20 samples
 before its own bar is consulted, and until then the floor makes it flag
-*everything*. `VE2SIL-1` flagged 10 of the 10 links it carried, then went
+*everything*. `STN070-1` flagged 10 of the 10 links it carried, then went
 permanently silent on the sample that made it established. Both halves of that
 are wrong for the same reason, and a reset fixes neither.
 
@@ -3335,7 +3341,7 @@ one day would destroy real history for any gate the rule caught wrongly, with
 nothing to restore it from. The two writes are not symmetric: reporting can be
 withdrawn, a reset cannot.
 
-**Counter-evidence considered.** DB0OAL, the gate that prompted the original
+**Counter-evidence considered.** STN062, the gate that prompted the original
 worry, healed unaided over ~1,900 samples once the parser stopped feeding it
 impossible positions (F-2026-08-26-01). That is the genuinely transient case,
 and it argues the same way: where there is real traffic the EMA already does
@@ -3358,8 +3364,8 @@ Some gates measure the same large distance every time, because the error is a
 fixed coordinate rather than anything in the traffic:
 
 ```
-KC3WJU-2    793 links at 1250.5 km ± 0.4 km
-LU9DCE      514 links at 1694.9 km, sigma exactly 0.0
+STN074-2    793 links at 1250.5 km ± 0.4 km
+STN073      514 links at 1694.9 km, sigma exactly 0.0
 ```
 
 Against the population: the median established gate's mean reach is **20.6 km**
@@ -3375,10 +3381,10 @@ of stored events, **3 of 246 openings existed only because of one** — and one
 of the three is unambiguous:
 
 ```
-K4OZS-10 -> KC3WJU-2  1250.3 km
-K4OZS-10 -> KC3WJU-2  1250.3 km
-K4OZS-10 -> KC3WJU-2  1250.3 km
-N8NOE-15 -> K2GB-10    864.4 km
+STN080-10 -> STN074-2  1250.3 km
+STN080-10 -> STN074-2  1250.3 km
+STN080-10 -> STN074-2  1250.3 km
+STN081-15 -> STN082-10    864.4 km
 ```
 
 The second sender was real. The first was one fixed error, three times. That
@@ -3400,7 +3406,7 @@ and cannot silence a real observation tomorrow, which is the only basis on
 which the narrower one is worth the extra code.
 
 The 1% floor exists because a sigma near zero is a *real value* here, not a
-degenerate one — `LU9DCE` genuinely reads 0.0 — and `3σ` alone would make the
+degenerate one — `STN073` genuinely reads 0.0 — and `3σ` alone would make the
 band razor-thin. On a 1250 km baseline the floor is still ±12.5 km, far tighter
 than any genuine change in path length.
 
@@ -3437,7 +3443,7 @@ this link can serve as evidence of an opening — that distinction does not
 matter, and asserting more would repeat the mistake corrected in
 F-2026-08-25-03.
 
-It also does not fix the other half of the `VE2SIL-1` problem. A gate still
+It also does not fix the other half of the `STN070-1` problem. A gate still
 flags *everything* while it is young, because the floor decides alone until 20
 samples. This rule needs an established mean, so it cannot help there. That
 half remains open.
@@ -3446,7 +3452,7 @@ half remains open.
 
 ## F-2026-08-26-04 — five identical readings answer a different question than twenty
 
-The other half of `VE2SIL-1`, and the noisy one. Shipped in v3.2.90.
+The other half of `STN070-1`, and the noisy one. Shipped in v3.2.90.
 
 F-2026-08-26-03 stopped a gate's repeated distance from supplying its own
 second sender, but the test needed an established mean — 20 samples — and the
@@ -3454,11 +3460,11 @@ damage happens before that. Until a gate reaches 20 samples the 300 km floor
 decides alone, so a misplaced young gate flags **everything it carries**:
 
 ```
-VE2SIL-1    10 flags of 10 links, samples 10-19
-RA4NHY-1    19 identical records at 1170.6 km ± 0.35
+STN070-1    10 flags of 10 links, samples 10-19
+STN056-1    19 identical records at 1170.6 km ± 0.35
 ```
 
-`RA4NHY-1` is the one worth pausing on. F-2026-08-22-03 recorded that pair
+`STN056-1` is the one worth pausing on. F-2026-08-22-03 recorded that pair
 repeating 19 times four days ago, as an observation about the evidence
 endpoint. The mechanism was sitting in the gate's own baseline the whole time:
 nineteen samples, all the same distance, sub-metre spread. The symptom was
@@ -3489,16 +3495,16 @@ The six at 5 are unambiguous — every one under `cv` 0.006, two with a sigma of
 exactly zero:
 
 ```
-N3VPD-2    n=19  mean=3839.5  sigma=5.78  cv=0.0015
-NT5R-4     n= 8  mean=1717.0  sigma=9.85  cv=0.0057
-BG6JDU     n= 8  mean=1176.3  sigma=0.00  cv=0.0000
-RA4NHY-1   n=19  mean=1170.6  sigma=0.35  cv=0.0003
-K4KPN-15   n=13  mean=1018.3  sigma=0.00  cv=0.0000
-CE3RHA-7   n= 6  mean=1009.0  sigma=0.30  cv=0.0003
+STN083-2    n=19  mean=3839.5  sigma=5.78  cv=0.0015
+STN084-4     n= 8  mean=1717.0  sigma=9.85  cv=0.0057
+STN085     n= 8  mean=1176.3  sigma=0.00  cv=0.0000
+STN056-1   n=19  mean=1170.6  sigma=0.35  cv=0.0003
+STN086-15   n=13  mean=1018.3  sigma=0.00  cv=0.0000
+STN087-7   n= 6  mean=1009.0  sigma=0.30  cv=0.0003
 ```
 
-And the boundary holds. The nearest young gate *not* caught is `G5ATT-7` at
-`cv` 0.10, and `KF6NYM-11` — mean 3838.9 km, sigma 531.9 — is correctly left
+And the boundary holds. The nearest young gate *not* caught is `STN088-7` at
+`cv` 0.10, and `STN058-11` — mean 3838.9 km, sigma 531.9 — is correctly left
 alone despite a mean higher than four of the six. **Spread is what separates a
 gate that is somewhere strange from a gate that is not where it says it is**,
 and it does that job at eight samples as well as at eight hundred.
@@ -3551,7 +3557,7 @@ absence it cannot know. It fired when the buffer held **zero** links.
 ```
 opening_status.state : single_sender
 buffer               : 1 links, window 1800 s
-in_field             : anomalous_links 1, distinct_senders ['N2EDX']
+in_field             : anomalous_links 1, distinct_senders ['STN089']
 ```
 
 One link in the ring — the link being asked about. `single_sender` reads as
@@ -3602,11 +3608,11 @@ Both gap links came from one gate, and both were flagged by the 300 km floor
 alone:
 
 ```
-LU8EB-1  -> LW7EEA-1  435.9 km  field=FF  established=False  '300 km floor alone'
-CX1AA-2  -> LW7EEA-1  625.0 km  field=GF  established=False  '300 km floor alone'
+STN090-1  -> STN091-1  435.9 km  field=FF  established=False  '300 km floor alone'
+STN092-2  -> STN091-1  625.0 km  field=GF  established=False  '300 km floor alone'
 ```
 
-`LW7EEA-1` had 12 samples. The opening loop already drops links whose gate is
+`STN091-1` had 12 samples. The opening loop already drops links whose gate is
 not established — the operator's decision, taken with F-43 attached, because
 on a freshly restarted process every gate is young and an opening built from
 those would be announcing the restart rather than the ionosphere.
@@ -3736,7 +3742,7 @@ rejected.
 
 ```
 SADDLE     I#   South Saddle Mountain Digipeater
-HOGBAK-10  L&   N1AF Hogback Mountain LoRa-APRS 433.
+HOGBAK-10  L&   STN093 Hogback Mountain LoRa-APRS 433.
 EUGENE     /_   PHG7380/W2,ORn-N,EUGENE 13.7V
 KYIV-1     /r   Free radio repeater 446.225/434.850
 OTISMA     /#   Digi I-Gate WX3in1v1
@@ -3745,7 +3751,7 @@ OTISMA     /#   Digi I-Gate WX3in1v1
 A mountain digipeater going quiet is precisely the news this detector exists
 for. The digit rule would silence all of them.
 
-Nor does the callsign suffix work: `TA8SVS` ends in `SVS` and is an operator
+Nor does the callsign suffix work: `STN094` ends in `SVS` and is an operator
 in Turkey, symbol `%`, comment *"Op.Volkan"*.
 
 **The digit rule does survive as an independent check**, and it is worth
@@ -3801,8 +3807,8 @@ first so the population was not the contaminated one:
 Live at the time, 13 of 17 cells had `silent ≠ sites`. The plainest:
 
 ```
-HD53  silent=3 sites=1  ['PU3AAG-D', 'PU3AAG-N', 'PU3AAG-Y']
-NK94  silent=6 sites=3  ['E23JWE-N','E25VZX-10','HS7TRE-C','HS7TRE-D','HS7TRE-E','HS7TRE-F']
+HD53  silent=3 sites=1  ['STN095-D', 'STN095-N', 'STN095-Y']
+NK94  silent=6 sites=3  ['STN096-N','STN097-10','STN098-C','STN098-D','STN098-E','STN098-F']
 ```
 
 `HD53` counted three witnesses. It had one operator's D-Star, DMR and Fusion
@@ -3862,9 +3868,9 @@ the `few_sites` demotion.
 weather product supplied the third operator at the time they fired.
 
 ```
-DM73  as stored     : ['ABQFFS', 'KJ7AZ-11', 'KJ7AZ-3', 'W5JXT-D']
-      owners then   : ABQFFS, KJ7AZ, W5JXT = 3   -> alert
-      after v3.2.93 : KJ7AZ, W5JXT = 2           -> demoted
+DM73  as stored     : ['ABQFFS', 'STN099-11', 'STN099-3', 'STN100-D']
+      owners then   : ABQFFS, STN099, STN100 = 3   -> alert
+      after v3.2.93 : STN099, STN100 = 2           -> demoted
 ```
 
 `ABQFFS` is an Albuquerque flood statement. **The alert threshold was being
@@ -4182,8 +4188,8 @@ span test caught **1,433**.
 
 ### And the 57 are not a general capability either
 
-`OE5DXL-14`, `OE5DRO-10`, `OE3OSB-3`, `OE2XZR-10` (Austria), `DO6GZ-2/-16/-17`,
-`DO1AKW-15` (Germany), `TF3GS`, `TF3IRA-1` (Iceland). Well-instrumented
+`STN101-14`, `STN102-10`, `STN103-3`, `STN104-10` (Austria), `STN105-2/-16/-17`,
+`STN106-15` (Germany), `STN107`, `STN108-1` (Iceland). Well-instrumented
 LoRa-APRS regions, clustered, not a worldwide property. A feature that works
 in three countries has to be described that way, and this project already
 carries one of those in the Turkey Repeaters DB.
@@ -4413,10 +4419,10 @@ file were taken through it.
 **Source:** the operator, reading fourteen days of DMWGPT's message traffic on
 aprs.fi.
 
-2026-08-28 09:04 UTC+2, VK2AHB-7 sent `test.from VK` from Australia. The reply
+2026-08-28 09:04 UTC+2, STN109-7 sent `test.from VK` from Australia. The reply
 that went on the air:
 
-    OK VK2AHB-7, receiving you 5x9. Test acknowledged. 73.
+    OK STN109-7, receiving you 5x9. Test acknowledged. 73.
 
 DMWGPT has no receiver. That packet crossed the APRS-IS backbone over TCP and
 arrived through somebody else's igate. `5x9` is a report on a radio path that
@@ -4437,21 +4443,21 @@ The same window shows the softer version twice more, unfixed and now recorded:
 | date | reply | what is invented |
 |---|---|---|
 | 2026-08-27 | "All systems normal here." | a health claim, while the badge subsystem exists to know that |
-| 2026-08-17 | "This is APRS agent TG5ALY." | the SENDER's callsign, as its own identity, with no `de`/`73` cue for `_strip_signature` to catch |
+| 2026-08-17 | "This is APRS agent STN110." | the SENDER's callsign, as its own identity, with no `de`/`73` cue for `_strip_signature` to catch |
 
 Neither is fixed here. They are named so they are not re-discovered.
 
 ### Correction, 2026-08-31 — the second row is not a finding
 
-The operator read the TG5ALY line as a form of address rather than a claim of
+The operator read the STN110 line as a form of address rather than a claim of
 identity, and he is right. Three things say so, none of which was checked when
 the row was written:
 
-**The inbound message was the bare string `TG5ALY`** — the sender's own
+**The inbound message was the bare string `STN110`** — the sender's own
 callsign and nothing else, sent by a station that had been probing what the
 gateway knew about callsigns for the previous hour. The natural reply to that
 is an acknowledgement naming them back. What is missing from
-`This is APRS agent TG5ALY.` is a comma, not a licence.
+`This is APRS agent STN110.` is a comma, not a licence.
 
 **Every other self-identification in the same fourteen days is clean**, and
 there are five of them: *"Hello! This is an APRS gateway."*, *"I'm an APRS
@@ -4460,13 +4466,13 @@ disputed line is the only one containing a callsign at all, and that callsign
 arrived in the packet a second earlier.
 
 **The model gets this construction right elsewhere.** On 2026-08-27:
-*"Test from VK2AHB-7 received. This is an APRS info service."* — names the
+*"Test from STN109-7 received. This is an APRS info service."* — names the
 sender, then identifies itself correctly. That is the same sentence shape,
 punctuated.
 
 **And the fix proposed for it would have done harm.** A strip keyed on a
 first-person copula plus a foreign callsign would cut
-`"TG5ALY, this is the APRS agent"` — ordinary operating practice, and the
+`"STN110, this is the APRS agent"` — ordinary operating practice, and the
 correct form of the very thing being flagged. A filter whose false positive is
 the right answer is worse than no filter.
 
@@ -4495,7 +4501,7 @@ where every true fact is already in hand: `packet_parser.parse_packet()` gives
 the igate from the q-construct, and whether the sender touched RF at all. So
 the answer is built from the packet and states the thing the tester needs:
 
-    Test OK VK2AHB-7, gated by VK2RAG-1. Internet-fed service - I cannot
+    Test OK STN109-7, gated by STN111-1. Internet-fed service - I cannot
     give a signal report.
 
 A sender who reached APRS-IS directly (`qAC`/`qAS`, or `TCPIP`) gets *"via
@@ -4954,9 +4960,9 @@ an idle manager still starts.
 ever wrote, rather than trusting the check that had just passed.
 
 ```
-14:45  YM2KY-1    -> BLN2LOCAL   Save lives, stay at home! ...
-14:48  YM2KY-1    -> BLN1LOCAL   Keep your distance ...
-14:48  KA7EZO-7   -> TACTICAL    KA7EZO-7=MPSar
+14:45  STN112-1    -> BLN2LOCAL   Save lives, stay at home! ...
+14:48  STN112-1    -> BLN1LOCAL   Keep your distance ...
+14:48  STN113-7   -> TACTICAL    STN113-7=MPSar
 ```
 
 The third row is American traffic. It was stored because the operator's
@@ -5273,7 +5279,7 @@ and it was nowhere in this agent's feed.
 Not a feed problem: 12,984 packets arrived in the first two minutes of the
 second window and 52,607 in the third, and every other SSID of the same base
 callsign was present throughout — `TA3HRJ-12` via `qAC,T2CHILE`, `TA3HRJ-8`
-via `qAR,TA3TX-4`.
+via `qAR,STN114-4`.
 
 The only thing that differed was the q-construct:
 
@@ -5662,12 +5668,12 @@ The gateway was announced in a Facebook APRS group on 2026-09-20. Two people
 who had never used it put questions to it within twenty minutes, and both
 exchanges went wrong in a way the operator could read straight off the log.
 
-`WB2EHG-5` opened with *"hello can you help me?"*, asked four questions about
+`STN115-5` opened with *"hello can you help me?"*, asked four questions about
 William Shatner, and then asked the thing a newcomer always asks:
 
-    13:46:55  WB2EHG-5>DMWGPT  what else can you do for me?
-    13:46:56  DMWGPT>WB2EHG-5  Too many questions - please wait 3 min, then ask again
-    13:51:04  WB2EHG-5>DMWGPT  what else can you do for me?
+    13:46:55  STN115-5>DMWGPT  what else can you do for me?
+    13:46:56  DMWGPT>STN115-5  Too many questions - please wait 3 min, then ask again
+    13:51:04  STN115-5>DMWGPT  what else can you do for me?
     (nothing)
 
 The limiter was working as built: five tokens, one back every six minutes, one
@@ -5680,11 +5686,11 @@ service.
 The answer he did get earlier was no better: *"hello can you help me?"* went to
 the model, which replied with a description of itself that nobody had checked.
 
-`KR4MVP-5`, the same afternoon:
+`STN116-5`, the same afternoon:
 
-    13:56:52  KR4MVP-5>DMWGPT  Tell me a joke about the weather
-    13:56:53  DMWGPT>KR4MVP-5  KM6YFK-13 28km away, 3min ago: 23.3C, 92%RH, 1013mb, gust --
-    13:56:58  DMWGPT>KR4MVP-5  0.9m/s. My own feed only, not a forecast
+    13:56:52  STN116-5>DMWGPT  Tell me a joke about the weather
+    13:56:53  DMWGPT>STN116-5  STN117-13 28km away, 3min ago: 23.3C, 92%RH, 1013mb, gust --
+    13:56:58  DMWGPT>STN116-5  0.9m/s. My own feed only, not a forecast
 
 The weather shortcut ran before the model and matched the word `WEATHER`
 anywhere in the text. Naming the weather was read as asking for it.
@@ -5719,7 +5725,7 @@ v3.2.115 on six of its assertions.**
 
 ### Also seen, not changed
 
-`KR4MVP-5` asked *"Propagation near me"* and *"Who is km6yfk"*. The first was
+`STN116-5` asked *"Propagation near me"* and *"Who is stn117"*. The first was
 refused for want of live data by a program whose own map draws propagation
 openings; the second was refused as a third-party lookup two minutes after the
 weather answer had disclosed that same station's callsign, distance and
@@ -5735,18 +5741,18 @@ say "I don't have the data" where the truth is "I am not allowed to".
 
 ### What was seen
 
-`DL5XL-9` found the gateway on 2026-09-20 and spent half an hour on it. The
+`STN118-9` found the gateway on 2026-09-20 and spent half an hour on it. The
 first exchange went well:
 
-    14:15:30  DL5XL-9>DMWGPT  I want to travel from Bremen to Berlin. What is the best way?
-    14:15:32  DMWGPT>DL5XL-9  No live data here. Best bet: Deutsche Bahn train, Bremen Hbf --
-    14:15:37  DMWGPT>DL5XL-9  to Berlin Hbf, roughly 4h with ICE. Check bahn.de.
+    14:15:30  STN118-9>DMWGPT  I want to travel from Bremen to Berlin. What is the best way?
+    14:15:32  DMWGPT>STN118-9  No live data here. Best bet: Deutsche Bahn train, Bremen Hbf --
+    14:15:37  DMWGPT>STN118-9  to Berlin Hbf, roughly 4h with ICE. Check bahn.de.
 
 The second did not:
 
-    14:16:39  DL5XL-9>DMWGPT  How long would it take by car?
-    14:16:40  DMWGPT>DL5XL-9  I don't have route or traffic data, and you haven't told me --
-    14:16:45  DMWGPT>DL5XL-9  the two places. Please resend with start and destination.
+    14:16:39  STN118-9>DMWGPT  How long would it take by car?
+    14:16:40  DMWGPT>STN118-9  I don't have route or traffic data, and you haven't told me --
+    14:16:45  DMWGPT>STN118-9  the two places. Please resend with start and destination.
 
 Every question was sent to the provider on its own: one user message, no
 history. A follow-up that names nothing, which is how people actually write
@@ -5757,7 +5763,7 @@ minutes — which is what someone does when they are working out why a service
 does not follow them — and one of those repeats was answered by nothing at
 all:
 
-    14:19:08  DL5XL-9>DMWGPT  I wonder what you can help me with.
+    14:19:08  STN118-9>DMWGPT  I wonder what you can help me with.
     (nothing)
 
 That was the replay cache: an answer may be replayed twice, and after that the
@@ -5810,16 +5816,16 @@ means it came back from RF, `TCPIP*` would mean it came from here.
 
 ### What was seen
 
-`KC1MUR-5`, on the afternoon the gateway was first announced:
+`STN119-5`, on the afternoon the gateway was first announced:
 
-    14:29  KC1MUR-5>DMWGPT  When was Dream Police by cheap trick released
-    14:30  DMWGPT>KC1MUR-5  Cheap Trick's "Dream Police" album came out in 1979 (Sept 21 --
-    14:30  DMWGPT>KC1MUR-5  US). The title single was released in 1979 too. No live data --
-    14:30  DMWGPT>KC1MUR-5  here, but that date is well documented.
-    14:30  KC1MUR-5>DMWGPT  When was Dream Police by cheap trick released
-    14:30  DMWGPT>KC1MUR-5  Cheap Trick's "Dream Police" album was released September --
-    14:30  DMWGPT>KC1MUR-5  21, 1979; the title single followed in 1979 as well. No live --
-    14:31  DMWGPT>KC1MUR-5  data here, but that date is well documented.
+    14:29  STN119-5>DMWGPT  When was Dream Police by cheap trick released
+    14:30  DMWGPT>STN119-5  Cheap Trick's "Dream Police" album came out in 1979 (Sept 21 --
+    14:30  DMWGPT>STN119-5  US). The title single was released in 1979 too. No live data --
+    14:30  DMWGPT>STN119-5  here, but that date is well documented.
+    14:30  STN119-5>DMWGPT  When was Dream Police by cheap trick released
+    14:30  DMWGPT>STN119-5  Cheap Trick's "Dream Police" album was released September --
+    14:30  DMWGPT>STN119-5  21, 1979; the title single followed in 1979 as well. No live --
+    14:31  DMWGPT>STN119-5  data here, but that date is well documented.
 
 One question, asked once in the plain sense of the word, answered twice a
 minute apart: two provider calls, six transmissions, and two answers that
@@ -5858,22 +5864,22 @@ re-reads its own section every five seconds.
 
 ### What was seen
 
-`KE4PIC` introduced himself with a grid and asked two questions:
+`STN120` introduced himself with a grid and asked two questions:
 
-    16:01  KE4PIC>DMWGPT  de Frank EM97xe
-    16:04  KE4PIC>DMWGPT  what is my distance to fairfax, va
-    16:04  DMWGPT>KE4PIC  No live position data, so I cannot calculate that. Check --
-    16:04  DMWGPT>KE4PIC  aprs.fi for your beacon and use its distance tool.
-    16:09  KE4PIC>DMWGPT  what is my nearest igate
-    16:09  DMWGPT>KE4PIC  I have no live station or igate data. aprs.fi or findu.com --
-    16:09  DMWGPT>KE4PIC  can show igates near EM97xe.
+    16:01  STN120>DMWGPT  de Frank EM97xe
+    16:04  STN120>DMWGPT  what is my distance to fairfax, va
+    16:04  DMWGPT>STN120  No live position data, so I cannot calculate that. Check --
+    16:04  DMWGPT>STN120  aprs.fi for your beacon and use its distance tool.
+    16:09  STN120>DMWGPT  what is my nearest igate
+    16:09  DMWGPT>STN120  I have no live station or igate data. aprs.fi or findu.com --
+    16:09  DMWGPT>STN120  can show igates near EM97xe.
 
 Both refusals were false in the same way. The registry held his position - the
 map was drawing him while he asked - and it classifies igates by symbol and
 records which gate last carried each station. The only thing genuinely missing
 was a way to turn "fairfax, va" into coordinates.
 
-`KR4MVP-5`, earlier the same afternoon, asked *"Propagation near me"* and was
+`STN116-5`, earlier the same afternoon, asked *"Propagation near me"* and was
 sent to hamqsl.com by the program that had measured 247 openings that week and
 draws them on its own map.
 
@@ -5932,10 +5938,10 @@ to the new boundary rather than deleted.
 Caught live at 17:59 local while a read-only listener was watching DMWGPT's
 own traffic for something else:
 
-    16:59:41  DMWGPT>QRX   Stored and queued for N1QQA; it will go out on the next --
+    16:59:41  DMWGPT>QRX   Stored and queued for STN121; it will go out on the next --
     16:59:46  DMWGPT>QRX   beacon. 73
     16:59:46  QRX>DMWGPT   QRX holds missed msgs. Send REG to start.
-    16:59:47  DMWGPT>QRX   Understood. Nothing more to send; your message to N1QQA is --
+    16:59:47  DMWGPT>QRX   Understood. Nothing more to send; your message to STN121 is --
     16:59:52  DMWGPT>QRX   queued and will go out on the next beacon. 73
     16:59:53  DMWGPT>QRX   replaying answer (1 left)
     16:59:58  DMWGPT>QRX   replaying answer (0 left)
@@ -5950,7 +5956,7 @@ went wrong at once:
 
 1. **The model answered a machine as if it were a person.**
 2. **It invented a capability.** This gateway cannot store, queue or forward
-   anything, and it told another service twice that a message to N1QQA was
+   anything, and it told another service twice that a message to STN121 was
    queued for the next beacon. On the air, to a third party, about traffic
    that never existed.
 3. **The repeat handling amplified it.** Two replays and three resends, each
@@ -6112,7 +6118,7 @@ raw string, and placeholder values drew no remark.
 
 ### What was seen
 
-2M0SBP asked for the weather at Arisaig on 2026-09-20 and was answered from
+STN122 asked for the weather at Arisaig on 2026-09-20 and was answered from
 a station 146 km away, inside the configured 250 km radius. The answer was
 in the same shape as one from down the road:
 
@@ -6291,9 +6297,9 @@ serves station AI and propagation notes, so a change there moves all three.
 ### What was seen
 
 Asked on 2026-09-27 to review DMWGPT's traffic, `message_history` held 11
-gateway rows for the past seven days, while `gateway_users` said VE7EPT
-(09-22), VE7JBX (09-23) and KF6TYS (09-24) had asked questions in that time,
-and KR4OII more than the one question left. The table's oldest row of any
+gateway rows for the past seven days, while `gateway_users` said STN030
+(09-22), STN123 (09-23) and STN124 (09-24) had asked questions in that time,
+and STN125 more than the one question left. The table's oldest row of any
 kind was from 2026-09-24 20:20. Fourteen days of the service's own record had
 become about two.
 
@@ -6305,13 +6311,13 @@ hard cap of 20,000 rows. The cap was written to bound the station-filter
 traffic and counted every channel.
 
 On 2026-09-25 from 01:55:17 to 03:30:51 UTC — 96 minutes, about 64 a
-minute — two automatic stations answered each other 6,102 times: YM2KDZ, an
+minute — two automatic stations answered each other 6,102 times: STN126, an
 auto-responder ("Mesajiniz alindi. Tesekkur ediyoruz - DARD81"), and
-TI0RHU-15, a menu bot ("Or choose: 1-QSL 2-Board 3-WhatsApp"). TI0RHU-15
+STN127-15, a menu bot ("Or choose: 1-QSL 2-Board 3-WhatsApp"). STN127-15
 read every text as a menu command and answered with four numbered messages
-(4,884 in all); YM2KDZ answered each with a free-text receipt or "HATA:
+(4,884 in all); STN126 answered each with a free-text receipt or "HATA:
 Mukerrer Mesaj!" (1,218). A receipt sent as a message rather than as an APRS
-`ack` is what kept it going. YM2KDZ matches `YM*` in the station filter, so every message
+`ack` is what kept it going. STN126 matches `YM*` in the station filter, so every message
 was kept — 9,709 station-filter rows that day against the ~840 a day the
 design was measured at. The cap then took the oldest rows, and the oldest
 rows were DMWGPT's. The loop stopped by itself; nothing of ours was party
@@ -6353,7 +6359,7 @@ the operator to decide.
 
 ### Also seen in the same review, not changed
 
-- The "nearest igates" answer to KR4OII was 72 characters and went out as two
+- The "nearest igates" answer to STN125 was 72 characters and went out as two
   packets, the second carrying only "feed only." — the fixed tail
   ". My own feed only." pushed it past 64. A second packet on the air for
   two words; any change to the tail is wording and gets a draft first.
@@ -6361,7 +6367,7 @@ the operator to decide.
   short form keeps the answer in one packet, the tail is " (own feed)";
   otherwise the sentence stays. The one-igate answer had the same spill
   (`…18km (seen gating). My own --` / `feed only.`) and is one packet now.
-  `tools/check_lookup.py` case 8 reproduces KR4OII's two igates and fails
+  `tools/check_lookup.py` case 8 reproduces STN125's two igates and fails
   against v3.2.135 ("went out as 2"); case 9 keeps the full sentence on a
   listing too long for one packet either way.
 - "SAAT VE TARIH?" was answered by the model with "Yerel saat dilimini
@@ -6449,19 +6455,19 @@ now gets the turnaround.
 
 ## F-2026-09-29-01 — a radio heard through a digipeater was told "via APRS-IS"
 
-2026-09-29 05:13 CEST. CE3EOA-6 in Chile sent `TEST`:
+2026-09-29 05:13 CEST. STN128-6 in Chile sent `TEST`:
 
-    CE3EOA-6>APAT81,CE3AA-5*,WIDE1*,WIDE2-1,qAS,CD3IRV-1::DMWGPT   :TEST
+    STN128-6>APAT81,STN129-5*,WIDE1*,WIDE2-1,qAS,STN130-1::DMWGPT   :TEST
 
-`APAT81` is an AnyTone. The packet was digipeated by CE3AA-5 and entered
-APRS-IS at CD3IRV-1 - it was on RF. The answer said *"Test OK CE3EOA-6, via
+`APAT81` is an AnyTone. The packet was digipeated by STN129-5 and entered
+APRS-IS at STN130-1 - it was on RF. The answer said *"Test OK STN128-6, via
 APRS-IS"*, because `_test_answer` read `qAS` as a direct login
 (F-2026-08-28-02). The same reading kept it off the RF list in `handle()`,
 so the first part left with no turnaround.
 
 Neither part was acked. 59900 and 59901 were each resent three times
 (05:13:55 to 05:17:00) and logged *"no ack ... after 3 resends"*, as
-designed. The station does ack: it sent `ack3` to CE3EOA at 00:49 the same
+designed. The station does ack: it sent `ack3` to STN128 at 00:49 the same
 night. The likeliest reading - inference, not measured - is that no igate
 there transmitted our reply to RF, which is outside our control.
 
@@ -6471,7 +6477,7 @@ A used digipeater hop before the q-construct (`*`, not `TCPIP*`/`TCPXX*`)
 now counts as RF whatever the q-construct is:
 
 - `_test_answer`: a `qAS` packet with such a hop answers *"heard on RF,
-  into APRS-IS at CD3IRV-1"*. Not "gated by": the name after `qAS` is
+  into APRS-IS at STN130-1"*. Not "gated by": the name after `qAS` is
   whoever handed the packet in and can be a server (the F-2026-08-14-41
   mistake). `qAS` with no hop, and anything with `TCPIP*`, stay *"via
   APRS-IS"*; `qAR`/`qAO` answers are unchanged.
@@ -6491,8 +6497,8 @@ packet answered *"via APRS-IS"*, and its first part left after 0.00 s.
 ## F-2026-10-04-01 — the kept Messages view showed two days as one, with no dates
 
 The operator sent a screenshot of the Messages tab, "Kept (14 days)" view,
-and pointed out it carried no date. The rows were from two days - KE2AHQ-8
-on 2 October 19:40-19:48 CEST and KC3NZY-5 on 3 October 23:33 - shown as
+and pointed out it carried no date. The rows were from two days - STN131-8
+on 2 October 19:40-19:48 CEST and STN132-5 on 3 October 23:33 - shown as
 bare clock times, newest first, so the older conversation looked like the
 later part of the same evening. The dates came only from the journal.
 
@@ -6511,10 +6517,10 @@ stamps must use it. **Seen failing** against v3.2.140 with 4 problems.
 
 ## F-2026-10-04-02 — a place name or a US ZIP code is answered from the sender's position, silently
 
-Same screenshot. KE2AHQ-8 asked "weather for flemington, nj please" and was
-answered `KD2CRT 22km from you` - the station nearest the sender's last
-position (`wx lookup: KE2AHQ-8 -> KD2CRT at 22km`), not Flemington.
-KC3NZY-5 asked "Weather around 21921", a US ZIP code, and got the same kind
+Same screenshot. STN131-8 asked "weather for flemington, nj please" and was
+answered `STN133 22km from you` - the station nearest the sender's last
+position (`wx lookup: STN131-8 -> STN133 at 22km`), not Flemington.
+STN132-5 asked "Weather around 21921", a US ZIP code, and got the same kind
 of answer.
 
 The design is right and old: no geocoding, a place name is refused rather
@@ -6527,7 +6533,7 @@ is literally true and still not the answer to the question.
 Not fixed yet. The fix belongs in the refusal, not in geocoding: say
 "measured from your last position - I cannot read place names" when the
 question names a place (`for X`, `in X`, `around NNNNN`) and gives no grid.
-Where KE2AHQ-8 actually was is not known; the raw packet log had rotated.
+Where STN131-8 actually was is not known; the raw packet log had rotated.
 
 **Fixed 2026-10-05, v3.2.144.** `_names_place()` recognises a place the
 gateway cannot read - a word after for/in/at/near/around/of (minus
@@ -6744,8 +6750,8 @@ readings for checking. Each reading answered the three questions; what they
 show about the bundle:
 
 **Right, and the bundle earned it.** All four used `recurrence` and
-`novel_stations` well. KM59: TA2GBV (0.793) and TA2OK (0.772) are this
-cell's habitual missing, YM2KF-10 (0.03) the one new face that kept the
+`novel_stations` well. KM59: STN134 (0.793) and STN135 (0.772) are this
+cell's habitual missing, STN136-10 (0.03) the one new face that kept the
 alert. LM09: no novel station, and both noticed `threshold_met: true` with
 `alert: false` - the novelty rule demoting it, read correctly. All four
 discounted the quakes (460-490 km, 7.5-19 h before) as candidates, not
@@ -6759,12 +6765,12 @@ causes, as the caveat asks.
   caveat that UPS-, battery- and solar-backed stations stop later after one
   mains failure (F-2026-10-05-03, corrected) - those went to the popup and
   our own note only.
-- Both took each station's `since` as the moment it went quiet ("TA2GBV went
+- Both took each station's `since` as the moment it went quiet ("STN134 went
   silent at epoch 1791150220"). `since` is last packet + 3x the station's
   own interval: the threshold crossing, which shifts stations of different
   cadence by different amounts.
-- Gemini blamed KM59 on YM2KF-10 failing as TA2OK's gate. ChatGPT, on the
-  same bundle, pointed out that TA2OK had stopped about 7 h before YM2KF-10.
+- Gemini blamed KM59 on STN136-10 failing as STN135's gate. ChatGPT, on the
+  same bundle, pointed out that STN135 had stopped about 7 h before STN136-10.
   The bundle gave `gate_of` but not whether a gate fell silent before its
   station, and the gap was filled with a story.
 
@@ -6777,7 +6783,7 @@ causes, as the caveat asks.
 - Each silent station carries `gate`, `gate_last_seen` and
   `gate_stopped_first` - true only when the gate's last packet is older
   than the station's, null when the gate is not in the registry. On a
-  KM59-shaped fixture: TA2OK -> YM2KF-10, `gate_stopped_first: false`.
+  KM59-shaped fixture: STN135 -> STN136-10, `gate_stopped_first: false`.
 - The opening window is the first station's own interval (min 15 min), not
   the longest in the cell; on the live alerts one 4-6 h beacon had
   stretched it to hours in DM15, FJ09 and JN27.
@@ -6794,7 +6800,7 @@ not touched here.
 ## F-2026-10-05-05 — nearly half of the alerts in established cells open on a single new station, and many re-open within hours
 
 Asked after F-2026-10-05-04, where KM59 alerted on one novel station
-(YM2KF-10) among three. Measured on the 2026-10-05 04:17 backup:
+(STN136-10) among three. Measured on the 2026-10-05 04:17 backup:
 `silence_history` 2026-09-21 to 2026-10-05, replaying the alert decision at
 every stored snapshot with only the history before it - a cell with 12 or
 more earlier threshold snapshots is chronic unless a silent station's share
@@ -6815,9 +6821,9 @@ single-novel onsets lasted two snapshots or fewer, as did 229 of 565 with
 two or more novel and 328 of 695 in young cells.
 
 **KM59 shows the mechanism.** On 2026-10-03 it crossed the threshold at
-04:58, 09:08, 12:31, 14:55 and 19:30 with the same habitual TA2GBV,
-TA2GBV-4 and TA2OK, plus one novel station that changed (YM2ESK, then
-YM2KF-10). Between those the cell fell below the threshold - one marginal
+04:58, 09:08, 12:31, 14:55 and 19:30 with the same habitual STN134,
+STN134-4 and STN135, plus one novel station that changed (STN137, then
+STN136-10). Between those the cell fell below the threshold - one marginal
 station beaconed - so each crossing was a new episode, a new alert and a
 new notification. A cell whose habitual three are permanently silent needs
 only one more station to dip briefly to alert again.
@@ -6888,10 +6894,10 @@ could see, because the bundle does not carry it, is the sender's own record:
 
 | link | km | the packet put the sender at | the station's record says |
 |---|---|---|---|
-| SV0SYH-1 -> SV2RYU-10 | 2,585 | 40.59 N 53.53 E (Caspian coast) | LoRa iGate/digi, 40.59 N 22.98 E (Thessaloniki), 12,819 packets |
-| SQ9SIM-5 -> SQ9IWE-3 | 3,883 | 26.29 N 14.03 W (Western Sahara) | mobile tracker, 50.27 N 19.13 E (Katowice), 7,518 packets |
-| LD7TG -> LA4M | 371 | 60.39 N 8.44 E | iGate on Graakallen, 63.42 N 10.26 E (Trondheim), 138,999 packets |
-| SP0LND-9 -> SK3GK-11 | 1,487 | 54.09 N 38.23 E | **"LoRa APRS Balloon DIGI"**, balloon symbol |
+| STN138-1 -> STN139-10 | 2,585 | 40.59 N 53.53 E (Caspian coast) | LoRa iGate/digi, 40.59 N 22.98 E (Thessaloniki), 12,819 packets |
+| STN140-5 -> STN141-3 | 3,883 | 26.29 N 14.03 W (Western Sahara) | mobile tracker, 50.27 N 19.13 E (Katowice), 7,518 packets |
+| STN142 -> STN143 | 371 | 60.39 N 8.44 E | iGate on Graakallen, 63.42 N 10.26 E (Trondheim), 138,999 packets |
+| STN144-9 -> STN145-11 | 1,487 | 54.09 N 38.23 E | **"LoRa APRS Balloon DIGI"**, balloon symbol |
 
 Three are one corrupt position in an otherwise steady station - a jump of
 hundreds to thousands of km in minutes that no station makes. The fourth is
@@ -6905,20 +6911,20 @@ afterwards, as designed:
 
 | gate | mean at first flag | mean at a later flag |
 |---|---|---|
-| SK3GK-10 | 10.2 km | 100.1 km |
-| SK3GK-11 | 55.4 km | 139.6 km (bar 166 -> 1,363 km) |
-| SK3W-10 | 25.4 km | 96.9 km |
-| OH3ERV-L1 | 2.1 km | 61.0 km |
-| OH3KUN-L1 | 4.0 km at 53 samples | - |
+| STN145-10 | 10.2 km | 100.1 km |
+| STN145-11 | 55.4 km | 139.6 km (bar 166 -> 1,363 km) |
+| STN146-10 | 25.4 km | 96.9 km |
+| STN147-L1 | 2.1 km | 61.0 km |
+| STN148-L1 | 4.0 km at 53 samples | - |
 
 F-2026-08-26-01 still holds: transient poison washes out at alpha 0.05 over
 about 1,900 samples, and no reset should be written. But a quiet gate takes
 weeks to get there, and meanwhile it cannot flag a real opening. That entry's
-cure was upstream - DB0OAL healed "once the parser stopped feeding it
+cure was upstream - STN062 healed "once the parser stopped feeding it
 impossible positions" - and so is this one's.
 
 **Also found:** the prefix table has Norway as `LA|LB|LC|LN`, but LA-LN is
-all Norway; LD7TG read as "no allocation known".
+all Norway; STN142 read as "no allocation known".
 
 **Why the check is not there now:** `ingest()` runs `rec.update_from_parsed()`
 before `_ingest_prop_link()`, so by the time a link is measured the record
@@ -6966,7 +6972,7 @@ either way:
 | North America | 3 / 39 | 13 / 27 | 2 / 2 |
 | **all** | **8 / 63 (13 %)** | **18 / 40 (45 %)** | **5 / 6** |
 
-Examples that agree: JN64/JN74 <-> JN80 at 550 km (ours IQ7HD-1 -> 9A4QV-2/-3,
+Examples that agree: JN64/JN74 <-> JN80 at 550 km (ours STN149-1 -> STN150-2/-3,
 549-551 km), IN99 <-> JO10 at 340 km (ours 327 km). Missed: JN45 <-> JN81
 790 km, JO40 <-> JN57, JN39 <-> JN26 and most of North America's 250-300 km
 paths. PSKReporter, unfiltered, matched 3 of 33 reports over 250 km - but
@@ -7019,8 +7025,8 @@ live episode logic; read them as relative, not as the number the map shows.
   balloons; taking them out of the map's openings costs nothing real.
 - **Protecting the baseline changes little in 29 h** (+3 flags a day), but
   it is what keeps particular gates alive: with and without the suspects,
-  SV2RYU-10's bar is 358 vs 1,941 km, OH3KUN-L1 12 vs 1,160, LU7ERZ-10 36 vs
-  1,102, OH3ERV-L1 8 vs 684 - four gates deaf below 1,000 km only because of
+  STN139-10's bar is 358 vs 1,941 km, STN148-L1 12 vs 1,160, STN151-10 36 vs
+  1,102, STN147-L1 8 vs 684 - four gates deaf below 1,000 km only because of
   them. Over weeks the effect accumulates.
 - **The gate rule** (one gate, two distinct distant senders in 30 min) adds
   2.5 -> 9.9 openings a day under V3. F-22 kept it "reported, not acted on"
@@ -7039,28 +7045,28 @@ about one gate in ten.
 The operator sent a screenshot of South India: five adjacent silence cells,
 four grey and one red (MJ88, "Regional silence (possible outage)").
 
-**What it was.** VU3ZAG-13 is an internet-connected Raspberry Pi Pico
+**What it was.** STN152-13 is an internet-connected Raspberry Pi Pico
 weather station near Mumbai (MK68). Besides its own beacons it sends
 position beacons for about twenty Kerala and Tamil Nadu repeaters under
 their callsigns:
 
-    VU2CSD>APRS,TCPIP*,qAS,VU3ZAG-13:!0853.45N/07636.08Er VU2CSD Repeater 145.350Mhz
+    STN153>APRS,TCPIP*,qAS,STN152-13:!0853.45N/07636.08Er STN153 Repeater 145.350Mhz
 
 None of them is heard on air. When the Pico stopped (2026-10-05 07:09 CEST)
 all of them fell silent at once - same 309 s cadence, same moment - and,
 spread over MJ88, MJ89, MK80, MK81 and MK91, drew a regional pattern.
 
 **The fault.** `last_gate` takes the name after the q-construct. For
-`TCPIP*,qAS,VU3ZAG-13` that is the login that injected the packet, not an
+`TCPIP*,qAS,STN152-13` that is the login that injected the packet, not an
 igate that heard anything, and `gate_independence()` only recognises the
 `T2*`/`FIRST`... servers as internet. So the four grey cells read
-"IGate failure" and MJ88, where a fifth station (VU2NXG-7) came in through
+"IGate failure" and MJ88, where a fifth station (STN154-7) came in through
 T2GREECE and was the one novel face, read "possible outage". The same error
 F-2026-09-29-01 fixed for the test answer (`qAS` + `TCPIP*` is internet) was
 still in the silence detector.
 
 **How common.** In six hours of the raw feed, 1,945 distinct callsigns
-arrived `TCPIP*,qAS,<another login>` - 9M2PJU-1 alone carried 556,
+arrived `TCPIP*,qAS,<another login>` - STN155-1 alone carried 556,
 BrandMeister's DMR gateways (BM2222, BM2142POS) hundreds. Measured on the
 live threshold cells (2026-10-06 ~07:40 CEST), each silent station's last
 packet looked up in the 29 h log (the in-memory `last_packet` is empty
@@ -7070,7 +7076,7 @@ after a restart, which made a first attempt read 3 of 250):
 |---|---|
 | threshold cells / alerting | 53 / 12 |
 | silent stations, all found in the log | 254 |
-| ... last packet injected under another login | 35 (VU3ZAG-13 20, VK2FLY 2, RC3C 2, others) |
+| ... last packet injected under another login | 35 (STN152-13 20, STN156 2, STN157 2, others) |
 | cells touched | 13 |
 | ... that would have no local witness at all | 10, among them **3 of the 12 alerts** (GF25, MJ88, PH57) and the four grey South India cells |
 
@@ -7088,7 +7094,7 @@ unchanged); `is_backbone_gate()` counts the prefix as internet, so
 of them reads `backbone` / no local witness; the gateway's "last gated by"
 answer says internet. `tools/check_injected_gate.py`, **seen failing** (4)
 against v3.2.153. Not done: rewriting the stored gate of records already
-silent - they keep VU3ZAG-13 until heard again, a one-off fix from the raw
+silent - they keep STN152-13 until heard again, a one-off fix from the raw
 log needing a separate decision.
 
 ---
@@ -7559,7 +7565,7 @@ Same measure every 30 min over 3.5 days, feed breaks excluded, 115 anchors:
 median 1 fixed station going quiet, p90 4, **the quake half-hour 13 of 85
 (15 %) and the next 12 - the two highest.** A real signal, and small: 85 % kept
 beaconing, among them all four stations within 40 km of the epicentre
-(HP1GDP-4, HP1COO-4, HP1UPR-2, HP1UPR-15).
+(STN158-4, STN159-4, STN160-2, STN160-15).
 
 **Why no big outage showed.** The 13 fell in four cells - FJ09 6, EJ88 3,
 EJ98 2, FJ08 2 - none near half its operators (FJ09: 3 operators of about
@@ -7582,7 +7588,7 @@ FJ09 at 08:03 the next morning.
    above the quake lines, and the cause list has no earthquake.
 3. **The quake reached EJ88 by four minutes.** A candidate had to fall
    before `since` + 10 min, and `since` is when the FIRST silent station
-   crossed its threshold - here HP3AXL, silent since before the quake, at
+   crossed its threshold - here STN161, silent since before the quake, at
    18:00:20 against the quake's 17:56:06. A quake after that is dropped
    whatever stops after it, from the map popup, the evidence file, the note
    and Telegram alike. Found by the probe below: its EJ88-shaped case had no
@@ -7646,7 +7652,7 @@ cumulative.
 **Ordinary hours.** 300 random places with at least 15 fixed stations within
 150 km, at random times away from Panama and from the deaf minutes. R 300 km,
 cumulative: p < 1e-4 at 60 min **1 of 300**, at 3 h 3 of 300; the 60 min one
-is 102 of 677 stations around G1OHH-N, 2026-10-09 00:33 UTC - a real regional
+is 102 of 677 stations around STN162-N, 2026-10-09 00:33 UTC - a real regional
 event, not chance. At 500 km and 3 h it is 11 of 300: wider rings catch more
 of the world's own outages.
 
@@ -7678,22 +7684,22 @@ but it is worth recording." · **Verdict:** measured, recorded, not fixed
 **Who is there.** The registry holds 63 stations at 84 N or more, 17 heard
 in the last 24 h. None is at the pole:
 
-- **Placeholder positions.** `9000.00N/18000.00E` (and `W`): KK7MFU-10,
-  W4AHI-10 ("RX-only iGate"), DL7AF-7, HB9FZW and others - a station saying
+- **Placeholder positions.** `9000.00N/18000.00E` (and `W`): STN163-10,
+  STN164-10 ("RX-only iGate"), STN165-7, STN166 and others - a station saying
   "no position" in a position field. `_on_earth` accepts 90/180, and 0/0
-  too (BG5HNP-0 sends `00000.00N/00000.00E`).
+  too (STN167-0 sends `00000.00N/00000.00E`).
 - **Misread latitudes.** `_RE_POS_UNCOMP` is searched, not anchored, so in a
-  malformed field it finds a valid-looking part: KC8HFO-D `38806.60N`
-  (38 06.60 with a stray digit) reads as 88 06.60; AA5PD-B `28540.47N` as
-  85 40.47; I4IFL-D `4420668800.00N` as 88 00.00.
+  malformed field it finds a valid-looking part: STN168-D `38806.60N`
+  (38 06.60 with a stray digit) reads as 88 06.60; STN169-B `28540.47N` as
+  85 40.47; STN170-D `4420668800.00N` as 88 00.00.
 
 **How often** (one day of raw feed, 7.0 M lines, 4.71 M with a position):
 **3,298 position packets (0.07 %) from 54 sources** were matched inside a
 longer digit run; **284** of them land at 84 N or more. Not all are wrong:
-F4ETJ-1 (570 packets) and NEVAMO put an object timestamp without its `z`
-(`0915514526.39N`) and K2ILH-2 a leading `0` (`04257.33N`) - the match
-reads their true position. MMDVM gateways with a stray digit (KC8HFO-D,
-I4IFL-D, EA5HJU-D `373618.60N`, VK2JEH-N, VK3RHD-D) read a false one. A
+STN171-1 (570 packets) and NEVAMO put an object timestamp without its `z`
+(`0915514526.39N`) and STN172-2 a leading `0` (`04257.33N`) - the match
+reads their true position. MMDVM gateways with a stray digit (STN168-D,
+STN170-D, STN173-D `373618.60N`, STN174-N, STN175-D) read a false one. A
 plain "not after a digit" rule would drop the right ones with the wrong.
 
 **Why the counts jump.** Web Mercator stops at 85.05 N. Below zoom 9 the
@@ -7730,7 +7736,7 @@ text (`misread_position`); every dropped value goes to meta
 copy of the live registry (308,141): **2,020 dropped - 1,845 placeholders,
 175 misreads**, 605 of them heard in the last week; 193 stations now read
 "position unreadable" in the map search. Misreads were not only at the pole:
-CT5HPY-12 stood in the South Atlantic, E20DNK in Gabon, BH1OFP in the Red
+STN176-12 stood in the South Atlantic, STN177 in Gabon, STN178 in the Red
 Sea. One day of feed: 2,315 packets unreadable, 9,720 placeholders or off the
 map. Five stations between 84 and 85 N stay drawn - their text says 84 and
 the map can draw it. The map shows a metric scale under the zoom buttons,
@@ -7786,7 +7792,7 @@ stations at exactly 50.000 N 3.000 W - open sea off Devon. They send
 `5000.00N/00300.00W`, Pi-Star's default: MMDVM voice hotspots whose position
 was never set. The registry held **1,983** at that point (790 heard in the
 last 24 h) - gateways and their D-Star/C4FM/NXDN repeater objects from
-Turkey (TB3ALL-N, TB1MCO-N), the US, Israel and elsewhere. Two more records
+Turkey (STN179-N, STN180-N), the US, Israel and elsewhere. Two more records
 at 50.01 N are not the default and stay.
 
 **Applied, v3.2.172.** `_plausible()` refuses exactly 50.0/-3.0, as it does
@@ -7826,9 +7832,9 @@ operator ("DMWGPT mesajlarında sorunlar olmuştu") · **Verdict:** our fault;
 fixed in v3.2.174
 
 ```
-05:38:48  RX from KE2AHQ-8: what is the speed limit on rt 78 in nj
+05:38:48  RX from STN131-8: what is the speed limit on rt 78 in nj
 05:53:48  AI query failed: TypeError: 'NoneType' object is not subscriptable
-05:57:10  RX from KE2AHQ-8: what is the speed limit on rt 78 in nj
+05:57:10  RX from STN131-8: what is the speed limit on rt 78 in nj
 06:12:11  AI query failed: TypeError: 'NoneType' object is not subscriptable
 ```
 
@@ -7941,16 +7947,16 @@ for the operator, both may answer the same message. Not changed.
 sorulmus ve cevaplanamamisti") · **Verdict:** our rules; fixed in v3.2.177
 
 ```
-2026-10-14 06:56:02  RX from KR4OII-1: igate near me
-                     Nearest igates to you: AJ4AR-10 44km; K4RBC-B 47km (own feed)
-2026-10-14 06:56:20  RX from KR4OII-1: digipeater near me
+2026-10-14 06:56:02  RX from STN125-1: igate near me
+                     Nearest igates to you: STN181-10 44km; STN182-B 47km (own feed)
+2026-10-14 06:56:20  RX from STN125-1: digipeater near me
                      Sorry, I have no live data, so no digipeater list. Check
                      aprs.fi or repeaterbook.com for nearby digis.
 ```
 
 The registry classifies `/#` and `\#` as `digi` and held 10,829 of them
-(2026-10-19). Around KR4OII-1's last position: K4TH-1 34 km and N9HO-10 43 km,
-both heard that day; KR4ISQ-2 44 km, last heard 56 days earlier.
+(2026-10-19). Around STN125-1's last position: STN183-1 34 km and STN184-10 43 km,
+both heard that day; STN185-2 44 km, last heard 56 days earlier.
 
 Two faults in `_IGATE_NEAR`: "digipeater near me" matched nothing (only
 "IGATES? NEAR" had a trailing form), and "nearest digi" / "en yakin digi"

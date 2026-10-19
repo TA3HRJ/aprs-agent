@@ -299,10 +299,9 @@ async def run() -> int:
     print("  %-13s %-28s -> %s" % ("quota spent", "what is the weather?", body3[:74]))
 
     # A place the gateway cannot read must be named as unread, not just
-    # answered "from you". 2026-10-02 KE2AHQ-8 "weather for flemington, nj
-    # please" and 2026-10-03 KC3NZY-5 "Weather around 21921" (a US ZIP) were
-    # both answered from the sender's own position with nothing saying the
-    # place had been ignored (F-2026-10-04-02). A plain question must not
+    # answered "from you". A question naming a town and one naming a US ZIP
+    # were both answered from the sender's own position with nothing saying
+    # the place had been ignored (F-2026-10-04-02). A plain question must not
     # carry the note.
     for text, want in (("weather for flemington, nj please", True),
                        ("Weather around 21921", True),

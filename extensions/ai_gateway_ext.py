@@ -194,8 +194,8 @@ _POSTCODE_IN_TEXT = re.compile(
 # A place named in the question that this program cannot read: "for
 # Flemington", "in Wakefield", "around 21921" (a US ZIP), "Izmir'de". There is
 # no geocoder (F-2026-09-20-04), so such a question is answered from the
-# sender's own position - and has to say the place was not read. KE2AHQ-8 and
-# KC3NZY-5 were answered "from you" with nothing more (F-2026-10-04-02).
+# sender's own position - and has to say the place was not read. Two such
+# questions were answered "from you" with nothing more (F-2026-10-04-02).
 _PLACE_WORD = re.compile(
     r"\b(?:for|in|at|near|around|of)\s+(?!(?:me|my|here|you|your|the|this|"
     r"today|tonight|tomorrow|now|celsius|fahrenheit|metric|english|turkish|"
@@ -457,9 +457,8 @@ _IGATE_NEAR = re.compile(
     r"\b(?:NEAREST|CLOSEST|LOCAL)\s+(?:APRS\s+)?(?:IGATE|I-GATE|GATE)"
     r"|\bIGATES?\s+NEAR\b|\bEN\s+YAKIN\s+IGATE", re.I)
 # Digipeaters are their own kind. "Nearest digi" used to be answered with
-# igates under the word "igates", and KR4OII-1's "digipeater near me"
-# (2026-10-14) matched nothing and reached the model, which said it had no
-# live data - with 10,829 digis in the registry, the nearest 34 km away.
+# igates under the word "igates", and "digipeater near me" matched nothing
+# and reached the model, which said it had no live data (F-2026-10-19-02).
 _DIGI_NEAR = re.compile(
     r"\b(?:NEAREST|CLOSEST|LOCAL)\s+(?:APRS\s+)?DIGI\w*"
     r"|\bDIGI\w*\s+(?:NEAR|AROUND|CLOSE)\b"
@@ -722,9 +721,9 @@ _PART_GAP_S = 5.0               # between parts
 # resend cannot come sooner than that or it never reaches the air.
 _RETRY_GAPS_S = (40.0, 60.0, 120.0)
 # How long one provider call may take. The OpenAI client's own default is ten
-# minutes and it retries twice; on 2026-10-15 KE2AHQ-8's question hung for
-# exactly 900 s, twice, before failing - answers normally take 1-6 s, and
-# nobody at a radio waits a quarter of an hour.
+# minutes and it retries twice; a question once hung for 900 s before failing
+# (F-2026-10-15-01) - answers normally take 1-6 s, and nobody at a radio
+# waits a quarter of an hour.
 _AI_TIMEOUT_S = 30.0
 _RF_QCONS = {"qAR", "qAr", "qAO", "qAo"}   # gated from RF, not typed online
 
@@ -1292,9 +1291,8 @@ class AIGateway(Extension):
         listing = "Nearest %s to %s: %s" % (label, whence, "; ".join(bits))
         full = listing + ". My own feed only."
         # The tail says where the answer comes from, and on a two-station
-        # listing it cost a packet of its own: KR4OII-9's answer on
-        # 2026-09-25 was 72 characters and the second packet carried
-        # "feed only." (F-2026-09-27-01). When the short form keeps the
+        # listing it cost a packet of its own: a 72-character answer sent
+        # a second packet carrying only "feed only." (F-2026-09-27-01). When the short form keeps the
         # answer in one packet, use it; otherwise the sentence stays.
         short = listing + " (own feed)"
         if len(full) > 64 and len(short) <= 64:
@@ -1618,8 +1616,8 @@ class AIGateway(Extension):
                     + turns + [{"role": "user", "content": question}],
                     extra_body=extra_body,
                 )
-                # KE2AHQ-8, 2026-10-15: a 200 with no answer in it, read as
-                # "'NoneType' object is not subscriptable". Say what it was.
+                # A 200 with no answer in it was read as "'NoneType' object
+                # is not subscriptable" (F-2026-10-15-01). Say what it was.
                 choice = resp.choices[0] if resp.choices else None
                 content = choice.message.content if choice and choice.message else None
                 if not content:
