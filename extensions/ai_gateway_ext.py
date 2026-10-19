@@ -454,8 +454,20 @@ _PUNCT = re.compile(r"[^A-Z0-9]+")
 # beacons precisely so that others can find it; answering about one is not
 # the same act as answering about a person who happens to carry a tracker.
 _IGATE_NEAR = re.compile(
-    r"\b(?:NEAREST|CLOSEST|LOCAL)\s+(?:APRS\s+)?(?:IGATE|I-GATE|GATE|DIGI\w*)"
-    r"|\bIGATES?\s+NEAR\b|\bEN\s+YAKIN\s+(?:IGATE|DIGI\w*)", re.I)
+    r"\b(?:NEAREST|CLOSEST|LOCAL)\s+(?:APRS\s+)?(?:IGATE|I-GATE|GATE)"
+    r"|\bIGATES?\s+NEAR\b|\bEN\s+YAKIN\s+IGATE", re.I)
+# Digipeaters are their own kind. "Nearest digi" used to be answered with
+# igates under the word "igates", and KR4OII-1's "digipeater near me"
+# (2026-10-14) matched nothing and reached the model, which said it had no
+# live data - with 10,829 digis in the registry, the nearest 34 km away.
+_DIGI_NEAR = re.compile(
+    r"\b(?:NEAREST|CLOSEST|LOCAL)\s+(?:APRS\s+)?DIGI\w*"
+    r"|\bDIGI\w*\s+(?:NEAR|AROUND|CLOSE)\b"
+    r"|\bEN\s+YAKIN\s+DIGI\w*|\bYAKIN\w*\s+DIGI\w*", re.I)
+_DIGI_TYPES = ("digi",)
+# The registry keeps a station forever; a digipeater not heard for a week is
+# no help to someone looking for a path onto the air today.
+_DIGI_RECENT_S = 7 * 86400
 _IGATE_MINE = re.compile(
     r"\bWHICH\s+IGATE\b|\bWHAT\s+IGATE\b|\bMY\s+IGATE\b"
     r"|\bWHO\s+IS\s+GATING\s+ME\b|\bGATED?\s+ME\b|\bHEARS?\s+ME\b"
@@ -1217,8 +1229,11 @@ class AIGateway(Extension):
         is a grid if the question names one, and the asker's own last beacon
         otherwise; a postcode is neither, and says so.
         """
+        recent_s = None
         if _REPEATER_NEAR.search(question):
             kinds, label = _REPEATER_TYPES, "repeaters"
+        elif _DIGI_NEAR.search(question):
+            kinds, label, recent_s = _DIGI_TYPES, "digipeaters", _DIGI_RECENT_S
         elif _IGATE_NEAR.search(question):
             kinds, label = _IGATE_TYPES, "igates"
         else:
@@ -1245,10 +1260,22 @@ class AIGateway(Extension):
         try:
             hits = await asyncio.get_event_loop().run_in_executor(
                 None, db.nearest_of_type, origin[0], origin[1],
-                kinds, _IGATE_RADIUS_KM, 2)
+                kinds, _IGATE_RADIUS_KM, 2 if recent_s is None else 20)
         except Exception as e:
             self.error(f"{label} scan failed: {e}")
             return None
+        if recent_s is not None:
+            now = _clock()
+
+            def _age(rec: dict) -> float:
+                ago = rec.get("last_seen_ago_s")
+                if ago is not None:
+                    return float(ago)
+                return now - float(rec.get("last_seen") or 0)
+            hits = [h for h in hits if _age(h[0]) <= recent_s][:2]
+            if not hits:
+                return ("No %s heard this week within %.0fkm of %s."
+                        % (label[:-1], _IGATE_RADIUS_KM, whence))
         if not hits:
             return ("No %s within %.0fkm of %s in my records."
                     % (label[:-1], _IGATE_RADIUS_KM, whence))

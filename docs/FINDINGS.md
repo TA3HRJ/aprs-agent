@@ -7932,3 +7932,34 @@ Seen while looking: the e-mail bridge listens on `EMAIL`, which is also the
 address of the public APRS e-mail service (VE7ZIO-EM answers it). It acts
 only for the operator's own callsigns, so for anyone else nothing changes;
 for the operator, both may answer the same message. Not changed.
+
+---
+
+## F-2026-10-19-02 — asked for a digipeater, the gateway said it had no data, holding 10,829 of them
+
+**Source:** operator, from the 2026-10-15 review ("takindaki digipeater
+sorulmus ve cevaplanamamisti") · **Verdict:** our rules; fixed in v3.2.177
+
+```
+2026-10-14 06:56:02  RX from KR4OII-1: igate near me
+                     Nearest igates to you: AJ4AR-10 44km; K4RBC-B 47km (own feed)
+2026-10-14 06:56:20  RX from KR4OII-1: digipeater near me
+                     Sorry, I have no live data, so no digipeater list. Check
+                     aprs.fi or repeaterbook.com for nearby digis.
+```
+
+The registry classifies `/#` and `\#` as `digi` and held 10,829 of them
+(2026-10-19). Around KR4OII-1's last position: K4TH-1 34 km and N9HO-10 43 km,
+both heard that day; KR4ISQ-2 44 km, last heard 56 days earlier.
+
+Two faults in `_IGATE_NEAR`: "digipeater near me" matched nothing (only
+"IGATES? NEAR" had a trailing form), and "nearest digi" / "en yakin digi"
+did match - and were answered with igates, under the word "igates".
+
+**Applied, v3.2.177.** `_DIGI_NEAR` (nearest/closest/local digi…, digi…
+near/around/close, en yakin / yakindaki digi…) asks the registry for type
+`digi` only, and leaves out any not heard for 7 days - the registry keeps a
+station forever, and a digi silent since August is no path onto the air.
+None left: "No digipeater heard this week within 250km of you."
+`check_digi_near.py` fails on v3.2.176 with exactly the live answer;
+`check_selflookup`'s "nearest digi" case still passes.
