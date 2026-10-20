@@ -301,6 +301,8 @@ minutes (`&lang=tr` for Turkish, `&theme=dark`, or the reader's own setting):
         width="320" height="210" style="border:0"></iframe>
 ```
 
+It works in a QRZ.com biography: paste the iframe in the editor's HTML view.
+
 The public page also serves `robots.txt` (keeping crawlers off `/api/` and
 `/ws`), `sitemap.xml`, `llms.txt` and an HTML 404 page, and loads Leaflet from
 itself rather than from a third-party script host.
