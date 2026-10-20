@@ -15,8 +15,9 @@ What must hold (a local OpenAI-compatible server records what is sent):
 
   1. the gateway and the station notes send each provider's current default
      model when none is configured; no retired model is a default
-  2. Gemini and Groq's gpt-oss get reasoning_effort "low" and room for it on
-     top of the answer's budget; OpenAI gets max_completion_tokens and
+  2. Groq's gpt-oss and a Gemini Flash model get reasoning_effort "low" and
+     room for it on top of the answer's budget; Flash-Lite, which does not
+     think unless asked, gets no switch; OpenAI gets max_completion_tokens and
      reasoning_effort "none"; DeepSeek keeps thinking disabled
   3. a model the operator names is sent as named
   4. Gemini is the default provider in config, the template and the web UI,
@@ -51,7 +52,7 @@ RETIRED = ("llama-3.3-70b-versatile", "llama-3.1-8b-instant",
            "meta-llama/llama-3.3-70b-instruct:free", "claude-3-5-haiku-20241022")
 # each provider's current model, from its own documentation on 2026-10-20
 EXPECTED = {
-    "gemini":     "gemini-flash-latest",
+    "gemini":     "gemini-3.5-flash-lite",
     "groq":       "openai/gpt-oss-120b",
     "openrouter": "google/gemma-4-31b-it:free",
     "openai":     "gpt-6-luna",
@@ -110,10 +111,14 @@ async def main() -> int:
                     p.append(f"{prov} {where}: model {body.get('model')!r}, "
                              f"default is {defaults[prov]!r}")
                 budget = 40 if where == "gateway" else 120
-                if prov in ("gemini", "groq"):
+                if prov == "groq":
                     if body.get("reasoning_effort") != "low" or \
                             (body.get("max_tokens") or 0) < budget + 512:
                         p.append(f"{prov} {where}: no reasoning room {shown}")
+                elif prov == "gemini":
+                    # Flash-Lite does not think unless asked; "low" would ask
+                    if "reasoning_effort" in body or (body.get("max_tokens") or 0) < budget:
+                        p.append(f"gemini {where}: {shown}")
                 elif prov == "openai":
                     if body.get("max_completion_tokens") != budget or \
                             body.get("reasoning_effort") != "none" or "max_tokens" in body:
@@ -123,6 +128,11 @@ async def main() -> int:
                         p.append(f"deepseek {where}: thinking not disabled")
                 elif body.get("max_tokens") != budget:
                     p.append(f"{prov} {where}: max_tokens {body.get('max_tokens')}")
+
+        flash = await gateway_body(base, "gemini", "gemini-3.8-flash")
+        print(f"  gemini named Flash -> { {k: v for k, v in flash.items() if k != 'messages'} }")
+        if flash.get("reasoning_effort") != "low" or (flash.get("max_tokens") or 0) < 40 + 512:
+            p.append(f"a named Gemini Flash model gets no reasoning switch and room: {flash}")
 
         named = await gateway_body(base, "groq", "qwen/qwen3.8-27b")
         if named.get("model") != "qwen/qwen3.8-27b" or "reasoning_effort" in named:

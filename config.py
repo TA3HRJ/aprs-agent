@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.187"
+VERSION = "3.2.188"
 
 # The APRS destination ("tocall") on every packet this program sends -
 # message replies, acks, bridged messages, status and the beacon. APRAGT is
@@ -371,7 +371,10 @@ AI_PROVIDER_URLS = {
     "anthropic":  "https://api.anthropic.com",
 }
 AI_PROVIDER_MODELS = {
-    "gemini":     "gemini-flash-latest",       # the newest stable Flash
+    # Flash-Lite answers without thinking: 4-17 s on the free tier, measured
+    # 2026-10-20; gemini-flash-latest thought ~900 tokens, took 22-90 s and
+    # returned 503 (overloaded) on 2 of 3 calls
+    "gemini":     "gemini-3.5-flash-lite",
     "groq":       "openai/gpt-oss-120b",
     "openrouter": "google/gemma-4-31b-it:free",
     "openai":     "gpt-6-luna",
@@ -400,9 +403,13 @@ def ai_request_params(provider: str, model: str, max_tokens: int) -> dict:
         # alias was the same model with thinking off
         return {"max_tokens": max_tokens, "thinking": {"type": "disabled"}}
     if provider == "gemini":
-        # Gemini 3 models cannot stop thinking; "low" keeps it brief
-        return {"max_tokens": max_tokens + _AI_REASONING_ROOM["gemini"],
-                "reasoning_effort": "low"}
+        # A Flash model thinks unless told otherwise and cannot be told
+        # "none" or "minimal" (400); "low" keeps it short. Flash-Lite does
+        # not think by default, and "low" would make it.
+        p = {"max_tokens": max_tokens + _AI_REASONING_ROOM["gemini"]}
+        if "lite" not in m:
+            p["reasoning_effort"] = "low"
+        return p
     if provider == "groq" and "gpt-oss" in m:
         return {"max_tokens": max_tokens + _AI_REASONING_ROOM["groq"],
                 "reasoning_effort": "low"}

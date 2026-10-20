@@ -2470,7 +2470,9 @@ class AgentManager:
                 headers["x-api-key"] = api_key
             req = urllib.request.Request(
                 url, data=_json.dumps(payload).encode(), headers=headers)
-            with urllib.request.urlopen(req, timeout=20) as resp:
+            # 45 s: a free tier answers in 4-17 s and sometimes slower;
+            # these notes run in the background, nobody is waiting
+            with urllib.request.urlopen(req, timeout=45) as resp:
                 data = _json.loads(resp.read())
             text = "".join(
                 block.get("text", "") for block in data.get("content", [])
@@ -2498,7 +2500,9 @@ class AgentManager:
             req = urllib.request.Request(
                 url, data=_json.dumps(payload).encode(), headers=headers
             )
-            with urllib.request.urlopen(req, timeout=20) as resp:
+            # 45 s: a free tier answers in 4-17 s and sometimes slower;
+            # these notes run in the background, nobody is waiting
+            with urllib.request.urlopen(req, timeout=45) as resp:
                 data = _json.loads(resp.read())
 
             text = (data.get("choices", [{}])[0]

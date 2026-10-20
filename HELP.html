@@ -837,7 +837,10 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
       <p><strong>Google Gemini</strong> (varsayılan): anahtar
       <a href="https://aistudio.google.com/apikey">aistudio.google.com</a>'dan
       alınır. Ücretsiz katmanda Flash modelleri ücret almaz; istek sınırları
-      projenin AI Studio sayfasında görünür. Google, ücretsiz katmandaki
+      projenin AI Studio sayfasında görünür. Varsayılan model
+      <code>gemini-3.5-flash-lite</code>: 20 Ekim 2026'daki denemede cevaplar
+      15–45 saniye sürdü (DeepSeek'ten yavaş). Daha büyük Flash modelleri
+      aynı gün çoğu istekte 503 (aşırı yük) döndü. Google, ücretsiz katmandaki
       içeriği ürünlerini geliştirmek için kullanır; ücretli katmanda
       kullanmaz.</p>
       <p><strong>Groq</strong>: ücretsiz planda <code>openai/gpt-oss-120b</code>
@@ -1765,7 +1768,10 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
       <p><strong>Google Gemini</strong> (the default): get a key at
       <a href="https://aistudio.google.com/apikey">aistudio.google.com</a>.
       On the free tier the Flash models cost nothing; the request limits are
-      shown on the project's AI Studio page. Google uses free-tier content to
+      shown on the project's AI Studio page. The default model is
+      <code>gemini-3.5-flash-lite</code>: tried on 20 October 2026, answers
+      took 15–45 seconds (slower than DeepSeek). The larger Flash models
+      returned 503 (overloaded) on most requests that day. Google uses free-tier content to
       improve its products; it does not on the paid tier.</p>
       <p><strong>Groq</strong>: on the free plan <code>openai/gpt-oss-120b</code>
       allows 30 requests a minute and 1,000 a day. Groq's Llama models have

@@ -8032,3 +8032,5 @@ free terms with the date. `check_ai_providers.py` records what is sent to a
 local server: v3.2.186 fails it 22 ways. Not live-tested: no Gemini, Groq,
 OpenRouter, OpenAI or Anthropic key was available; the VPS runs DeepSeek,
 whose request is unchanged.
+
+**Live, v3.2.188** (a free-tier Gemini key from the operator, 2026-10-20). `gemini-flash-latest` with effort `low` thought ~900 tokens, took 22-90 s and gave 503 (overloaded) on 2 of 3 calls; effort `minimal` and `none` are rejected (400) for Flash. `gemini-3.5-flash-lite` without an effort does not think: 4-17 s, 3 of 3; effort `low` makes it think 290-350 tokens. Default changed to Flash-Lite, no effort for Lite models. Through the gateway: three answers (one part, three parts, Turkish two parts) in 15-44 s, the 44 s one after the 30 s timeout and its retry; a station note returned valid JSON in 16 s. The notes' 20 s timeout is now 45 s.
