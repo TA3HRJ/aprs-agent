@@ -8,7 +8,7 @@ Supports:
   --print-config           Print the loaded config and exit
   --sync-config-to-file    Add any missing default values to the config file
 
-Developed by TA3HX & TA3PKS
+Developed by TA3HX, TA3PKS & TA3EKM
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.186"
+VERSION = "3.2.187"
 
 # The APRS destination ("tocall") on every packet this program sends -
 # message replies, acks, bridged messages, status and the beacon. APRAGT is
@@ -266,7 +266,7 @@ DEFAULTS: dict[str, Any] = {
         "ai_gateway": {
             "enabled": False,
             "callsign": "N0CALL",
-            "provider": "puter",
+            "provider": "gemini",
             # Legacy single-key field — kept only so configs saved before
             # per-provider keys still work (resolve_ai_api_key() falls back
             # to it). New saves populate api_keys instead.
@@ -348,6 +348,65 @@ def resolve_ai_api_key(ai_cfg: dict[str, Any], provider: str) -> str:
     configs saved before per-provider keys existed (pre-v2.10.12)."""
     keys = ai_cfg.get("api_keys") or {}
     return keys.get(provider) or ai_cfg.get("api_key", "") or ""
+
+
+# AI providers: endpoint and default model, shared by the gateway and the
+# station/silence/propagation notes. Checked against each provider's own
+# documentation 2026-10-20 (tools/check_ai_providers.py): Groq shut its Llama
+# models down for free and developer accounts on 2026-08-16, Anthropic retired
+# Claude 3.5 Haiku on 2026-02-19, OpenAI shuts gpt-4o-mini on 2027-01-14, and
+# OpenRouter's free Llama 3.3 is gone. Puter's OpenAI-compatible endpoint
+# needs a paid Puter plan (a free account gets 402).
+AI_DEFAULT_PROVIDER = "gemini"
+AI_PROVIDER_URLS = {
+    # free tier: no charge, content used by Google to improve its products
+    "gemini":     "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "groq":       "https://api.groq.com/openai/v1/",
+    "openrouter": "https://openrouter.ai/api/v1/",
+    "openai":     "https://api.openai.com/v1/",
+    "deepseek":   "https://api.deepseek.com/v1/",
+    "puter":      "https://api.puter.com/puterai/openai/v1/",
+    # Anthropic is not OpenAI-compatible: host only, "/v1/messages" is
+    # appended where it is used
+    "anthropic":  "https://api.anthropic.com",
+}
+AI_PROVIDER_MODELS = {
+    "gemini":     "gemini-flash-latest",       # the newest stable Flash
+    "groq":       "openai/gpt-oss-120b",
+    "openrouter": "google/gemma-4-31b-it:free",
+    "openai":     "gpt-6-luna",
+    "deepseek":   "deepseek-v4-flash",
+    "puter":      "gpt-4o-mini",
+    "anthropic":  "claude-haiku-5-5",
+}
+# Room for a reasoning model's thinking on top of the answer's own budget:
+# reasoning tokens count against the same limit, and an answer of 40-215
+# tokens left none - the reply came back empty.
+_AI_REASONING_ROOM = {"gemini": 2048, "groq": 1024}
+
+
+def ai_request_params(provider: str, model: str, max_tokens: int) -> dict:
+    """Body fields for an OpenAI-compatible chat call beyond model and
+    messages: the output limit under the name the provider takes, and the
+    switch that keeps a reasoning model's thinking short or off."""
+    m = (model or "").lower()
+    if provider == "openai":
+        p: dict[str, Any] = {"max_completion_tokens": max_tokens}
+        if m.startswith(("gpt-5", "gpt-6", "o1", "o3", "o4")):
+            p["reasoning_effort"] = "none"
+        return p
+    if provider == "deepseek":
+        # deepseek-v4-flash thinks by default; the legacy "deepseek-chat"
+        # alias was the same model with thinking off
+        return {"max_tokens": max_tokens, "thinking": {"type": "disabled"}}
+    if provider == "gemini":
+        # Gemini 3 models cannot stop thinking; "low" keeps it brief
+        return {"max_tokens": max_tokens + _AI_REASONING_ROOM["gemini"],
+                "reasoning_effort": "low"}
+    if provider == "groq" and "gpt-oss" in m:
+        return {"max_tokens": max_tokens + _AI_REASONING_ROOM["groq"],
+                "reasoning_effort": "low"}
+    return {"max_tokens": max_tokens}
 
 
 def strip_ssid(callsign: str) -> str:

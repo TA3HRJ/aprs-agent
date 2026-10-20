@@ -18,7 +18,7 @@ Setup:
   2. Message your bot, then get your chat_id from @userinfobot
   3. Enter bot_token and chat_id in config
 
-Developed by TA3HX & TA3PKS
+Developed by TA3HX, TA3PKS & TA3EKM
 """
 from __future__ import annotations
 

@@ -3,7 +3,7 @@ APRS-Agent Extension System
 ===========================
 Base class and registry for all extensions.
 
-Developed by TA3HX & TA3PKS
+Developed by TA3HX, TA3PKS & TA3EKM
 """
 from __future__ import annotations
 

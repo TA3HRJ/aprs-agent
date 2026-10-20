@@ -10,7 +10,7 @@ Web-based interface for APRS-Agent. Runs on any OS with a browser.
 On Windows: automatically opens browser to http://localhost:PORT
 On Linux  : access via http://SERVER_IP:PORT
 
-Developed by TA3HX & TA3PKS
+Developed by TA3HX, TA3PKS & TA3EKM
 """
 from __future__ import annotations
 
@@ -1811,7 +1811,7 @@ class AgentManager:
     async def _assess_prop(self, region: str, ls: list,
                            ai_cfg: dict) -> str:
         """Short AI read on an opening: tropo vs sporadic-E vs other."""
-        provider = ai_cfg.get("provider", "puter")
+        provider = ai_cfg.get("provider", cfg_module.AI_DEFAULT_PROVIDER)
         api_key = cfg_module.resolve_ai_api_key(ai_cfg, provider)
         base_url = self._ai_base_url(provider, ai_cfg.get("base_url", ""))
         model = ai_cfg.get("model", "")
@@ -2206,7 +2206,7 @@ class AgentManager:
     async def _assess_silence(self, c: dict, ai_cfg: dict) -> str:
         """Ask the AI Gateway to interpret a silence cluster. Returns a short
         note like "[power_outage/high] …summary…" or "" on failure."""
-        provider = ai_cfg.get("provider", "puter")
+        provider = ai_cfg.get("provider", cfg_module.AI_DEFAULT_PROVIDER)
         api_key  = cfg_module.resolve_ai_api_key(ai_cfg, provider)
         base_url = self._ai_base_url(provider, ai_cfg.get("base_url", ""))
         model    = ai_cfg.get("model", "")
@@ -2266,21 +2266,9 @@ class AgentManager:
     @staticmethod
     def _ai_base_url(provider: str, base_url: str) -> str:
         base_url = (base_url or "").rstrip("/")
-        if provider == "puter":
-            return base_url or "https://api.puter.com/puterai/openai/v1"
-        if provider == "groq":
-            return base_url or "https://api.groq.com/openai/v1"
-        if provider == "openrouter":
-            return base_url or "https://openrouter.ai/api/v1"
-        if provider == "openai":
-            return base_url or "https://api.openai.com/v1"
-        if provider == "deepseek":
-            return base_url or "https://api.deepseek.com/v1"
-        if provider == "anthropic":
-            # Different API shape (see _call_ai_api) — this is the host
-            # only, "/v1/messages" is appended there, not "/chat/completions".
-            return base_url or "https://api.anthropic.com"
-        return base_url
+        # Anthropic's entry is the host only: a different API shape, see
+        # _call_ai_api, where "/v1/messages" is appended.
+        return base_url or cfg_module.AI_PROVIDER_URLS.get(provider, "").rstrip("/")
 
     @staticmethod
     def _format_silence_msg(c: dict, note: str) -> str:
@@ -2427,7 +2415,7 @@ class AgentManager:
             rec.ai_analyzed = True
             return
 
-        provider  = ai_cfg.get("provider", "puter")
+        provider  = ai_cfg.get("provider", cfg_module.AI_DEFAULT_PROVIDER)
         api_key   = cfg_module.resolve_ai_api_key(ai_cfg, provider)
         base_url  = self._ai_base_url(provider, ai_cfg.get("base_url", ""))
         model     = ai_cfg.get("model", "")
@@ -2471,7 +2459,7 @@ class AgentManager:
             # endpoint, auth header, and request/response shape.
             url = base_url.rstrip("/") + "/v1/messages"
             payload = {
-                "model": model or "claude-3-5-haiku-20241022",
+                "model": model or cfg_module.AI_PROVIDER_MODELS["anthropic"],
                 "max_tokens": 120,
                 "system": system_msg,
                 "messages": [{"role": "user", "content": prompt}],
@@ -2488,32 +2476,19 @@ class AgentManager:
                 block.get("text", "") for block in data.get("content", [])
                 if block.get("type") == "text")
         else:
-            default_models = {
-                "puter": "gpt-4o-mini",
-                "groq":  "llama-3.1-8b-instant",
-                "openai": "gpt-4o-mini",
-                # "deepseek-chat" is a legacy alias for this model,
-                # deprecating 2026-07-24 -- use the real name directly.
-                "deepseek": "deepseek-v4-flash",
-            }
+            model = model or cfg_module.AI_PROVIDER_MODELS.get(provider, "")
             payload = {
-                "model": model or default_models.get(provider, ""),
+                "model": model,
                 "messages": [
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": prompt},
                 ],
-                "max_tokens": 120,
                 "temperature": 0,
             }
-            if provider == "deepseek":
-                # deepseek-v4-flash defaults to Thinking Mode on -- the
-                # legacy "deepseek-chat"/"deepseek-reasoner" aliases were
-                # actually this same model with thinking off/on respectively.
-                # Without this, the model spends the whole max_tokens budget
-                # on reasoning_content and never reaches the actual JSON
-                # answer in content, which then fails to parse -- silently,
-                # since an empty/invalid response isn't an exception.
-                payload["thinking"] = {"type": "disabled"}
+            # The output limit under the provider's own name, and the switch
+            # that keeps a reasoning model from spending it all on thinking
+            # and returning no JSON - silently, an empty answer is no error.
+            payload.update(cfg_module.ai_request_params(provider, model, 120))
             url = base_url.rstrip("/") + "/chat/completions"
 
             headers = {"Content-Type": "application/json"}

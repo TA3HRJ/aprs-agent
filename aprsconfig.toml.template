@@ -4,7 +4,7 @@
 # Edit the values below with your own settings.
 # Lines starting with '#' are comments and are ignored by the program.
 #
-# Developed by TA3HX & TA3PKS
+# Developed by TA3HX, TA3PKS & TA3EKM
 # https://github.com/YOUR_USERNAME/aprs-agent
 # =============================================================================
 
@@ -388,7 +388,8 @@ aprs_destination = ""
 
 # --- AI Gateway ---
 # Auto-responds to incoming APRS messages using an AI provider.
-# Supports Puter (free), Groq, OpenRouter, or any OpenAI-compatible endpoint.
+# Supports Google Gemini (free tier), Groq, OpenRouter, DeepSeek, OpenAI,
+# Anthropic, Puter (paid plan), or any OpenAI-compatible endpoint.
 # Messages addressed to the configured callsign will get an AI-generated reply.
 
 [extensions.ai_gateway]
@@ -397,9 +398,10 @@ enabled = false
 # The callsign that triggers AI responses (messages addressed to this callsign)
 callsign = "N0CALL"
 
-# AI provider: "openai" (ChatGPT), "anthropic" (Claude), "deepseek", "groq",
-# "openrouter", "puter" (free), or "custom"
-provider = "puter"
+# AI provider: "gemini" (Google, free tier: key from aistudio.google.com),
+# "openai" (ChatGPT), "anthropic" (Claude), "deepseek", "groq",
+# "openrouter", "puter" (needs a paid Puter plan), or "custom"
+provider = "gemini"
 
 # Custom base URL — only needed to override a provider's default endpoint
 # (e.g. a proxy), or required if provider = "custom"
@@ -479,11 +481,12 @@ wx_radius_km = 250
 # other [extensions.ai_gateway] key above — TOML cannot reopen a table once
 # a subtable of it has been declared.
 [extensions.ai_gateway.api_keys]
-puter = ""
+gemini = ""
 groq = ""
 openrouter = ""
 openai = ""
 anthropic = ""
+puter = ""
 deepseek = ""
 custom = ""
 

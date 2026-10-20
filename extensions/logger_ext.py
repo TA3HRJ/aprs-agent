@@ -4,7 +4,7 @@ Logger Extension
 Logs incoming APRS packets to the console.
 Supports filtering by APRS data type character and keywords.
 
-Developed by TA3HX & TA3PKS
+Developed by TA3HX, TA3PKS & TA3EKM
 """
 from __future__ import annotations
 

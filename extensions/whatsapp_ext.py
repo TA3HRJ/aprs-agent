@@ -20,7 +20,7 @@ Setup:
   4. Set webhook URL to: https://YOUR_SERVER/webhook/whatsapp
   5. Set verify_token to match your config
 
-Developed by TA3HX & TA3PKS
+Developed by TA3HX, TA3PKS & TA3EKM
 """
 from __future__ import annotations
 

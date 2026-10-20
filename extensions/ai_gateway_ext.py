@@ -7,10 +7,10 @@ Monitors the APRS-IS stream for message packets addressed to a
 configured callsign, queries an OpenAI-compatible AI, and sends
 the response back as APRS message(s).
 
-Supported providers: Puter (free), Groq, OpenRouter, or any
-OpenAI-compatible endpoint.
+Supported providers: Google Gemini (free tier), Groq, OpenRouter, DeepSeek,
+OpenAI, Anthropic, Puter (paid plan), or any OpenAI-compatible endpoint.
 
-Developed by TA3HX & TA3PKS
+Developed by TA3HX, TA3PKS & TA3EKM
 Bidirectional design follows aprs-ai-gateway by TA3EKM (Arda Yalin Ozkan),
 which is what made an APRS station able to answer rather than only report.
   https://github.com/ArdaYalinOzkan/aprs-ai-gateway
@@ -31,7 +31,9 @@ from typing import Optional
 import aprslib
 
 from . import Extension
-from config import TOCALL, strip_ssid, resolve_ai_api_key
+from config import (TOCALL, strip_ssid, resolve_ai_api_key, AI_DEFAULT_PROVIDER,
+                    AI_PROVIDER_URLS as _PROVIDER_URLS,
+                    AI_PROVIDER_MODELS as _PROVIDER_MODELS, ai_request_params)
 from packet_parser import looks_like_callsign
 
 _TR_MAP = str.maketrans(
@@ -62,27 +64,8 @@ _LATIN_EXTRA = {
     "\u00fe": "th", "\u00de": "Th", "\u00f0": "d", "\u00d0": "D",
 }
 
-_PROVIDER_URLS = {
-    "puter":      "https://api.puter.com/puterai/openai/v1/",
-    "groq":       "https://api.groq.com/openai/v1/",
-    "openrouter": "https://openrouter.ai/api/v1/",
-    "openai":     "https://api.openai.com/v1/",
-    "deepseek":   "https://api.deepseek.com/v1/",
-    # Anthropic is not OpenAI-compatible (see _do_ask) — this is the host
-    # only, "/v1/messages" is appended where it's actually used.
-    "anthropic":  "https://api.anthropic.com",
-}
-
-_PROVIDER_MODELS = {
-    "puter":      "gpt-4o-mini",
-    "groq":       "llama-3.3-70b-versatile",
-    "openrouter": "meta-llama/llama-3.3-70b-instruct:free",
-    "openai":     "gpt-4o-mini",
-    # "deepseek-chat" is a legacy alias for this model, deprecating
-    # 2026-07-24 -- using the real name directly so it keeps working.
-    "deepseek":   "deepseek-v4-flash",
-    "anthropic":  "claude-3-5-haiku-20241022",
-}
+# Provider endpoints and default models live in config.py, shared with
+# the web GUI's notes.
 
 
 _CRLF = "\r\n"
@@ -918,11 +901,11 @@ class AIGateway(Extension):
         self._delivery_recorder = None
         # numbered part (addressee, msg id) -> its answer's tally
         self._part_group: dict = {}
-        self._provider = config.get("provider", "puter")
+        self._provider = config.get("provider", AI_DEFAULT_PROVIDER)
         self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(
-            self._provider, _PROVIDER_URLS["puter"])
+            self._provider, "")
         self._model = config.get("model", "") or _PROVIDER_MODELS.get(
-            self._provider, "gpt-4o-mini")
+            self._provider, "")
         self.log(
             f"initialized | provider={self._provider} "
             f"| model={self._model} "
@@ -1028,7 +1011,7 @@ class AIGateway(Extension):
         cfg = self._config
         if not cfg.get("callsign"):
             raise ValueError("AI Gateway: callsign is required")
-        if not resolve_ai_api_key(cfg, cfg.get("provider", "puter")):
+        if not resolve_ai_api_key(cfg, cfg.get("provider", AI_DEFAULT_PROVIDER)):
             raise ValueError("AI Gateway: api_key is required")
 
     @property
@@ -1744,17 +1727,12 @@ class AIGateway(Extension):
                     timeout=_AI_TIMEOUT_S,
                     max_retries=1,
                 )
-                extra_body = {}
-                if provider == "deepseek":
-                    # deepseek-v4-flash defaults to Thinking Mode on -- the
-                    # legacy "deepseek-chat" alias was this same model with
-                    # thinking off. Without this, the model can spend the
-                    # whole max_tokens budget on reasoning_content and never
-                    # reach an actual reply in content.
-                    extra_body["thinking"] = {"type": "disabled"}
+                # The output limit under the provider's own name, and its
+                # reasoning switch: a thinking model given 40 tokens spends
+                # them all thinking and answers nothing (config.py).
+                extra_body = ai_request_params(provider, model, max_tokens)
                 resp = client.chat.completions.create(
                     model=model,
-                    max_tokens=max_tokens,
                     messages=[{"role": "system", "content": system_prompt}]
                     + turns + [{"role": "user", "content": question}],
                     extra_body=extra_body,

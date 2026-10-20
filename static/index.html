@@ -714,7 +714,7 @@ body.public #about-gw-link{display:none!important}
   <div class="action-row"><div class="content"><div class="title">AI Gateway</div><div class="subtitle" data-i="ai_sub">Auto-respond to APRS messages with AI. This is the master switch for ALL AI calls — turning it off also stops Silence Map, Propagation and Station AI assessments, even if those are individually enabled below</div></div><label class="adw-switch"><input type="checkbox" id="f-ai-enabled"><span></span></label></div>
   <div class="entry-row"><label data-i="ai_callsign">AI Callsign</label><input id="f-ai-callsign" type="text" placeholder="N0CALL" style="text-transform:uppercase;max-width:140px"></div>
   <div class="entry-row"><label data-i="ai_provider">Provider</label>
-    <select id="f-ai-provider" onchange="onAiProviderChange()"><option value="openai">ChatGPT (OpenAI)</option><option value="anthropic">Claude (Anthropic)</option><option value="deepseek">DeepSeek</option><option value="groq">Groq</option><option value="openrouter">OpenRouter</option><option value="puter">Puter (Free)</option><option value="custom">Custom Endpoint</option></select></div>
+    <select id="f-ai-provider" onchange="onAiProviderChange()"><option value="gemini">Google Gemini</option><option value="openai">ChatGPT (OpenAI)</option><option value="anthropic">Claude (Anthropic)</option><option value="deepseek">DeepSeek</option><option value="groq">Groq</option><option value="openrouter">OpenRouter</option><option value="puter">Puter</option><option value="custom">Custom Endpoint</option></select></div>
   <div class="entry-row"><label data-i="ai_api_key">API Key</label><input id="f-ai-api-key" type="password" oninput="aiKeysByProvider[$('f-ai-provider').value]=$('f-ai-api-key').value"><div class="hint" data-i="ai_api_key_hint">Stored separately per provider — switching providers recalls its own key instead of overwriting one shared field.</div></div>
   <div class="entry-row"><label data-i="ai_base_url">Custom Base URL</label><input id="f-ai-base-url" type="text" placeholder="https://api.example.com/v1/"><div class="hint" data-i="ai_base_url_hint">Only for custom provider</div></div>
   <div class="entry-row"><label data-i="ai_model">Model</label><input id="f-ai-model" type="text" placeholder="auto"><div class="hint" data-i="ai_model_hint">Leave empty for provider default</div></div>
@@ -1041,7 +1041,7 @@ const chars=s=>s.split(',').map(x=>x.trim()).filter(x=>x.length===1||x==='\\');
 let lang='en',autoScroll=true,logCount=0,heardFilter=null,lastStations=[];
 // AI Gateway: one API key per provider, so switching the dropdown recalls
 // that provider's own key instead of overwriting a single shared field.
-let aiKeysByProvider={},aiPrevProvider='puter';
+let aiKeysByProvider={},aiPrevProvider='gemini';
 function onAiProviderChange(){
   aiKeysByProvider[aiPrevProvider]=$('f-ai-api-key').value;   // stash the field we're leaving
   aiPrevProvider=$('f-ai-provider').value;
@@ -1481,7 +1481,7 @@ function loadCfg(cfg){
   $('f-tg-hashtag').checked=tg.add_hash_tag!==false;$('f-tg-recepients').value=csv(tg.allowed_recepients);$('f-tg-senders').value=csv(tg.allowed_senders);
   $('f-tg-poll').checked=tg.poll_enabled||false;$('f-tg-poll-interval').value=tg.poll_interval_secs||5;$('f-tg-from-call').value=tg.from_callsign||'';$('f-tg-aprs-dest').value=tg.aprs_destination||'';
   const ai=(cfg.extensions||{}).ai_gateway||{};$('f-ai-enabled').checked=ai.enabled||false;$('f-ai-callsign').value=ai.callsign||'';
-  aiPrevProvider=ai.provider||'puter';$('f-ai-provider').value=aiPrevProvider;
+  aiPrevProvider=ai.provider||'gemini';$('f-ai-provider').value=aiPrevProvider;
   // Per-provider keys; a lone legacy api_key (configs saved before api_keys existed)
   // is attributed to whichever provider is currently selected.
   aiKeysByProvider=Object.assign({},ai.api_keys||{});

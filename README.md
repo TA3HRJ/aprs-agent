@@ -361,7 +361,10 @@ max_batch      = 20     # max stations analysed per run
 
 ### AI Gateway
 
-Answers incoming APRS messages. Free providers available.
+Answers incoming APRS messages. The default provider, Google Gemini, has a free tier
+(key from [aistudio.google.com](https://aistudio.google.com/apikey); Google uses free-tier
+content to improve its products). Groq's free plan and OpenRouter's `:free` models also cost
+nothing, within daily limits; Puter's OpenAI-compatible endpoint needs a paid Puter plan.
 
 #### What it answers without asking the model
 
@@ -456,7 +459,7 @@ and conventional in compliance.
 [extensions.ai_gateway]
 enabled        = true
 callsign       = "YOUR_CALLSIGN"
-provider       = "puter"              # openai, anthropic, deepseek, groq, openrouter, puter, or custom
+provider       = "gemini"             # gemini, openai, anthropic, deepseek, groq, openrouter, puter, or custom
 base_url       = ""                   # leave empty for built-in providers
 model          = ""                   # leave empty to use provider default
 system_prompt  = ""                   # optional: custom system prompt
@@ -513,8 +516,8 @@ wx_radius_km   = 250
 # One key per provider — switching "provider" above recalls that provider's
 # own key automatically (required even on a provider's free tier)
 [extensions.ai_gateway.api_keys]
-puter = "your-puter-key"
-# groq, openrouter, openai, anthropic, deepseek, custom = "..." as needed
+gemini = "your-gemini-key"
+# groq, openrouter, openai, anthropic, deepseek, puter, custom = "..." as needed
 ```
 
 Two small files live beside the config file and are written by the gateway

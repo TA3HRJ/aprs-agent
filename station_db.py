@@ -4,7 +4,7 @@ Station Database
 In-memory database of all APRS stations heard in the current session.
 Combines live APRS data with an optional static Turkey Repeaters JSON file.
 
-Developed by TA3HX & TA3PKS
+Developed by TA3HX, TA3PKS & TA3EKM
 """
 from __future__ import annotations
 

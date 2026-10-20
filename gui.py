@@ -22,7 +22,7 @@ Features:
 Run with:   python gui.py
             python gui.py -c /path/to/aprsconfig.toml
 
-Developed by TA3HX & TA3PKS
+Developed by TA3HX, TA3PKS & TA3EKM
 """
 
 import argparse

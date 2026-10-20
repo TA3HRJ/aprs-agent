@@ -16,7 +16,7 @@ Email subject format:
 
 Requires IMAP access (Gmail: enable IMAP + use App Password).
 
-Developed by TA3HX & TA3PKS
+Developed by TA3HX, TA3PKS & TA3EKM
 """
 from __future__ import annotations
 

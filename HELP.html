@@ -119,7 +119,8 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
   .card .callout { background: var(--bg); }
   .callout.tip  { border-left-color: var(--accent2); }
   .callout.warn { border-left-color: var(--accent); }
-  .callout strong:first-child { display: block; margin-bottom: 3px; }
+  .callout > strong:first-child { display: block; margin-bottom: 3px; }
+  .callout p { margin: .35em 0 0; }
 
   code { font: .9em var(--mono); background: var(--bg2); padding: 1px 4px; }
   pre { background: var(--bg2); border: 1px solid var(--line); padding: 10px 12px;
@@ -832,15 +833,34 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
       kullanılır.
     </p>
     <div class="callout tip">
-      <strong>Ücretsiz seçenekler mevcut</strong>
-      Puter tamamen ücretsiz bir AI sağlayıcıdır. Groq ve OpenRouter'da da
-      ücretsiz modeller bulunmaktadır.
+      <strong>Ücretsiz kullanım (Ekim 2026 itibarıyla)</strong>
+      <p><strong>Google Gemini</strong> (varsayılan): anahtar
+      <a href="https://aistudio.google.com/apikey">aistudio.google.com</a>'dan
+      alınır. Ücretsiz katmanda Flash modelleri ücret almaz; istek sınırları
+      projenin AI Studio sayfasında görünür. Google, ücretsiz katmandaki
+      içeriği ürünlerini geliştirmek için kullanır; ücretli katmanda
+      kullanmaz.</p>
+      <p><strong>Groq</strong>: ücretsiz planda <code>openai/gpt-oss-120b</code>
+      dakikada 30, günde 1.000 istek. Groq'un Llama modelleri 16 Ağustos
+      2026'dan beri ücretsiz hesaplara kapalı.</p>
+      <p><strong>OpenRouter</strong>: adı <code>:free</code> ile biten modeller
+      ücretsizdir; dakikada 20 istek, hiç kredi alınmamışsa günde 50, en az 10
+      kredi alınmışsa günde 1.000. Ücretsiz modellerin listesi sık değişir;
+      varsayılan model kalkarsa <em>Model</em> alanına
+      <a href="https://openrouter.ai/models?max_price=0">listeden</a> birini
+      yazın.</p>
+      <p><strong>Puter</strong>: bu yazılımın kullandığı OpenAI uyumlu adresi
+      ücretli bir Puter planı ister; ücretsiz hesap 402 hatası alır.
+      <strong>DeepSeek, OpenAI ve Anthropic</strong> ücretlidir.</p>
+      <p>Sınırlar sağlayıcıların kendi sayfalarında değişebilir. Yanıtlanan
+      mesajlar APRS'te zaten herkese açıktır; yine de anahtarı aldığınız
+      sağlayıcının koşullarını okuyun.</p>
     </div>
     <table>
       <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
       <tr><td><span class="field-name">AI Çağrı İşareti</span></td><td>Bu çağrı işaretine gönderilen mesajlar AI yanıtı tetikler. SSID dikkate alınmadan eşleştirilir; <code>TA1ABC</code> olarak ayarlanmış bir geçide <code>TA1ABC-1</code> adresine yazan da ulaşır.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">Tetikleme Takma Adları</span></td><td>Bu geçidin ayrıca cevapladığı ek alıcı adları, virgülle ayrılır. APRS alıcı alanı her hâlükârda sabit 9 karakterdir; kısa bir takma ad havada bayt kazandırmaz, el telsizi tuş takımında basış kazandırır — orada bir rakam dört basışa mal olur. <strong>Emin değilseniz boş bırakın:</strong> APRS-IS tek bir dünya akışıdır, alıcı adı kimseye tahsis edilmez, ilk yazan kullanır. Başkasının seçmeyeceği bir ad seçin ve başka yerde gördüğünüz bir adı asla kullanmayın — aynı alıcı adına cevap veren iki geçit, yabancı birine iki ayrı cevap gönderir ve iki operatör de bunun olduğunu fark edemez.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
-      <tr><td><span class="field-name">Sağlayıcı</span></td><td>AI sağlayıcı: ChatGPT (OpenAI), Claude (Anthropic), DeepSeek, Groq, OpenRouter, Puter (ücretsiz) veya özel endpoint.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Sağlayıcı</span></td><td>AI sağlayıcı: Google Gemini (varsayılan, ücretsiz katmanı var), ChatGPT (OpenAI), Claude (Anthropic), DeepSeek, Groq, OpenRouter, Puter (ücretli plan) veya özel endpoint. <em>Model</em> alanı boşsa sağlayıcının varsayılan modeli kullanılır.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">API Anahtarı</span></td><td>Her sağlayıcı için ayrı saklanır — sağlayıcı değiştirilince o sağlayıcının kendi anahtarı otomatik gelir, tek bir alanın üzerine yazılmaz.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">Ek SMS Parçası</span></td><td>0 = tek 64 karakterlik yanıt. 1-5 = uzun yanıtlar için çok parçalı mesaj.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
       <tr><td><span class="field-name">Whitelist</span></td><td>Etkinleştirilirse sadece listedeki çağrı işaretlerinden gelen mesajlar yanıtlanır. <strong>Liste boşken açık bırakılırsa hiç kimseye yanıt verilmez</strong> — listeyi boşaltmak kapıyı açmaz, kapatır. Değişiklik yeniden başlatma gerektirmez: Kaydet dedikten ~5 saniye sonra geçerli olur.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
@@ -1741,15 +1761,33 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
       Map assessments.
     </p>
     <div class="callout tip">
-      <strong>Free options available</strong>
-      Puter is a completely free AI provider. Groq and OpenRouter also
-      offer free-tier models.
+      <strong>Free use (as of October 2026)</strong>
+      <p><strong>Google Gemini</strong> (the default): get a key at
+      <a href="https://aistudio.google.com/apikey">aistudio.google.com</a>.
+      On the free tier the Flash models cost nothing; the request limits are
+      shown on the project's AI Studio page. Google uses free-tier content to
+      improve its products; it does not on the paid tier.</p>
+      <p><strong>Groq</strong>: on the free plan <code>openai/gpt-oss-120b</code>
+      allows 30 requests a minute and 1,000 a day. Groq's Llama models have
+      been closed to free accounts since 16 August 2026.</p>
+      <p><strong>OpenRouter</strong>: models whose name ends in
+      <code>:free</code> cost nothing; 20 requests a minute, 50 a day if no
+      credits were ever bought, 1,000 a day after buying at least 10 credits.
+      The free list changes often; if the default model disappears, put one
+      from <a href="https://openrouter.ai/models?max_price=0">the list</a> in
+      the <em>Model</em> field.</p>
+      <p><strong>Puter</strong>: the OpenAI-compatible endpoint this software
+      uses needs a paid Puter plan; a free account gets error 402.
+      <strong>DeepSeek, OpenAI and Anthropic</strong> are paid.</p>
+      <p>Limits can change on the providers' own pages. The messages answered
+      are public on APRS anyway; still, read the terms of the provider you
+      take a key from.</p>
     </div>
     <table>
       <tr><th>Field</th><th>Description</th><th>Status</th></tr>
       <tr><td><span class="field-name">AI Callsign</span></td><td>Messages addressed to this callsign trigger an AI response. Matched with the SSID ignored, so a message to <code>TA1ABC-1</code> reaches a gateway configured as <code>TA1ABC</code>.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Trigger Aliases</span></td><td>Extra addressees this gateway also answers to, comma-separated. The APRS addressee field is a fixed 9 characters either way, so a shorter alias saves nothing on air — it saves key presses on a handheld keypad, where a digit costs four presses. <strong>Leave empty unless you mean it:</strong> APRS-IS is one worldwide feed and an addressee is first-come and unenforced. Choose a name nobody else would plausibly pick, and never reuse one you saw somewhere else — two gateways answering the same addressee send a stranger two answers, and neither operator can tell it is happening.</td><td><span class="badge opt">Optional</span></td></tr>
-      <tr><td><span class="field-name">Provider</span></td><td>AI provider: ChatGPT (OpenAI), Claude (Anthropic), DeepSeek, Groq, OpenRouter, Puter (free), or a custom endpoint.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Provider</span></td><td>AI provider: Google Gemini (the default, has a free tier), ChatGPT (OpenAI), Claude (Anthropic), DeepSeek, Groq, OpenRouter, Puter (paid plan), or a custom endpoint. With the <em>Model</em> field empty the provider's default model is used.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">API Key</span></td><td>Stored separately per provider — switching providers recalls that provider's own key automatically instead of overwriting one shared field.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Extra SMS Parts</span></td><td>0 = single 64-char reply. 1-5 = multi-part messages for longer responses.</td><td><span class="badge opt">Optional</span></td></tr>
       <tr><td><span class="field-name">Whitelist</span></td><td>If enabled, only messages from listed callsigns are answered. <strong>Enabled with an empty list answers nobody</strong> — clearing the list closes the gate, it does not open it. Changes need no restart: they take effect about 5 seconds after Save.</td><td><span class="badge opt">Optional</span></td></tr>

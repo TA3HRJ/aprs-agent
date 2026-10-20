@@ -7994,3 +7994,41 @@ unique `.<ns>.rotating` name and queues it; one worker, in order, shifts the
 400 packets through rotations of about 1 KB with 6 backups and requires the
 kept files to hold one gap-free run ending at the last packet: v3.2.179 fails
 it 6 of 6 runs (21-36 packets kept, with gaps), v3.2.180 passes 12 of 12.
+
+---
+
+## F-2026-10-20-02 — AI provider defaults retired, and Puter called free
+
+**Source:** the operator: HELP said "Puter is a completely free AI provider";
+Puter gives a monthly allowance and then requires payment · **Verdict:** our
+docs and defaults; fixed in v3.2.187
+
+Checked 2026-10-20 against each provider's own documentation:
+
+- Puter: the OpenAI-compatible endpoint the gateway uses
+  (`/puterai/openai/v1`) "require[s] a paid plan; a free account gets
+  `402 subscription_required`". Puter.js's user-pays model does not reach a
+  server using the owner's token. The docs, template and both GUIs said free.
+- Groq: `llama-3.3-70b-versatile` (gateway default) and `llama-3.1-8b-instant`
+  (notes default) shut for free and developer accounts on 2026-08-16;
+  replacements `openai/gpt-oss-120b` / `-20b`.
+- OpenRouter: `meta-llama/llama-3.3-70b-instruct:free` is not in the model
+  list (17 `:free` models on 2026-10-20). The notes sent no model at all for
+  OpenRouter.
+- Anthropic: `claude-3-5-haiku-20241022` retired 2026-02-19.
+- OpenAI: `gpt-4o-mini` shuts 2027-01-14; `gpt-6-luna` is a reasoning model
+  (effort `none` needed for `temperature`).
+
+The replacements reason before answering and the reasoning counts against
+the same output limit (40-215 tokens for an answer, 120 for a note), which
+leaves an empty reply.
+
+**Applied, v3.2.187.** One provider table in `config.py` for the gateway and
+the notes; Google Gemini (`gemini-flash-latest`; free tier, content used by
+Google to improve its products) is the default provider; per provider the
+output limit under its own name and the reasoning switch
+(`ai_request_params`). HELP, README and the template state each provider's
+free terms with the date. `check_ai_providers.py` records what is sent to a
+local server: v3.2.186 fails it 22 ways. Not live-tested: no Gemini, Groq,
+OpenRouter, OpenAI or Anthropic key was available; the VPS runs DeepSeek,
+whose request is unchanged.
