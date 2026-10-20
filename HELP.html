@@ -135,6 +135,11 @@
     background: #eef2f7; padding: 1px 5px;
     border-radius: 3px; font-size: .92em;
   }
+  pre {
+    background: #eef2f7; padding: 10px 12px; border-radius: 4px;
+    overflow-x: auto; margin: 8px 0 12px; line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; }
   a { color: var(--accent2); }
 
   .field-name { font-weight: 600; }
@@ -942,6 +947,37 @@
       görebilir. Uzaktan erişim için reverse proxy (nginx/Apache) + Basic Auth
       arkasına almanız önerilir; Public View portu bu korumaya gerek duymaz.
     </div>
+  </div>
+
+  <div class="card" id="embed-tr">
+    <div class="card-title">🧩 Gömülebilir durum kartı</div>
+    <p>
+      Bir karenin durumunu kendi sitenizde, blogunuzda ya da QRZ.com
+      biyografinizde gösteren küçük bir kart. Kartta karenin sessizlik durumu
+      (her şey yayında, bölgesel sessizlik ya da igate arızası), kareye ulaşan
+      bir deprem halkası ve son 3 saatte 400 km içindeki propagasyon açılımları
+      görünür. Kart 5 dakikada bir kendini yeniler. Script içermez, başka bir
+      sunucudan bir şey yüklemez. Alttaki bağlantı haritayı yeni bir sekmede o karede açar.
+    </p>
+    <p>Sayfanıza şu kodu yapıştırın (<code>KM38</code> yerine kendi karenizi yazın):</p>
+<pre><code>&lt;iframe src="https://map.aprsagent.com/embed/status?grid=KM38&amp;lang=tr"
+        width="320" height="210" style="border:0"&gt;&lt;/iframe&gt;</code></pre>
+    <table>
+      <tr><th>Parametre</th><th>Açıklama</th></tr>
+      <tr><td><code>grid</code></td><td>Maidenhead karesi (<code>KM38</code>; <code>KM38nk</code> gibi altı karakter de olur, ilk dördü kullanılır) ya da bir alan (<code>KM</code>: alandaki uyarı veren kareleri listeler). Zorunlu.</td></tr>
+      <tr><td><code>lang=tr</code></td><td>Türkçe. Verilmezse İngilizce.</td></tr>
+      <tr><td><code>theme=dark</code> / <code>theme=light</code></td><td>Koyu ya da açık tema. Verilmezse okuyanın cihaz ayarı kullanılır.</td></tr>
+    </table>
+    <div class="callout tip" style="margin-top:12px;">
+      <strong>QRZ.com</strong>
+      Biyografi düzenleyicisinde HTML (kaynak) görünümüne geçin ve kodu oraya yapıştırın.
+    </div>
+    <p style="margin-top:12px;">
+      Kendi kurulumunuzda aynı kart Public View adresinizde,
+      <code>/embed/status</code> yolunda durur. Uyarıları bir RSS/Atom
+      okuyucuda izlemek için <code>/feed/silence.atom</code> akışı da var
+      (<code>?grid=KM</code> bölgeye göre süzer, <code>?lang=tr</code> Türkçe).
+    </p>
   </div>
 
   <h2>Extension Sunucu Sekmesi</h2>
@@ -1819,6 +1855,37 @@
       keys. For remote access, put it behind a reverse proxy (nginx/Apache)
       with Basic Auth; the Public View port needs no such protection.
     </div>
+  </div>
+
+  <div class="card" id="embed-en">
+    <div class="card-title">🧩 Embeddable status card</div>
+    <p>
+      A small card that shows a square's status on your own website, blog or
+      QRZ.com biography: the square's silence state (all on the air, regional
+      silence or an igate fault), a quake ring reaching it, and the
+      propagation openings within 400 km in the last 3 hours. It refreshes
+      itself every 5 minutes, runs no scripts and loads nothing from another
+      server. The link at its foot opens the map on that square in a new tab.
+    </p>
+    <p>Paste this into your page (put your own square in place of <code>KM38</code>):</p>
+<pre><code>&lt;iframe src="https://map.aprsagent.com/embed/status?grid=KM38"
+        width="320" height="210" style="border:0"&gt;&lt;/iframe&gt;</code></pre>
+    <table>
+      <tr><th>Parameter</th><th>Description</th></tr>
+      <tr><td><code>grid</code></td><td>A Maidenhead square (<code>KM38</code>; six characters such as <code>KM38nk</code> work too, the first four are used) or a field (<code>KM</code>: lists the field's alerting squares). Required.</td></tr>
+      <tr><td><code>lang=tr</code></td><td>Turkish. English when left out.</td></tr>
+      <tr><td><code>theme=dark</code> / <code>theme=light</code></td><td>Dark or light theme. When left out, the reader's device setting is used.</td></tr>
+    </table>
+    <div class="callout tip" style="margin-top:12px;">
+      <strong>QRZ.com</strong>
+      Switch the biography editor to its HTML (source) view and paste the code there.
+    </div>
+    <p style="margin-top:12px;">
+      On your own installation the same card is on your Public View address
+      at <code>/embed/status</code>. To follow the alerts in an RSS/Atom
+      reader there is also the <code>/feed/silence.atom</code> feed
+      (<code>?grid=KM</code> filters by region, <code>?lang=tr</code> for Turkish).
+    </p>
   </div>
 
   <h2>Extension Server Tab</h2>
