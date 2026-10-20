@@ -1,180 +1,157 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>APRS-Agent – User Guide / Kullanım Kılavuzu</title>
+<meta name="theme-color" content="#f6f3ea">
+<script>(function(){var t=null;try{t=localStorage.getItem("theme")}catch(e){}
+document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
 <style>
+  /* aprsagent.com family: warm paper, cool technical ink (as privacy.html) */
   :root {
-    --accent:  #1a5276;
-    --accent2: #2471a3;
-    --ok:      #1a8c1a;
-    --warn:    #b7770d;
-    --bg:      #f8f9fa;
-    --card:    #ffffff;
-    --border:  #dce1e7;
-    --text:    #212529;
-    --muted:   #6c757d;
-    --req:     #c0392b;
-    --opt:     #1a8c1a;
+    --bg:#f6f3ea; --bg2:#efebdf; --fg:#22201a; --fg2:#635c50;
+    --line:#d9d2c2; --hair:#c6bda8;
+    --accent:#b0413e; --accent2:#24506e; --link:#24506e; --card:#fdfbf5;
+    --grid-a:rgba(36,80,110,.085); --grid-b:rgba(36,80,110,.038);
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: "Segoe UI", Arial, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 15px;
-    line-height: 1.65;
+  :root[data-theme="dark"] {
+    --bg:#1b1a16; --bg2:#24221d; --card:#211f1a; --fg:#ece6d8; --fg2:#b3aa98;
+    --line:#3a362e; --hair:#4a453b; --accent:#d0605c; --accent2:#7eaacb; --link:#8fb6d4;
+    --grid-a:rgba(126,170,203,.07); --grid-b:rgba(126,170,203,.03);
   }
-  /* ── Language tabs ── */
-  .lang-bar {
-    position: sticky; top: 0; z-index: 100;
-    background: var(--accent);
-    display: flex; align-items: center;
-    padding: 0 24px; gap: 4px;
-    box-shadow: 0 2px 6px rgba(0,0,0,.25);
-  }
-  .lang-bar span {
-    color: #aac4e0; font-size: 13px; margin-right: 12px;
-    font-style: italic;
-  }
-  .lang-btn {
-    padding: 10px 22px; border: none; cursor: pointer;
-    font-size: 14px; font-weight: 600; border-radius: 0;
-    background: transparent; color: #cce0f5;
-    border-bottom: 3px solid transparent;
-    transition: all .15s;
-  }
-  .lang-btn.active {
-    color: #ffffff;
-    border-bottom-color: #f0a500;
-    background: rgba(255,255,255,.08);
-  }
-  .lang-btn:hover:not(.active) { color: #ffffff; background: rgba(255,255,255,.05); }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; color: var(--fg); font: 16px/1.62 var(--sans);
+    background:
+     repeating-linear-gradient(0deg,var(--grid-a) 0 1px,transparent 1px 110px),
+     repeating-linear-gradient(90deg,var(--grid-a) 0 1px,transparent 1px 110px),
+     repeating-linear-gradient(0deg,var(--grid-b) 0 1px,transparent 1px 22px),
+     repeating-linear-gradient(90deg,var(--grid-b) 0 1px,transparent 1px 22px),
+     var(--bg); }
+  body::before { content:""; position:fixed; left:0; right:0; top:0; height:5px; z-index:99;
+    background: repeating-linear-gradient(45deg,#b0413e 0 9px,var(--bg) 9px 18px,#24506e 18px 27px,var(--bg) 27px 36px); }
+  a { color: var(--link); }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 0 20px; }
+  [lang="en"] .l-tr, [lang="tr"] .l-en { display: none; }
+  /* anchors land below the sticky bar */
+  [id] { scroll-margin-top: 76px; }
 
-  /* ── Content sections ── */
-  .section { display: none; max-width: 860px; margin: 0 auto; padding: 32px 24px 60px; }
+  /* ── top bar ── */
+  header { border-bottom: 1px solid var(--fg); background: var(--bg);
+    position: sticky; top: 5px; z-index: 10; }
+  .bar { display: flex; align-items: center; gap: 14px; height: 56px; }
+  .brand { font: 600 15px var(--mono); letter-spacing: .07em; text-transform: uppercase;
+    text-decoration: none; color: var(--fg); }
+  .brand span { color: var(--accent); }
+  .crumb { font: 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--fg2); }
+  .sp { flex: 1; }
+  .lang { display: flex; border: 1px solid var(--fg); overflow: hidden; }
+  .lang button { border: 0; background: transparent; color: var(--fg2); font: 12px var(--mono);
+    padding: 5px 11px; cursor: pointer; letter-spacing: .06em; }
+  .lang button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  .thm { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 28px;
+    padding: 0; border: 1px solid var(--fg); background: transparent; color: var(--fg2);
+    cursor: pointer; flex: none; }
+  .thm:hover { color: var(--fg); background: var(--bg2); }
+  .thm svg { width: 15px; height: 15px; display: block; }
+  :root[data-theme="dark"] .thm .i-moon, :root:not([data-theme="dark"]) .thm .i-sun { display: none; }
+
+  /* ── content: one language shown at a time ── */
+  .section { display: none; max-width: 820px; margin: 0 auto; padding: 30px 20px 56px; }
   .section.active { display: block; }
+  .back { display: inline-block; font: 12px var(--mono); letter-spacing: .08em;
+    text-transform: uppercase; text-decoration: none; margin-bottom: 18px; }
+  .back:hover { text-decoration: underline; }
+  h1 { font-size: clamp(28px,4vw,40px); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 6px; }
+  .subtitle { font: 12px var(--mono); letter-spacing: .08em; text-transform: uppercase;
+    color: var(--fg2); margin: 0 0 26px; }
+  h2 { font: 700 13px var(--mono); letter-spacing: .12em; text-transform: uppercase;
+    margin: 40px 0 12px; padding-top: 14px; border-top: 1px solid var(--fg); }
+  h3 { font-size: 17px; margin: 20px 0 6px; }
+  p { margin: .55em 0; }
+  ul { margin: .4em 0; padding-left: 1.2em; }
+  li { margin: .3em 0; }
 
-  /* ── Heading styles ── */
-  h1 { font-size: 1.9em; color: var(--accent); margin-bottom: 4px; }
-  .subtitle { color: var(--muted); font-size: 0.95em; margin-bottom: 32px; }
-  h2 {
-    font-size: 1.25em; color: var(--accent);
-    margin: 36px 0 12px;
-    padding-bottom: 6px;
-    border-bottom: 2px solid var(--border);
-  }
-  h3 { font-size: 1.05em; color: var(--accent2); margin: 20px 0 6px; }
+  .card { background: var(--card); border: 1px solid var(--line); padding: 16px 20px;
+    margin: 0 0 14px; }
+  .card-title { font: 600 12px var(--mono); letter-spacing: .1em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 8px; }
 
-  /* ── Cards ── */
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 18px 22px;
-    margin-bottom: 16px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.06);
-  }
-  .card-title {
-    font-weight: 700;
-    font-size: 1.0em;
-    color: var(--accent);
-    margin-bottom: 8px;
-    display: flex; align-items: center; gap: 8px;
-  }
+  .badge { display: inline-block; font: 600 10.5px var(--mono); letter-spacing: .08em;
+    text-transform: uppercase; padding: 1px 6px; border: 1px solid; vertical-align: middle;
+    white-space: nowrap; }
+  .req  { color: var(--accent); }
+  .opt  { color: var(--fg2); border-color: var(--hair); }
+  .info, .web { color: var(--accent2); }
+  h2 .badge { font-size: 10px; margin-left: 6px; letter-spacing: .06em; }
 
-  /* ── Badges ── */
-  .badge {
-    display: inline-block; border-radius: 4px;
-    font-size: 0.72em; font-weight: 700;
-    padding: 2px 7px; vertical-align: middle;
-    letter-spacing: .4px; text-transform: uppercase;
-  }
-  .req  { background: #fdecea; color: var(--req); border: 1px solid #f5c6c1; }
-  .opt  { background: #eafaf1; color: var(--opt); border: 1px solid #a9dfbf; }
-  .info { background: #e8f4fd; color: var(--accent2); border: 1px solid #aed6f1; }
-  .web  { background: #f4ecfb; color: #6c3fa8; border: 1px solid #d9bdf0; }
-
-  /* ── Tables ── */
-  table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; }
-  th { background: var(--accent); color: #fff; text-align: left; padding: 8px 12px; font-size: .88em; }
-  td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: .92em; vertical-align: top; }
-  tr:nth-child(even) td { background: #f4f7fb; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 15px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border: 1px solid var(--line); }
+  th { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase;
+    color: var(--fg2); background: var(--bg2); }
   /* Phone: a row per block - field and status on top, description below -
      instead of three columns wider than the screen */
   @media (max-width: 600px) {
     table, tbody { display: block; }
     tr:first-child { display: none; }
     tr { display: grid; grid-template-columns: 1fr auto; column-gap: 10px;
-         padding: 8px 10px; border-bottom: 1px solid var(--border); }
-    tr:nth-child(even) { background: #f4f7fb; }
-    td { display: block; padding: 0; border: 0; background: none !important;
-         min-width: 0; overflow-wrap: break-word; }
+         padding: 8px 10px; border: 1px solid var(--line); border-top: 0; }
+    tr:nth-child(2) { border-top: 1px solid var(--line); }
+    td { display: block; padding: 0; border: 0; min-width: 0; overflow-wrap: break-word; }
     td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; margin-top: 3px; }
     td:nth-child(3) { grid-column: 2; grid-row: 1; text-align: right; }
   }
 
-  /* ── Steps ── */
   .steps { counter-reset: step; list-style: none; padding: 0; }
-  .steps li {
-    counter-increment: step;
-    display: flex; gap: 14px; align-items: flex-start;
-    margin-bottom: 14px;
-  }
-  .steps li::before {
-    content: counter(step);
-    flex-shrink: 0;
-    width: 28px; height: 28px;
-    background: var(--accent); color: #fff;
-    border-radius: 50%; display: flex;
-    align-items: center; justify-content: center;
-    font-weight: 700; font-size: .88em;
-  }
-  .steps li div { padding-top: 4px; }
+  .steps li { counter-increment: step; display: flex; gap: 14px; align-items: flex-start;
+    margin-bottom: 14px; }
+  .steps li::before { content: counter(step); flex-shrink: 0; width: 26px; height: 26px;
+    border: 1px solid var(--fg); display: flex; align-items: center; justify-content: center;
+    font: 600 12px var(--mono); }
+  .steps li div { padding-top: 1px; }
 
-  /* ── Callout boxes ── */
-  .callout {
-    border-radius: 6px; padding: 12px 16px; margin: 14px 0;
-    border-left: 4px solid;
-  }
-  .callout.tip   { background: #eafaf1; border-color: var(--opt); }
-  .callout.warn  { background: #fef9e7; border-color: var(--warn); }
-  .callout.note  { background: #eaf4fb; border-color: var(--accent2); }
-  .callout strong { display: block; margin-bottom: 4px; }
+  .callout { border-left: 3px solid var(--hair); background: var(--card); padding: 10px 14px;
+    margin: 14px 0; font-size: 15px; border-top: 1px solid var(--line);
+    border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .card .callout { background: var(--bg); }
+  .callout.tip  { border-left-color: var(--accent2); }
+  .callout.warn { border-left-color: var(--accent); }
+  .callout strong:first-child { display: block; margin-bottom: 3px; }
 
-  code {
-    font-family: "Consolas", monospace;
-    background: #eef2f7; padding: 1px 5px;
-    border-radius: 3px; font-size: .92em;
-  }
-  pre {
-    background: #eef2f7; padding: 10px 12px; border-radius: 4px;
-    overflow-x: auto; margin: 8px 0 12px; line-height: 1.5;
-  }
+  code { font: .9em var(--mono); background: var(--bg2); padding: 1px 4px; }
+  pre { background: var(--bg2); border: 1px solid var(--line); padding: 10px 12px;
+    overflow-x: auto; margin: 8px 0 12px; line-height: 1.5; }
   pre code { background: none; padding: 0; }
-  a { color: var(--accent2); }
-
   .field-name { font-weight: 600; }
-  ul { padding-left: 20px; }
-  ul li { margin-bottom: 4px; }
-  p { margin-bottom: 10px; }
+
+  footer { border-top: 1px solid var(--fg); padding: 18px 0 32px; color: var(--fg2);
+    font: 12px var(--mono); letter-spacing: .05em; }
+  .fbar { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+  @media (max-width: 420px) { .crumb { display: none; } }
 </style>
 </head>
 <body>
 
-<!-- Language selector -->
-<div class="lang-bar">
-  <span>🌐</span>
-  <button class="lang-btn active" onclick="setLang('tr')">Türkçe</button>
-  <button class="lang-btn"        onclick="setLang('en')">English</button>
-</div>
+<header><div class="wrap bar">
+  <a class="brand" href="https://aprsagent.com/">APRS<span>-Agent</span></a>
+  <span class="crumb">/ <span class="l-tr">Kılavuz</span><span class="l-en">Guide</span></span>
+  <span class="sp"></span>
+  <button class="thm" type="button" data-thm title="Açık / koyu tema · Light / dark theme" aria-label="Açık / koyu tema · Light / dark theme"><svg class="i-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z"/></svg><svg class="i-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 .8v2M8 13.2v2M.8 8h2M13.2 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M2.9 13.1l1.4-1.4M11.7 4.3l1.4-1.4"/></svg></button>
+  <div class="lang" role="group" aria-label="Dil / Language">
+    <button type="button" id="l-tr" onclick="setLang('tr')" aria-pressed="true">TR</button>
+    <button type="button" id="l-en" onclick="setLang('en')" aria-pressed="false">EN</button>
+  </div>
+</div></header>
 
 <!-- ══════════════════ TÜRKÇE ══════════════════ -->
 <div id="tr" class="section active">
 
-  <h1>APRS-Agent</h1>
-  <p class="subtitle">Kullanım Kılavuzu</p>
+  <a class="back" href="https://aprsagent.com/">← aprsagent.com</a>
+  <h1>Kullanım kılavuzu</h1>
+  <p class="subtitle">APRS-Agent · web ve masaüstü</p>
 
   <h2>APRS-Agent Nedir?</h2>
 
@@ -207,14 +184,14 @@
   </div>
 
   <div class="callout note">
-    <strong>📡 Bilgi: Radyo lisansınız gereklidir</strong>
+    <strong>Bilgi: Radyo lisansınız gereklidir</strong>
     APRS-IS'e bağlanmak için geçerli bir amatör telsiz çağrı işareti ve
     buna ait APRS-IS parolası (passcode) gerekmektedir.
     Passcode otomatik hesaplanır — sizin bir şey yapmanız gerekmez.
   </div>
 
   <div class="callout note">
-    <strong>🖥️ Web GUI mi, Masaüstü GUI mi?</strong>
+    <strong>Web GUI mi, Masaüstü GUI mi?</strong>
     Program iki arayüzle gelir: tarayıcı tabanlı <strong>Web GUI</strong> (herhangi bir
     işletim sisteminde çalışır, telefondan da erişilebilir) ve Windows'a özel
     <strong>Masaüstü GUI</strong> (tkinter, sistem tepsisi ikonu). Masaüstü GUI
@@ -240,7 +217,7 @@
       (Logger, Sabit Konum vb.) ve ayarlarını doldurun.
     </div></li>
     <li><div>
-      <strong>💾 Ayarları Kaydet</strong> butonuna tıklayın.
+      <strong>💾 Kaydet</strong> butonuna tıklayın (masaüstü uygulamada <strong>Ayarları Kaydet</strong>).
     </div></li>
     <li><div>
       <strong>▶ Başlat</strong> butonuna tıklayın.
@@ -258,7 +235,7 @@
   <h2>Bağlantı Sekmesi</h2>
 
   <div class="card">
-    <div class="card-title">🔌 Bağlantı</div>
+    <div class="card-title">Bağlantı</div>
     <table>
       <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
       <tr>
@@ -312,7 +289,7 @@
   <h2>Logger Sekmesi</h2>
 
   <div class="card">
-    <div class="card-title">📋 Logger</div>
+    <div class="card-title">Logger</div>
     <p>Gelen APRS paketlerini ekranın alt kısmındaki log penceresinde gösterir.</p>
     <table>
       <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
@@ -339,7 +316,7 @@
   <h2>Sabit Konum (Fixed Beacon) Sekmesi</h2>
 
   <div class="card">
-    <div class="card-title">📍 Sabit Konum Yayını</div>
+    <div class="card-title">Sabit Konum Yayını</div>
     <p>
       Bu sekme, istasyonunuzun konumunu APRS-IS ağına düzenli aralıklarla gönderir.
       Böylece aprs.fi gibi haritalar üzerinde görünürsünüz.
@@ -389,12 +366,12 @@
       </tr>
     </table>
     <div class="callout tip" style="margin-top:12px;">
-      <strong>💡 QTH Locator'ınızı bilmiyor musunuz?</strong>
+      <strong>QTH Locator'ınızı bilmiyor musunuz?</strong>
       <a href="https://www.levinecentral.com/ham/grid_square.php" target="_blank">levinecentral.com/ham/grid_square.php</a>
       adresine gidin, haritada yerinize tıklayın.
     </div>
     <div class="callout note" style="margin-top:12px;">
-      <strong>ℹ️ Kendi beacon'ınız haritada</strong>
+      <strong>Kendi beacon'ınız haritada</strong>
       Web GUI'nin Harita sekmesinde kendi istasyonunuz "your station" rozetiyle
       görünür, ama Sessizlik Haritası'nda bir sensör olarak sayılmaz — çünkü
       kendi beacon'ınız istasyonun bulunduğu yerdeki gerçek durumdan bağımsız
@@ -405,7 +382,7 @@
   <h2 id="map-tr">İstasyonlar ve Harita <span class="badge web">Web GUI</span></h2>
 
   <div class="card">
-    <div class="card-title">📊 İstasyonlar Sekmesi</div>
+    <div class="card-title">İstasyonlar Sekmesi</div>
     <p>
       APRS-IS'ten duyulan her istasyonu canlı bir tablo olarak listeler — tür,
       konum, kuruluş, frekans, çevrimiçi/çevrimdışı durumu ve son duyulma zamanı.
@@ -414,7 +391,7 @@
       Tür/durum/arama filtreleri ile listeyi daraltabilirsiniz.
     </p>
     <div class="callout note">
-      <strong>🌍 Dünya modunda kırpma</strong>
+      <strong>Dünya modunda kırpma</strong>
       Tüm Dünya Akışı açıkken kayıt sayısı on binleri bulabilir; tablo ve
       liste bu durumda en yeni 4000 istasyonla sınırlanır (sayaç toplam
       sayıyı gösterir). Detay paneli her zaman güncel, eksiksiz kaydı çeker.
@@ -422,7 +399,7 @@
   </div>
 
   <div class="card">
-    <div class="card-title">🗺️ Harita Sekmesi</div>
+    <div class="card-title">Harita Sekmesi</div>
     <p>
       Duyulan tüm istasyonların canlı konumunu, gerçek APRS sembol setiyle
       (aprs.fi ile aynı sprite'lar) bir Leaflet haritasında gösterir.
@@ -443,7 +420,7 @@
       açılmanın linkleri de haritada belirir.
     </p>
     <div class="callout note">
-      <strong>🌍 Dünya modunda kümeleme</strong>
+      <strong>Dünya modunda kümeleme</strong>
       2000'den fazla istasyon haritaya düşünce görünüm otomatik değişir: uzak
       zoom'da sayı rozetli kümeler (tıklayınca yakınlaşır), yakın zoom'da ise o
       an göründüğünüz bölgenin <strong>tüm</strong> istasyonları sunucudan çekilir.
@@ -454,7 +431,7 @@
   <h2 id="silence-tr">Sessizlik Haritası ve İzleme</h2>
 
   <div class="card">
-    <div class="card-title">🔴 Sessizlik Tespiti</div>
+    <div class="card-title">Sessizlik Tespiti</div>
     <p>
       Her istasyonun kendi beacon aralığına göre bir "normal" temposu öğrenilir.
       Bir Maidenhead karesinde (4 karakter, örn. <code>KM38</code>) normalde aktif
@@ -499,7 +476,7 @@
   </div>
 
   <div class="card" id="rules-tr">
-    <div class="card-title">⚖️ Bir uyarı ve bir açılım nasıl belirlenir</div>
+    <div class="card-title">Bir uyarı ve bir açılım nasıl belirlenir</div>
     <p><strong>Sessiz istasyon.</strong> Son paketinden bu yana kendi beacon
       aralığının <strong>3 katı</strong> (en az 15 dakika) geçmiş, son
       <strong>24 saat</strong> içinde duyulmuş ve en az 5 paketi olan sabit bir
@@ -550,7 +527,7 @@
   </div>
 
   <div class="card">
-    <div class="card-title">🔔 Röle İzleyici</div>
+    <div class="card-title">Röle İzleyici</div>
     <p>
       Aşağıdaki Türkiye Röle Veritabanı'ndaki röleleri izler; bir röle
       çevrimdışı olduğunda veya geri geldiğinde Telegram/e-posta ile bildirim
@@ -573,7 +550,7 @@
   <h2 id="prop-tr">RF Propagasyon Takibi</h2>
 
   <div class="card">
-    <div class="card-title">📡 Bant Açılması Tespiti</div>
+    <div class="card-title">Bant Açılması Tespiti</div>
     <p>
       Bir igate'in RF üzerinden duyup APRS-IS'e aktardığı her paket
       (<code>qAR</code>/<code>qAO</code>), uzunluğu tam olarak bilinen
@@ -598,7 +575,7 @@
       çizelgesinden tekrar oynatılabilir.
     </p>
     <div class="callout note">
-      <strong>ℹ️ Neden tek uzun link olay sayılmaz?</strong>
+      <strong>Neden tek uzun link olay sayılmaz?</strong>
       Yanlış yapılandırılmış tek bir GPS istediği mesafeyi "uydurabilirsiniz";
       iki bağımsız istasyon aynı bölgede aynı anda uyduramaz. Ayrıca
       internet kaynaklı paketler (<code>TCPIP</code>), digipeat'li paketler,
@@ -622,7 +599,7 @@
   <h2>Türkiye Röle Veritabanı</h2>
 
   <div class="card">
-    <div class="card-title">🗄️ Röle DB Dosyası</div>
+    <div class="card-title">Röle DB Dosyası</div>
     <p>
       İstasyonlar sekmesini şehir, ilçe, frekans, CTCSS tonu, bant ve mod
       bilgisiyle zenginleştirir — canlı bir paket gerekmeden, sadece çağrı
@@ -639,7 +616,7 @@
   <h2 id="stations-tr">AI İstasyon Analizi</h2>
 
   <div class="card">
-    <div class="card-title">🤖 AI İstasyon Analizi</div>
+    <div class="card-title">AI İstasyon Analizi</div>
     <p>
       Duyulan istasyonların beacon yorumlarını periyodik olarak yapay zekaya
       göndererek kulüp/kurum adını ve kısa bir açıklamayı otomatik çıkarır;
@@ -660,13 +637,13 @@
   <h2>Twitter / X Sekmesi</h2>
 
   <div class="card">
-    <div class="card-title">🐦 Twitter / X Entegrasyonu</div>
+    <div class="card-title">Twitter / X Entegrasyonu</div>
     <p>
       Size gelen bir APRS mesajı (belirli bir takma ada — örn. <code>TWSEND</code> — gönderilmiş)
       otomatik olarak Twitter/X hesabınıza tweet atılır.
     </p>
     <div class="callout warn">
-      <strong>⚠️ Twitter API anahtarı gereklidir</strong>
+      <strong>Twitter API anahtarı gereklidir</strong>
       Bunun için Twitter/X Developer Portal'dan (developer.twitter.com) bir uygulama oluşturmanız
       ve dört adet anahtar/token almanız gerekir.  Bu bir seferlik bir işlemdir.
     </div>
@@ -682,13 +659,13 @@
   <h2>Bluesky Sekmesi</h2>
 
   <div class="card">
-    <div class="card-title">🦋 Bluesky Entegrasyonu</div>
+    <div class="card-title">Bluesky Entegrasyonu</div>
     <p>
       Size gelen bir APRS mesajı (belirli bir takma ada — örn. <code>BSKYSEND</code> — gönderilmiş)
       otomatik olarak Bluesky hesabınıza post olarak atılır.
     </p>
     <div class="callout tip">
-      <strong>✅ Ücretsiz API — ödeme gerekmez</strong>
+      <strong>Ücretsiz API — ödeme gerekmez</strong>
       Twitter/X'in aksine Bluesky API tamamen ücretsizdir.
       Sadece bir Uygulama Şifresi (App Password) oluşturmanız yeterlidir:
       <a href="https://bsky.app" target="_blank">bsky.app</a> → Ayarlar → App Passwords
@@ -705,7 +682,7 @@
   <h2>WhatsApp Sekmesi</h2>
 
   <div class="card">
-    <div class="card-title">📱 WhatsApp Entegrasyonu</div>
+    <div class="card-title">WhatsApp Entegrasyonu</div>
     <p>
       Meta Cloud API üzerinden çift yönlü APRS ↔ WhatsApp mesajlaşması sağlar.
       Size gelen bir APRS mesajı (belirli bir takma ada gönderilmiş) WhatsApp'a
@@ -713,7 +690,7 @@
       bir mesaj da APRS'e gönderilir.
     </p>
     <div class="callout warn">
-      <strong>⚠️ Meta Business hesabı gereklidir</strong>
+      <strong>Meta Business hesabı gereklidir</strong>
       <a href="https://business.facebook.com" target="_blank">Meta Business</a>
       panelinden bir WhatsApp uygulaması oluşturup Telefon Numarası ID ve
       Erişim Token almanız, ayrıca gelen mesajlar için webhook adresinizi
@@ -734,14 +711,14 @@
   <h2 id="ext-tr">Telegram Sekmesi</h2>
 
   <div class="card">
-    <div class="card-title">💬 Telegram Entegrasyonu</div>
+    <div class="card-title">Telegram Entegrasyonu</div>
     <p>
       Çift yönlü APRS ↔ Telegram mesajlaşması sağlar — tamamen ücretsiz,
       webhook gerekmez (Telegram'ın bot API'si yoklanarak/polling ile çalışır).
       Sessizlik Haritası uyarıları da bu kanaldan gönderilebilir (bkz. Monitor).
     </p>
     <div class="callout tip">
-      <strong>🤖 Bot Token nasıl alınır?</strong>
+      <strong>Bot Token nasıl alınır?</strong>
       Telegram'da <code>@BotFather</code> ile konuşup <code>/newbot</code> komutunu
       verin. Chat ID'nizi öğrenmek için <code>@userinfobot</code> ile konuşabilirsiniz.
     </div>
@@ -754,7 +731,7 @@
       <tr><td><span class="field-name">Yoklama aralığı (sn)</span></td><td>Telegram'ın kaç saniyede bir kontrol edileceği. Varsayılan: 5.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
     </table>
     <div class="callout warn" style="margin-top:12px;">
-      <strong>⚠️ Bir bot token'ı yalnızca tek bir agent tarafından dinlenebilir</strong>
+      <strong>Bir bot token'ı yalnızca tek bir agent tarafından dinlenebilir</strong>
       Aynı bot token'ıyla iki agent (örn. hem ev bilgisayarınız hem bir sunucu)
       aynı anda "Telegram'ı yokla" ile çalışırsa Telegram <code>409 Conflict</code>
       hatası verir. Sadece birini polling modunda açık tutun.
@@ -823,7 +800,7 @@
 
 
   <div class="callout warn">
-      <strong>⚠️ Yazdığınız her şey herkese açıktır</strong>
+      <strong>Yazdığınız her şey herkese açıktır</strong>
       Amatör telsizde haberleşme açık yapılır; şifreleme veya anlamı gizleme amaçlı
       kodlama yasaktır (ITU Radyo Tüzüğü, amatör servise ayrılmış 25. Madde;
       Amatör Telsizcilik Yönetmeliği). Bu, AI Gateway için şu anlama gelir: gelen
@@ -846,7 +823,7 @@
 
 
   <div class="card">
-    <div class="card-title">🤖 AI Gateway</div>
+    <div class="card-title">AI Gateway</div>
     <p>
       Gelen APRS mesajlarına yapay zeka ile otomatik yanıt verir.
       Mesaj yapılandırılmış çağrı işaretine gönderildiğinde AI sağlayıcıya sorulur
@@ -855,7 +832,7 @@
       kullanılır.
     </p>
     <div class="callout tip">
-      <strong>✅ Ücretsiz seçenekler mevcut</strong>
+      <strong>Ücretsiz seçenekler mevcut</strong>
       Puter tamamen ücretsiz bir AI sağlayıcıdır. Groq ve OpenRouter'da da
       ücretsiz modeller bulunmaktadır.
     </div>
@@ -876,14 +853,14 @@
   <h2>IMAP Alma Sekmesi</h2>
 
   <div class="card">
-    <div class="card-title">📥 IMAP E-posta Alıcı</div>
+    <div class="card-title">IMAP E-posta Alıcı</div>
     <p>
       E-posta gelen kutunuzu belirli aralıklarla yoklar ve yeni e-postaları
       APRS mesajı olarak telsize iletir. SMTP ile birlikte çift yönlü e-posta
       iletişimi sağlar.
     </p>
     <div class="callout tip">
-      <strong>📧 E-posta konu formatı</strong>
+      <strong>E-posta konu formatı</strong>
       <code>TA1ABC-7 Merhaba, beacon calisiyor!</code><br>
       İlk kelime = hedef çağrı işareti, geri kalanı = mesaj metni.
     </div>
@@ -900,7 +877,7 @@
   <h2>SMTP E-posta Sekmesi</h2>
 
   <div class="card">
-    <div class="card-title">✉️ E-posta Yönlendirme</div>
+    <div class="card-title">E-posta Yönlendirme</div>
     <p>
       Size gelen bir APRS mesajında (örn. <code>EMAIL arkadas@mail.com Merhaba!</code>
       formatında) belirtilen adrese otomatik e-posta gönderir.
@@ -918,7 +895,7 @@
   <h2>Mesajlar Sekmesi <span class="badge web">Web GUI</span></h2>
 
   <div class="card">
-    <div class="card-title">💬 Mesajlar</div>
+    <div class="card-title">Mesajlar</div>
     <p>
       Ajanın duyduğu veya gönderdiği <strong>her</strong> APRS mesajını tek bir panelde
       listeler: saat, yön, gönderen, alıcı, metin ve mesajın ait olduğu köprü
@@ -933,7 +910,7 @@
   <h2>Herkese Açık İzleme Sayfası <span class="badge web">Web GUI</span></h2>
 
   <div class="card">
-    <div class="card-title">👁️ Public View</div>
+    <div class="card-title">Public View</div>
     <p>
       Admin panelinizi (ayarlar, API anahtarları, Başlat/Durdur) hiç açığa
       çıkarmadan, sadece <strong>Canlı Log / İstasyonlar / Harita</strong> görünümlerini
@@ -954,7 +931,7 @@
       <tr><td><span class="field-name">Başlık / Alt başlık</span></td><td>Sayfa üstünde çağrı işaretinizin yanında görünecek metin. Boş bırakılırsa "APRS-Agent · ÇAĞRI-İŞARETİNİZ" ve dile göre bir açıklama gösterilir.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
     </table>
     <div class="callout warn" style="margin-top:12px;">
-      <strong>⚠️ Sadece bu portu dışarı açın</strong>
+      <strong>Sadece bu portu dışarı açın</strong>
       Admin portunun (8080) kendi kimlik doğrulaması <strong>yoktur</strong> — dışarıya
       açık bırakılırsa herkes ayarlarınızı değiştirebilir ve API anahtarlarınızı
       görebilir. Uzaktan erişim için reverse proxy (nginx/Apache) + Basic Auth
@@ -963,7 +940,7 @@
   </div>
 
   <div class="card" id="embed-tr">
-    <div class="card-title">🧩 Gömülebilir durum kartı</div>
+    <div class="card-title">Gömülebilir durum kartı</div>
     <p>
       Bir karenin durumunu kendi sitenizde, blogunuzda ya da QRZ.com
       biyografinizde gösteren küçük bir kart. Kartta karenin sessizlik durumu
@@ -996,7 +973,7 @@
   <h2>Extension Sunucu Sekmesi</h2>
 
   <div class="card">
-    <div class="card-title">🔗 Extension Sunucu</div>
+    <div class="card-title">Extension Sunucu</div>
     <p>
       Bu sekme ileri düzey kullanıcılar içindir.
       Aynı bilgisayarda çalışan başka bir yazılımın (örn. kendi yazdığınız
@@ -1078,8 +1055,9 @@
 <!-- ══════════════════ ENGLISH ══════════════════ -->
 <div id="en" class="section">
 
-  <h1>APRS-Agent</h1>
-  <p class="subtitle">User Guide</p>
+  <a class="back" href="https://aprsagent.com/">← aprsagent.com</a>
+  <h1>User guide</h1>
+  <p class="subtitle">APRS-Agent · web and desktop</p>
 
   <h2>What is APRS-Agent?</h2>
 
@@ -1110,14 +1088,14 @@
   </div>
 
   <div class="callout note">
-    <strong>📡 Note: An amateur radio licence is required</strong>
+    <strong>Note: An amateur radio licence is required</strong>
     You need a valid amateur radio callsign and its corresponding APRS-IS
     passcode to connect. The passcode is calculated automatically — you don't
     need to do anything special.
   </div>
 
   <div class="callout note">
-    <strong>🖥️ Web GUI or Desktop GUI?</strong>
+    <strong>Web GUI or Desktop GUI?</strong>
     The program ships with two interfaces: the browser-based <strong>Web GUI</strong>
     (runs on any OS, reachable from a phone too) and the Windows-only
     <strong>Desktop GUI</strong> (tkinter, system tray icon). The Desktop GUI has been
@@ -1142,7 +1120,7 @@
       and fill in their settings.
     </div></li>
     <li><div>
-      Click <strong>💾 Save Config</strong>.
+      Click <strong>💾 Save</strong> (<strong>Save Config</strong> in the desktop app).
     </div></li>
     <li><div>
       Click <strong>▶ Start</strong>.
@@ -1161,7 +1139,7 @@
   <h2>Connection Tab</h2>
 
   <div class="card">
-    <div class="card-title">🔌 Connection</div>
+    <div class="card-title">Connection</div>
     <table>
       <tr><th>Field</th><th>Description</th><th>Status</th></tr>
       <tr>
@@ -1214,7 +1192,7 @@
   <h2>Logger Tab</h2>
 
   <div class="card">
-    <div class="card-title">📋 Logger</div>
+    <div class="card-title">Logger</div>
     <p>Displays incoming APRS packets in the log panel at the bottom of the window.</p>
     <table>
       <tr><th>Field</th><th>Description</th><th>Status</th></tr>
@@ -1239,7 +1217,7 @@
   <h2>Fixed Beacon Tab</h2>
 
   <div class="card">
-    <div class="card-title">📍 Fixed Beacon</div>
+    <div class="card-title">Fixed Beacon</div>
     <p>
       This tab sends your station's position to the APRS network at regular intervals,
       making you visible on maps like <a href="https://aprs.fi" target="_blank">aprs.fi</a>.
@@ -1289,12 +1267,12 @@
       </tr>
     </table>
     <div class="callout tip" style="margin-top:12px;">
-      <strong>💡 Don't know your QTH Locator?</strong>
+      <strong>Don't know your QTH Locator?</strong>
       Visit <a href="https://www.levinecentral.com/ham/grid_square.php" target="_blank">levinecentral.com/ham/grid_square.php</a>
       and click your location on the map.
     </div>
     <div class="callout note" style="margin-top:12px;">
-      <strong>ℹ️ Your own beacon on the map</strong>
+      <strong>Your own beacon on the map</strong>
       Your station shows on the Web GUI's Map tab with a "your station"
       badge, but it is never counted as a Silence Map sensor — it keeps
       beaconing regardless of the real situation at the claimed location
@@ -1305,7 +1283,7 @@
   <h2 id="map-en">Stations and Map <span class="badge web">Web GUI</span></h2>
 
   <div class="card">
-    <div class="card-title">📊 Stations Tab</div>
+    <div class="card-title">Stations Tab</div>
     <p>
       Lists every station heard from APRS-IS as a live table — type,
       location, organisation, frequency, online/offline status and last
@@ -1314,7 +1292,7 @@
       filters let you narrow the list.
     </p>
     <div class="callout note">
-      <strong>🌍 Capping in world mode</strong>
+      <strong>Capping in world mode</strong>
       With the Full World Feed on, the registry can reach tens of thousands
       of stations; the list is then capped at the 4000 most recently heard
       (the counter still shows the true total). The detail panel always
@@ -1323,7 +1301,7 @@
   </div>
 
   <div class="card">
-    <div class="card-title">🗺️ Map Tab</div>
+    <div class="card-title">Map Tab</div>
     <p>
       Shows the live position of every heard station on a Leaflet map,
       using the real APRS symbol set (same sprites as aprs.fi). Red squares
@@ -1344,7 +1322,7 @@
       its links on the map.
     </p>
     <div class="callout note">
-      <strong>🌍 Clustering in world mode</strong>
+      <strong>Clustering in world mode</strong>
       Once more than 2000 stations would be plotted, the map switches
       behaviour automatically: numbered cluster badges at low zoom (click
       to zoom in), and every station of the currently visible area fetched
@@ -1356,7 +1334,7 @@
   <h2 id="silence-en">Silence Map and Monitor</h2>
 
   <div class="card">
-    <div class="card-title">🔴 Silence Detection</div>
+    <div class="card-title">Silence Detection</div>
     <p>
       Each station's "normal" beacon cadence is learned automatically. When
       most of the normally-active stations (several radios of one
@@ -1403,7 +1381,7 @@
   </div>
 
   <div class="card" id="rules-en">
-    <div class="card-title">⚖️ How an alert and an opening are decided</div>
+    <div class="card-title">How an alert and an opening are decided</div>
     <p><strong>A silent station.</strong> A fixed station whose last packet is
       older than <strong>3 times</strong> its own beacon interval (at least 15
       minutes), heard within the last <strong>24 hours</strong>, with at least 5
@@ -1456,7 +1434,7 @@
   </div>
 
   <div class="card">
-    <div class="card-title">🔔 Repeater Monitor</div>
+    <div class="card-title">Repeater Monitor</div>
     <p>
       Watches the repeaters listed in the Turkey Repeaters database below
       and sends a Telegram/email notification when one goes offline or
@@ -1479,7 +1457,7 @@
   <h2 id="prop-en">RF Propagation Tracking</h2>
 
   <div class="card">
-    <div class="card-title">📡 Band-Opening Detection</div>
+    <div class="card-title">Band-Opening Detection</div>
     <p>
       Every packet an igate hears on RF and forwards to APRS-IS
       (<code>qAR</code>/<code>qAO</code>) is a <strong>realised radio
@@ -1504,7 +1482,7 @@
       timeline for 14 days.
     </p>
     <div class="callout note">
-      <strong>ℹ️ Why is a single long link never an event?</strong>
+      <strong>Why is a single long link never an event?</strong>
       One misconfigured GPS can fake any distance; two independent stations
       in the same area at the same time cannot. Internet-origin packets
       (<code>TCPIP</code>), digipeated packets, Objects, balloons above
@@ -1529,7 +1507,7 @@
   <h2>Turkey Repeaters DB</h2>
 
   <div class="card">
-    <div class="card-title">🗄️ Repeater DB Path</div>
+    <div class="card-title">Repeater DB Path</div>
     <p>
       Enriches the Stations tab with city, district, frequency, CTCSS tone,
       band and mode — matched by callsign alone, no live packet needed.
@@ -1546,7 +1524,7 @@
   <h2 id="stations-en">AI Station Analysis</h2>
 
   <div class="card">
-    <div class="card-title">🤖 AI Station Analysis</div>
+    <div class="card-title">AI Station Analysis</div>
     <p>
       Periodically sends heard stations' beacon comments to AI to extract an
       organisation name and short description; results appear in the
@@ -1567,13 +1545,13 @@
   <h2>Twitter / X Tab</h2>
 
   <div class="card">
-    <div class="card-title">🐦 Twitter / X Integration</div>
+    <div class="card-title">Twitter / X Integration</div>
     <p>
       When an APRS message is addressed to a configured alias (e.g. <code>TWSEND</code>)
       from an allowed sender, it is automatically posted as a tweet.
     </p>
     <div class="callout warn">
-      <strong>⚠️ Twitter API credentials are required</strong>
+      <strong>Twitter API credentials are required</strong>
       You must create an application at the Twitter/X Developer Portal
       (developer.twitter.com) and obtain four keys/tokens.
       This is a one-time setup.
@@ -1590,13 +1568,13 @@
   <h2>Bluesky Tab</h2>
 
   <div class="card">
-    <div class="card-title">🦋 Bluesky Integration</div>
+    <div class="card-title">Bluesky Integration</div>
     <p>
       When an APRS message is addressed to a configured alias (e.g. <code>BSKYSEND</code>)
       from an allowed sender, it is automatically posted to your Bluesky account.
     </p>
     <div class="callout tip">
-      <strong>✅ Free API — no payment required</strong>
+      <strong>Free API — no payment required</strong>
       Unlike Twitter/X, the Bluesky API is completely free.
       You only need to create an App Password:
       <a href="https://bsky.app" target="_blank">bsky.app</a> → Settings → App Passwords
@@ -1613,7 +1591,7 @@
   <h2>WhatsApp Tab</h2>
 
   <div class="card">
-    <div class="card-title">📱 WhatsApp Integration</div>
+    <div class="card-title">WhatsApp Integration</div>
     <p>
       Bidirectional APRS ↔ WhatsApp messaging via the Meta Cloud API. An
       APRS message addressed to a configured alias is forwarded to
@@ -1621,7 +1599,7 @@
       WhatsApp is forwarded to APRS.
     </p>
     <div class="callout warn">
-      <strong>⚠️ A Meta Business account is required</strong>
+      <strong>A Meta Business account is required</strong>
       Create a WhatsApp app in the
       <a href="https://business.facebook.com" target="_blank">Meta Business</a>
       dashboard to get a Phone Number ID and Access Token, and register your
@@ -1643,14 +1621,14 @@
   <h2 id="ext-en">Telegram Tab</h2>
 
   <div class="card">
-    <div class="card-title">💬 Telegram Integration</div>
+    <div class="card-title">Telegram Integration</div>
     <p>
       Bidirectional APRS ↔ Telegram messaging — completely free, no webhook
       needed (the Telegram bot API is polled). Silence Map alerts can also
       be sent through this channel (see Monitor above).
     </p>
     <div class="callout tip">
-      <strong>🤖 Getting a Bot Token</strong>
+      <strong>Getting a Bot Token</strong>
       Talk to <code>@BotFather</code> on Telegram and use <code>/newbot</code>.
       To find your Chat ID, talk to <code>@userinfobot</code>.
     </div>
@@ -1663,7 +1641,7 @@
       <tr><td><span class="field-name">Poll interval (sec)</span></td><td>How often Telegram is checked. Default: 5.</td><td><span class="badge opt">Optional</span></td></tr>
     </table>
     <div class="callout warn" style="margin-top:12px;">
-      <strong>⚠️ A bot token can only be polled by one agent at a time</strong>
+      <strong>A bot token can only be polled by one agent at a time</strong>
       If the same bot token is polled by two agents at once (e.g. your home
       PC and a server), Telegram returns a <code>409 Conflict</code> error.
       Keep polling enabled on only one of them.
@@ -1731,7 +1709,7 @@
 
 
   <div class="callout warn">
-      <strong>⚠️ Everything you send is public</strong>
+      <strong>Everything you send is public</strong>
       Amateur radio is conducted in the clear; encoding a transmission to obscure its
       meaning is not permitted (ITU Radio Regulations, Article 25, which governs the
       amateur service). For the AI Gateway that means both the incoming question and
@@ -1754,7 +1732,7 @@
 
 
   <div class="card">
-    <div class="card-title">🤖 AI Gateway</div>
+    <div class="card-title">AI Gateway</div>
     <p>
       Auto-responds to incoming APRS messages using AI.
       When a message is addressed to the configured callsign, it is sent to
@@ -1763,7 +1741,7 @@
       Map assessments.
     </p>
     <div class="callout tip">
-      <strong>✅ Free options available</strong>
+      <strong>Free options available</strong>
       Puter is a completely free AI provider. Groq and OpenRouter also
       offer free-tier models.
     </div>
@@ -1784,14 +1762,14 @@
   <h2>IMAP Receive Tab</h2>
 
   <div class="card">
-    <div class="card-title">📥 IMAP Email Receiver</div>
+    <div class="card-title">IMAP Email Receiver</div>
     <p>
       Polls your email inbox at a configurable interval and forwards new
       emails as APRS messages to the radio. Together with SMTP, this enables
       bidirectional email communication.
     </p>
     <div class="callout tip">
-      <strong>📧 Email subject format</strong>
+      <strong>Email subject format</strong>
       <code>TA1ABC-7 Hello, your beacon is working!</code><br>
       First word = destination callsign, rest = message text.
     </div>
@@ -1808,7 +1786,7 @@
   <h2>SMTP Email Tab</h2>
 
   <div class="card">
-    <div class="card-title">✉️ SMTP Email Forwarding</div>
+    <div class="card-title">SMTP Email Forwarding</div>
     <p>
       Automatically sends an email when an APRS message in the format
       <code>EMAIL recipient@example.com Message text here</code>
@@ -1827,7 +1805,7 @@
   <h2>Messages Tab <span class="badge web">Web GUI</span></h2>
 
   <div class="card">
-    <div class="card-title">💬 Messages</div>
+    <div class="card-title">Messages</div>
     <p>
       Lists <strong>every</strong> APRS message the agent hears or sends in one
       panel — time, direction, from, to, text, and which bridge it belongs
@@ -1842,7 +1820,7 @@
   <h2>Public View <span class="badge web">Web GUI</span></h2>
 
   <div class="card">
-    <div class="card-title">👁️ Public View</div>
+    <div class="card-title">Public View</div>
     <p>
       Lets you safely expose just the <strong>Live Log / Stations / Map</strong>
       views to the internet, without ever exposing your admin panel
@@ -1862,7 +1840,7 @@
       <tr><td><span class="field-name">Title / Subtitle</span></td><td>Text shown at the top of the page next to your callsign. Leave empty for the defaults: "APRS-Agent · YOUR_CALLSIGN" and a language-aware description.</td><td><span class="badge opt">Optional</span></td></tr>
     </table>
     <div class="callout warn" style="margin-top:12px;">
-      <strong>⚠️ Only forward this port</strong>
+      <strong>Only forward this port</strong>
       The admin port (8080) has <strong>no authentication of its own</strong> —
       if left exposed, anyone can change your settings and see your API
       keys. For remote access, put it behind a reverse proxy (nginx/Apache)
@@ -1871,7 +1849,7 @@
   </div>
 
   <div class="card" id="embed-en">
-    <div class="card-title">🧩 Embeddable status card</div>
+    <div class="card-title">Embeddable status card</div>
     <p>
       A small card that shows a square's status on your own website, blog or
       QRZ.com biography: the square's silence state (all on the air, regional
@@ -1904,7 +1882,7 @@
   <h2>Extension Server Tab</h2>
 
   <div class="card">
-    <div class="card-title">🔗 Extension Server</div>
+    <div class="card-title">Extension Server</div>
     <p>
       This is an advanced feature. It opens a local TCP port so that
       other programs on your computer can subscribe to the live APRS packet stream.
@@ -1976,17 +1954,33 @@
 
 </div><!-- /en -->
 
+<footer><div class="wrap fbar">
+  <a href="https://aprsagent.com/"><span class="l-tr">Ana sayfa</span><span class="l-en">Home</span></a>
+  <a href="https://map.aprsagent.com/"><span class="l-tr">Canlı harita</span><span class="l-en">Live map</span></a>
+  <a href="https://aprsagent.com/privacy.html"><span class="l-tr">Gizlilik</span><span class="l-en">Privacy</span></a>
+  <a href="https://github.com/TA3HRJ/aprs-agent" rel="noopener">GitHub</a>
+</div></footer>
+
 <script>
   function setLang(lang) {
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(lang).classList.add('active');
-    document.querySelectorAll('.lang-btn').forEach(b => {
-      if (b.textContent.toLowerCase().startsWith(lang === 'tr' ? 'tü' : 'en')) {
-        b.classList.add('active');
-      }
+    document.querySelectorAll('.section').forEach(function (s) {
+      s.classList.toggle('active', s.id === lang);
     });
+    document.documentElement.lang = lang;
+    document.getElementById('l-tr').setAttribute('aria-pressed', lang === 'tr');
+    document.getElementById('l-en').setAttribute('aria-pressed', lang === 'en');
+    try { localStorage.setItem('aprsagent.lang', lang); } catch (e) {}
   }
+  // the family theme button: light unless chosen, the choice remembered
+  document.querySelector('[data-thm]').addEventListener('click', function () {
+    var r = document.documentElement, n = r.dataset.theme === 'dark' ? 'light' : 'dark';
+    r.dataset.theme = n; try { localStorage.setItem('theme', n); } catch (e) {}
+  });
+  // the language chosen on aprsagent.com, unless the link names one
+  try {
+    var saved = localStorage.getItem('aprsagent.lang');
+    if (saved === 'en' && !/-(tr|en)$/.test(location.hash)) setLang('en');
+  } catch (e) {}
 
   // Section anchors carry their language: #silence-tr and #silence-en are the
   // same section in the two halves of this file. Only one half is displayed at
