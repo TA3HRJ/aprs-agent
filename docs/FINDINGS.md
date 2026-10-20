@@ -7969,3 +7969,28 @@ station forever, and a digi silent since August is no path onto the air.
 None left: "No digipeater heard this week within 250km of you."
 `check_digi_near.py` fails on v3.2.176 with exactly the live answer;
 `check_selflookup`'s "nearest digi" case still passes.
+
+---
+
+## F-2026-10-20-01 — compressed log rotation lost files when rotations outran compression
+
+**Source:** `check_feedlog` item 7 failing about one run in four on Windows
+while preparing the v3.2.179 release · **Verdict:** our code; fixed in v3.2.180
+
+`log_compress` renamed every rotated file to the same temporary name,
+`packets.log.1.gz.rotating`, and compressed it in a thread of its own into
+`packets.log.1.gz`. A rotation arriving before the previous compression
+finished reused both names: on Windows the older copy was overwritten, on
+Linux the first thread's `os.remove` deleted the newer file. The failing runs
+kept `packets.log.1.gz` and `.3.gz` with `.2.gz` gone.
+
+On the VPS a file rotates at 200 MB, about every five hours, and compresses in
+seconds, so it has not happened there. Fast rotation - a small
+`log_max_mb`, a busy feed - would lose data.
+
+**Applied, v3.2.180.** `_GzipRotatingHandler` moves each rotated file to a
+unique `.<ns>.rotating` name and queues it; one worker, in order, shifts the
+`.gz` backups and writes the newest as `.1.gz`. `check_feedlog` item 8 writes
+400 packets through rotations of about 1 KB with 6 backups and requires the
+kept files to hold one gap-free run ending at the last packet: v3.2.179 fails
+it 6 of 6 runs (21-36 packets kept, with gaps), v3.2.180 passes 12 of 12.

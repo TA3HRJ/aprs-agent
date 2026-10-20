@@ -24,6 +24,11 @@ So the boundary this check defends is narrow and easy to erase by accident:
   6. an unwritable path degrades to Live-Log-only instead of killing the agent
   7. with log_compress, rotated files are gzipped (off the event loop) and
      capped at log_backups; nothing is left half-written
+  8. rotations faster than the compressions behind them lose nothing: the
+     kept files hold one gap-free run of packets ending at the newest. The
+     first version gave every rotation the same temporary name and target,
+     and a rotation arriving mid-compression overwrote or deleted the one
+     before it (item 7 failed about one run in four on Windows)
 
 Usage:  python tools/check_feedlog.py
 Exit code 1 on failure.
@@ -164,6 +169,40 @@ async def run() -> int:
     for h in list(_lg.getLogger("aprs.packetfeed").handlers):
         h.close()
     print("  %-28s %s" % ("log_compress", names))
+
+    # 8 - many rotations in a burst, each file a few packets: the kept copies
+    # must be one contiguous run ending at the last packet written
+    import re as _re
+    rpath = os.path.join(tmp, "r", "packets.log")
+    total = 400
+    with Capture():
+        lg = Logger(cfg(log_file=rpath, log_max_mb=0.001, log_backups=6,
+                        log_compress=True))
+        for i in range(total):
+            await lg.handle(PACKET + " #%04d" % i)
+    for _ in range(100):
+        rnames = sorted(os.listdir(os.path.dirname(rpath)))
+        if not any(n.endswith((".rotating", ".part")) for n in rnames):
+            break
+        _t.sleep(0.1)
+    runs = []
+    for k in range(6, 0, -1):
+        fp = os.path.join(tmp, "r", "packets.log.%d.gz" % k)
+        if os.path.exists(fp):
+            with _gz.open(fp, "rt", encoding="utf-8") as f:
+                runs += [int(x) for x in _re.findall(r"#(\d{4})", f.read())]
+    with open(rpath, encoding="utf-8") as f:
+        runs += [int(x) for x in _re.findall(r"#(\d{4})", f.read())]
+    gap_free = bool(runs) and runs == list(range(runs[0], runs[0] + len(runs)))
+    leftovers = [n for n in rnames if n.endswith((".rotating", ".part"))]
+    if not gap_free or runs[-1] != total - 1 or leftovers:
+        problems.append("log_compress burst: kept packets not one run ending "
+                        "at #%04d (%d kept, leftovers %r)"
+                        % (total - 1, len(runs), leftovers))
+    for h in list(_lg.getLogger("aprs.packetfeed").handlers):
+        h.close()
+    print("  %-28s %d packets kept, gap-free=%s" % ("log_compress burst",
+                                                     len(runs), gap_free))
 
     print()
     for p in problems:

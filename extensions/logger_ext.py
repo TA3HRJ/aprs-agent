@@ -13,9 +13,11 @@ import gzip
 import logging
 import logging.handlers
 import os
+import queue
 import shutil
 import sys
 import threading
+import time
 from typing import Optional
 
 
@@ -48,30 +50,62 @@ def get_data_type_identifier(line: str) -> str:
     return ""
 
 
-def _gzip_rotator(source: str, dest: str) -> None:
+class _GzipRotatingHandler(logging.handlers.RotatingFileHandler):
     """Rotate, then compress the rotated file off the event loop.
 
     AUDIT-2026-10-08 O4. The handler rotates inside a logging call on the
     event loop; compressing 200 MB there would stall everything for seconds.
-    The rename is instant, and a thread does the rest. A full-feed log
-    compresses about 2.6:1 (200 MB -> 76 MB, measured 2026-10-08), so a week
-    of feed fits in about 2 GB.
+    The rename is instant, and one worker thread does the rest. A full-feed
+    log compresses about 2.6:1 (200 MB -> 76 MB, measured 2026-10-08), so a
+    week of feed fits in about 2 GB.
+
+    Each rotated file gets a name of its own, and the worker - one, in
+    order - shifts the .gz backups itself before writing the newest as .1.gz.
+    The first version renamed every rotation to the same ".1.gz.rotating"
+    and compressed each in its own thread: a rotation arriving before the
+    previous compression finished took the same name and the same target,
+    and one copy overwrote or deleted the other (check_feedlog item 7, about
+    one run in four on Windows; at 200 MB a file the VPS never rotates that
+    fast).
     """
-    plain = dest + ".rotating"           # never the name of an older file
-    os.replace(source, plain)
 
-    def _compress() -> None:
-        try:
-            with open(plain, "rb") as fi, gzip.open(dest + ".part", "wb",
-                                                    compresslevel=6) as fo:
-                shutil.copyfileobj(fi, fo, 1 << 20)
-            os.replace(dest + ".part", dest)
-            os.remove(plain)
-        except Exception as e:
-            print(f"[logger] compressing {plain} failed, left as is: {e}",
-                  file=sys.__stderr__)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._pending: "queue.Queue[str]" = queue.Queue()
+        threading.Thread(target=self._worker, name="logzip", daemon=True).start()
 
-    threading.Thread(target=_compress, name="logzip", daemon=True).start()
+    def doRollover(self) -> None:
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+        if os.path.exists(self.baseFilename):
+            plain = "%s.%d.rotating" % (self.baseFilename, time.time_ns())
+            os.replace(self.baseFilename, plain)
+            self._pending.put(plain)
+        if not self.delay:
+            self.stream = self._open()
+
+    def _worker(self) -> None:
+        base = self.baseFilename
+        while True:
+            plain = self._pending.get()
+            try:
+                if self.backupCount <= 0:
+                    os.remove(plain)
+                    continue
+                for i in range(self.backupCount - 1, 0, -1):
+                    src = "%s.%d.gz" % (base, i)
+                    if os.path.exists(src):
+                        os.replace(src, "%s.%d.gz" % (base, i + 1))
+                dest = base + ".1.gz"
+                with open(plain, "rb") as fi, gzip.open(dest + ".part", "wb",
+                                                        compresslevel=6) as fo:
+                    shutil.copyfileobj(fi, fo, 1 << 20)
+                os.replace(dest + ".part", dest)
+                os.remove(plain)
+            except Exception as e:
+                print(f"[logger] compressing {plain} failed, left as is: {e}",
+                      file=sys.__stderr__)
 
 
 class Logger(Extension):
@@ -88,16 +122,15 @@ class Logger(Extension):
                     os.makedirs(d, exist_ok=True)
                 # Rotates on its own terms instead of competing with every
                 # other service for room in the system journal.
-                h = logging.handlers.RotatingFileHandler(
+                cls = (_GzipRotatingHandler if config.get("log_compress")
+                       else logging.handlers.RotatingFileHandler)
+                h = cls(
                     path, maxBytes=int(float(config.get("log_max_mb", 50)) * 1024 * 1024),
                     backupCount=int(config.get("log_backups", 3)),
                     encoding="utf-8",
                 )
                 h.setFormatter(logging.Formatter(
                     "%(asctime)s %(message)s", "%Y-%m-%dT%H:%M:%S"))
-                if config.get("log_compress"):
-                    h.namer = lambda name: name + ".gz"
-                    h.rotator = _gzip_rotator
                 lg = logging.getLogger("aprs.packetfeed")
                 lg.setLevel(logging.INFO)
                 lg.propagate = False        # never climb back into stderr
