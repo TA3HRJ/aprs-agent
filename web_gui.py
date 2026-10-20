@@ -1375,6 +1375,9 @@ class AgentManager:
                         # Its own registry, for answering a sender about their
                         # own callsign. Nothing else reads it.
                         ext.set_station_db(self._station_db)
+                        # STATUS answers from the cells and quake watches
+                        # the map shows, which live here.
+                        ext.set_status_provider(self._grid_status)
                         ExtensionRegistry.register(ext)
                     else:
                         ExtensionRegistry.register(cls(cfg))
@@ -1846,6 +1849,50 @@ class AgentManager:
         if act_n:
             out += (f"Stations in the same cell still active: {act_n}, e.g.\n"
                     + "\n".join(act_lines) + "\n")
+        return out
+
+    async def _grid_status(self, grid: str) -> dict:
+        """What DMWGPT's STATUS answers from: the silence cell of a 4-char
+        square (or the alerting cells of a 2-char field) and the quake rings
+        near it - the same cached cells and watches the map is drawn from."""
+        db = self._station_db
+        if db is None:
+            return {}
+        if db.deaf_since():
+            return {"deaf": True}
+        cells = await silence_cells_cached(db, self._sta_db_path)
+        out: dict = {}
+        if len(grid) == 2:
+            out["field_alerts"] = [{"cell": c["cell"]} for c in cells
+                                   if c.get("alert") and c["cell"].startswith(grid)]
+            lon0 = (ord(grid[0]) - 65) * 20 - 180 + 10
+            lat0 = (ord(grid[1]) - 65) * 10 - 90 + 5
+            reach = 800.0
+        else:
+            c = next((c for c in cells if c["cell"] == grid), None)
+            if c is not None:
+                out["cell"] = {k: c.get(k) for k in
+                               ("baseline", "silent", "alert", "cause")}
+                if c.get("alert") and self._silence_active.get(grid):
+                    out["cell"]["since"] = int(self._silence_active[grid])
+            lon0 = (ord(grid[0]) - 65) * 20 - 180 + int(grid[2]) * 2 + 1
+            lat0 = (ord(grid[1]) - 65) * 10 - 90 + int(grid[3]) + 0.5
+            reach = 100.0       # about half a square's diagonal
+        now = time.time()
+        quakes = []
+        for w in self._quake_watches.values():
+            if w.get("alert") not in _PAGER_SHOWN or not w.get("ts"):
+                continue
+            km = StationDB._haversine_km(lat0, lon0, w["lat"], w["lon"])
+            if km > (w.get("radius_km") or 150.0) + reach:
+                continue
+            r = w.get("result") or {}
+            quakes.append({"mag": float(w.get("mag") or 0), "km": km,
+                           "hours": (now - w["ts"]) / 3600.0,
+                           "measured": bool(r), "k": r.get("k", 0),
+                           "n": r.get("n", 0), "unusual": bool(r.get("unusual"))})
+        quakes.sort(key=lambda q: -q["mag"])
+        out["quakes"] = quakes
         return out
 
     def _quake_watch_scan(self) -> None:

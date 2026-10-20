@@ -365,6 +365,7 @@ chance of an invented number:
 | `which igate hears me` | the igate on your packet's own path — or that nobody is, if you arrived over the internet, since a `qAC` path names a core server rather than an igate |
 | `nearest igate`, `nearest repeater` | the closest ones with distances, measured from a grid you name or from your last beacon |
 | `digipeater near me`, `nearest digi` | the two closest digipeaters heard in the last 7 days, with distances |
+| `STATUS`, `STATUS KM38`, `DURUM` | the silence state of your square (or the one named): all on the air, a regional silence with its start time and how many stations are quiet, or an igate fault; a quake ring nearby with its count. `STATUS KM` lists a field's alerting squares |
 | `propagation near me` | openings this agent measured within 400 km and three hours, or a plain statement that there were none |
 | `weather`, `wx KM38` | the nearest APRS weather station, with its distance, its age, and **what it was measured from**; beyond 30 km the answer opens with the distance and says it is not local |
 | `where is XX1YYY` | that station's last position, its age and its distance from you |

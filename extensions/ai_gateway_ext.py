@@ -398,6 +398,93 @@ def _strip_signal_report(text: str) -> str:
 # question and goes to the model like any other.
 _TEST_MSG = re.compile(r"^\s*(?:test|ping|deneme)\b", re.I)
 
+# "STATUS KM38" / "DURUM": is my square silent, is a quake ring counting near
+# it. The whole message and nothing else, so "status of my order" is a
+# question for the model. The grid is optional: without it, the square of
+# the sender's own last beacon. Two letters ask about a whole field.
+_STATUS_MSG = re.compile(
+    r"^\s*(STATUS|DURUM)(?:\s+([A-R]{2}(?:[0-9]{2}(?:[A-X]{2})?)?))?\s*[?!.]*\s*$",
+    re.I)
+
+
+def _latlon_to_grid4(lat: float, lon: float) -> str:
+    """The 4-character Maidenhead square a position falls in."""
+    lon += 180.0
+    lat += 90.0
+    a = chr(ord("A") + int(lon // 20)) + chr(ord("A") + int(lat // 10))
+    return a + str(int((lon % 20) // 2)) + str(int(lat % 10))
+
+
+def _status_text(grid: str, st: dict, tr: bool) -> str:
+    """The answer to STATUS, from the facts the map is drawn from."""
+    if st.get("deaf"):
+        return ("Durum bilinmiyor: bu istasyon su an APRS-IS'i duymuyor."
+                if tr else
+                "Status unknown: this agent is not hearing APRS-IS right now.")
+    parts = []
+    if len(grid) == 2:
+        alerts = st.get("field_alerts") or []
+        if alerts:
+            names = ", ".join(a["cell"] for a in alerts[:4])
+            parts.append(("%s: %d karede bolgesel sessizlik (%s)." if tr else
+                          "%s: regional silence in %d square(s) (%s).")
+                         % (grid, len(alerts), names))
+        else:
+            parts.append(("%s: bolgesel sessizlik yok." if tr else
+                          "%s: no regional silence.") % grid)
+    else:
+        c = st.get("cell")
+        if not c or not c.get("baseline"):
+            parts.append(("%s: degerlendirilecek sabit istasyon yok." if tr else
+                          "%s: no fixed stations here to judge by.") % grid)
+        else:
+            n, k = c["baseline"], c.get("silent", 0)
+            if c.get("alert"):
+                since = c.get("since")
+                at = time.strftime("%H:%M UTC", time.gmtime(since)) if since else ""
+                if c.get("cause") == "igate":
+                    parts.append(("%s: %d/%d istasyon sessiz, hepsi susan tek bir "
+                                  "igate uzerinden; buyuk olasilikla igate arizasi."
+                                  if tr else
+                                  "%s: %d of %d stations quiet, all through one igate "
+                                  "that went quiet - likely an igate fault.")
+                                 % (grid, k, n))
+                elif c.get("cause") == "shared_gate":
+                    parts.append(("%s: %d/%d istasyon sessiz, hepsi durumu gorulemeyen "
+                                  "tek bir igate uzerinden; o igate olabilir."
+                                  if tr else
+                                  "%s: %d of %d stations quiet, all through one igate "
+                                  "whose own state is unknown - it may be that igate.")
+                                 % (grid, k, n))
+                else:
+                    parts.append(("%s: bolgesel sessizlik%s - %d/%d istasyon sessiz. "
+                                  "Olasi elektrik ya da altyapi kesintisi." if tr else
+                                  "%s: regional silence%s - %d of %d stations quiet. "
+                                  "Possible power or network outage.")
+                                 % (grid, (" " + at + "'den beri" if tr else
+                                           " since " + at) if at else "", k, n))
+            elif k:
+                parts.append(("%s: %d sabit istasyon, %d sessiz; bu kare icin "
+                              "olagandisi degil." if tr else
+                              "%s: %d fixed stations, %d quiet - not unusual here.")
+                             % (grid, n, k))
+            else:
+                parts.append(("%s: %d sabit istasyonun hepsi yayinda. Bolgesel "
+                              "sessizlik yok." if tr else
+                              "%s: all %d fixed stations on the air. No regional "
+                              "silence.") % (grid, n))
+    for q in (st.get("quakes") or [])[:1]:
+        line = ("M%.1f deprem %.0f km uzakta, %.0f sa once" if tr else
+                "M%.1f quake %.0f km away, %.0f h ago") % (q["mag"], q["km"], q["hours"])
+        if q.get("measured"):
+            line += ((": %d/%d istasyon sustu%s." if tr else ": %d of %d stations quiet%s.")
+                     % (q["k"], q["n"], (" (olagandisi)" if tr else " (unusual)")
+                        if q.get("unusual") else ""))
+        else:
+            line += "."
+        parts.append(line)
+    return " ".join(parts)
+
 # "What can you do?" — the question a newcomer sends before any real one.
 # Tight in the same way: it has to be about the service, so "can you help me
 # convert 5 miles" is a question and goes to the model.
@@ -823,6 +910,9 @@ class AIGateway(Extension):
         self._day_told = False
         self._status_started = False
         self._station_db = None        # set by set_station_db()
+        # STATUS: an async callable(grid) -> dict, given by the web GUI,
+        # which holds the silence cells and quake watches the map shows.
+        self._status_provider = None
         self._provider = config.get("provider", "puter")
         self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(
             self._provider, _PROVIDER_URLS["puter"])
@@ -946,6 +1036,37 @@ class AIGateway(Extension):
 
     def set_station_db(self, db) -> None:
         self._station_db = db
+
+    def set_status_provider(self, fn) -> None:
+        self._status_provider = fn
+
+    async def _status_lookup(self, question: str, sender_full: str,
+                             sender_base: str) -> "Optional[str]":
+        """STATUS / DURUM [grid]: the silence state of a square, and a
+        quake ring near it, from the same facts the map is drawn from."""
+        m = _STATUS_MSG.match(_to_ascii(question))
+        if not m:
+            return None
+        tr = m.group(1).upper() == "DURUM"
+        if self._status_provider is None:
+            return ("Bu gecitte bolge durumu yok." if tr else
+                    "Region status is not available on this gateway.")
+        grid = (m.group(2) or "").upper()
+        if len(grid) == 6:
+            grid = grid[:4]
+        if not grid:
+            origin = self._sender_origin(sender_full, sender_base)
+            if origin is None:
+                return ("Konumunuzu bilmiyorum. Bir kare yazin: DURUM KM38"
+                        if tr else
+                        "I do not know where you are. Name a square: STATUS KM38")
+            grid = _latlon_to_grid4(origin[0], origin[1])
+        try:
+            st = await self._status_provider(grid)
+        except Exception as e:
+            self.error(f"status lookup failed: {e}")
+            return None
+        return _status_text(grid, st or {}, tr)
 
     def set_own_writer(self, q: asyncio.Queue) -> None:
         self._own_writer = q
@@ -1945,6 +2066,8 @@ class AIGateway(Extension):
         answer = _test_answer(question, sender_full, line)
         if answer is None:
             answer = _swr_answer(question)
+        if answer is None:
+            answer = await self._status_lookup(question, sender_full, sender_base)
         if answer is None:
             answer = self._optout_command(question, sender_base)
         if answer is None:
