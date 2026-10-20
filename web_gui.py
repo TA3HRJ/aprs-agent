@@ -760,6 +760,24 @@ class AgentManager:
         # again from its first scan, which the map says ("counted from").
         self._quake_watches: dict[str, dict] = {}
         self._qw_saved = ""
+        # DMWGPT delivery, per UTC day: [answers, answers fully acked, parts,
+        # parts acked] - what the landing page's ack rate is computed from.
+        # Seeded once from gateway_delivery_seed.json beside the config (built
+        # from the journal) when the meta key is still empty.
+        self._delivery: dict[str, list] = {}
+        try:
+            raw = station_db_module.load_meta(self._sta_db_path,
+                                              "gateway_delivery", "")
+            if not raw:
+                seed = Path(self.config_path).with_name("gateway_delivery_seed.json")
+                if seed.exists():
+                    raw = seed.read_text(encoding="utf-8")
+            d = json.loads(raw or "{}")
+            self._delivery = {k: [int(x) for x in v][:4] for k, v in d.items()
+                              if isinstance(v, list) and len(v) >= 4}
+        except Exception as e:
+            print(f"[gateway] delivery counts not restored: {e}",
+                  file=sys.__stderr__)
         try:
             self._quake_watches = _quake_watches_load(
                 station_db_module.load_meta(self._sta_db_path,
@@ -1397,6 +1415,7 @@ class AgentManager:
                         # STATUS answers from the cells and quake watches
                         # the map shows, which live here.
                         ext.set_status_provider(self._grid_status)
+                        ext.set_delivery_recorder(self._record_delivery)
                         ExtensionRegistry.register(ext)
                     else:
                         ExtensionRegistry.register(cls(cfg))
@@ -1869,6 +1888,33 @@ class AgentManager:
             out += (f"Stations in the same cell still active: {act_n}, e.g.\n"
                     + "\n".join(act_lines) + "\n")
         return out
+
+    def _record_delivery(self, parts: int, acked: int) -> None:
+        """One answer settled: count it on today's line and keep 60 days."""
+        if parts <= 0:
+            return
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        row = self._delivery.setdefault(day, [0, 0, 0, 0])
+        row[0] += 1
+        row[1] += int(acked >= parts)
+        row[2] += parts
+        row[3] += acked
+        for k in sorted(self._delivery)[:-60]:
+            del self._delivery[k]
+        try:
+            station_db_module.save_meta(self._sta_db_path, "gateway_delivery",
+                                        json.dumps(self._delivery))
+        except Exception as e:
+            print(f"[gateway] delivery counts not saved: {e}", file=sys.__stderr__)
+
+    def _delivery_summary(self, days: int = 30) -> dict:
+        """Totals over the last `days` UTC days."""
+        cutoff = time.strftime("%Y-%m-%d", time.gmtime(time.time() - days * 86400))
+        rows = [v for k, v in self._delivery.items() if k > cutoff]
+        tot = [sum(r[i] for r in rows) for i in range(4)]
+        return {"days": days, "answers": tot[0], "acked": tot[1],
+                "parts": tot[2], "parts_acked": tot[3],
+                "since": min((k for k in self._delivery if k > cutoff), default="")}
 
     async def _grid_status(self, grid: str) -> dict:
         """What DMWGPT's STATUS answers from: the silence cell of a 4-char
@@ -3451,6 +3497,9 @@ async def counters(request: web.Request) -> web.Response:
         "calls_this_run": s["unique_calls"],
         "uptime":        s["uptime"],
         "uptime_total":  s["uptime_total"],
+        # DMWGPT answers over 30 days, and how many the recipient's station
+        # acknowledged in full (every part acked).
+        "gateway_delivery": mgr._delivery_summary(30),
     }, headers={"Cache-Control": "public, max-age=30"})
 
 

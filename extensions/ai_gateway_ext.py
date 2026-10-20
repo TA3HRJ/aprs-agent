@@ -913,6 +913,11 @@ class AIGateway(Extension):
         # STATUS: an async callable(grid) -> dict, given by the web GUI,
         # which holds the silence cells and quake watches the map shows.
         self._status_provider = None
+        # Delivery outcome of every fresh answer: fn(parts, acked), given by
+        # the web GUI, which keeps the daily counts the landing page shows.
+        self._delivery_recorder = None
+        # numbered part (addressee, msg id) -> its answer's tally
+        self._part_group: dict = {}
         self._provider = config.get("provider", "puter")
         self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(
             self._provider, _PROVIDER_URLS["puter"])
@@ -1039,6 +1044,23 @@ class AIGateway(Extension):
 
     def set_status_provider(self, fn) -> None:
         self._status_provider = fn
+
+    def set_delivery_recorder(self, fn) -> None:
+        self._delivery_recorder = fn
+
+    def _part_done(self, key: tuple, acked: bool) -> None:
+        """One numbered part settled: acked, or given up on. When the last
+        part of an answer settles, the answer's outcome is recorded."""
+        g = self._part_group.pop(key, None)
+        if g is None:
+            return
+        g["acked"] += int(acked)
+        g["left"] -= 1
+        if g["left"] == 0 and self._delivery_recorder is not None:
+            try:
+                self._delivery_recorder(g["n"], g["acked"])
+            except Exception as e:
+                self.error(f"delivery record failed: {e}")
 
     async def _status_lookup(self, question: str, sender_full: str,
                              sender_base: str) -> "Optional[str]":
@@ -1781,17 +1803,19 @@ class AIGateway(Extension):
                               f"back to the clock: {e}")
         return str(self._msg_counter)
 
-    async def _send_reply(self, from_call: str, to_call: str, message: str) -> None:
+    async def _send_reply(self, from_call: str, to_call: str,
+                          message: str) -> "Optional[tuple]":
         if not self._own_writer:
             self.error("no own_writer queue — cannot send reply")
             return
         mid = self._next_msg_id()
         pkt = f"{from_call}>{TOCALL},TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
         await self._own_writer.put(pkt.encode("utf-8"))
+        key = (to_call.upper(), str(mid))
         if _RETRY_GAPS_S:
-            key = (to_call.upper(), str(mid))
             self._unacked[key] = asyncio.create_task(
                 self._resend(key, to_call, str(mid), pkt))
+        return key
 
     async def _resend(self, key: tuple, to_call: str, mid: str, pkt: str) -> None:
         """Send the same numbered part again until it is acked or rejected."""
@@ -1809,11 +1833,15 @@ class AIGateway(Extension):
         finally:
             if self._unacked.get(key) is asyncio.current_task():
                 del self._unacked[key]
+            # not acked (an ack settles the part before cancelling this task)
+            self._part_done(key, False)
 
     def _acked(self, sender_full: str, mid: str, kind: str) -> None:
         """An ack or rej for one of our parts: stop resending it."""
-        task = self._unacked.pop((sender_full.upper(), str(mid)), None)
+        key = (sender_full.upper(), str(mid))
+        task = self._unacked.pop(key, None)
         if task is not None:
+            self._part_done(key, True)
             task.cancel()
             self.log(f"{kind.lower()} from {sender_full} for {mid}")
 
@@ -1824,12 +1852,22 @@ class AIGateway(Extension):
         a sender heard on RF, and a gap between parts. The two replay loops
         used to sleep after a part rather than before the next, which sent
         the first two parts back to back."""
+        # A fresh answer (not a replay) is tallied: how many of its parts the
+        # recipient's station acknowledges. Replays are the same answer again.
+        group = ({"n": len(parts), "left": len(parts), "acked": 0}
+                 if log and _RETRY_GAPS_S and parts else None)
         for i, part in enumerate(parts):
             if i:
                 await asyncio.sleep(_PART_GAP_S)
             elif rf and _RF_TURNAROUND_S > 0:
                 await asyncio.sleep(_RF_TURNAROUND_S)
-            await self._send_reply(from_call, to_call, part)
+            key = await self._send_reply(from_call, to_call, part)
+            if group is not None:
+                if key is None:
+                    group["n"] -= 1
+                    group["left"] -= 1
+                else:
+                    self._part_group[key] = group
             if log:
                 self.log(f"TX to {to_call}: {part}")
 
