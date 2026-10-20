@@ -3509,8 +3509,9 @@ function toggleSidebar(){
   // (2026-10-20). Waits for the map and the silence cells, then frames it.
   (function(){const q=(new URLSearchParams(location.search).get('q')||'').trim();
     if(!LOC_RE.test(q))return;switchTab('map');let n=0;
-    const tm=setInterval(()=>{n++;if(map&&(Object.keys(silRects).length||n>25)){clearInterval(tm);
-      $('map-search').value=q;mapLocGo(q.slice(0,4).toUpperCase()+q.slice(4).toLowerCase())}},300)})();
+    // The page's own first fit-to-stations must not undo it: claim it.
+    const tm=setInterval(()=>{n++;if(map&&map.getSize().x>0&&(Object.keys(silRects).length||n>25)){clearInterval(tm);
+      mapFitted=true;$('map-search').value=q;mapLocGo(q.slice(0,4).toUpperCase()+q.slice(4).toLowerCase())}},300)})();
   pollSilence();setInterval(pollSilence,15000);
 })();
 </script>
