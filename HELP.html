@@ -101,6 +101,19 @@
   th { background: var(--accent); color: #fff; text-align: left; padding: 8px 12px; font-size: .88em; }
   td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: .92em; vertical-align: top; }
   tr:nth-child(even) td { background: #f4f7fb; }
+  /* Phone: a row per block - field and status on top, description below -
+     instead of three columns wider than the screen */
+  @media (max-width: 600px) {
+    table, tbody { display: block; }
+    tr:first-child { display: none; }
+    tr { display: grid; grid-template-columns: 1fr auto; column-gap: 10px;
+         padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    tr:nth-child(even) { background: #f4f7fb; }
+    td { display: block; padding: 0; border: 0; background: none !important;
+         min-width: 0; overflow-wrap: break-word; }
+    td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; margin-top: 3px; }
+    td:nth-child(3) { grid-column: 2; grid-row: 1; text-align: right; }
+  }
 
   /* ── Steps ── */
   .steps { counter-reset: step; list-style: none; padding: 0; }
