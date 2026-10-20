@@ -3100,6 +3100,165 @@ async def silence_feed(request: web.Request) -> web.Response:
                         headers={"Cache-Control": "public, max-age=60"})
 
 
+# ── Embeddable status card (2026-10-20) ─────────────────────────────────────
+# One small self-contained page for a club's own website, in an iframe:
+#   <iframe src="https://map.example.org/embed/status?grid=KM38&lang=tr"
+#           width="320" height="210" style="border:0"></iframe>
+# The square's silence state, a quake ring reaching it and the propagation
+# openings near it in the last 3 h - the facts STATUS and the feed give -
+# refreshing itself every 5 minutes. ?theme=dark, or the reader's own
+# light/dark preference.
+_EMBED_GRID = re.compile(r"^[A-R]{2}(?:[0-9]{2}(?:[A-X]{2})?)?$", re.I)
+_EMBED_PROP_KM = 400.0
+_EMBED_PROP_S = 3 * 3600.0
+_EMBED_T = {
+    "en": {"ok": "All on the air", "silence": "Regional silence",
+           "igate": "Igate fault", "gate": "One igate, state unknown",
+           "unknown": "Status unknown", "none": "No fixed stations to judge by",
+           "deaf": "This agent is not hearing APRS-IS right now.",
+           "stations": "{n} fixed stations · {k} quiet", "since": "since {t}",
+           "field_ok": "No regional silence in this field",
+           "field_alert": "Regional silence in {n} square(s): {cells}",
+           "quake": "M{m:.1f} quake {km:.0f} km away, {h:.0f} h ago",
+           "quake_n": ": {k} of {n} stations quiet", "unusual": " (unusual)",
+           "prop": "{n} propagation opening(s) nearby in 3 h, longest {km:.0f} km",
+           "prop0": "No propagation openings nearby in 3 h",
+           "open": "Open on the map", "updated": "Updated {t} UTC"},
+    "tr": {"ok": "Herkes yayında", "silence": "Bölgesel sessizlik",
+           "igate": "Igate arızası", "gate": "Tek igate, durumu bilinmiyor",
+           "unknown": "Durum bilinmiyor", "none": "Değerlendirilecek sabit istasyon yok",
+           "deaf": "Bu ajan şu an APRS-IS'i duymuyor.",
+           "stations": "{n} sabit istasyon · {k} sessiz", "since": "{t}'den beri",
+           "field_ok": "Bu alanda bölgesel sessizlik yok",
+           "field_alert": "{n} karede bölgesel sessizlik: {cells}",
+           "quake": "M{m:.1f} deprem, {km:.0f} km uzakta, {h:.0f} sa önce",
+           "quake_n": ": {k}/{n} istasyon sustu", "unusual": " (olağandışı)",
+           "prop": "Son 3 saatte yakında {n} propagasyon açılımı, en uzun {km:.0f} km",
+           "prop0": "Son 3 saatte yakında propagasyon açılımı yok",
+           "open": "Haritada aç", "updated": "Güncellendi {t} UTC"},
+}
+_EMBED_CSS = """
+:root{--bg:#fdfbf5;--fg:#22201a;--fg2:#635c50;--line:#d9d2c2;--ok:#2e7d4f;
+--bad:#b0413e;--warn:#b57a18;--link:#24506e;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+:root[data-theme="dark"]{--bg:#211f1a;--fg:#ece6d8;--fg2:#b3aa98;--line:#3a362e;
+--ok:#5fbf86;--bad:#d0605c;--warn:#d39a3a;--link:#8fb6d4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#211f1a;
+--fg:#ece6d8;--fg2:#b3aa98;--line:#3a362e;--ok:#5fbf86;--bad:#d0605c;--warn:#d39a3a;--link:#8fb6d4}}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--sans);
+border:1px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:3px;
+background:repeating-linear-gradient(45deg,#b0413e 0 7px,var(--bg) 7px 14px,#24506e 14px 21px,var(--bg) 21px 28px)}
+.hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:2px}
+.sq{font:700 15px var(--mono);letter-spacing:.06em}
+.brand{font:11px var(--mono);letter-spacing:.08em;color:var(--fg2);text-transform:uppercase;text-decoration:none}
+.st{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.ok .dot{background:var(--ok)}.bad .dot{background:var(--bad)}.warn .dot{background:var(--warn)}
+.unk .dot{background:var(--fg2)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.unk{color:var(--fg2)}
+.l{color:var(--fg2);font-size:13px}
+.ft{margin-top:auto;display:flex;justify-content:space-between;gap:8px;
+font:11px var(--mono);color:var(--fg2)}
+.ft a{color:var(--link);text-decoration:none;font-weight:600}
+"""
+
+
+@routes.get("/embed/status")
+async def embed_status(request: web.Request) -> web.Response:
+    mgr: AgentManager = request.app["manager"]
+    base = _public_base(request, mgr.get_config())
+    lang = "tr" if request.query.get("lang", "").lower() == "tr" else "en"
+    T = _EMBED_T[lang]
+    grid = request.query.get("grid", "").strip()
+    if not _EMBED_GRID.match(grid):
+        return web.Response(status=400, text="grid: a Maidenhead field or square, "
+                            "e.g. ?grid=KM38\n")
+    grid = grid[:4].upper()
+    theme = request.query.get("theme", "").lower()
+    st = await mgr._grid_status(grid)
+    esc = html.escape
+    lines = []
+    if st.get("deaf"):
+        cls, head = "unk", T["unknown"]
+        lines.append(T["deaf"])
+    elif len(grid) == 2:
+        alerts = st.get("field_alerts") or []
+        if alerts:
+            cls, head = "bad", T["silence"]
+            lines.append(T["field_alert"].format(
+                n=len(alerts), cells=", ".join(a["cell"] for a in alerts[:6])))
+        else:
+            cls, head = "ok", T["field_ok"]
+    else:
+        c = st.get("cell") or {}
+        n, k = c.get("baseline") or 0, c.get("silent") or 0
+        if not n:
+            cls, head = "unk", T["none"]
+        elif c.get("alert"):
+            cause = c.get("cause")
+            cls, head = (("warn", T["igate"]) if cause == "igate" else
+                         ("warn", T["gate"]) if cause == "shared_gate" else
+                         ("bad", T["silence"]))
+            since = c.get("since")
+            line = T["stations"].format(n=n, k=k)
+            if since:
+                line += " · " + T["since"].format(
+                    t=time.strftime("%H:%M UTC", time.gmtime(since)))
+            lines.append(line)
+        else:
+            cls, head = "ok", T["ok"]
+            lines.append(T["stations"].format(n=n, k=k))
+    for q in (st.get("quakes") or [])[:1]:
+        line = T["quake"].format(m=q["mag"], km=q["km"], h=q["hours"])
+        if q.get("measured"):
+            line += T["quake_n"].format(k=q["k"], n=q["n"]) + (
+                T["unusual"] if q.get("unusual") else "")
+        lines.append(line)
+    # propagation openings with an end near the square, last 3 h, not suspect
+    lat0, lon0, _ = _grid_center(grid)
+    now = time.time()
+    near = []
+    try:
+        summary = mgr._station_db.prop_summary(200)
+    except Exception:
+        summary = {}
+    for ln in summary.get("links", []):
+        if ln.get("suspect") or now - float(ln.get("ts") or 0) > _EMBED_PROP_S:
+            continue
+        for la, lo in ((ln.get("s_lat"), ln.get("s_lon")),
+                       (ln.get("g_lat"), ln.get("g_lon"))):
+            if la is not None and lo is not None and \
+                    StationDB._haversine_km(lat0, lon0, la, lo) <= _EMBED_PROP_KM:
+                near.append(float(ln.get("km") or 0))
+                break
+    if near:
+        lines.append(T["prop"].format(n=len(near), km=max(near)))
+    else:
+        lines.append(T["prop0"])
+    theme_attr = ' data-theme="%s"' % theme if theme in ("light", "dark") else ""
+    body = ['<!doctype html>', '<html lang="%s"%s><head><meta charset="utf-8">'
+            % (lang, theme_attr),
+            '<meta name="viewport" content="width=device-width,initial-scale=1">',
+            '<meta http-equiv="refresh" content="300">',
+            '<meta name="robots" content="noindex">',
+            '<title>%s · %s</title>' % (esc(grid), esc(head)),
+            '<style>%s</style></head><body>' % _EMBED_CSS,
+            '<div class="hd"><span class="sq">%s</span>'
+            '<a class="brand" href="%s" target="_blank" rel="noopener">APRS-Agent</a></div>'
+            % (esc(grid), esc(base)),
+            '<div class="st %s"><span class="dot"></span>%s</div>' % (cls, esc(head))]
+    body += ['<div class="l">%s</div>' % esc(x) for x in lines]
+    body.append('<div class="ft"><span>%s</span><a href="%s?q=%s" target="_blank" '
+                'rel="noopener">%s →</a></div></body></html>'
+                % (esc(T["updated"].format(t=time.strftime("%H:%M", time.gmtime(now)))),
+                   esc(base), esc(grid), esc(T["open"])))
+    return web.Response(text="\n".join(body), content_type="text/html",
+                        charset="utf-8", headers={"Cache-Control": "public, max-age=60"})
+
+
 # A page, not "404: Not Found" in plain text, for a person who mistyped an
 # address - in the family's paper colours, both languages, one link back.
 _NOT_FOUND_HTML = """<!doctype html>
@@ -4595,6 +4754,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/sitemap.xml", public_sitemap),
         web.get("/llms.txt", public_llms),
         web.get("/feed/silence.atom", silence_feed),
+        web.get("/embed/status", embed_status),
         web.get("/aprs-symbols-24-{table}.png", symbols),
         web.get("/api/info", info),
         web.get("/api/counters", counters),

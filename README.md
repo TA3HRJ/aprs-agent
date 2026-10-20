@@ -291,6 +291,16 @@ public_base_url = ""      # optional: the page's own address, used as its
 public_privacy_url = ""   # optional: a privacy notice linked from the About box
 ```
 
+**Embeddable status card.** `/embed/status?grid=KM38` is a small self-contained
+page for another website: the square's silence state, a quake ring reaching it
+and the propagation openings near it in the last 3 hours, refreshing every 5
+minutes (`&lang=tr` for Turkish, `&theme=dark`, or the reader's own setting):
+
+```html
+<iframe src="https://map.aprsagent.com/embed/status?grid=KM38&lang=tr"
+        width="320" height="210" style="border:0"></iframe>
+```
+
 The public page also serves `robots.txt` (keeping crawlers off `/api/` and
 `/ws`), `sitemap.xml`, `llms.txt` and an HTML 404 page, and loads Leaflet from
 itself rather than from a third-party script host.
