@@ -51,8 +51,8 @@ between versions, see the
 | 🔶 | **Quake ring** | A large quake can silence a share of a region's stations spread over several squares, none of which meets the cell rule. Around every quake USGS PAGER rates yellow or above, the map draws a dashed ring (150 km below M7, 300 km to M7.9, 500 km from M8) and counts, for 3 hours, the fixed stations on the air when it struck that went quiet — against the share going quiet in the rest of the world at the same moment. Orange when that is more than chance explains, grey otherwise; the dot at the epicentre shows the numbers. A count, not an outage report, and it sends no notification |
 | 👁️ | **Public View** | Optional read-only monitoring page on a separate port (`public_port`): Live Log / Stations / Map only — no settings, no start/stop, no API keys, log stream filtered to packet lines. Safe to expose to the internet while the admin port stays local. Serves its own Leaflet (no third-party script host), `robots.txt`, `sitemap.xml`, `llms.txt`, a 404 page, and an **Atom feed** of announced silence alerts and quake rings at `/feed/silence.atom` (`?grid=KM,KN41` to limit it, `?lang=tr` for Turkish; each entry links to `/?q=<square>`, which opens the map there); `public_base_url` makes one address canonical when the page answers under several, `public_privacy_url` links a privacy notice from the About box |
 | 📊 | **Stations Tab** | Live table of all heard stations — type, location, organization, frequency, online/offline status; Object packets parsed; location falls back to Maidenhead locator or coordinates |
-| 🗄️ | **Turkey Repeaters DB** | Enriches station records with city, district, frequency, tone, band, mode from a local JSON database |
-| 🔔 | **Repeater Monitor** | Detects when DB-matched repeaters go offline or come back; sends Telegram or email notification |
+| 🗄️ | **Turkey Repeaters DB** | Enriches station records with city, district, frequency, tone, band, mode from a local JSON database. Matched by callsign without SSID, so a club's digi, igate or weather station under a repeater's callsign takes the repeater's record, position included |
+| 🔔 | **Repeater Monitor** | Notifies (Telegram or email) when a station matched to the repeater database stops or resumes sending APRS. It does not hear the repeater itself: a repeater that sends no APRS is never seen, and the match also takes the club's other stations under the same callsign |
 | 🧠 | **AI Station Analysis** | Periodically sends beacon comments to AI to extract organisation name and description — results shown in Stations tab; skips seasonal/greeting messages |
 | 📡 | **Fixed Beacon** | Periodically sends your station's position — with APRS symbol picker and Maidenhead / QTH Locator support |
 | 🪵 | **Logger** | Logs incoming APRS packets to the terminal, with type and keyword filters |
@@ -312,7 +312,12 @@ itself rather than from a third-party script host.
 
 ### Repeater Monitor
 
-Watches DB-matched repeaters and sends a notification when one goes offline or comes back online.
+Sends a notification when a station matched to the repeater database stops or resumes sending
+APRS packets (silent past its type's threshold: 24 h for a repeater symbol, 2 h for a digi or
+igate, 6 h for a weather station, 4 h otherwise). The match is the callsign
+without SSID, so it covers the club's digi, igate or weather station as well as a repeater that
+beacons; the repeater's voice traffic is not observed, and a repeater that sends no APRS is not
+watched at all. The state is kept in memory: the first check after a start sets it, no alert.
 Requires `repeater_db_path` to be set and at least one notification channel configured.
 
 ```toml

@@ -171,7 +171,7 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
       <li>Duyulan tüm istasyonları tablo ve harita üzerinde gösterir, gerçek APRS sembolleriyle (<strong>İstasyonlar / Harita</strong> — Web GUI)</li>
       <li>Bir bölgede (veya tüm dünyada) çok sayıda istasyonun aynı anda susmasını tespit eder ve olası elektrik kesintisi uyarısı verir (<strong>Sessizlik Haritası</strong> — Web GUI)</li>
       <li>Alışılmadık uzunlukta RF linklerinden bant açılmalarını (tropo/Sporadik-E) tespit eder ve bildirir (<strong>RF Propagasyon Takibi</strong> — Web GUI)</li>
-      <li>Türkiye Röle Veritabanı ile eşleşen istasyonları şehir/frekans/ton bilgisiyle zenginleştirir ve çevrimdışı olduklarında bildirim gönderir (<strong>Röle İzleyici</strong>)</li>
+      <li>Türkiye Röle Veritabanı'ndaki çağrı işaretiyle APRS'te duyulan istasyonları şehir/frekans/ton bilgisiyle zenginleştirir ve APRS paketleri kesilince ya da geri gelince bildirim gönderir (<strong>Röle İzleyici</strong>)</li>
       <li>Duyulan istasyonların beacon yorumlarını yapay zekaya göndererek kulüp/kurum adını ve açıklamasını otomatik çıkarır (<strong>AI İstasyon Analizi</strong>)</li>
       <li>Size gelen APRS mesajlarını Twitter/X'e iletir (<strong>Twitter</strong>)</li>
       <li>Size gelen APRS mesajlarını Bluesky'a iletir (<strong>Bluesky</strong>) — ücretsiz API</li>
@@ -530,9 +530,16 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
   <div class="card" id="repeater-tr">
     <div class="card-title">Röle İzleyici</div>
     <p>
-      Aşağıdaki Türkiye Röle Veritabanı'ndaki röleleri izler; bir röle
-      çevrimdışı olduğunda veya geri geldiğinde Telegram/e-posta ile bildirim
-      gönderir. <code>Röle DB Dosyası</code> ayarının yapılmış olması gerekir.
+      Aşağıdaki Türkiye Röle Veritabanı'ndaki çağrı işaretleriyle APRS'te
+      duyulan istasyonları izler; eşleşen bir istasyonun APRS paketleri
+      kesilince ya da geri gelince Telegram/e-posta ile bildirim gönderir.
+      <code>Röle DB Dosyası</code> ayarının yapılmış olması gerekir.</p>
+    <p><strong>Neyi izlemediği:</strong> rölenin ses yayınını duymaz; APRS
+      göndermeyen bir röle hiç görünmez. Eşleşme SSID'siz çağrı işaretiyle
+      yapılır, bu yüzden kulübün aynı çağrı işaretli digi, igate ya da hava
+      istasyonu da "röle" sayılır ve konumu röle kaydındaki konumla
+      değiştirilir. İlk kontrol yalnızca durumu kaydeder; yeniden başlatmadan
+      sonraki ilk kontrolde bildirim gelmez.
     </p>
     <table>
       <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
@@ -1097,7 +1104,7 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
       <li>Show every heard station in a table and on a map with real APRS symbols (<strong>Stations / Map</strong> — Web GUI)</li>
       <li>Detect when many stations in a region (or worldwide) fall silent together and raise a possible power-outage alert (<strong>Silence Map</strong> — Web GUI)</li>
       <li>Detect band openings (tropo/sporadic-E) from unusually long RF links and notify (<strong>RF Propagation Tracking</strong> — Web GUI)</li>
-      <li>Enrich matching stations from the Turkey Repeaters database with city/frequency/tone and notify when a repeater goes offline (<strong>Repeater Monitor</strong>)</li>
+      <li>Enrich stations heard on APRS under a Turkey Repeaters database callsign with city/frequency/tone and notify when their APRS packets stop or resume (<strong>Repeater Monitor</strong>)</li>
       <li>Send heard stations' beacon comments to AI to automatically extract an organisation name and description (<strong>AI Station Analysis</strong>)</li>
       <li>Forward incoming APRS messages to Twitter/X (<strong>Twitter</strong>)</li>
       <li>Forward incoming APRS messages to Bluesky (<strong>Bluesky</strong>) — free API</li>
@@ -1459,9 +1466,17 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
   <div class="card" id="repeater-en">
     <div class="card-title">Repeater Monitor</div>
     <p>
-      Watches the repeaters listed in the Turkey Repeaters database below
-      and sends a Telegram/email notification when one goes offline or
-      comes back. Requires the <code>Repeater DB Path</code> setting.
+      Watches the stations heard on APRS under a callsign in the Turkey
+      Repeaters database below, and sends a Telegram/email notification when
+      a matched station's APRS packets stop or resume. Requires the
+      <code>Repeater DB Path</code> setting.</p>
+    <p><strong>What it does not watch:</strong> it does not hear the
+      repeater's voice traffic, and a repeater that sends no APRS is never
+      seen. The match is the callsign without SSID, so a club's digi, igate or
+      weather station under the same callsign counts as the "repeater" and
+      its position is replaced with the repeater record's. The first check
+      only records the state; there is no alert on the first check after a
+      restart.
     </p>
     <table>
       <tr><th>Field</th><th>Description</th><th>Status</th></tr>

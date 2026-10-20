@@ -8034,3 +8034,36 @@ OpenRouter, OpenAI or Anthropic key was available; the VPS runs DeepSeek,
 whose request is unchanged.
 
 **Live, v3.2.188** (a free-tier Gemini key from the operator, 2026-10-20). `gemini-flash-latest` with effort `low` thought ~900 tokens, took 22-90 s and gave 503 (overloaded) on 2 of 3 calls; effort `minimal` and `none` are rejected (400) for Flash. `gemini-3.5-flash-lite` without an effort does not think: 4-17 s, 3 of 3; effort `low` makes it think 290-350 tokens. Default changed to Flash-Lite, no effort for Lite models. Through the gateway: three answers (one part, three parts, Turkish two parts) in 15-44 s, the 44 s one after the 30 s timeout and its retry; a station note returned valid JSON in 16 s. The notes' 20 s timeout is now 45 s.
+
+---
+
+## F-2026-10-20-03 — the repeater monitor watches callsigns, not repeaters
+
+**Source:** the operator, after the landing page described it as "says when a
+repeater goes quiet": "sanmıyorum" · **Verdict:** docs overstated it; the
+landing card was withdrawn the same day; code unchanged
+
+Read from the code (`StationDB.load_repeater_db`, `ingest`, `check_transitions`,
+`StationRecord.update_from_db`, `_monitor_loop`) and measured on the live
+registry 2026-10-20:
+
+- A station is matched to the repeater database by its callsign **without
+  SSID** (`_repeater_index[base]`, first entry wins). The monitor reports a
+  matched station whose APRS packets stop (past `OFFLINE_THRESHOLD` of its
+  type: repeater 24 h, digi/igate 2 h, weather 6 h, else 4 h) or resume. A
+  repeater that sends no APRS is never seen; its voice traffic never is.
+- The Turkey Repeaters DB has 574 records under 77 distinct base callsigns
+  (club callsigns own several). 32 of the 77 were ever heard on APRS, as 71
+  station records; only 9 of those carry a repeater symbol - the rest are
+  the clubs' digis (28), weather stations (4), an igate, cars, walkers.
+- `update_from_db` treats the DB as authoritative: a matched club weather
+  station or igate takes the repeater's lat/lon, frequency and tone - it
+  would move on the map to the repeater site.
+- `prev_online` lives in memory: the first check after a start only records.
+- On the VPS `repeater_db_path` is empty, so neither enrichment nor the
+  monitor runs (0 ONLINE/OFFLINE lines in 30 days of journal).
+
+README, HELP and the landing page had said it "detects when DB-matched
+repeaters go offline". **Applied:** README and HELP now say what it does and
+does not watch; the landing card became the quake ring. **Not applied:** a
+fix (NEXT 22).

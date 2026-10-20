@@ -137,6 +137,12 @@ What is left, in the order it is worth doing:
     fault; record and next test outside the repo (`DMR-BRIDGE-2026-09-10.md`).
     The landing page still says DMR is "not tested"; it now is, and the
     answer does not come back.
+22. **Repeater monitor matches the wrong stations** (F-2026-10-20-03). Match
+    on the full callsign with SSID where the DB gives one, else only a
+    station with a repeater symbol; never overwrite a matched station's
+    measured position. Cost: one rule in `load_repeater_db`/`ingest` and a
+    check that fails on today's code (a club `-13` weather station must not
+    match). Off on the VPS until then; not done without a yes.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.
