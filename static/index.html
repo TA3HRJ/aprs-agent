@@ -14,6 +14,7 @@ if(d.dataset.theme==="light"){var m=document.querySelector('meta[name="theme-col
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.json">
+<link rel="alternate" type="application/atom+xml" title="APRS-Agent silence alerts" href="/feed/silence.atom">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <!-- Leaflet from this server, not unpkg.com (2026-10-15): no third party sees
      a visitor's address, and no second handshake on a first visit. -->
@@ -3504,6 +3505,12 @@ function toggleSidebar(){
   // when it answers here - a login redirect is not the report.
   if(!window.PUBLIC){fetch('/stats/',{method:'HEAD',cache:'no-store',redirect:'manual'}).then(r=>{if(r.ok)$('btn-stats').hidden=false}).catch(()=>{})}
   restorePanelState();restoreTab();connectWS();applyLang();
+  // ?q=KM38 opens the map on that square - the links in the Atom feed
+  // (2026-10-20). Waits for the map and the silence cells, then frames it.
+  (function(){const q=(new URLSearchParams(location.search).get('q')||'').trim();
+    if(!LOC_RE.test(q))return;switchTab('map');let n=0;
+    const tm=setInterval(()=>{n++;if(map&&(Object.keys(silRects).length||n>25)){clearInterval(tm);
+      $('map-search').value=q;mapLocGo(q.slice(0,4).toUpperCase()+q.slice(4).toLowerCase())}},300)})();
   pollSilence();setInterval(pollSilence,15000);
 })();
 </script>

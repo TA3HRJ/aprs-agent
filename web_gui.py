@@ -467,6 +467,25 @@ def _quake_watch_radius(mag: float) -> float:
     return 500.0 if mag >= 8.0 else 300.0 if mag >= 7.0 else 150.0
 
 
+def _grid_center(grid: str):
+    """Centre of a 2- or 4-character Maidenhead locator, and how far from it
+    a quake ring may be and still touch it (about half the diagonal)."""
+    g = grid.upper()
+    lon = (ord(g[0]) - 65) * 20 - 180
+    lat = (ord(g[1]) - 65) * 10 - 90
+    if len(g) >= 4:
+        return lat + int(g[3]) + 0.5, lon + int(g[2]) * 2 + 1, 100.0
+    return lat + 5, lon + 10, 800.0
+
+
+def _quake_reaches(w: dict, grid: str):
+    """Distance from a grid to a watched quake, or None when its ring does
+    not reach the grid."""
+    lat0, lon0, reach = _grid_center(grid)
+    km = StationDB._haversine_km(lat0, lon0, w["lat"], w["lon"])
+    return km if km <= (w.get("radius_km") or 150.0) + reach else None
+
+
 def _quake_watch_public(watches) -> list:
     """The watches the map is given: PAGER yellow and above, counted or not.
 
@@ -1865,9 +1884,6 @@ class AgentManager:
         if len(grid) == 2:
             out["field_alerts"] = [{"cell": c["cell"]} for c in cells
                                    if c.get("alert") and c["cell"].startswith(grid)]
-            lon0 = (ord(grid[0]) - 65) * 20 - 180 + 10
-            lat0 = (ord(grid[1]) - 65) * 10 - 90 + 5
-            reach = 800.0
         else:
             c = next((c for c in cells if c["cell"] == grid), None)
             if c is not None:
@@ -1875,16 +1891,13 @@ class AgentManager:
                                ("baseline", "silent", "alert", "cause")}
                 if c.get("alert") and self._silence_active.get(grid):
                     out["cell"]["since"] = int(self._silence_active[grid])
-            lon0 = (ord(grid[0]) - 65) * 20 - 180 + int(grid[2]) * 2 + 1
-            lat0 = (ord(grid[1]) - 65) * 10 - 90 + int(grid[3]) + 0.5
-            reach = 100.0       # about half a square's diagonal
         now = time.time()
         quakes = []
         for w in self._quake_watches.values():
             if w.get("alert") not in _PAGER_SHOWN or not w.get("ts"):
                 continue
-            km = StationDB._haversine_km(lat0, lon0, w["lat"], w["lon"])
-            if km > (w.get("radius_km") or 150.0) + reach:
+            km = _quake_reaches(w, grid)
+            if km is None:
                 continue
             r = w.get("result") or {}
             quakes.append({"mag": float(w.get("mag") or 0), "km": km,
@@ -2960,6 +2973,8 @@ async def public_llms(request: web.Request) -> web.Response:
         "  messages and silence, propagation and hazard history for 14 days.",
         "- Software: APRS-Agent, open source (MIT):"
         " https://github.com/TA3HRJ/aprs-agent",
+        f"- Atom feed of silence alerts and quake rings: {_public_base(request, cfg)}"
+        "feed/silence.atom (?grid=KM,KN41, ?lang=tr)",
     ]
     for label, key in (("Home", "public_home_url"),
                        ("Privacy", "public_privacy_url")):
@@ -2971,6 +2986,118 @@ async def public_llms(request: web.Request) -> web.Response:
         lines.append(f"- Data contact: {mail}")
     return web.Response(text="\n".join(lines) + "\n", content_type="text/plain",
                         charset="utf-8", headers=_DAY_CACHE)
+
+
+# ── Atom feed: silence alerts and quake rings (2026-10-20) ──────────────────
+# For clubs and emergency-communication groups to plug into their own feed
+# reader or bot: announced silence alerts (the ones the map lists) and the
+# PAGER yellow+ quake rings, optionally limited to fields or squares
+# (?grid=KM,KN41), in English or Turkish (?lang=tr). Same facts and wording
+# as DMWGPT's STATUS.
+_FEED_GRID = re.compile(r"^[A-R]{2}(?:[0-9]{2})?$", re.I)
+_FEED_MAX = 50
+_PAGER_TR = {"yellow": "sarı", "orange": "turuncu", "red": "kırmızı"}
+
+
+def _atom_time(ts: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
+
+
+@routes.get("/feed/silence.atom")
+async def silence_feed(request: web.Request) -> web.Response:
+    from extensions.ai_gateway_ext import _latlon_to_grid4, _status_text
+    mgr: AgentManager = request.app["manager"]
+    base = _public_base(request, mgr.get_config())
+    tr = request.query.get("lang", "").lower() == "tr"
+    grids = [g.strip().upper() for g in request.query.get("grid", "").split(",")
+             if g.strip()]
+    if any(not _FEED_GRID.match(g) for g in grids):
+        return web.Response(status=400, text="grid: Maidenhead fields or "
+                            "squares, comma-separated, e.g. KM,KN41\n")
+    db = mgr._station_db
+    entries = []
+    deaf = db.deaf_since()
+    if deaf:
+        entries.append({
+            "id": "tag:aprsagent.com,2026:deaf/%d" % int(deaf),
+            "updated": deaf,
+            "title": ("Ajan APRS-IS'i duymuyor" if tr else
+                      "This agent is not hearing APRS-IS"),
+            "summary": ("Bu süre boyunca sessizlik değerlendirilmiyor." if tr
+                        else "No silence is judged while it cannot hear."),
+            "link": base})
+    else:
+        for c in await silence_cells_cached(db, mgr._sta_db_path):
+            since = mgr._silence_active.get(c["cell"]) if c.get("alert") else None
+            if not since:
+                continue        # not an announced alert (held 10 min first)
+            if grids and not any(c["cell"].startswith(g[:4]) for g in grids):
+                continue
+            cell = {k: c.get(k) for k in ("baseline", "silent", "alert", "cause")}
+            cell["since"] = int(since)
+            entries.append({
+                "id": "tag:aprsagent.com,2026:silence/%s/%d" % (c["cell"], int(since)),
+                "updated": since,
+                "title": (("%s: bölgesel sessizlik" if tr else
+                           "%s: regional silence") % c["cell"]),
+                "summary": _status_text(c["cell"], {"cell": cell}, tr),
+                "link": base + "?q=" + c["cell"]})
+    for w in list(mgr._quake_watches.values()):
+        if w.get("alert") not in _PAGER_SHOWN or not w.get("ts"):
+            continue
+        if grids and not any(_quake_reaches(w, g) is not None for g in grids):
+            continue
+        r = w.get("result") or {}
+        mag, place = float(w.get("mag") or 0), str(w.get("place") or "")
+        radius = int(w.get("radius_km") or 150)
+        level = _PAGER_TR.get(w["alert"], w["alert"]) if tr else w["alert"]
+        if r:
+            k, n = r.get("k", 0), r.get("n", 0)
+            mark = ((" (olağandışı)" if tr else " (unusual)")
+                    if r.get("unusual") else "")
+            text = (f"{radius} km içinde {k}/{n} sabit istasyon sustu{mark}."
+                    if tr else
+                    f"{k} of {n} fixed stations within {radius} km went quiet{mark}.")
+        else:
+            text = ("Bu ajan ilk 3 saatte çalışmadığı için sayılmadı." if tr else
+                    "Not counted: this agent was not running in its first 3 hours.")
+        entries.append({
+            "id": "tag:aprsagent.com,2026:quake/%s" % w.get("id"),
+            "updated": r.get("measured_until") or w["ts"],
+            "title": ("M%.1f %s (PAGER %s)" % (mag, place, level)),
+            "summary": text,
+            "link": base + "?q=" + _latlon_to_grid4(w["lat"], w["lon"])})
+    entries.sort(key=lambda e: -e["updated"])
+    entries = entries[:_FEED_MAX]
+    esc = html.escape
+    self_url = str(request.url.with_scheme(
+        request.headers.get("X-Forwarded-Proto", request.scheme)))
+    title = ("APRS-Agent — sessizlik uyarıları ve deprem halkaları" if tr else
+             "APRS-Agent — silence alerts and quake rings")
+    if grids:
+        title += " (" + ", ".join(grids) + ")"
+    out = ['<?xml version="1.0" encoding="utf-8"?>',
+           '<feed xmlns="http://www.w3.org/2005/Atom">',
+           "<title>%s</title>" % esc(title),
+           "<id>%s</id>" % esc(base + "feed/silence.atom"
+                               + ("?grid=" + ",".join(grids) if grids else "")),
+           "<updated>%s</updated>" % _atom_time(
+               entries[0]["updated"] if entries else time.time()),
+           '<link rel="self" href="%s"/>' % esc(self_url),
+           '<link rel="alternate" href="%s"/>' % esc(base),
+           "<author><name>APRS-Agent</name></author>"]
+    for e in entries:
+        out += ["<entry>",
+                "<id>%s</id>" % esc(e["id"]),
+                "<title>%s</title>" % esc(e["title"]),
+                "<updated>%s</updated>" % _atom_time(e["updated"]),
+                '<link href="%s"/>' % esc(e["link"]),
+                "<summary>%s</summary>" % esc(e["summary"]),
+                "</entry>"]
+    out.append("</feed>")
+    return web.Response(text="\n".join(out) + "\n",
+                        content_type="application/atom+xml", charset="utf-8",
+                        headers={"Cache-Control": "public, max-age=60"})
 
 
 # A page, not "404: Not Found" in plain text, for a person who mistyped an
@@ -4467,6 +4594,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/robots.txt", public_robots),
         web.get("/sitemap.xml", public_sitemap),
         web.get("/llms.txt", public_llms),
+        web.get("/feed/silence.atom", silence_feed),
         web.get("/aprs-symbols-24-{table}.png", symbols),
         web.get("/api/info", info),
         web.get("/api/counters", counters),
