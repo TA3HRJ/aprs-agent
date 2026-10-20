@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.184"
+VERSION = "3.2.185"
 
 # The APRS destination ("tocall") on every packet this program sends -
 # message replies, acks, bridged messages, status and the beacon. APRAGT is

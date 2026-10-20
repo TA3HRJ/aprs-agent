@@ -3112,7 +3112,8 @@ _EMBED_GRID = re.compile(r"^[A-R]{2}(?:[0-9]{2}(?:[A-X]{2})?)?$", re.I)
 _EMBED_PROP_KM = 400.0
 _EMBED_PROP_S = 3 * 3600.0
 _EMBED_T = {
-    "en": {"ok": "All on the air", "silence": "Regional silence",
+    "en": {"ok": "All on the air", "quiet_ok": "No regional silence",
+           "silence": "Regional silence",
            "igate": "Igate fault", "gate": "One igate, state unknown",
            "unknown": "Status unknown", "none": "No fixed stations to judge by",
            "deaf": "This agent is not hearing APRS-IS right now.",
@@ -3124,7 +3125,8 @@ _EMBED_T = {
            "prop": "{n} propagation opening(s) nearby in 3 h, longest {km:.0f} km",
            "prop0": "No propagation openings nearby in 3 h",
            "open": "Open on the map", "updated": "Updated {t} UTC"},
-    "tr": {"ok": "Herkes yayında", "silence": "Bölgesel sessizlik",
+    "tr": {"ok": "Herkes yayında", "quiet_ok": "Bölgesel sessizlik yok",
+           "silence": "Bölgesel sessizlik",
            "igate": "Igate arızası", "gate": "Tek igate, durumu bilinmiyor",
            "unknown": "Durum bilinmiyor", "none": "Değerlendirilecek sabit istasyon yok",
            "deaf": "Bu ajan şu an APRS-IS'i duymuyor.",
@@ -3209,7 +3211,8 @@ async def embed_status(request: web.Request) -> web.Response:
                     t=time.strftime("%H:%M UTC", time.gmtime(since)))
             lines.append(line)
         else:
-            cls, head = "ok", T["ok"]
+            # a few quiet stations without an alert are this square's usual
+            cls, head = "ok", (T["quiet_ok"] if k else T["ok"])
             lines.append(T["stations"].format(n=n, k=k))
     for q in (st.get("quakes") or [])[:1]:
         line = T["quake"].format(m=q["mag"], km=q["km"], h=q["hours"])

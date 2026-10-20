@@ -119,6 +119,11 @@ async def main() -> int:
     if 'data-theme="dark"' not in h:
         p.append("theme=dark")
 
+    some = {"cell": {"baseline": 29, "silent": 3, "alert": False, "cause": ""}}
+    st, _, h = await page(some, "?grid=KM38")
+    if "No regional silence" not in text(h) or "All on the air" in text(h):
+        p.append("a few quiet stations without an alert must not read 'All on the air'")
+
     st, _, _ = await page(quiet, "?grid=ZZ99")
     if st != 400:
         p.append(f"malformed grid gave {st}")
