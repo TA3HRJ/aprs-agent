@@ -3,10 +3,12 @@
 [![Release](https://img.shields.io/github/v/release/TA3HRJ/aprs-agent)](https://github.com/TA3HRJ/aprs-agent/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-An APRS-IS server agent with a graphical interface and extensible plugin system, written in Python.
+Live worldwide APRS map with regional silence (power-outage) detection, RF
+propagation openings and DMWGPT, an AI message gateway over APRS.
 
-Connects to the global [APRS-IS](http://www.aprs2.net/) network and provides
-several automation features useful for amateur radio operators.
+An open-source APRS-IS agent written in Python, with a web interface and a
+plugin system. It connects to the global [APRS-IS](http://www.aprs2.net/)
+network and provides automation features for amateur radio operators.
 
 ### 🔴 [aprsagent.com](https://aprsagent.com/) — project site and live demo
 
@@ -281,7 +283,17 @@ public_subtitle = ""      # one-line description — empty = language-aware
                           # default. A value here is a single fixed string,
                           # so it stays in whichever language you wrote it
                           # even when the reader switches to the other.
+public_home_url = ""      # optional "Home" link in the header
+public_contact_email = "" # optional: the About box then states what is kept
+                          # and where to ask for a record to be removed
+public_base_url = ""      # optional: the page's own address, used as its
+                          # canonical URL and in /sitemap.xml, /robots.txt
+public_privacy_url = ""   # optional: a privacy notice linked from the About box
 ```
+
+The public page also serves `robots.txt` (keeping crawlers off `/api/` and
+`/ws`), `sitemap.xml`, `llms.txt` and an HTML 404 page, and loads Leaflet from
+itself rather than from a third-party script host.
 
 > ⚠️ Forward **only** this port. The admin port has no built-in authentication —
 > keep it on `127.0.0.1` or behind a reverse proxy with auth.
@@ -352,11 +364,14 @@ chance of an invented number:
 | `where am I`, `my last position` | your own record: position, grid, age, and the igate that gated you |
 | `which igate hears me` | the igate on your packet's own path — or that nobody is, if you arrived over the internet, since a `qAC` path names a core server rather than an igate |
 | `nearest igate`, `nearest repeater` | the closest ones with distances, measured from a grid you name or from your last beacon |
+| `digipeater near me`, `nearest digi` | the two closest digipeaters heard in the last 7 days, with distances |
 | `propagation near me` | openings this agent measured within 400 km and three hours, or a plain statement that there were none |
 | `weather`, `wx KM38` | the nearest APRS weather station, with its distance, its age, and **what it was measured from**; beyond 30 km the answer opens with the distance and says it is not local |
 | `where is XX1YYY` | that station's last position, its age and its distance from you |
 | `what can you do` | a fixed sentence, answered before the rate limiter because it costs nothing |
 | `TEST` | what the packet itself says: who sent it, which igate gated it, whether it touched RF at all |
+| `date`, `time` | the server's clock, in UTC — with Turkish time beside it for a sender in Turkey |
+| `what does SWR 2.5 mean` | worked out: the share of power reflected, the mismatch loss and a one-line verdict, in the language of the question; "how do I lower it" still goes to the model |
 
 Two boundaries are deliberate. An answer about another station is **one
 observation** — never a name, a licence record or an address — and a station
@@ -366,7 +381,9 @@ map's callsign search, until it sends `LOOKUP`. And a refusal names its own reas
 
 Everything else goes to the model, carrying the last three exchanges with
 that station for ten minutes, in memory only, so that *"how long would it
-take by car?"* still knows which journey you meant.
+take by car?"* still knows which journey you meant. A provider call is given
+30 seconds and one retry; if it fails, nothing is sent, and the sender's
+retry of the same message asks again.
 
 Automatic stations are not answered at all. APRS service names are not
 callsign-shaped — `QRX`, `WXBOT`, `SMSGTE` carry no digit where a callsign
@@ -399,7 +416,10 @@ service addressees do not.
 
 The agent **operates no transmitter**. It is an APRS-IS client over TCP; the
 session is authenticated with the operator's own callsign and passcode, and its
-packets carry the `TCPIP*` path that marks internet origin. Where a reply
+packets carry the `TCPIP*` path that marks internet origin. Every packet the
+agent sends — replies, acks, bridged messages, status and the fixed beacon —
+uses the destination (tocall) `APRAGT`, registered to APRS-Agent in the
+[APRS device identification list](https://github.com/aprsorg/aprs-deviceid). Where a reply
 reaches RF, the transmitting station is an **igate**, keying up under its own
 licence and its own callsign, and that operator is responsible for that
 emission — the ordinary third-party model of APRS messaging.
