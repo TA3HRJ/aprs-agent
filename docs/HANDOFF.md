@@ -65,7 +65,15 @@ predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
 
 ## Releasing to Windows
 
-**Published 2026-10-08: [v3.2.165](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.165)**
+**Published 2026-10-20: [v3.2.179](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.179)**
+— `aprs-agent-v3.2.179.zip`, 59.9 MiB, 250 files, sha256
+`307947F7816C120942376D8F422E94996C533471DFDC50067E87DA54AE46E283` (GitHub's asset
+digest matches). Notes in `docs/RELEASE-v3.2.179-draft.md`. Level with the VPS.
+Built from a `core.autocrlf=false` export of the tag with its own pin file
+(aiohttp 3.14.4, yarl 1.25.1 pure wheel, cryptography 48.0.1); root files
+identical to the tag; web exe smoke-tested (version, bundled Leaflet SRI).
+
+**Before that, 2026-10-08: [v3.2.165](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.165)**
 — `aprs-agent-v3.2.165.zip`, 59.8 MiB, 248 files, sha256
 `9C833A9226C4FC7A7ADEEFF40478A08150F210458B5B8367DDFB46612DE4F965`. Notes in
 `docs/RELEASE-v3.2.165-draft.md`. Level with the VPS. Built from a clean
