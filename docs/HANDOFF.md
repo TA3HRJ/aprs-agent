@@ -65,7 +65,13 @@ predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
 
 ## Releasing to Windows
 
-**Published 2026-10-20: [v3.2.179](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.179)**
+**Published 2026-10-20: [v3.2.180](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.180)**
+— `aprs-agent-v3.2.180.zip`, 60.0 MiB, 250 files, sha256
+`DD9435513A1907AE129D9EE2676FA1B8B45E86283795D0EB8F8FAD07CA149817` (asset digest
+matches). Notes in `docs/RELEASE-v3.2.180-draft.md`. Against v3.2.179 only the
+executables and `base_library.zip` differ. Level with the VPS.
+
+**Earlier the same day: [v3.2.179](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.179)**
 — `aprs-agent-v3.2.179.zip`, 59.9 MiB, 250 files, sha256
 `307947F7816C120942376D8F422E94996C533471DFDC50067E87DA54AE46E283` (GitHub's asset
 digest matches). Notes in `docs/RELEASE-v3.2.179-draft.md`. Level with the VPS.
