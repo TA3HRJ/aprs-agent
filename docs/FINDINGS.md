@@ -8067,3 +8067,31 @@ README, HELP and the landing page had said it "detects when DB-matched
 repeaters go offline". **Applied:** README and HELP now say what it does and
 does not watch; the landing card became the quake ring. **Not applied:** a
 fix (NEXT 22).
+
+---
+
+## F-2026-10-21-01 — AI station analysis: one name in six is a callsign, and "null" is stored
+
+**Source:** checking the landing page's feature cards against the code, at the
+operator's request · **Verdict:** works; output quality lower than the docs
+imply; landing wording corrected, code unchanged
+
+Live registry 2026-10-21 (`station_ai` on, every 6 h, 10 a batch; its lines
+go to the panel log, not the journal - 0 in 30 days there, which looked like
+"not running"): 5,076 stations analysed, 688 with an organisation, 4,031 with
+a description.
+
+- 112 of the 688 organisations (16 %) are only a callsign (`HS5AC`, `BG6STN`);
+  others are devices or software (`ESP8266`, `kxyTrack`) or the station's
+  function (`Aprs Igate & Digipeater`).
+- 16 organisations and 22 descriptions are the text `null`: the model
+  answered the string "null" and `_analyze_one` stores whatever is not
+  falsy. The Stations tab shows it as "null".
+- Some descriptions copy the comment verbatim (telemetry in Chinese).
+
+Also checked the same day, holding: the still-missing list sorts by time since
+last heard and drops a station only when heard (or gone from the registry);
+a live evidence bundle (QE38, 144 fields) carries no key, config or path -
+`no_local_path` is the RF-path flag; it names the note's provider and model.
+One wording fix there: stations join the list when the alert opens, not when
+it clears.

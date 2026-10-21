@@ -143,6 +143,9 @@ What is left, in the order it is worth doing:
     measured position. Cost: one rule in `load_repeater_db`/`ingest` and a
     check that fails on today's code (a club `-13` weather station must not
     match). Off on the VPS until then; not done without a yes.
+23. **AI station analysis output** (F-2026-10-21-01): treat "null"/"none"
+    as empty, drop an organisation that is only a callsign. Cost: two lines in
+    `_analyze_one` and a check; existing rows cleaned once. Not done without a yes.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.
