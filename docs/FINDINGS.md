@@ -8068,6 +8068,14 @@ repeaters go offline". **Applied:** README and HELP now say what it does and
 does not watch; the landing card became the quake ring. **Not applied:** a
 fix (NEXT 22).
 
+**Applied, v3.2.189** (2026-10-21): `StationDB._db_entry` - a listing with an
+SSID matches that callsign only, one without matches only a station whose own
+symbol is a repeater; matching runs after the packet is parsed, so the symbol
+is known. `update_from_db` keeps a beaconed position and no longer forces the
+type to repeater. `check_repeater_match.py` fails on v3.2.188 eleven ways
+(the club weather station matched, moved and retyped; the monitor would name
+five stations where two are repeaters).
+
 ---
 
 ## F-2026-10-21-01 — AI station analysis: one name in six is a callsign, and "null" is stored
@@ -8095,3 +8103,9 @@ a live evidence bundle (QE38, 144 fields) carries no key, config or path -
 `no_local_path` is the RF-path flag; it names the note's provider and model.
 One wording fix there: stations join the list when the alert opens, not when
 it clears.
+
+**Applied, v3.2.189:** `clean_ai_org` / `clean_ai_description` drop "null",
+"none" and similar, and an organisation that is only a callsign, both for a
+new answer and on load from SQLite, so stored rows are fixed by the next
+save. Device and software names (`ESP8266`) are not filtered - no rule for
+them without guessing. `check_repeater_match` item 6.

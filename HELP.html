@@ -535,11 +535,12 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
       kesilince ya da geri gelince Telegram/e-posta ile bildirim gönderir.
       <code>Röle DB Dosyası</code> ayarının yapılmış olması gerekir.</p>
     <p><strong>Neyi izlemediği:</strong> rölenin ses yayınını duymaz; APRS
-      göndermeyen bir röle hiç görünmez. Eşleşme SSID'siz çağrı işaretiyle
-      yapılır, bu yüzden kulübün aynı çağrı işaretli digi, igate ya da hava
-      istasyonu da "röle" sayılır ve konumu röle kaydındaki konumla
-      değiştirilir. İlk kontrol yalnızca durumu kaydeder; yeniden başlatmadan
-      sonraki ilk kontrolde bildirim gelmez.
+      göndermeyen bir röle hiç görünmez. Veritabanında SSID'li yazılmış bir
+      çağrı işareti yalnızca kendisiyle eşleşir; SSID'siz yazılmış olan yalnızca
+      kendi sembolü röle olan bir istasyonla eşleşir, kulübün aynı çağrı
+      işaretli digi, igate ya da hava istasyonuyla eşleşmez. İstasyonun kendi
+      bildirdiği konum korunur. İlk kontrol yalnızca durumu kaydeder; yeniden
+      başlatmadan sonraki ilk kontrolde bildirim gelmez.
     </p>
     <table>
       <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
@@ -1472,9 +1473,10 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
       <code>Repeater DB Path</code> setting.</p>
     <p><strong>What it does not watch:</strong> it does not hear the
       repeater's voice traffic, and a repeater that sends no APRS is never
-      seen. The match is the callsign without SSID, so a club's digi, igate or
-      weather station under the same callsign counts as the "repeater" and
-      its position is replaced with the repeater record's. The first check
+      seen. A database callsign written with an SSID matches only itself; one
+      without matches only a station whose own symbol is a repeater, not a
+      club's digi, igate or weather station under the same callsign. The
+      station's own position is kept. The first check
       only records the state; there is no alert on the first check after a
       restart.
     </p>

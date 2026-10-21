@@ -1046,6 +1046,27 @@ def callsign_query(query: str) -> "Optional[re.Pattern]":
                               else re.escape(c) for c in q))
 
 
+# What the station analysis may keep (F-2026-10-21-01): the model answers
+# the text "null" for nothing found, and 16 % of the organisations it found
+# on the live registry were only a callsign.
+_AI_EMPTY = {"", "null", "none", "n/a", "na", "unknown", "-"}
+_CALLSIGN_ONLY = re.compile(
+    r"^(?:[A-Z]{1,2}|[0-9][A-Z]|[A-Z][0-9])[0-9][A-Z]{1,4}(?:-[0-9A-Z]{1,2})?$")
+
+
+def clean_ai_org(value: Any) -> str:
+    """An extracted organisation, or "" when it is no organisation."""
+    s = str(value or "").strip()
+    if s.lower() in _AI_EMPTY or _CALLSIGN_ONLY.match(s.upper()):
+        return ""
+    return s
+
+
+def clean_ai_description(value: Any) -> str:
+    s = str(value or "").strip()
+    return "" if s.lower() in _AI_EMPTY else s
+
+
 class StationRecord:
     """All known data about a single station (callsign + SSID)."""
 
@@ -1202,19 +1223,21 @@ class StationRecord:
                 setattr(self, wx, parsed[wx])
 
     def update_from_db(self, db: dict[str, Any]) -> None:
-        """Overlay structured data from Turkey Repeaters DB."""
+        """Overlay structured data from Turkey Repeaters DB.
+
+        The station's own position wins: the DB's is a listing, often
+        approximate, and a station that beacons says where it is
+        (F-2026-10-20-03: a matched club weather station moved to the
+        repeater site)."""
         self.db_record = db
-        # Location fields — DB is authoritative
         self.city     = db.get("city") or self.city
         self.district = db.get("district") or self.district
         self.location = db.get("location") or self.location
         self.ta_region = db.get("ta_region") or self.ta_region
-        self.locator  = db.get("locator") or self.locator
-        # Coordinates — DB is authoritative
-        if db.get("lat") is not None:
-            self.lat = db["lat"]
-        if db.get("lon") is not None:
-            self.lon = db["lon"]
+        if self.lat is None or self.lon is None:
+            if db.get("lat") is not None and db.get("lon") is not None:
+                self.lat, self.lon = db["lat"], db["lon"]
+            self.locator = db.get("locator") or self.locator
         # Frequency — DB is authoritative
         if db.get("frequency") is not None:
             self.freq_mhz = float(db["frequency"])
@@ -1228,9 +1251,8 @@ class StationRecord:
         self.band = db.get("band") or self.band
         self.mode = db.get("mode") or self.mode
         self.db_status = db.get("status")   # True/False/None
-        # All records in Turkey Repeaters DB are repeaters
-        self.station_type = "repeater"
-        self.icon = STATION_ICON["repeater"]
+        # Only repeaters are matched now (StationDB._db_entry), so the type
+        # stays what the station's own symbol says
 
     @property
     def online(self) -> Optional[bool]:
@@ -1362,6 +1384,7 @@ class StationDB:
         self._stations: dict[str, StationRecord] = {}
         self.load_dropped_positions = 0
         # base_call → list of DB records for fast lookup
+        # Turkey Repeaters DB, by callsign as listed: "YM2KA" or "TA6ATA-L"
         self._repeater_index: dict[str, list[dict]] = {}
         # Maidenhead fields (first two chars, e.g. "KM") that silence detection
         # is scoped to. A prefix station filter such as p/TA also matches
@@ -1454,16 +1477,35 @@ class StationDB:
             if not raw_call:
                 continue
             call = str(raw_call).strip().upper()
-            base = call.split("-")[0]
-            self._repeater_index.setdefault(base, []).append(rec)
+            self._repeater_index.setdefault(call, []).append(rec)
         # Enrich stations already in memory (e.g. loaded from SQLite before
         # the repeater DB was available).
         for st in self._stations.values():
             if st.db_record is None:
-                entries = self._repeater_index.get(st.base_call)
-                if entries:
-                    st.update_from_db(entries[0])
+                entry = self._db_entry(st)
+                if entry:
+                    st.update_from_db(entry)
         return len(records)
+
+    def _db_entry(self, st: "StationRecord") -> Optional[dict]:
+        """The repeater DB record for this station, or None.
+
+        A listing with an SSID matches that callsign exactly. A listing
+        without one is a club or owner callsign that also names its digis,
+        igates and weather stations, so it matches only a station whose own
+        symbol says repeater. Before 2026-10-20 the base callsign matched
+        anything: of 71 stations matched on the live registry, 9 were
+        repeaters (F-2026-10-20-03)."""
+        call = st.callsign.upper()
+        if "-" in call:
+            exact = self._repeater_index.get(call)
+            if exact:
+                return exact[0]
+        if st.station_type == "repeater":
+            plain = self._repeater_index.get(st.base_call.upper())
+            if plain:
+                return plain[0]
+        return None
 
     # ------------------------------------------------------------------
     def ingest(self, raw_line: str, own: bool = False) -> Optional[StationRecord]:
@@ -1486,15 +1528,15 @@ class StationDB:
         if callsign not in self._stations:
             rec = StationRecord(callsign)
             self._stations[callsign] = rec
-            # Try to match against repeater DB
-            base = parsed.get("base_call", callsign.split("-")[0])
-            db_entries = self._repeater_index.get(base, [])
-            if db_entries:
-                rec.update_from_db(db_entries[0])
         else:
             rec = self._stations[callsign]
 
         rec.update_from_parsed(parsed)
+        # Matched once its own symbol is known: the match depends on it
+        if rec.db_record is None and self._repeater_index:
+            entry = self._db_entry(rec)
+            if entry:
+                rec.update_from_db(entry)
         if own:
             rec.self_beacon = True
         else:
@@ -2641,8 +2683,10 @@ class StationDB:
                 r.freq_mhz     = d["freq_mhz"]
                 r.tone_hz      = d["tone_hz"]
                 r.comment      = d["comment"] or ""
-                r.ai_org       = d["ai_org"] or ""
-                r.ai_description = d["ai_description"] or ""
+                # cleaned on load: rows stored before the rule are fixed
+                # by the next save
+                r.ai_org       = clean_ai_org(d["ai_org"])
+                r.ai_description = clean_ai_description(d["ai_description"])
                 r.ai_analyzed  = bool(d["ai_analyzed"])
                 r.ema_interval_s = d["ema_interval_s"]
                 r.last_gate    = d["last_gate"] or ""

@@ -2436,8 +2436,9 @@ class AgentManager:
         )
         rec.ai_analyzed = True
         if result:
-            rec.ai_org = result.get("org") or ""
-            rec.ai_description = result.get("description") or ""
+            rec.ai_org = station_db_module.clean_ai_org(result.get("org"))
+            rec.ai_description = station_db_module.clean_ai_description(
+                result.get("description"))
             if rec.ai_org or rec.ai_description:
                 print(
                     f"[station-ai] {rec.callsign}: org={rec.ai_org!r} desc={rec.ai_description!r}",
