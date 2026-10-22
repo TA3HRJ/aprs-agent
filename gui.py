@@ -924,7 +924,7 @@ class _AboutDialog:
 
     _DEVELOPERS = [
         ("TA3HX",  "ta3hx.radio@gmail.com", "https://github.com/TA3HRJ"),
-        ("TA3PKS", "ta3pks@mugsoft.io",   "https://github.com/TA3PKS"),
+        ("TA3PKS", "ta3pks@mugsoft.io",   None),   # GitHub account gone (2026-10-22)
         ("TA3EKM", None,                   "https://github.com/ArdaYalinOzkan"),
     ]
     _GITHUB_URL = "https://github.com/TA3HRJ/aprs-agent"
@@ -1020,8 +1020,11 @@ class _AboutDialog:
                 )
                 mail_lnk.pack(side="left")
                 mail_lnk.bind("<Button-1>", lambda e, m=email: webbrowser.open(f"mailto:{m}"))
-                ttk.Label(row, text="  |  ", foreground="#cccccc").pack(side="left")
+                if gh_url:
+                    ttk.Label(row, text="  |  ", foreground="#cccccc").pack(side="left")
 
+            if not gh_url:
+                continue
             gh_lnk = tk.Label(
                 row,
                 text=gh_url,

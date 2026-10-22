@@ -847,7 +847,7 @@ MIT License — see [LICENSE](LICENSE) file.
 
 APRS-Agent is built on three contributions:
 
-**[TA3PKS](https://github.com/TA3PKS)** — the [original Rust implementation](https://github.com/ta3pks/aprs-agent) and its extension system: the Extension interface, the registry, the extension server, and the own-writer channel that lets an extension transmit without having been spoken to first. The first logger, beacon, Twitter and email extensions are that work too. The Python port kept the design unchanged, and every extension written since plugs into it.
+**TA3PKS** — the original Rust implementation and its extension system: the Extension interface, the registry, the extension server, and the own-writer channel that lets an extension transmit without having been spoken to first. The first logger, beacon, Twitter and email extensions are that work too. The Python port kept the design unchanged, and every extension written since plugs into it.
 
 **[TA3EKM](https://github.com/ArdaYalinOzkan)** — the bidirectional [AI Gateway](https://github.com/ArdaYalinOzkan/aprs-ai-gateway). A station that could answer, and not merely report, is what turned this project from a one-way logger into a two-way service; it is the hinge the architecture turns on, and every extension added afterwards follows that pattern.
 

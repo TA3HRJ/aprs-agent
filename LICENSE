@@ -11,7 +11,6 @@ Three contributions this project is built on.
   first logger, fixed-beacon, Twitter and email extensions are that work
   too. The Python port kept the design unchanged, and every extension
   written since — including the AI Gateway — plugs into it.
-  https://github.com/ta3pks/aprs-agent
 
   TA3EKM (Arda Yalın Özkan) — the bidirectional AI Gateway. A station
   that could answer, and not merely report, is what turned this project
