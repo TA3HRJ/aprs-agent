@@ -34,7 +34,7 @@ import asyncio
 import re
 import sys
 import tempfile
-import tomllib
+
 import types
 from pathlib import Path
 
@@ -159,7 +159,8 @@ async def main() -> int:
     if getattr(config, "AI_DEFAULT_PROVIDER", "") != "gemini" or \
             config.DEFAULTS["extensions"]["ai_gateway"]["provider"] != "gemini":
         p.append("config default provider is not gemini")
-    tpl = tomllib.loads((ROOT / "aprsconfig.toml.template").read_text(encoding="utf-8"))
+    # config picks tomllib or, on Python 3.10, tomli
+    tpl = config.tomllib.loads((ROOT / "aprsconfig.toml.template").read_text(encoding="utf-8"))
     if tpl["extensions"]["ai_gateway"]["provider"] != "gemini" or \
             "gemini" not in tpl["extensions"]["ai_gateway"]["api_keys"]:
         p.append("template does not default to gemini with a gemini key")
