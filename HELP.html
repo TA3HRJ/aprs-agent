@@ -6,7 +6,8 @@
 <title>APRS-Agent – User Guide / Kullanım Kılavuzu</title>
 <meta name="theme-color" content="#f6f3ea">
 <script>(function(){var t=null;try{t=localStorage.getItem("theme")}catch(e){}
-document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
+document.documentElement.dataset.theme=t==="dark"?"dark":"light";
+if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.content="#1b1a16"}})();</script>
 <style>
   /* aprsagent.com family: warm paper, cool technical ink (as privacy.html) */
   :root {
@@ -2036,6 +2037,8 @@ document.documentElement.dataset.theme=t==="dark"?"dark":"light";})();</script>
   document.querySelector('[data-thm]').addEventListener('click', function () {
     var r = document.documentElement, n = r.dataset.theme === 'dark' ? 'light' : 'dark';
     r.dataset.theme = n; try { localStorage.setItem('theme', n); } catch (e) {}
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.content = n === 'dark' ? '#1b1a16' : '#f6f3ea';
   });
   // the language chosen on aprsagent.com, unless the link names one
   try {
