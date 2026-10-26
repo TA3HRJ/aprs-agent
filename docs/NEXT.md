@@ -160,7 +160,11 @@ What is left, in the order it is worth doing:
     users; (4) e-mail from aprsagent.com (SPF is `-all`, no MX today; DKIM
     signer exists on the VPS), recipient confirmation, IMAP inbound from
     linked addresses with SPF/DKIM; (5) Bluesky by DM or left as is;
-    (6) WhatsApp stays off. Open decisions: the operator's.
+    (6) WhatsApp stays off.
+    Decided 2026-10-26: a bridged message goes on air under its
+    originator's own linked callsign (not the gateway's with the call in
+    the text), so Md.23/1-f and 1-g hold by construction. Open: e-mail
+    DNS for aprsagent.com, Bluesky DM or unchanged.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.
