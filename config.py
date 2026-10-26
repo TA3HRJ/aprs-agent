@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.193"
+VERSION = "3.2.194"
 
 # The APRS destination ("tocall") on every packet this program sends -
 # message replies, acks, bridged messages, status and the beacon. APRAGT is
@@ -268,6 +268,9 @@ DEFAULTS: dict[str, Any] = {
             "aprs_destination": "",
             "aprs_source": "own",
             "gateway_callsign": "",
+            # person to person: licensed amateurs link their chat to their
+            # callsign from the radio (/bagla); off until the operator opens it
+            "allow_links": False,
         },
         "ai_gateway": {
             "enabled": False,

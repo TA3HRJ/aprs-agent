@@ -8134,3 +8134,27 @@ licence and call sign for a breach of Md.23.
 **Applied, v3.2.191.** Only the configured chat is relayed; any other chat is
 logged as ignored. `check_telegram_inbound.py` fails on v3.2.190 (a stranger
 and a group relayed under TA3HX-6).
+
+---
+
+## F-2026-10-27-01 — "which services are open?" went to a model that cannot know
+
+**Source:** the operator: "DMWGPT should say which services are open when
+asked" · **Verdict:** our code; fixed in v3.2.194
+
+Measured against v3.2.193: "hangi servisler acik", "what services are
+available", "servisler" and "telegram var mi" matched none of the gateway's
+fixed answers and went to the model. The model is told nothing about this
+server's bridges (Telegram, Bluesky, e-mail), so it could only guess - the
+same failure HELP was written in code to avoid. HELP itself did not mention
+the bridges, and with `extra_sms = 2` on the VPS it already filled its three
+parts (159/162 characters of 188), so a list could not simply be appended.
+
+**Applied, v3.2.194.** `SERVICES` / `SERVIS` and the narrow question forms
+above are answered by the code from the running config: each enabled bridge
+with its alias, whether it is open to the asker (their call in its
+`allowed_senders`, or Telegram with `allow_links`) or to listed calls only,
+and which bridges are off. Same ten-minute repeat rule as HELP. HELP ends
+"Bridges: SERVICES" when a bridge is on (fits the three parts); the model is
+told it cannot pass messages to other networks and to point to SERVICES.
+`check_services_answer.py` fails on v3.2.193 (8 items).

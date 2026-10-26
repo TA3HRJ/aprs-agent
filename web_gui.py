@@ -681,6 +681,10 @@ class AgentManager:
 
     def __init__(self, config_path: str):
         self.config_path = config_path
+        # Bridge links (extensions/bridge_links.py), beside the config
+        from extensions.bridge_links import BridgeLinks
+        self._bridge_links = BridgeLinks(
+            Path(config_path).resolve().with_name("bridge_links.json"))
         self.running = False
         self._log_queue: queue.Queue = queue.Queue(maxsize=2000)
         self._ws_clients: Set[web.WebSocketResponse] = set()
@@ -1416,6 +1420,16 @@ class AgentManager:
                         # the map shows, which live here.
                         ext.set_status_provider(self._grid_status)
                         ext.set_delivery_recorder(self._record_delivery)
+                        # SERVICES answers which bridges run here from this
+                        ext.set_bridges(ext_cfg)
+                        ExtensionRegistry.register(ext)
+                    elif cls is Telegram:
+                        ext = cls(cfg)
+                        # callsign <-> chat links, proven from the radio:
+                        # person to person between licensed amateurs. Off
+                        # unless the operator opens it (allow_links).
+                        if cfg.get("allow_links"):
+                            ext.set_links(self._bridge_links)
                         ExtensionRegistry.register(ext)
                     else:
                         ExtensionRegistry.register(cls(cfg))

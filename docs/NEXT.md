@@ -167,8 +167,17 @@ What is left, in the order it is worth doing:
     both name the originator (Md.23/1-f, 1-g). Built in v3.2.193
     (extensions/bridge_source.py); e-mail has no callsign yet, so it is
     always the gateway form. Step (1) done: v3.2.193, and the landing's bridges card
-    (2026-10-26) says what runs here and for whom. Open: e-mail
-    DNS for aprsagent.com, Bluesky DM or unchanged.
+    (2026-10-26) says what runs here and for whom.
+    Steps (2)+(3) for Telegram done in v3.2.194 (`bridge_links.py`,
+    `check_bridge_links`): /link CALL gives a code, LINK <code> from that
+    callsign's radio links the chat; linked chats send under their own call
+    (20 an hour) and receive "TGSEND CALL text"; /unlink or UNLINK removes
+    it. Off until the operator opens it (`allow_links`, panel switch).
+    DMWGPT answers SERVICES from the config (F-2026-10-27-01).
+    E-mail DNS done 2026-10-27: SPF allows the VPS (IPv4 and IPv6),
+    DKIM `202606._domainkey` (OpenDKIM on the VPS signs since 2026-10-26).
+    Open: a test mail to an outside address (operator's yes), then e-mail
+    linking with recipient confirmation; Bluesky DM or unchanged.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.

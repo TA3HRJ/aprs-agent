@@ -490,14 +490,84 @@ _HELP_MSG_TR = re.compile(
     re.I)
 
 # Two facts and a boundary, in the order someone meeting it needs them.
-# Deliberately not a command list: there are no commands, and promising some
-# would be the next thing to go stale.
+# Deliberately not a command list: promising commands would be the next thing
+# to go stale. The one pointer added to it, to SERVICES, is only appended when
+# this gateway carries a bridge, and what SERVICES answers is read from the
+# config (_services_text).
 _HELP_TEXT = ("I answer short questions sent as APRS messages. Also: your own "
               "station (ask where am I), nearest APRS weather, and TEST. No "
               "news, no other stations' positions.")
 _HELP_TEXT_TR = ("APRS mesajıyla gelen kısa soruları yanıtlarım. Ayrıca: kendi "
                  "istasyonun (neredeyim), en yakın APRS hava ölçümü ve TEST. "
                  "Haber yok, başka istasyonların konumu yok.")
+
+# "Which services are open?" Measured 2026-10-27: "hangi servisler acik",
+# "what services are available", "servisler" and "telegram var mi" all went
+# to the model, which does not know which bridges this server carries and
+# would make an answer up. Tight like the help patterns: "how do I send an
+# e-mail from my radio" is a question and still goes to the model.
+_SERVICES_MSG = re.compile(
+    r"^\s*(?:services?|bridges?)\s*[?!.]*\s*$"
+    r"|\b(?:what|which)\s+(?:services|bridges)\b"
+    r"|\b(?:is|are)\s+(?:the\s+)?(?:telegram|whatsapp|bluesky|twitter|e-?mail)"
+    r"\s+(?:bridge\s+)?(?:on|open|available|working)\b",
+    re.I)
+_SERVICES_MSG_TR = re.compile(
+    r"^\s*(?:servis(?:ler)?|k[öo]pr[üu](?:ler)?)\s*[?!.]*\s*$"
+    r"|\bhangi\s+(?:servis|k[öo]pr[üu])"
+    r"|\b(?:telegram|whatsapp|bluesky|twitter|e-?posta|mail)\s+"
+    r"(?:k[öo]pr[üu]s[üu]\s+)?(?:var\s*m[ıi]|a[çc][ıi]k\s*m[ıi]|[çc]al[ıi][şs][ıi]yor\s*mu)",
+    re.I)
+
+# (config section, name, Turkish name, the key holding the alias to send to)
+_BRIDGES = (
+    ("telegram", "Telegram", "Telegram", "allowed_recepients"),
+    ("bluesky", "Bluesky", "Bluesky", "allowed_recepients"),
+    ("twitter", "X", "X", "allowed_recepients"),
+    ("whatsapp", "WhatsApp", "WhatsApp", "allowed_recepients"),
+    ("smtp", "e-mail out", "e-posta gönderme", "allowed_recipients"),
+    ("imap", "e-mail in", "e-posta alma", None),
+)
+
+
+def _has_bridge(ext_cfg: "Optional[dict]") -> bool:
+    return any((ext_cfg or {}).get(k, {}).get("enabled") for k, *_ in _BRIDGES)
+
+
+def _services_text(ext_cfg: dict, sender_base: str, tr: bool) -> str:
+    """Which bridges this gateway carries and whether the asker may use them,
+    from the running config: a bridge's own allowed_senders decide, and a
+    Telegram with allow_links is open to any licensed amateur who links."""
+    mine, listed, off = [], [], []
+    for key, en, tr_name, alias_key in _BRIDGES:
+        c = ext_cfg.get(key) or {}
+        name = tr_name if tr else en
+        if not c.get("enabled"):
+            off.append(name)
+            continue
+        aliases = [a for a in (c.get(alias_key) or []) if a] if alias_key else []
+        alias = aliases[0].upper() if aliases else ""
+        label = f"{alias} {name}".strip()
+        senders = {strip_ssid(s).upper() for s in c.get("allowed_senders", [])
+                   if s and s.upper() != "N0CALL"}
+        if alias_key and sender_base.upper() in senders:
+            mine.append(label)
+        elif key == "telegram" and c.get("allow_links"):
+            mine.append(label + (" (/bagla)" if tr else " (/link)"))
+        else:
+            listed.append(label)
+    if not mine and not listed:
+        return "Bu geçitte köprü yok." if tr else "No bridges on this gateway."
+    out = []
+    if mine:
+        out.append(("Sana açık: " if tr else "Open to you: ") + ", ".join(mine) + ".")
+    if listed:
+        out.append(("Yalnız izinli çağrılara: " if tr else "Listed calls only: ")
+                   + ", ".join(listed) + ".")
+    if off:
+        out.append(("Kapalı: " if tr else "Off: ") + ", ".join(off) + ".")
+    return " ".join(out)
+
 
 # How much of a conversation rides along with the next question, and for how
 # long. On 2026-09-20 DL5XL-9 asked for the best way from Bremen to Berlin,
@@ -878,6 +948,10 @@ class AIGateway(Extension):
         # for the first time asks three or four questions back to back.
         self._buckets: dict[str, list] = {}   # sender -> [tokens, last_refill, told]
         self._help_at: dict[str, float] = {}  # sender -> when the help text went out
+        self._services_at: dict[str, float] = {}  # the same, for SERVICES
+        # The extensions section of the config, for SERVICES; None until the
+        # web GUI hands it over, and then SERVICES goes to the model as before
+        self._bridges: Optional[dict] = None
         # sender -> [(ts, question, answer), ...], newest last. Memory only.
         self._history: dict[str, list] = {}
         # normalised question -> (expiry, the dedup key it was first filed
@@ -1030,6 +1104,9 @@ class AIGateway(Extension):
 
     def set_delivery_recorder(self, fn) -> None:
         self._delivery_recorder = fn
+
+    def set_bridges(self, ext_cfg: dict) -> None:
+        self._bridges = ext_cfg
 
     def _part_done(self, key: tuple, acked: bool) -> None:
         """One numbered part settled: acked, or given up on. When the last
@@ -1565,16 +1642,36 @@ class AIGateway(Extension):
         tr = bool(_HELP_MSG_TR.search(question))
         if not tr and not _HELP_MSG.search(question):
             return None
-        now = _clock()
-        last = self._help_at.get(sender_base, 0.0)
-        if now - last < _HELP_REPEAT_S:
+        if not self._fixed_answer_due(self._help_at, sender_base):
             return None
-        self._help_at[sender_base] = now
-        if len(self._help_at) > 2000:
+        text = _HELP_TEXT_TR if tr else _HELP_TEXT
+        if _has_bridge(self._bridges):
+            text += " Köprüler: SERVIS" if tr else " Bridges: SERVICES"
+        return text
+
+    def _services_answer(self, question: str, sender_base: str) -> "Optional[str]":
+        """Which bridges are open, said by the code from the config. None when
+        the question is not about them, the bridges were not handed over, or
+        the sender was told within _HELP_REPEAT_S (as for the help text)."""
+        if self._bridges is None:
+            return None
+        tr = bool(_SERVICES_MSG_TR.search(question))
+        if not tr and not _SERVICES_MSG.search(question):
+            return None
+        if not self._fixed_answer_due(self._services_at, sender_base):
+            return None
+        return _services_text(self._bridges, sender_base, tr)
+
+    def _fixed_answer_due(self, told_at: dict, sender_base: str) -> bool:
+        now = _clock()
+        if now - told_at.get(sender_base, 0.0) < _HELP_REPEAT_S:
+            return False
+        told_at[sender_base] = now
+        if len(told_at) > 2000:
             cutoff = now - _HELP_REPEAT_S
-            for k in [k for k, v in self._help_at.items() if v < cutoff]:
-                del self._help_at[k]
-        return _HELP_TEXT_TR if tr else _HELP_TEXT
+            for k in [k for k, v in told_at.items() if v < cutoff]:
+                del told_at[k]
+        return True
 
     def _self_lookup(self, question: str, sender_base: str,
                      sender_full: str = "") -> "Optional[str]":
@@ -1674,6 +1771,13 @@ class AIGateway(Extension):
                 "not you. You are not a station and have no callsign of your "
                 "own. Never sign as another callsign, never use DE with one, "
                 "and do not role-play a QSO - answer as a service."
+            )
+        if _has_bridge(self._bridges):
+            # The model does not know which bridges run here; the code does
+            rules += (
+                " You cannot pass messages to Telegram, e-mail or any other "
+                "network yourself. If asked about this gateway's bridges, "
+                "tell them to send SERVICES (in Turkish: SERVIS)."
             )
         operator = cfg.get("system_prompt", "").strip()
         system_prompt = (rules + " " + operator) if operator else rules
@@ -2051,6 +2155,8 @@ class AIGateway(Extension):
         # and the one he sent after it, so the only question of the day left
         # unanswered was the one with a fixed answer sitting in the code.
         help_text = self._help_answer(question, sender_base)
+        if help_text is None:
+            help_text = self._services_answer(question, sender_base)
         if help_text is not None:
             self.log(f"RX from {sender_full}: {question}")
             prev = self._processed.get(dedup_key)

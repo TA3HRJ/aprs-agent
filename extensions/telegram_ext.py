@@ -23,6 +23,7 @@ Developed by TA3HX, TA3PKS & TA3EKM
 from __future__ import annotations
 
 import asyncio
+import time
 import json
 import urllib.request
 import urllib.error
@@ -31,7 +32,8 @@ from typing import Optional
 import aprslib
 
 from . import Extension
-from .bridge_source import aprs_origin
+from .bridge_source import aprs_origin, gateway_callsign
+from .bridge_links import looks_like_callsign
 from config import TOCALL
 from config import strip_ssid
 
@@ -86,6 +88,24 @@ def _mask(v: str) -> str:
     return v[:4] + "****" + v[-4:] if len(v) > 8 else "***"
 
 
+# A linked amateur's messages on air per hour, per chat
+_LINKED_PER_HOUR = 20
+
+_HELP_TEXT = (
+    "APRS köprüsü yalnızca lisanslı amatörler içindir (Yönetmelik Md.23/1-c).\n"
+    "1) /bagla ÇAĞRI  — bir kod alırsınız\n"
+    "2) Telsizinizden {alias} adresine: LINK <kod>\n"
+    "Sonra: ÇAĞRI mesaj  → telsize. /coz bağlantıyı kaldırır.\n\n"
+    "The APRS bridge is for licensed amateurs only.\n"
+    "1) /link CALL  — you get a code\n"
+    "2) From your radio, to {alias}: LINK <code>\n"
+    "Then: CALL message → on air. /unlink removes the link.")
+
+
+def _to_text(s: str) -> str:
+    return (s or "").strip()
+
+
 class Telegram(Extension):
 
     def __init__(self, config: dict):
@@ -95,6 +115,10 @@ class Telegram(Extension):
         self._msg_counter = 0
         self._last_update_id = 0
         self._poll_task: Optional[asyncio.Task] = None
+        # callsign <-> chat links (bridge_links.BridgeLinks), given by the
+        # web GUI; None = operator-only, as before links existed
+        self._links = None
+        self._sent_at: dict = {}        # chat id -> recent send times
 
         self.log(
             f"initialized | token={_mask(config['bot_token'])} "
@@ -119,6 +143,20 @@ class Telegram(Extension):
     def is_spawnable(self) -> bool:
         return False
 
+    def set_links(self, links) -> None:
+        self._links = links
+
+    def _within_rate(self, chat_id: str) -> bool:
+        """A linked user may put _LINKED_PER_HOUR messages an hour on air."""
+        now = time.time()
+        recent = [x for x in self._sent_at.get(chat_id, []) if now - x < 3600]
+        if len(recent) >= _LINKED_PER_HOUR:
+            self._sent_at[chat_id] = recent
+            return False
+        recent.append(now)
+        self._sent_at[chat_id] = recent
+        return True
+
     def set_own_writer(self, q: asyncio.Queue) -> None:
         self._queue = q
         # Called again on every APRS-IS reconnect (routine over a
@@ -135,13 +173,13 @@ class Telegram(Extension):
                 self._poll_task is None or self._poll_task.done()):
             self._poll_task = asyncio.create_task(self._poll_loop())
 
-    async def _send_tg(self, text: str) -> None:
+    async def _send_tg(self, text: str, chat_id: Optional[str] = None) -> None:
         cfg = self._config
         loop = asyncio.get_running_loop()
 
         def _do():
             _tg_api(cfg["bot_token"], "sendMessage", {
-                "chat_id": cfg["chat_id"],
+                "chat_id": chat_id or cfg["chat_id"],
                 "text": text,
             })
 
@@ -167,9 +205,8 @@ class Telegram(Extension):
 
         sender_full = packet.get("from", "")
         sender_call = strip_ssid(sender_full)
-        if not any(s.upper() == sender_call.upper()
-                   for s in cfg.get("allowed_senders", [])):
-            return None
+        operator = any(s.upper() == sender_call.upper()
+                       for s in cfg.get("allowed_senders", []))
 
         recipient = packet.get("addresse", "").strip()
         allowed = list(cfg.get("allowed_recepients", []))
@@ -180,14 +217,42 @@ class Telegram(Extension):
             return None
 
         message = packet.get("message_text", "")
-        path = ",".join(packet.get("path", []))
-        dest = packet.get("to", "")
+        words = message.split(None, 1)
+        head = words[0].upper() if words else ""
+        links = self._links
 
-        text = f"{message}\nfrom {sender_full}>{dest},{path}"
-        if cfg.get("add_hash_tag", True):
-            text += " #APRS"
-
-        await self._send_tg(text)
+        if links is not None and head == "LINK" and len(words) == 2:
+            # the radio half of linking: the code the bot gave in Telegram
+            entry = links.confirm("telegram", sender_full, words[1])
+            if entry:
+                self.log(f"linked {entry['call']} to a Telegram chat")
+                await self._send_tg(f"Bağlandı / Linked: {entry['call']}", entry["target"])
+            else:
+                self.warn(f"LINK from {sender_full}: unknown or expired code")
+        elif links is not None and head == "UNLINK":
+            gone = links.unlink_call("telegram", sender_full)
+            if gone:
+                self.log(f"unlinked {gone['call']}")
+                await self._send_tg(f"Bağlantı kaldırıldı / Unlinked: {gone['call']}", gone["target"])
+        elif (links is not None and len(words) == 2 and looks_like_callsign(head)
+              and links.by_call("telegram", head)):
+            # to another licensed amateur's linked Telegram
+            target = links.by_call("telegram", head)
+            await self._send_tg(f"{sender_full}: {_to_text(words[1])}\n(APRS)", target["target"])
+            self.log(f"{sender_full} -> {target['call']} on Telegram")
+        elif operator:
+            path = ",".join(packet.get("path", []))
+            dest = packet.get("to", "")
+            text = f"{message}\nfrom {sender_full}>{dest},{path}"
+            if cfg.get("add_hash_tag", True):
+                text += " #APRS"
+            await self._send_tg(text)
+        elif links is not None and links.by_call("telegram", sender_full):
+            # a linked amateur writing to their own Telegram
+            own = links.by_call("telegram", sender_full)
+            await self._send_tg(f"{message}\n(APRS, {sender_full})", own["target"])
+        else:
+            return None
 
         msg_id = packet.get("msgNo", "")
         if not msg_id:
@@ -264,14 +329,52 @@ class Telegram(Extension):
 
             sender_name = msg.get("from", {}).get("first_name", "TG")
 
-            # Only the configured chat may put text on APRS: the bot is
-            # findable by name, and whatever it relays goes out under the
-            # operator's callsign. Until 2026-10-26 any Telegram user who
-            # messaged the bot was relayed.
             chat_id = str(msg.get("chat", {}).get("id", ""))
-            if chat_id != str(cfg.get("chat_id", "")).strip():
+            own_chat = chat_id == str(cfg.get("chat_id", "")).strip()
+            alias = gateway_callsign(cfg) or "TGSEND"
+
+            # Linking commands, open to any chat: they put nothing on air
+            if self._links is not None and text.startswith("/"):
+                cmd, _, arg = text.partition(" ")
+                cmd = cmd.split("@")[0].lower()
+                if cmd in ("/link", "/bagla"):
+                    code = self._links.request("telegram", arg.strip(), chat_id)
+                    if code:
+                        await self._send_tg(
+                            f"Telsizinizden {alias} adresine şu mesajı gönderin: LINK {code}\n"
+                            f"From your radio, send to {alias}: LINK {code}\n"
+                            f"(10 dk / 10 min)", chat_id)
+                    else:
+                        await self._send_tg("Çağrı işareti? / Callsign? — /bagla TA1ABC", chat_id)
+                    continue
+                if cmd in ("/unlink", "/coz"):
+                    gone = self._links.unlink_target("telegram", chat_id)
+                    await self._send_tg(
+                        f"Bağlantı kaldırıldı / Unlinked: {gone['call']}" if gone
+                        else "Bağlı çağrı işareti yok / No linked callsign", chat_id)
+                    continue
+                if cmd in ("/start", "/help", "/yardim"):
+                    await self._send_tg(_HELP_TEXT.format(alias=alias), chat_id)
+                    continue
+
+            # Who may put text on APRS, and under which callsign: the
+            # configured chat as the operator (from_callsign), a linked chat
+            # as its own amateur. Anyone else is not relayed - the bot is
+            # findable by name, and until 2026-10-26 it relayed every chat
+            # under the operator's callsign (F-2026-10-26-01).
+            linked = self._links.by_target("telegram", chat_id) if self._links else None
+            if own_chat:
+                originator = from_call
+            elif linked:
+                originator = linked["call"]
+                if not self._within_rate(chat_id):
+                    await self._send_tg(f"Saatlik sınır / Hourly limit: {_LINKED_PER_HOUR}", chat_id)
+                    continue
+            else:
                 self.warn(f"ignored a message from chat {chat_id or '?'} "
-                          f"({sender_name}): not the configured chat")
+                          f"({sender_name}): not the configured chat, not linked")
+                if self._links is not None:
+                    await self._send_tg(_HELP_TEXT.format(alias=alias), chat_id)
                 continue
 
             tokens = text.split(None, 1)
@@ -280,7 +383,7 @@ class Telegram(Extension):
                     and any(c.isdigit() for c in tokens[0])):
                 to_call = tokens[0].upper()
                 message = _to_ascii(tokens[1])
-            elif aprs_dest:
+            elif aprs_dest and own_chat:
                 to_call = aprs_dest
                 message = _to_ascii(text)
             else:
@@ -290,10 +393,9 @@ class Telegram(Extension):
             if not message:
                 continue
 
-            # The configured chat is the operator's: from_callsign is its
-            # own callsign. "own" sends from it, "gateway" from the bridge
-            # alias with the callsign in the text (bridge_source).
-            src, message, used = aprs_origin(cfg, from_call, message)
+            # "own" sends from the originator's callsign, "gateway" from
+            # the bridge alias with the callsign in the text (bridge_source)
+            src, message, used = aprs_origin(cfg, originator, message)
             self.log(f"RX from Telegram ({sender_name}): {to_call} {message} [{used}: {src}]")
             await self._send_aprs(src, to_call, message)
 

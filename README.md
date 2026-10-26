@@ -385,6 +385,7 @@ chance of an invented number:
 | `which igate hears me` | the igate on your packet's own path — or that nobody is, if you arrived over the internet, since a `qAC` path names a core server rather than an igate |
 | `nearest igate`, `nearest repeater` | the closest ones with distances, measured from a grid you name or from your last beacon |
 | `digipeater near me`, `nearest digi` | the two closest digipeaters heard in the last 7 days, with distances |
+| `SERVICES`, `SERVIS`, "what services are available", "telegram var mi" | this server's bridges from the config: which are on, the alias to send to, whether open to the asker or to listed calls only, and which are off. HELP points to it when a bridge is on |
 | `STATUS`, `STATUS KM38`, `DURUM` | the silence state of your square (or the one named): all on the air, a regional silence with its start time and how many stations are quiet, or an igate fault; a quake ring nearby with its count. `STATUS KM` lists a field's alerting squares |
 | `propagation near me` | openings this agent measured within 400 km and three hours, or a plain statement that there were none |
 | `weather`, `wx KM38` | the nearest APRS weather station, with its distance, its age, and **what it was measured from**; beyond 30 km the answer opens with the distance and says it is not local |
@@ -601,10 +602,24 @@ from_callsign      = ""              # SSID used when sending from Telegram to A
 aprs_destination   = ""             # default destination callsign for Telegram → APRS
 aprs_source        = "own"          # "own": on air from from_callsign; "gateway": from
 gateway_callsign   = ""             #   gateway_callsign (empty = TGSEND), text "TA3HX-6: ..."
+allow_links        = false          # person to person between licensed amateurs, see below
 ```
 
 Send APRS to Telegram: address a message to `TGSEND`.
 Send Telegram to APRS: type `CALLSIGN-7 Hello!` in the bot chat.
+
+Only `chat_id` and `allowed_senders` use the bridge unless `allow_links` is on.
+With it on, any licensed amateur can link their own chat to their own callsign,
+proven from the radio (Turkish regulations, Art. 23/1-c: no traffic with
+unlicensed persons):
+
+1. In Telegram: `/link TA1ABC` (or `/bagla`) - the bot answers with a code, valid 10 minutes
+2. From that callsign's radio, to `TGSEND`: `LINK <code>`
+3. Then `TA2XYZ-9 hello` in Telegram goes on air under the linked callsign
+   (`aprs_source`), at most 20 an hour; `TGSEND TA1ABC hi` from a radio reaches
+   TA1ABC's chat. `/unlink` (`/coz`) or `UNLINK` from the radio removes it.
+
+Links are kept in `bridge_links.json` beside the config: callsign, chat id, time.
 
 ### WhatsApp
 

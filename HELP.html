@@ -741,7 +741,25 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><td><span class="field-name">Telsize çıkış</span></td><td>Bu yönden gelen mesajın telsize hangi çağrı işaretiyle çıkacağı. <code>Kendi çağrı işareti</code>: gönderen çağrı işaretinden, metin olduğu gibi. <code>Geçit</code>: geçit çağrı işaretinden (boşsa ilk tetikleme takma adı), metin gönderenin çağrısıyla başlar: <code>TA1ABC-7: merhaba</code>. Yönetmelik her mesajın sahibini belirtmesini ister.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
       <tr><td><span class="field-name">Telegram'ı yokla</span></td><td>Telegram → APRS yönünü açar: bot chat'ine <code>ÇAĞRI-İŞARETİ Mesaj</code> yazarak APRS'e gönderebilirsiniz.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
       <tr><td><span class="field-name">Yoklama aralığı (sn)</span></td><td>Telegram'ın kaç saniyede bir kontrol edileceği. Varsayılan: 5.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">Kişiden kişiye (lisanslı amatörler)</span></td><td>Açıkken herkes kendi Telegram sohbetini kendi çağrı işaretine bağlayabilir; kapalıyken köprüyü yalnızca yukarıdaki sohbet ve izin verilen göndericiler kullanır. Varsayılan: kapalı (<code>allow_links</code>).</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
     </table>
+    <div class="callout" style="margin-top:12px;">
+      <strong>Kişiden kişiye: çağrı işaretini bağlamak</strong>
+      <p>Yönetmelik (Md.23/1-c) lisanssız kişilerle haberleşmeyi yasaklar; bu
+      yüzden bir Telegram sohbeti, sahibi çağrı işaretini telsizden kanıtlayana
+      kadar telsize hiçbir şey çıkaramaz.</p>
+      <ol>
+        <li>Telegram'da bota <code>/bagla TA1ABC</code> yazın (İngilizce: <code>/link</code>). Bot altı haneli bir kod verir; kod 10 dakika geçerlidir.</li>
+        <li>Telsizinizden, aynı çağrı işaretiyle, tetikleme takma adına (<code>TGSEND</code>) <code>LINK 123456</code> gönderin. Bot "Bağlandı" yazar.</li>
+        <li>Sonra Telegram'dan <code>TA2XYZ-9 merhaba</code> yazdığınızda mesaj telsize kendi çağrı işaretinizle (ya da "Geçit" seçiliyse geçitten, metin sizin çağrınızla başlayarak) çıkar. Saatte en çok 20 mesaj.</li>
+        <li>Telsizden <code>TGSEND TA1ABC selam</code> gönderen bir istasyonun mesajı TA1ABC'nin bağlı Telegram sohbetine gider.</li>
+        <li><code>/coz</code> (Telegram) ya da telsizden <code>UNLINK</code> bağlantıyı siler.</li>
+      </ol>
+      <p>Sunucuda her bağlantı için yalnızca çağrı işareti, Telegram sohbet
+      kimliği ve bağlanma zamanı tutulur (<code>bridge_links.json</code>,
+      yapılandırma dosyasının yanında); kod bellekte durur. APRS'te kimlik
+      doğrulaması yoktur: bu bağlantı, bu ortamın verebildiği en iyi kanıttır.</p>
+    </div>
     <div class="callout warn" style="margin-top:12px;">
       <strong>Bir bot token'ı yalnızca tek bir agent tarafından dinlenebilir</strong>
       Aynı bot token'ıyla iki agent (örn. hem ev bilgisayarınız hem bir sunucu)
@@ -763,6 +781,10 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       durumunu söyler: herkes yayında mı, bölgesel bir sessizlik mi var (ne
       zamandan beri, kaç istasyon), yoksa bir igate arızası mı; yakında bir
       deprem halkası varsa sayısıyla birlikte.
+      <code>SERVIS</code> (ya da "hangi servisler açık", "telegram var mı")
+      bu sunucudaki köprüleri sayar: hangisi açık, hangi takma ada
+      gönderilir, size mi yoksa yalnızca izinli çağrılara mı açık, hangisi
+      kapalı. Liste yapılandırmadan okunur.
       Bunlar ücretsizdir ve uydurma sayı içermez.</p>
   </div>
 
@@ -1684,7 +1706,25 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><td><span class="field-name">On air from</span></td><td>Which callsign a message from this side goes on air from. <code>Own callsign</code>: from the From callsign, the text as written. <code>Gateway</code>: from the gateway callsign (empty = the first trigger alias), the text opening with the owner's call: <code>TA1ABC-7: hello</code>. The regulations require every message to name its originator.</td><td><span class="badge opt">Optional</span></td></tr>
       <tr><td><span class="field-name">Poll Telegram</span></td><td>Enables the Telegram → APRS direction: type <code>CALLSIGN Message</code> in the bot chat to send to APRS.</td><td><span class="badge opt">Optional</span></td></tr>
       <tr><td><span class="field-name">Poll interval (sec)</span></td><td>How often Telegram is checked. Default: 5.</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Person to person (licensed amateurs)</span></td><td>When on, anyone may link their own Telegram chat to their own callsign; when off, only the chat above and the allowed senders use the bridge. Default: off (<code>allow_links</code>).</td><td><span class="badge opt">Optional</span></td></tr>
     </table>
+    <div class="callout" style="margin-top:12px;">
+      <strong>Person to person: linking a callsign</strong>
+      <p>Turkish regulations (Art. 23/1-c) forbid communicating with people
+      who hold no licence, so a Telegram chat puts nothing on air until its
+      owner proves a callsign from the radio.</p>
+      <ol>
+        <li>In Telegram, send the bot <code>/link TA1ABC</code>. It answers with a six-digit code, valid for 10 minutes.</li>
+        <li>From your radio, under the same callsign, send <code>LINK 123456</code> to the trigger alias (<code>TGSEND</code>). The bot says "Linked".</li>
+        <li>From then on <code>TA2XYZ-9 hello</code> typed in Telegram goes on air under your own callsign (or, with "Gateway", from the gateway with your call opening the text). At most 20 messages an hour.</li>
+        <li>A station sending <code>TGSEND TA1ABC hi</code> from the radio reaches TA1ABC's linked Telegram chat.</li>
+        <li><code>/unlink</code> in Telegram, or <code>UNLINK</code> from the radio, deletes the link.</li>
+      </ol>
+      <p>For each link the server keeps only the callsign, the Telegram chat
+      id and when it was made (<code>bridge_links.json</code>, beside the
+      config); the code lives in memory. APRS has no authentication: the link
+      is the best evidence this medium offers.</p>
+    </div>
     <div class="callout warn" style="margin-top:12px;">
       <strong>A bot token can only be polled by one agent at a time</strong>
       If the same bot token is polled by two agents at once (e.g. your home
@@ -1705,7 +1745,11 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       loss, computed). <code>STATUS</code> (or <code>STATUS KM38</code>) gives
       your square's silence state: all on the air, a regional silence (since
       when, how many stations), or an igate fault, and a quake ring nearby with
-      its count. They cost nothing and contain no invented numbers.</p>
+      its count. <code>SERVICES</code> (or "what services are available",
+      "is the telegram bridge on") lists this server's bridges: which are on,
+      which alias to send to, whether they are open to you or to listed calls
+      only, and which are off - read from the config.
+      They cost nothing and contain no invented numbers.</p>
   </div>
 
   <div class="callout">

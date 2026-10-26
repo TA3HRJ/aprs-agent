@@ -400,6 +400,12 @@ aprs_destination = ""
 aprs_source = "own"
 gateway_callsign = ""
 
+# Person to person between licensed amateurs: a Telegram user links their chat
+# to their callsign (/bagla CALL in Telegram, then "LINK <code>" from the radio
+# to the trigger alias). Linked chats send on air under their own callsign and
+# receive "ALIAS CALL text" from the radio. Off until you open it.
+allow_links = false
+
 # --- AI Gateway ---
 # Auto-responds to incoming APRS messages using an AI provider.
 # Supports Google Gemini (free tier), Groq, OpenRouter, DeepSeek, OpenAI,
