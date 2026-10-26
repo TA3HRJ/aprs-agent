@@ -8109,3 +8109,28 @@ it clears.
 new answer and on load from SQLite, so stored rows are fixed by the next
 save. Device and software names (`ESP8266`) are not filtered - no rule for
 them without guessing. `check_repeater_match` item 6.
+
+---
+
+## F-2026-10-26-01 — the Telegram bridge relayed anyone's message under the operator's callsign
+
+**Source:** reading the bridges for the operator's "make them person to
+person" plan · **Verdict:** our code; fixed in v3.2.191
+
+`Telegram._check_updates` relayed every message the bot received to APRS-IS
+as `from_callsign` (the operator's call, SSID 6). It never compared the
+message's chat with the configured `chat_id`; a Telegram bot is found by its
+name, so anyone could have sent APRS messages under the operator's callsign.
+No history shows whether it happened: the bridge's lines go to the panel log,
+and the Messages store keeps only APRS and AI traffic.
+
+KEGM Amatör Telsizcilik Sınav ve Belgelendirme Yönetmeliği (RG 27482, latest
+amendment RG 27852 of 2011), Md.23/1 - read from mevzuat.gov.tr 2026-10-26 -
+forbids (c) communicating with persons who hold no amateur licence, except in
+disaster/emergency traffic and training, (f) letting third parties use one's
+call sign, (g) communicating without identifying oneself. Md.24 cancels the
+licence and call sign for a breach of Md.23.
+
+**Applied, v3.2.191.** Only the configured chat is relayed; any other chat is
+logged as ignored. `check_telegram_inbound.py` fails on v3.2.190 (a stranger
+and a group relayed under TA3HX-6).

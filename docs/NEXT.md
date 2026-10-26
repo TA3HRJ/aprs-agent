@@ -146,6 +146,21 @@ What is left, in the order it is worth doing:
 23. ✅ **Done, v3.2.189.** **AI station analysis output** (F-2026-10-21-01): treat "null"/"none"
     as empty, drop an organisation that is only a callsign. Cost: two lines in
     `_analyze_one` and a check; existing rows cleaned once. Not done without a yes.
+24. **Person-to-person bridges** (the operator's request, 2026-10-26). Today
+    Telegram, Bluesky and e-mail serve the operator only; WhatsApp is off.
+    Constraint: KEGM Yön. Md.23/1-c forbids amateur communication with
+    unlicensed persons outside emergencies and training, and Md.23/1-f
+    letting others use one's call sign (F-2026-10-26-01) - so both ends of
+    a bridged message must be licensed amateurs, and a message reaching the
+    air must carry its originator's own call.
+    Order: (1) badges show off modules, landing says what is open to whom,
+    bridge traffic in the Messages store; (2) linking a callsign to a
+    Telegram chat / e-mail address, proven by a code sent from the radio,
+    with unlink and a privacy-page line; (3) Telegram both ways for linked
+    users; (4) e-mail from aprsagent.com (SPF is `-all`, no MX today; DKIM
+    signer exists on the VPS), recipient confirmation, IMAP inbound from
+    linked addresses with SPF/DKIM; (5) Bluesky by DM or left as is;
+    (6) WhatsApp stays off. Open decisions: the operator's.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.

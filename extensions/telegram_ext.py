@@ -263,6 +263,16 @@ class Telegram(Extension):
 
             sender_name = msg.get("from", {}).get("first_name", "TG")
 
+            # Only the configured chat may put text on APRS: the bot is
+            # findable by name, and whatever it relays goes out under the
+            # operator's callsign. Until 2026-10-26 any Telegram user who
+            # messaged the bot was relayed.
+            chat_id = str(msg.get("chat", {}).get("id", ""))
+            if chat_id != str(cfg.get("chat_id", "")).strip():
+                self.warn(f"ignored a message from chat {chat_id or '?'} "
+                          f"({sender_name}): not the configured chat")
+                continue
+
             tokens = text.split(None, 1)
             if (len(tokens) >= 2
                     and len(tokens[0]) <= 9
