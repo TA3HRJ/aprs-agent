@@ -2621,6 +2621,10 @@ class AgentManager:
         messages is a different object from a map of their positions. It is
         not stored, and that is a decision about more than disk.
         """
+        # A bridge's traffic (Telegram, e-mail, ...) is the operator's own
+        # service record, like the gateway's: kept whoever is on the other end
+        if (msg.get("channel") or "APRS") not in ("APRS", "AI"):
+            return True
         names, stems = self._msg_scope()
         who = ((msg.get("from") or "") + " " + (msg.get("to") or "")).upper()
         for n in names:

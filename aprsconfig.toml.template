@@ -351,6 +351,13 @@ from_callsign = ""
 aprs_destination = ""
 allowed_phones = []
 
+# Which callsign a message from WhatsApp goes on air from (Yönetmelik Md.23/1-f, g):
+#   "own"     from from_callsign, the owner's own call; the text as written
+#   "gateway" from gateway_callsign (empty = the first trigger alias, WASEND),
+#             the text opening with the owner's call: "TA1ABC-7: hello"
+aprs_source = "own"
+gateway_callsign = ""
+
 # --- Telegram ---
 # Bidirectional APRS ↔ Telegram messaging (completely free).
 # Setup: message @BotFather on Telegram to create a bot and get a token.
@@ -385,6 +392,13 @@ from_callsign = "TG-BOT"
 
 # Default APRS destination if Telegram message doesn't specify a callsign
 aprs_destination = ""
+
+# Which callsign a message from Telegram goes on air from (Yönetmelik Md.23/1-f, g):
+#   "own"     from from_callsign, the owner's own call; the text as written
+#   "gateway" from gateway_callsign (empty = the first trigger alias, TGSEND),
+#             the text opening with the owner's call: "TA1ABC-7: hello"
+aprs_source = "own"
+gateway_callsign = ""
 
 # --- AI Gateway ---
 # Auto-responds to incoming APRS messages using an AI provider.

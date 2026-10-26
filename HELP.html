@@ -713,6 +713,7 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><td><span class="field-name">Webhook Doğrulama Token</span></td><td>Kendi belirlediğiniz bir dize — Meta webhook ayarıyla eşleşmeli.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">Alıcı Telefon</span></td><td>Giden mesajlar için varsayılan WhatsApp numarası.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">İzin verilen APRS alıcıları / göndericileri</span></td><td>APRS → WhatsApp yönü için takma ad ve çağrı işareti filtreleri.</td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Telsize çıkış</span></td><td>Bu yönden gelen mesajın telsize hangi çağrı işaretiyle çıkacağı. <code>Kendi çağrı işareti</code>: gönderen çağrı işaretinden, metin olduğu gibi. <code>Geçit</code>: geçit çağrı işaretinden (boşsa ilk tetikleme takma adı), metin gönderenin çağrısıyla başlar: <code>TA1ABC-7: merhaba</code>. Yönetmelik her mesajın sahibini belirtmesini ister.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
       <tr><td><span class="field-name">Gönderen çağrı işareti</span></td><td>WhatsApp → APRS yönünde kullanılacak SSID.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
       <tr><td><span class="field-name">İzin verilen telefon numaraları</span></td><td>Sadece bu numaralar APRS'i tetikleyebilir. Boş = herkes.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
     </table>
@@ -737,6 +738,7 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><td><span class="field-name">Bot Token</span></td><td>@BotFather'dan alınır.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">Chat ID</span></td><td>Telegram kullanıcı veya grup ID'niz.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">İzin verilen APRS alıcıları / göndericileri</span></td><td>APRS → Telegram yönü için takma ad ve çağrı işareti filtreleri. Varsayılan takma ad: <code>TGSEND</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Telsize çıkış</span></td><td>Bu yönden gelen mesajın telsize hangi çağrı işaretiyle çıkacağı. <code>Kendi çağrı işareti</code>: gönderen çağrı işaretinden, metin olduğu gibi. <code>Geçit</code>: geçit çağrı işaretinden (boşsa ilk tetikleme takma adı), metin gönderenin çağrısıyla başlar: <code>TA1ABC-7: merhaba</code>. Yönetmelik her mesajın sahibini belirtmesini ister.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
       <tr><td><span class="field-name">Telegram'ı yokla</span></td><td>Telegram → APRS yönünü açar: bot chat'ine <code>ÇAĞRI-İŞARETİ Mesaj</code> yazarak APRS'e gönderebilirsiniz.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
       <tr><td><span class="field-name">Yoklama aralığı (sn)</span></td><td>Telegram'ın kaç saniyede bir kontrol edileceği. Varsayılan: 5.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
     </table>
@@ -900,7 +902,7 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><th>Alan</th><th>Açıklama</th><th>Durum</th></tr>
       <tr><td><span class="field-name">IMAP Sunucusu</span></td><td>IMAP sunucu adresi ve portu. Örnek: <code>imap.gmail.com:993</code></td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">Kullanıcı adı / Şifre</span></td><td>E-posta hesap bilgileri. Gmail için Uygulama Şifresi kullanın.</td><td><span class="badge req">Zorunlu</span></td></tr>
-      <tr><td><span class="field-name">Gönderen çağrı işareti</span></td><td>İletilen e-postaların APRS'deki gönderen adı. Örnek: <code>EMAIL-5</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Gönderen çağrı işareti</span></td><td>İletilen e-postaların APRS'deki gönderen adı. Örnek: <code>EMAIL-5</code>. Gönderenin çağrı işareti bilinmediği için metin gönderenin adresiyle başlar: <code>ad@ornek.com: merhaba</code>.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">Yoklama aralığı</span></td><td>Gelen kutusu kaç dakikada bir kontrol edilsin. Varsayılan: 5 dakika.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
       <tr><td><span class="field-name">İzin verilen gönderenler</span></td><td>Sadece bu e-posta adreslerinden gelenler iletilir. Boş = hepsi kabul.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
     </table>
@@ -1654,6 +1656,7 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><td><span class="field-name">Webhook Verify Token</span></td><td>A string you choose — must match your Meta webhook configuration.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Recipient Phone</span></td><td>Default WhatsApp number for outgoing messages.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Allowed APRS recipients / senders</span></td><td>Addressee and callsign filters for the APRS → WhatsApp direction.</td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">On air from</span></td><td>Which callsign a message from this side goes on air from. <code>Own callsign</code>: from the From callsign, the text as written. <code>Gateway</code>: from the gateway callsign (empty = the first trigger alias), the text opening with the owner's call: <code>TA1ABC-7: hello</code>. The regulations require every message to name its originator.</td><td><span class="badge opt">Optional</span></td></tr>
       <tr><td><span class="field-name">From callsign</span></td><td>SSID used for the WhatsApp → APRS direction.</td><td><span class="badge opt">Optional</span></td></tr>
       <tr><td><span class="field-name">Allowed phone numbers</span></td><td>Only these numbers can trigger APRS. Empty = anyone.</td><td><span class="badge opt">Optional</span></td></tr>
     </table>
@@ -1678,6 +1681,7 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><td><span class="field-name">Bot Token</span></td><td>From @BotFather.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Chat ID</span></td><td>Your Telegram user or group ID.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Allowed APRS recipients / senders</span></td><td>Addressee and callsign filters for the APRS → Telegram direction. Default addressee: <code>TGSEND</code></td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">On air from</span></td><td>Which callsign a message from this side goes on air from. <code>Own callsign</code>: from the From callsign, the text as written. <code>Gateway</code>: from the gateway callsign (empty = the first trigger alias), the text opening with the owner's call: <code>TA1ABC-7: hello</code>. The regulations require every message to name its originator.</td><td><span class="badge opt">Optional</span></td></tr>
       <tr><td><span class="field-name">Poll Telegram</span></td><td>Enables the Telegram → APRS direction: type <code>CALLSIGN Message</code> in the bot chat to send to APRS.</td><td><span class="badge opt">Optional</span></td></tr>
       <tr><td><span class="field-name">Poll interval (sec)</span></td><td>How often Telegram is checked. Default: 5.</td><td><span class="badge opt">Optional</span></td></tr>
     </table>
@@ -1839,7 +1843,7 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><th>Field</th><th>Description</th><th>Status</th></tr>
       <tr><td><span class="field-name">IMAP Server</span></td><td>IMAP server address and port. Example: <code>imap.gmail.com:993</code></td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Username / Password</span></td><td>Email account credentials. For Gmail, use an App Password.</td><td><span class="badge req">Required</span></td></tr>
-      <tr><td><span class="field-name">From callsign</span></td><td>APRS sender callsign for forwarded emails. Example: <code>EMAIL-5</code></td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">From callsign</span></td><td>APRS sender callsign for forwarded emails. Example: <code>EMAIL-5</code>. The sender has no known callsign, so the text opens with their address: <code>name@example.com: hello</code>.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Poll interval</span></td><td>How often to check the inbox, in minutes. Default: 5.</td><td><span class="badge opt">Optional</span></td></tr>
       <tr><td><span class="field-name">Allowed senders</span></td><td>Only forward emails from these addresses. Empty = allow all.</td><td><span class="badge opt">Optional</span></td></tr>
     </table>

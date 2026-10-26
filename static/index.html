@@ -689,6 +689,8 @@ body.public #about-gw-link{display:none!important}
   <div class="entry-row"><label data-i="wa_recepients">Allowed APRS recipients</label><input id="f-wa-recepients" type="text"></div>
   <div class="entry-row"><label data-i="wa_senders">Allowed APRS senders</label><input id="f-wa-senders" type="text"></div>
   <div class="section-label">📥 <span data-i="wa_inbound_title">Receive — WhatsApp → Radio (Webhook)</span></div>
+  <div class="entry-row"><label data-i="src_mode">On air from</label><select id="f-wa-src"><option value="own" data-i="src_own">Own callsign</option><option value="gateway" data-i="src_gw">Gateway + callsign in text</option></select><div class="hint" data-i="src_hint">Own: from the callsign above. Gateway: from the gateway callsign, the text opening with the owner's call.</div></div>
+  <div class="entry-row"><label data-i="src_gw_call">Gateway callsign</label><input id="f-wa-gwcall" type="text" placeholder="WASEND" style="max-width:140px"><div class="hint" data-i="src_gw_hint">Empty = the first trigger alias</div></div>
   <div class="entry-row"><label data-i="wa_from_call">From callsign</label><input id="f-wa-from-call" type="text" style="max-width:140px"><div class="hint" data-i="wa_from_hint">APRS sender for WhatsApp messages</div></div>
   <div class="entry-row"><label data-i="wa_aprs_dest">Default APRS destination</label><input id="f-wa-aprs-dest" type="text" style="max-width:140px"></div>
   <div class="entry-row"><label data-i="wa_allowed_phones">Allowed phone numbers</label><input id="f-wa-allowed-phones" type="text"><div class="hint" data-i="wa_phones_hint">Comma-separated, empty = allow all</div></div>
@@ -705,6 +707,8 @@ body.public #about-gw-link{display:none!important}
   <div class="section-label">📥 <span data-i="tg_inbound_title">Receive — Telegram → Radio</span></div>
   <div class="action-row"><div class="content"><div class="title" data-i="tg_poll_enabled">Poll Telegram</div><div class="subtitle" data-i="tg_poll_sub">Forward Telegram messages to APRS</div></div><label class="adw-switch"><input type="checkbox" id="f-tg-poll"><span></span></label></div>
   <div class="entry-row"><label data-i="tg_poll_interval">Poll interval (seconds)</label><input id="f-tg-poll-interval" type="text" value="5" style="max-width:80px"></div>
+  <div class="entry-row"><label data-i="src_mode">On air from</label><select id="f-tg-src"><option value="own" data-i="src_own">Own callsign</option><option value="gateway" data-i="src_gw">Gateway + callsign in text</option></select><div class="hint" data-i="src_hint">Own: from the callsign above. Gateway: from the gateway callsign, the text opening with the owner's call.</div></div>
+  <div class="entry-row"><label data-i="src_gw_call">Gateway callsign</label><input id="f-tg-gwcall" type="text" placeholder="TGSEND" style="max-width:140px"><div class="hint" data-i="src_gw_hint">Empty = the first trigger alias</div></div>
   <div class="entry-row"><label data-i="tg_from_call">From callsign</label><input id="f-tg-from-call" type="text" placeholder="TG-BOT" style="max-width:140px"><div class="hint" data-i="tg_from_hint">APRS sender for forwarded Telegram messages</div></div>
   <div class="entry-row"><label data-i="tg_aprs_dest">Default APRS destination</label><input id="f-tg-aprs-dest" type="text" placeholder="" style="max-width:140px"><div class="hint" data-i="tg_dest_hint">If set, messages without a callsign prefix go here</div></div>
 </div></div>
@@ -1077,6 +1081,7 @@ const S={en:{
   wa_token:"Access Token",wa_verify:"Webhook Verify Token",wa_verify_hint:"Must match Meta webhook config",
   wa_recipient:"Recipient Phone",wa_recipient_hint:"Default WhatsApp number for outgoing",wa_hashtag:"Add #APRS hashtag",
   wa_recepients:"Allowed APRS recipients",wa_senders:"Allowed APRS senders",
+  src_mode:"On air from",src_own:"Own callsign",src_gw:"Gateway + callsign in text",src_hint:"Own: from the callsign above. Gateway: from the gateway callsign, the text opening with the owner's call.",src_gw_call:"Gateway callsign",src_gw_hint:"Empty = the first trigger alias",
   wa_inbound_title:"Receive — WhatsApp → Radio (Webhook)",wa_from_call:"From callsign",wa_from_hint:"APRS sender for WhatsApp messages",
   wa_aprs_dest:"Default APRS destination",wa_allowed_phones:"Allowed phone numbers",wa_phones_hint:"Comma-separated, empty = all",
   tg_sub:"Bidirectional APRS ↔ Telegram (free)",tg_token:"Bot Token",tg_token_hint:"Get from @BotFather",tg_chat_id:"Chat ID",tg_chat_id_hint:"Your Telegram user or group ID",
@@ -1205,7 +1210,8 @@ const S={en:{
   mod_title:"Active modules",
   mod_ai:"AI",mod_ai_off:"AI Gateway is off — no automatic AI calls anywhere in the app",mod_ai_ok:"AI Gateway is on and answering — the last request it handled went through",mod_ai_idle:"AI Gateway is on, but nothing has asked it anything since the agent started — switched on is not the same as working",mod_ai_error:"AI Gateway is on but the last request it handled failed — questions sent to it may be going unanswered",
   mod_station_ai:"Station AI",mod_repeater_monitor:"Repeater Monitor",mod_full_feed:"World Feed",mod_ext_server:"Ext. Server",
-  mod_telegram:"Telegram",mod_whatsapp:"WhatsApp",mod_twitter:"Twitter",mod_bluesky:"Bluesky",mod_smtp:"SMTP",mod_imap:"IMAP"
+  mod_telegram:"Telegram",mod_whatsapp:"WhatsApp",mod_twitter:"Twitter",mod_bluesky:"Bluesky",mod_smtp:"SMTP",mod_imap:"IMAP",
+  mod_off:"Off",mod_bridge_on:"On — for callsigns on its allowed list only"
 },tr:{
   g_conn:"Bağlantı",g_logger:"Logger",g_beacon:"Sabit Konum",g_email:"E-Posta",g_station_ai:"İstasyon AI",g_monitor:"İzleyici",g_ext:"Ext. Sunucu",g_config:"Ayar Dosyası",
   sai_enabled:"AI İstasyon Analizi",sai_sub:"İstasyon yorumlarını periyodik olarak AI'a gönder — dernek adı ve açıklama çıkarır. AI Gateway ayarlarını kullanır.",
@@ -1234,6 +1240,7 @@ const S={en:{
   wa_token:"Erişim Token",wa_verify:"Webhook Doğrulama Token",wa_verify_hint:"Meta webhook ayarıyla eşleşmeli",
   wa_recipient:"Alıcı Telefon",wa_recipient_hint:"Varsayılan WhatsApp numarası",wa_hashtag:"#APRS hashtag ekle",
   wa_recepients:"İzin verilen APRS alıcıları",wa_senders:"İzin verilen APRS göndericileri",
+  src_mode:"Telsize çıkış",src_own:"Kendi çağrı işareti",src_gw:"Geçit + metinde çağrı işareti",src_hint:"Kendi: yukarıdaki çağrı işaretinden. Geçit: geçit çağrı işaretinden, metin sahibinin çağrısıyla başlar.",src_gw_call:"Geçit çağrı işareti",src_gw_hint:"Boş = ilk tetikleme takma adı",
   wa_inbound_title:"Al — WhatsApp → Telsiz (Webhook)",wa_from_call:"Gönderen çağrı işareti",wa_from_hint:"WhatsApp mesajları için APRS gönderen",
   wa_aprs_dest:"Varsayılan APRS hedefi",wa_allowed_phones:"İzin verilen telefon numaraları",wa_phones_hint:"Virgülle ayır, boş = hepsi",
   tg_sub:"Çift yönlü APRS ↔ Telegram mesajlaşma (ücretsiz)",tg_token:"Bot Token",tg_token_hint:"Telegram'da @BotFather'dan alın",tg_chat_id:"Chat ID",tg_chat_id_hint:"Telegram kullanıcı veya grup ID'niz",
@@ -1363,7 +1370,8 @@ const S={en:{
   mod_title:"Aktif modüller",
   mod_ai:"AI",mod_ai_off:"AI Gateway kapalı — uygulamada hiçbir otomatik AI çağrısı yapılmaz",mod_ai_ok:"AI Gateway açık ve cevap veriyor — işlediği son istek başarıyla tamamlandı",mod_ai_idle:"AI Gateway açık, ancak ajan başladığından beri ona hiçbir şey sorulmadı — açık olmak çalışmakla aynı şey değil",mod_ai_error:"AI Gateway açık ama işlediği son istek başarısız oldu — ona gönderilen sorular cevapsız kalıyor olabilir",
   mod_station_ai:"İstasyon AI",mod_repeater_monitor:"Röle İzleyici",mod_full_feed:"Dünya Akışı",mod_ext_server:"Ext. Sunucu",
-  mod_telegram:"Telegram",mod_whatsapp:"WhatsApp",mod_twitter:"Twitter",mod_bluesky:"Bluesky",mod_smtp:"SMTP",mod_imap:"IMAP"
+  mod_telegram:"Telegram",mod_whatsapp:"WhatsApp",mod_twitter:"Twitter",mod_bluesky:"Bluesky",mod_smtp:"SMTP",mod_imap:"IMAP",
+  mod_off:"Kapalı",mod_bridge_on:"Açık — yalnızca izin listesindeki çağrı işaretleri için"
 }};
 function t(k){return(S[lang]&&S[lang][k])||S.en[k]||k}
 let pubTitle='',pubCall='',pubSub='';
@@ -1418,18 +1426,21 @@ function renderModStatus(active,health){
   // off | idle | ok | error — falls back to the old on/off reading if an
   // older agent is serving /api/info without a health block.
   const aiState=(lastHealth&&lastHealth.ai)||(a.ai?'idle':'off');
+  const bt=on=>t(on?'mod_bridge_on':'mod_off');
   const rows=[
     ['ai',a.ai,t('mod_ai_'+aiState),true,aiState],
     ['station_ai',a.station_ai,'',false],
     ['repeater_monitor',a.repeater_monitor,'',false],
     ['full_feed',a.full_feed,'',false],
     ['ext_server',a.extension_server,'',false],
-    ['telegram',a.telegram,'',false],
-    ['whatsapp',a.whatsapp,'',false],
-    ['twitter',a.twitter,'',false],
-    ['bluesky',a.bluesky,'',false],
-    ['smtp',a.smtp,'',false],
-    ['imap',a.imap,'',false]
+    // Bridges always show, off ones grey: a visitor reading "Telegram"
+    // should see whether it runs and that it serves listed callsigns only
+    ['telegram',a.telegram,bt(a.telegram),true],
+    ['whatsapp',a.whatsapp,bt(a.whatsapp),true],
+    ['twitter',a.twitter,bt(a.twitter),true],
+    ['bluesky',a.bluesky,bt(a.bluesky),true],
+    ['smtp',a.smtp,bt(a.smtp),true],
+    ['imap',a.imap,bt(a.imap),true]
   ];
   el.title=t('mod_title');
   el.innerHTML=rows.filter(([k,on,ti,always])=>on||always).map(([k,on,ti,al,st])=>
@@ -1476,10 +1487,10 @@ function loadCfg(cfg){
   const wa=(cfg.extensions||{}).whatsapp||{};$('f-wa-enabled').checked=wa.enabled||false;$('f-wa-phone-id').value=wa.phone_number_id||'';
   $('f-wa-token').value=wa.access_token||'';$('f-wa-verify').value=wa.verify_token||'';$('f-wa-recipient').value=wa.recipient_phone||'';
   $('f-wa-hashtag').checked=wa.add_hash_tag!==false;$('f-wa-recepients').value=csv(wa.allowed_recepients);$('f-wa-senders').value=csv(wa.allowed_senders);
-  $('f-wa-from-call').value=wa.from_callsign||'';$('f-wa-aprs-dest').value=wa.aprs_destination||'';$('f-wa-allowed-phones').value=csv(wa.allowed_phones);
+  $('f-wa-from-call').value=wa.from_callsign||'';$('f-wa-src').value=wa.aprs_source==='gateway'?'gateway':'own';$('f-wa-gwcall').value=wa.gateway_callsign||'';$('f-wa-aprs-dest').value=wa.aprs_destination||'';$('f-wa-allowed-phones').value=csv(wa.allowed_phones);
   const tg=(cfg.extensions||{}).telegram||{};$('f-tg-enabled').checked=tg.enabled||false;$('f-tg-token').value=tg.bot_token||'';$('f-tg-chat-id').value=tg.chat_id||'';
   $('f-tg-hashtag').checked=tg.add_hash_tag!==false;$('f-tg-recepients').value=csv(tg.allowed_recepients);$('f-tg-senders').value=csv(tg.allowed_senders);
-  $('f-tg-poll').checked=tg.poll_enabled||false;$('f-tg-poll-interval').value=tg.poll_interval_secs||5;$('f-tg-from-call').value=tg.from_callsign||'';$('f-tg-aprs-dest').value=tg.aprs_destination||'';
+  $('f-tg-poll').checked=tg.poll_enabled||false;$('f-tg-poll-interval').value=tg.poll_interval_secs||5;$('f-tg-from-call').value=tg.from_callsign||'';$('f-tg-src').value=tg.aprs_source==='gateway'?'gateway':'own';$('f-tg-gwcall').value=tg.gateway_callsign||'';$('f-tg-aprs-dest').value=tg.aprs_destination||'';
   const ai=(cfg.extensions||{}).ai_gateway||{};$('f-ai-enabled').checked=ai.enabled||false;$('f-ai-callsign').value=ai.callsign||'';
   aiPrevProvider=ai.provider||'gemini';$('f-ai-provider').value=aiPrevProvider;
   // Per-provider keys; a lone legacy api_key (configs saved before api_keys existed)
@@ -1525,8 +1536,8 @@ function getCfg(){return{
     fixed_beacon:{enabled:$('f-bcn-enabled').checked,ssid:$('f-bcn-ssid').value.trim().toUpperCase(),lat:$('f-bcn-lat').value.trim(),lon:$('f-bcn-lon').value.trim(),symbol_table:$('f-bcn-sym-tbl').value||'/',symbol:($('f-bcn-sym').value||'-')[0],comment:$('f-bcn-comment').value.trim(),beacon_interval_mins:parseInt($('f-bcn-interval').value)||15},
     twitter:{enabled:$('f-tw-enabled').checked,api_key:$('f-tw-api-key').value.trim(),api_secret:$('f-tw-api-secret').value.trim(),access_token_key:$('f-tw-tok-key').value.trim(),access_token_secret:$('f-tw-tok-secret').value.trim(),add_hash_tag:$('f-tw-hashtag').checked,allowed_recepients:lst($('f-tw-recepients').value),allowed_senders:lst($('f-tw-senders').value)},
     bluesky:{enabled:$('f-bsky-enabled').checked,username:$('f-bsky-username').value.trim(),app_password:$('f-bsky-app-pass').value,add_hash_tag:$('f-bsky-hashtag').checked,allowed_recepients:lst($('f-bsky-recepients').value),allowed_senders:lst($('f-bsky-senders').value)},
-    whatsapp:{enabled:$('f-wa-enabled').checked,phone_number_id:$('f-wa-phone-id').value.trim(),access_token:$('f-wa-token').value,verify_token:$('f-wa-verify').value.trim(),recipient_phone:$('f-wa-recipient').value.trim(),add_hash_tag:$('f-wa-hashtag').checked,allowed_recepients:lst($('f-wa-recepients').value),allowed_senders:lst($('f-wa-senders').value),from_callsign:$('f-wa-from-call').value.trim().toUpperCase(),aprs_destination:$('f-wa-aprs-dest').value.trim().toUpperCase(),allowed_phones:lst($('f-wa-allowed-phones').value)},
-    telegram:{enabled:$('f-tg-enabled').checked,bot_token:$('f-tg-token').value,chat_id:$('f-tg-chat-id').value.trim(),add_hash_tag:$('f-tg-hashtag').checked,allowed_recepients:lst($('f-tg-recepients').value),allowed_senders:lst($('f-tg-senders').value),poll_enabled:$('f-tg-poll').checked,poll_interval_secs:parseInt($('f-tg-poll-interval').value)||5,from_callsign:$('f-tg-from-call').value.trim().toUpperCase(),aprs_destination:$('f-tg-aprs-dest').value.trim().toUpperCase()},
+    whatsapp:{aprs_source:$('f-wa-src').value,gateway_callsign:$('f-wa-gwcall').value.trim().toUpperCase(),enabled:$('f-wa-enabled').checked,phone_number_id:$('f-wa-phone-id').value.trim(),access_token:$('f-wa-token').value,verify_token:$('f-wa-verify').value.trim(),recipient_phone:$('f-wa-recipient').value.trim(),add_hash_tag:$('f-wa-hashtag').checked,allowed_recepients:lst($('f-wa-recepients').value),allowed_senders:lst($('f-wa-senders').value),from_callsign:$('f-wa-from-call').value.trim().toUpperCase(),aprs_destination:$('f-wa-aprs-dest').value.trim().toUpperCase(),allowed_phones:lst($('f-wa-allowed-phones').value)},
+    telegram:{aprs_source:$('f-tg-src').value,gateway_callsign:$('f-tg-gwcall').value.trim().toUpperCase(),enabled:$('f-tg-enabled').checked,bot_token:$('f-tg-token').value,chat_id:$('f-tg-chat-id').value.trim(),add_hash_tag:$('f-tg-hashtag').checked,allowed_recepients:lst($('f-tg-recepients').value),allowed_senders:lst($('f-tg-senders').value),poll_enabled:$('f-tg-poll').checked,poll_interval_secs:parseInt($('f-tg-poll-interval').value)||5,from_callsign:$('f-tg-from-call').value.trim().toUpperCase(),aprs_destination:$('f-tg-aprs-dest').value.trim().toUpperCase()},
     ai_gateway:(function(){
       // Commit whatever's typed under the currently-selected provider before reading it out
       aiKeysByProvider[$('f-ai-provider').value]=$('f-ai-api-key').value;

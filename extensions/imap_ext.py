@@ -28,6 +28,7 @@ import imaplib
 from typing import Optional
 
 from . import Extension
+from .bridge_source import aprs_origin
 from config import TOCALL
 
 
@@ -140,8 +141,13 @@ class ImapReceiver(Extension):
         loop = asyncio.get_running_loop()
         messages = await loop.run_in_executor(None, self._fetch_emails)
         for to_call, subject_text, sender in messages:
-            parts = _split_message(_to_ascii(subject_text))
-            from_call = self._config.get("from_callsign", "EMAIL-5")
+            # An e-mail sender has no callsign until addresses are linked to
+            # calls, so this is always the gateway form: from the bridge's
+            # callsign, the sender's address opening the text (bridge_source).
+            src, text, _used = aprs_origin(self._config, sender, _to_ascii(subject_text),
+                                           limit=None)
+            from_call = src or self._config.get("from_callsign", "EMAIL-5")
+            parts = _split_message(text)
             for i, part in enumerate(parts):
                 await self._send_aprs(from_call, to_call, part)
                 self.log(f"TX {sender} -> {to_call}: {part}")

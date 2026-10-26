@@ -599,6 +599,8 @@ poll_enabled       = true            # enable Telegram → APRS direction
 poll_interval_secs = 5
 from_callsign      = ""              # SSID used when sending from Telegram to APRS
 aprs_destination   = ""             # default destination callsign for Telegram → APRS
+aprs_source        = "own"          # "own": on air from from_callsign; "gateway": from
+gateway_callsign   = ""             #   gateway_callsign (empty = TGSEND), text "TA3HX-6: ..."
 ```
 
 Send APRS to Telegram: address a message to `TGSEND`.
@@ -618,6 +620,8 @@ app_secret       = "..."           # for HMAC signature verification
 recipient_phone  = "+905551234567"
 from_callsign    = ""              # SSID used when sending from WhatsApp to APRS
 aprs_destination = ""             # default destination callsign for WhatsApp → APRS
+aprs_source      = "own"          # "own" or "gateway", as for Telegram
+gateway_callsign = ""
 allowed_phones   = []             # phone numbers allowed to trigger APRS (empty = anyone)
 ```
 

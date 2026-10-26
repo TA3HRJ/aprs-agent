@@ -31,6 +31,7 @@ from typing import Optional
 import aprslib
 
 from . import Extension
+from .bridge_source import aprs_origin
 from config import TOCALL
 from config import strip_ssid
 
@@ -289,11 +290,12 @@ class Telegram(Extension):
             if not message:
                 continue
 
-            if len(message) > 64:
-                message = message[:61] + "..."
-
-            self.log(f"RX from Telegram ({sender_name}): {to_call} {message}")
-            await self._send_aprs(from_call, to_call, message)
+            # The configured chat is the operator's: from_callsign is its
+            # own callsign. "own" sends from it, "gateway" from the bridge
+            # alias with the callsign in the text (bridge_source).
+            src, message, used = aprs_origin(cfg, from_call, message)
+            self.log(f"RX from Telegram ({sender_name}): {to_call} {message} [{used}: {src}]")
+            await self._send_aprs(src, to_call, message)
 
     def _next_msg_id(self) -> str:
         self._msg_counter = (self._msg_counter + 1) % 999 + 1

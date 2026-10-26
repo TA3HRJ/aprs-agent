@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.192"
+VERSION = "3.2.193"
 
 # The APRS destination ("tocall") on every packet this program sends -
 # message replies, acks, bridged messages, status and the beacon. APRAGT is
@@ -250,6 +250,10 @@ DEFAULTS: dict[str, Any] = {
             "from_callsign": "",
             "aprs_destination": "",
             "allowed_phones": [],
+            # on air from the owner's own call, or from the gateway with the
+            # call in the text (extensions/bridge_source.py)
+            "aprs_source": "own",
+            "gateway_callsign": "",
         },
         "telegram": {
             "enabled": False,
@@ -262,6 +266,8 @@ DEFAULTS: dict[str, Any] = {
             "poll_interval_secs": 5,
             "from_callsign": "",
             "aprs_destination": "",
+            "aprs_source": "own",
+            "gateway_callsign": "",
         },
         "ai_gateway": {
             "enabled": False,

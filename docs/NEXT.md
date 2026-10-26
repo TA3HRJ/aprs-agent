@@ -161,9 +161,12 @@ What is left, in the order it is worth doing:
     signer exists on the VPS), recipient confirmation, IMAP inbound from
     linked addresses with SPF/DKIM; (5) Bluesky by DM or left as is;
     (6) WhatsApp stays off.
-    Decided 2026-10-26: a bridged message goes on air under its
-    originator's own linked callsign (not the gateway's with the call in
-    the text), so Md.23/1-f and 1-g hold by construction. Open: e-mail
+    2026-10-26: the operator wants both forms available - `aprs_source`
+    per bridge, "own" (the originator's callsign as source, default) or
+    "gateway" (gateway_callsign as source, "CALL: " opening the text);
+    both name the originator (Md.23/1-f, 1-g). Built in v3.2.193
+    (extensions/bridge_source.py); e-mail has no callsign yet, so it is
+    always the gateway form. Step (1) done in v3.2.193 except the landing card. Open: e-mail
     DNS for aprsagent.com, Bluesky DM or unchanged.
 
 Everything below this block is history — kept for the reasoning, not for the
