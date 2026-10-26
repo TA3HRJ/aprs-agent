@@ -176,8 +176,9 @@ What is left, in the order it is worth doing:
     DMWGPT answers SERVICES from the config (F-2026-10-27-01).
     E-mail DNS done 2026-10-27: SPF allows the VPS (IPv4 and IPv6),
     DKIM `202606._domainkey` (OpenDKIM on the VPS signs since 2026-10-26).
-    Open: a test mail to an outside address (operator's yes), then e-mail
-    linking with recipient confirmation; Bluesky DM or unchanged.
+    Test mail 2026-10-27 to the operator's Gmail: spf=pass, dkim=pass
+    (s=202606), dmarc=pass, TLS 1.3, inbox. Open: e-mail linking with
+    recipient confirmation; Bluesky DM or unchanged.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.
