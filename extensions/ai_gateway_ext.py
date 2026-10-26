@@ -554,6 +554,9 @@ def _services_text(ext_cfg: dict, sender_base: str, tr: bool) -> str:
             mine.append(label)
         elif key == "telegram" and c.get("allow_links"):
             mine.append(label + (" (/bagla)" if tr else " (/link)"))
+        elif key == "smtp" and c.get("allow_links"):
+            # to linked amateurs: "CALL text"; your own address: LINK addr
+            mine.append(label + (" (bagli: LINK adres)" if tr else " (linked: LINK address)"))
         else:
             listed.append(label)
     if not mine and not listed:

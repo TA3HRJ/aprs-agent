@@ -1431,6 +1431,13 @@ class AgentManager:
                         if cfg.get("allow_links"):
                             ext.set_links(self._bridge_links)
                         ExtensionRegistry.register(ext)
+                    elif cls is SmtpEmailer:
+                        ext = cls(cfg)
+                        # callsign <-> address links, the same file as
+                        # Telegram's; off unless allow_links
+                        if cfg.get("allow_links"):
+                            ext.set_links(self._bridge_links)
+                        ExtensionRegistry.register(ext)
                     else:
                         ExtensionRegistry.register(cls(cfg))
                 except Exception as e:

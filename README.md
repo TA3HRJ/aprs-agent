@@ -680,6 +680,26 @@ To send an email via APRS, send this message from your radio or software:
 EMAIL friend@example.com Hello, sent via APRS!
 ```
 
+Only `allowed_senders` may write to any address, through the account above.
+With `allow_links = true` licensed amateurs link their own address from the
+radio and anyone may write to a linked callsign:
+
+```toml
+allow_links       = true
+links_smtp_server = "localhost:25"                      # this machine's own MTA
+links_from_email  = "APRS-Agent <noreply@your-domain>"  # SPF + DKIM must pass
+```
+
+1. `EMAIL LINK name@example.com` - a code is mailed there (10 min; one request
+   per callsign per 10 min, three code mails per address a day)
+2. `EMAIL LINK <code>` from the same callsign - linked, a confirmation is mailed
+3. `EMAIL TA1ABC hello` from any station is mailed to TA1ABC's address, naming
+   the sender (20 an hour per sender); a linked station's own text goes to its
+   own address. `EMAIL UNLINK` removes the link.
+
+This traffic never goes through the operator's account. Links share
+`bridge_links.json` with Telegram.
+
 ### Extension Server
 
 Exposes a local TCP server that external programs can connect to.

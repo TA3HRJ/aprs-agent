@@ -945,7 +945,25 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><td><span class="field-name">İzin verilen APRS göndericileri</span></td><td>Hangi çağrı işaretlerinden gelen isteği kabul edeceği.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">İzin verilen APRS alıcıları</span></td><td>Hangi APRS takma ada gönderilmiş mesajları işleyeceği. Varsayılan: <code>EMAIL</code></td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">Gönderen adresi</span></td><td>E-postanın "Kimden" alanında görünecek adres. Örnek: <code>APRS-Agent &lt;aprs@gmail.com&gt;</code></td><td><span class="badge req">Zorunlu</span></td></tr>
+      <tr><td><span class="field-name">Kişiden kişiye (lisanslı amatörler)</span></td><td>Açıkken istasyonlar kendi adreslerini telsizden çağrı işaretlerine bağlayabilir ve herkes bağlı bir çağrı işaretine e-posta gönderebilir. Varsayılan: kapalı (<code>allow_links</code>).</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">Kişiden kişiye SMTP / gönderen</span></td><td>Bu trafiğin gittiği yol: varsayılan bu makinenin kendi posta sunucusu (<code>localhost:25</code>, girişsiz) ve SPF ile DKIM'i bu sunucudan geçen bir adres, örn. <code>APRS-Agent &lt;noreply@alanadiniz&gt;</code>. Yukarıdaki hesap bu trafik için hiç kullanılmaz: başkalarının iletisi sizin hesabınızdan gitmez.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
     </table>
+    <div class="callout" style="margin-top:12px;">
+      <strong>Kişiden kişiye: adresi çağrı işaretine bağlamak</strong>
+      <ol>
+        <li>Telsizinizden <code>EMAIL</code> adresine <code>LINK ad@ornek.com</code> gönderin. Sunucu o adrese altı haneli bir kod yollar (10 dakika geçerli); telsizinize "Kod gönderildi: a***@ornek.com" gelir — havada adres açık yazılmaz.</li>
+        <li>Aynı çağrı işaretinden <code>EMAIL</code> adresine <code>LINK 123456</code> gönderin. Adres bağlanır, bir onay iletisi gelir.</li>
+        <li>Artık herhangi bir istasyon <code>EMAIL</code> adresine <code>TA1ABC merhaba</code> gönderdiğinde ileti TA1ABC'nin bağlı adresine, gönderenin çağrı işaretiyle gider. Kendi düz metniniz kendi adresinize gider. Gönderen başına saatte en çok 20.</li>
+        <li><code>UNLINK</code> bağlantıyı siler.</li>
+      </ol>
+      <p>Yalnızca bağlı adreslere yazılabilir: her iki uç da lisanslı amatördür
+      (Yönetmelik Md.23/1-c). Kod iletisi istenmemişse yok sayılabilir; kod
+      telsizden gelmedikçe hiçbir şey saklanmaz. Bir çağrı işareti 10
+      dakikada bir, bir adres günde üç kod iletisi alabilir. Sunucuda her
+      bağlantı için çağrı işareti, adres ve zaman tutulur
+      (<code>bridge_links.json</code>). Gelen e-posta (cevap) henüz yoktur:
+      cevap telsizden verilir.</p>
+    </div>
   </div>
 
   <h2>Mesajlar Sekmesi <span class="badge web">Web GUI</span></h2>
@@ -1909,7 +1927,25 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><td><span class="field-name">Allowed APRS senders</span></td><td>Only messages from these callsigns trigger emails.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Allowed APRS recipients</span></td><td>Which APRS addressee triggers email forwarding. Default: <code>EMAIL</code></td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">From address</span></td><td>The "From" field in the sent email. Example: <code>APRS-Agent &lt;aprs@gmail.com&gt;</code></td><td><span class="badge req">Required</span></td></tr>
+      <tr><td><span class="field-name">Person to person (licensed amateurs)</span></td><td>When on, stations can link their own address to their callsign from the radio, and anyone can mail a linked callsign. Default: off (<code>allow_links</code>).</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Person-to-person SMTP / From</span></td><td>Where this traffic goes: by default this machine's own mail server (<code>localhost:25</code>, no login) and an address whose SPF and DKIM pass from this server, e.g. <code>APRS-Agent &lt;noreply@your-domain&gt;</code>. The account above is never used for it: other people's messages do not go out from your account.</td><td><span class="badge opt">Optional</span></td></tr>
     </table>
+    <div class="callout" style="margin-top:12px;">
+      <strong>Person to person: linking an address to a callsign</strong>
+      <ol>
+        <li>From your radio, send <code>LINK name@example.com</code> to <code>EMAIL</code>. The server mails a six-digit code there (valid 10 minutes); your radio gets "Code sent: n***@example.com" - the address is never spelled out on air.</li>
+        <li>From the same callsign, send <code>LINK 123456</code> to <code>EMAIL</code>. The address is linked and a confirmation is mailed.</li>
+        <li>From then on any station sending <code>TA1ABC hello</code> to <code>EMAIL</code> reaches TA1ABC's linked address, naming the sender. Your own plain text goes to your own address. At most 20 an hour per sender.</li>
+        <li><code>UNLINK</code> deletes the link.</li>
+      </ol>
+      <p>Only linked addresses can be written to: both ends are licensed
+      amateurs (Turkish regulations, Art. 23/1-c). An unrequested code mail can
+      be ignored; nothing is stored unless the code comes back from the radio.
+      A callsign can ask once in 10 minutes, an address gets three code mails a
+      day. For each link the server keeps the callsign, the address and the
+      time (<code>bridge_links.json</code>). There is no inbound mail yet:
+      answers go over the radio.</p>
+    </div>
   </div>
 
   <h2>Messages Tab <span class="badge web">Web GUI</span></h2>

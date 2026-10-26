@@ -177,8 +177,18 @@ What is left, in the order it is worth doing:
     E-mail DNS done 2026-10-27: SPF allows the VPS (IPv4 and IPv6),
     DKIM `202606._domainkey` (OpenDKIM on the VPS signs since 2026-10-26).
     Test mail 2026-10-27 to the operator's Gmail: spf=pass, dkim=pass
-    (s=202606), dmarc=pass, TLS 1.3, inbox. Open: e-mail linking with
-    recipient confirmation; Bluesky DM or unchanged.
+    (s=202606), dmarc=pass, TLS 1.3, inbox.
+    E-mail linking done in v3.2.195 (`check_email_links`): "LINK addr" to
+    EMAIL mails a code, "LINK <code>" from the same callsign links;
+    "CALL text" from any station is mailed to CALL's linked address, a
+    linked station's own text to its own; through `links_smtp_server` /
+    `links_from_email` (localhost Postfix, noreply@aprsagent.com), never
+    the operator's Gmail. Off until `allow_links`. Limits: one code
+    request per callsign per 10 min, 3 code mails per address a day, 20 an
+    hour in all; 20 person-to-person mails an hour per sender.
+    Open: turning Telegram and e-mail links on (operator), then the
+    landing card and the privacy-page line; inbound mail (MX/IMAP) not
+    started; Bluesky DM or unchanged.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.

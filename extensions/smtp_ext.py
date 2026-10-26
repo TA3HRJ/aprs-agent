@@ -13,15 +13,29 @@ How it works:
 
 Supports Gmail (use App Password), Outlook, or any standard SMTP server.
 
+Person to person (allow_links): a licensed amateur links an address to their
+callsign from the radio - "LINK addr@example.com" to the alias mails a code
+to that address, "LINK <code>" from the same callsign confirms it. Any
+station may then send "CALL text" to the alias and it is mailed to CALL's
+linked address; a linked station's plain text goes to its own address. Only
+linked addresses receive this traffic: both ends are licensed amateurs (KEGM
+Yön. Md.23/1-c), and the mail names the sending callsign (1-g). It goes out
+through its own transport (links_smtp_server, links_from_email - on
+aprsagent.com the server's own Postfix as noreply@aprsagent.com), never the
+operator's account: that would be letting others use it (1-f).
+
 Developed by TA3HX, TA3PKS & TA3EKM
 """
 from __future__ import annotations
 
 
 import asyncio
+import re
 import smtplib
+import time
+from email.message import EmailMessage
 from email.mime.text import MIMEText
-from email.utils import formataddr, formatdate, getaddresses
+from email.utils import formataddr, formatdate, getaddresses, make_msgid
 from typing import Optional
 
 import aprslib
@@ -29,6 +43,25 @@ import aprslib
 from . import Extension
 from config import TOCALL
 from config import strip_ssid
+from .bridge_links import CODE_TTL_S, base_call, looks_like_callsign
+
+_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$")
+
+# Limits on what a station can make this server mail. A code mail goes to an
+# address the requester names, so without them the gateway is a way to send
+# mail to anyone: one live request per callsign, three code mails per address
+# a day, twenty code mails an hour in all; a sender's person-to-person mails,
+# twenty an hour.
+_CODE_ADDR_PER_DAY = 3
+_CODES_PER_HOUR = 20
+_LINKED_PER_HOUR = 20
+_LOOPBACK = ("localhost", "127.0.0.1", "::1")
+
+
+def mask_address(addr: str) -> str:
+    """t***@gmail.com - what goes on air, where everything is public."""
+    local, _, domain = (addr or "").partition("@")
+    return f"{local[:1]}***@{domain}" if domain else "***"
 
 
 # What the config template ships with. A config still carrying one of these
@@ -60,12 +93,84 @@ def sender_addresses(cfg: dict) -> tuple[str, str]:
     return user, user
 
 
+_CODE_BODY = """\
+{call} asked to link this e-mail address to their amateur radio callsign
+on the aprsagent.com APRS gateway.
+
+To confirm, send this APRS message from that callsign's radio to {alias}:
+
+    LINK {code}
+
+The code is valid for {mins} minutes. If this was not you, ignore this mail:
+nothing is stored unless the code comes back from the radio.
+
+---
+{call} bu e-posta adresini aprsagent.com APRS geçidinde amatör telsiz çağrı
+işaretine bağlamak istedi. Onaylamak için o çağrı işaretinin telsizinden
+{alias} adresine şu APRS mesajını gönderin:
+
+    LINK {code}
+
+Kod {mins} dakika geçerlidir. Siz istemediyseniz bu iletiyi yok sayın; kod
+telsizden gelmedikçe hiçbir şey saklanmaz.
+
+This address takes no mail. / Bu adrese yazılan okunmaz.
+https://aprsagent.com/
+"""
+
+_LINKED_BODY = """\
+This address is now linked to {call} on the aprsagent.com APRS gateway.
+APRS messages sent to {alias} as "{call} text" will be mailed here, naming
+the sender's callsign. To remove the link, send UNLINK to {alias} from
+your radio.
+
+---
+Bu adres aprsagent.com APRS geçidinde {call} çağrı işaretine bağlandı.
+{alias} adresine "{call} metin" olarak gönderilen APRS mesajları, gönderenin
+çağrı işaretiyle buraya iletilir. Bağlantıyı kaldırmak için telsizinizden
+{alias} adresine UNLINK gönderin.
+
+This address takes no mail. / Bu adrese yazılan okunmaz.
+"""
+
+_P2P_BODY = """\
+{text}
+
+---
+{sender} sent this to {call} over APRS, through the aprsagent.com gateway.
+Answer over APRS: to {sender} directly, or this mail address takes no mail.
+To stop these mails, send UNLINK to {alias} from your radio.
+/ {sender} bunu APRS üzerinden {call} için gönderdi. Telsizden {sender}
+istasyonuna cevap verin; bu adrese yazılan okunmaz. Durdurmak için
+telsizinizden {alias} adresine UNLINK gönderin.
+"""
+
+_OWN_BODY = """\
+{text}
+
+---
+Sent from your radio as {sender} over APRS, through the aprsagent.com
+gateway. UNLINK to {alias} removes the link.
+/ Telsizinizden {sender} olarak gönderildi. {alias} adresine UNLINK
+bağlantıyı kaldırır.
+"""
+
+
 class SmtpEmailer(Extension):
     """Forwards APRS messages to email via SMTP."""
 
     def __init__(self, config: dict):
         self._config = config
         self._validate()
+        # callsign <-> address links (bridge_links.BridgeLinks), given by the
+        # web GUI when allow_links is on; None = operator-only, as before
+        self._links = None
+        self._queue: Optional[asyncio.Queue] = None
+        self._msg_counter = 0
+        self._code_at: dict = {}        # base call -> last code mail
+        self._addr_codes: dict = {}     # address -> code mail times
+        self._codes: list = []          # all code mail times
+        self._sent_at: dict = {}        # base call -> person-to-person times
         self.log(
             f"SMTP initialized | server={config['smtp_server']} "
             f"| senders={config['allowed_senders']} "
@@ -88,6 +193,12 @@ class SmtpEmailer(Extension):
     def name(self) -> str:
         return "smtp"
 
+    def set_links(self, links) -> None:
+        self._links = links
+
+    def set_own_writer(self, q: asyncio.Queue) -> None:
+        self._queue = q
+
     async def handle(self, line: str) -> Optional[bytes]:
         cfg = self._config
 
@@ -105,14 +216,6 @@ class SmtpEmailer(Extension):
         if packet.get("format") != "message":
             return None
 
-        # Check sender
-        sender_full = packet.get("from", "")
-        sender_call = strip_ssid(sender_full)
-        if not any(
-            s.upper() == sender_call.upper() for s in cfg.get("allowed_senders", [])
-        ):
-            return None
-
         # Check APRS message recipient (addressee)
         recipient = packet.get("addresse", "").strip().upper()
         if not any(
@@ -120,8 +223,23 @@ class SmtpEmailer(Extension):
         ):
             return None
 
-        # Parse message body: first word = email address, rest = content
+        sender_full = packet.get("from", "")
+        sender_call = strip_ssid(sender_full)
+        operator = any(
+            s.upper() == sender_call.upper() for s in cfg.get("allowed_senders", [])
+        )
         message_text = packet.get("message_text", "")
+
+        if self._links is not None:
+            done = await self._linked(sender_full, recipient, message_text, operator)
+            if done:
+                return self._ack(packet, recipient, sender_full)
+
+        # Check sender
+        if not operator:
+            return None
+
+        # Parse message body: first word = email address, rest = content
         parts = message_text.split(" ", 1)
         if len(parts) < 2:
             self.error(
@@ -153,15 +271,167 @@ class SmtpEmailer(Extension):
         if not success:
             return None
 
-        # Build and return APRS ACK packet
+        return self._ack(packet, recipient, sender_full)
+
+    @staticmethod
+    def _ack(packet: dict, recipient: str, sender_full: str) -> Optional[bytes]:
         msg_id = packet.get("msgNo", "")
         if not msg_id:
             return None
-
         # From the alias that was addressed, to the sender. It used to be
         # built as <the question's tocall>><sender>,<the question's path>.
         ack = f"{recipient}>{TOCALL},TCPIP*::{sender_full:<9}:ack{msg_id}\r\n"
         return ack.encode("utf-8")
+
+    # ── person to person ──────────────────────────────────────────────
+    async def _linked(self, sender_full: str, alias: str, text: str,
+                      operator: bool) -> bool:
+        """The linking commands and mail to linked addresses. True when the
+        message was one of them (handled, whatever the outcome); False
+        leaves it to the operator's path."""
+        links = self._links
+        words = text.strip().split(None, 1)
+        head = words[0].upper() if words else ""
+        if head == "LINK" and len(words) == 2:
+            arg = words[1].strip()
+            if "@" in arg:
+                await self._request_link(sender_full, alias, arg)
+            else:
+                entry = links.confirm("email", sender_full, arg)
+                if entry:
+                    self.log(f"linked {entry['call']} to an e-mail address")
+                    await self._reply(alias, sender_full,
+                                      f"Baglandi/Linked: {mask_address(entry['target'])}")
+                    await self._mail_linked(entry["target"], "aprsagent.com: linked",
+                                            _LINKED_BODY.format(call=entry["call"], alias=alias))
+                else:
+                    self.warn(f"LINK from {sender_full}: unknown or expired code")
+                    await self._reply(alias, sender_full, "Kod gecersiz/Code unknown or expired")
+            return True
+        if head == "UNLINK":
+            gone = links.unlink_call("email", sender_full)
+            if gone:
+                self.log(f"unlinked {gone['call']} from its e-mail address")
+            await self._reply(alias, sender_full, "Baglanti kaldirildi/Unlinked" if gone
+                              else "Bagli adres yok/No linked address")
+            return True
+        if len(words) == 2 and looks_like_callsign(head) and links.by_call("email", head):
+            target = links.by_call("email", head)
+            if not self._within_rate(sender_full):
+                await self._reply(alias, sender_full, f"Saatlik sinir/Hourly limit {_LINKED_PER_HOUR}")
+                return True
+            ok = await self._mail_linked(
+                target["target"], f"APRS: {sender_full}",
+                _P2P_BODY.format(text=words[1].strip(), sender=sender_full,
+                                 alias=alias, call=target["call"]))
+            if ok:
+                self.log(f"{sender_full} -> {target['call']} by e-mail")
+            return True
+        if not operator and links.by_call("email", sender_full):
+            own = links.by_call("email", sender_full)
+            if not self._within_rate(sender_full):
+                return True
+            await self._mail_linked(own["target"], f"APRS: {sender_full}",
+                                    _OWN_BODY.format(text=text.strip(), sender=sender_full,
+                                                     alias=alias))
+            return True
+        return False
+
+    async def _request_link(self, sender_full: str, alias: str, addr: str) -> None:
+        addr = addr.strip().lower()
+        base = base_call(sender_full)
+        now = time.time()
+        if not _EMAIL_RE.match(addr) or not looks_like_callsign(base):
+            await self._reply(alias, sender_full, "Adres?/Address? LINK ad@ornek.com")
+            return
+        if now - self._code_at.get(base, 0.0) < CODE_TTL_S:
+            await self._reply(alias, sender_full, "Kod zaten gonderildi/Code already sent")
+            return
+        sent = [x for x in self._addr_codes.get(addr, []) if now - x < 86400]
+        self._codes = [x for x in self._codes if now - x < 3600]
+        if len(sent) >= _CODE_ADDR_PER_DAY or len(self._codes) >= _CODES_PER_HOUR:
+            self.warn(f"code mail for {sender_full} refused: limit")
+            await self._reply(alias, sender_full, "Sinir, sonra deneyin/Limit, try later")
+            return
+        code = self._links.request("email", base, addr)
+        if not code:
+            return
+        ok = await self._mail_linked(
+            addr, f"aprsagent.com: LINK {code}",
+            _CODE_BODY.format(call=sender_full, alias=alias, code=code,
+                              mins=CODE_TTL_S // 60))
+        if ok:
+            self._code_at[base] = now
+            self._addr_codes[addr] = sent + [now]
+            self._codes.append(now)
+            self.log(f"link code mailed for {sender_full}")
+            await self._reply(alias, sender_full, f"Kod gonderildi/Code sent: {mask_address(addr)}")
+        else:
+            await self._reply(alias, sender_full, "E-posta gonderilemedi/Mail failed")
+
+    def _within_rate(self, sender_full: str) -> bool:
+        base = base_call(sender_full)
+        now = time.time()
+        recent = [x for x in self._sent_at.get(base, []) if now - x < 3600]
+        if len(recent) >= _LINKED_PER_HOUR:
+            self._sent_at[base] = recent
+            return False
+        self._sent_at[base] = recent + [now]
+        return True
+
+    def _next_msg_id(self) -> str:
+        self._msg_counter = (self._msg_counter + 1) % 999 + 1
+        return str(self._msg_counter)
+
+    async def _reply(self, alias: str, to_call: str, text: str) -> None:
+        """A short APRS message from the alias back to the sender."""
+        if not self._queue:
+            return
+        pkt = (f"{alias}>{TOCALL},TCPIP*::{to_call:<9}:{text[:67]}"
+               f"{{{self._next_msg_id()}\r\n")
+        await self._queue.put(pkt.encode("utf-8"))
+
+    async def _mail_linked(self, to_addr: str, subject: str, body: str) -> bool:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._send_links_mail,
+                                          to_addr, subject, body)
+
+    def _send_links_mail(self, to_addr: str, subject: str, body: str) -> bool:
+        """Blocking send through the links transport, never the operator's
+        account: links_smtp_server (default localhost:25, no login) as
+        links_from_email."""
+        cfg = self._config
+        server = str(cfg.get("links_smtp_server") or "localhost:25")
+        found = getaddresses([str(cfg.get("links_from_email", ""))])
+        if len(found) != 1 or "@" not in found[0][1]:
+            self.error("links_from_email is not set - no person-to-person mail")
+            return False
+        name, envelope = found[0]
+        try:
+            host, port_str = server.rsplit(":", 1)
+            msg = EmailMessage()
+            msg["From"] = formataddr((name, envelope))
+            msg["To"] = to_addr
+            msg["Subject"] = subject
+            msg["Date"] = formatdate(localtime=True)
+            msg["Message-ID"] = make_msgid(domain=envelope.split("@", 1)[1])
+            msg["Auto-Submitted"] = "auto-generated"
+            msg.set_content(body)
+            with smtplib.SMTP(host, int(port_str), timeout=30) as s:
+                s.ehlo()
+                if host not in _LOOPBACK and s.has_extn("starttls"):
+                    s.starttls()
+                    s.ehlo()
+                user = cfg.get("links_smtp_username", "")
+                if user:
+                    s.login(user, cfg.get("links_smtp_password", ""))
+                s.send_message(msg, from_addr=envelope, to_addrs=[to_addr])
+            self.mark_working()
+            return True
+        except Exception as e:
+            self.error(f"links mail error: {type(e).__name__}: {e}")
+            self.mark_broken(f"links mail error: {type(e).__name__}")
+            return False
 
     def _send_email(
         self, to_addr: str, content: str, aprs_sender: str, cfg: dict

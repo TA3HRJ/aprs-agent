@@ -746,6 +746,9 @@ body.public #about-gw-link{display:none!important}
   <div class="entry-row"><label data-i="smtp_recip">Allowed APRS recipients</label><input id="f-smtp-recip" type="text"></div>
   <div class="entry-row"><label data-i="smtp_emails">Allowed destination emails</label><input id="f-smtp-emails" type="text"><div class="hint" data-i="smtp_emails_hint">Comma-separated, empty = allow all</div></div>
   <div class="entry-row"><label data-i="smtp_from">From address</label><input id="f-smtp-from" type="text"></div>
+  <div class="action-row"><div class="content"><div class="title" data-i="smtp_links">Person to person (licensed amateurs)</div><div class="subtitle" data-i="smtp_links_hint">A station links its address from the radio: LINK addr, then LINK &lt;code&gt; from the mail. Anyone may then send "CALL text" to a linked callsign. Sent through the transport below, never the account above.</div></div><label class="adw-switch"><input type="checkbox" id="f-smtp-links"><span></span></label></div>
+  <div class="entry-row"><label data-i="smtp_links_server">Person-to-person SMTP</label><input id="f-smtp-links-server" type="text" placeholder="localhost:25"></div>
+  <div class="entry-row"><label data-i="smtp_links_from">Person-to-person From</label><input id="f-smtp-links-from" type="text" placeholder="APRS-Agent &lt;noreply@example.org&gt;"><div class="hint" data-i="smtp_links_from_hint">An address of your own domain that passes SPF and DKIM from this server</div></div>
   <!-- IMAP Receive -->
   <div class="section-label">📥 <span data-i="email_recv_title">Receive — Email → Radio (IMAP)</span></div>
   <div class="action-row"><div class="content"><div class="title" data-i="imap_enabled">IMAP Receive</div></div><label class="adw-switch"><input type="checkbox" id="f-imap-enabled"><span></span></label></div>
@@ -1098,7 +1101,7 @@ const S={en:{
   ai_daily_limit:"Daily ceiling",ai_daily_limit_hint:"Total questions answered per day across ALL senders. 0 = no ceiling. Per-sender limits do not protect you from many strangers asking once each",
   email_send_title:"Send — Radio → Email (SMTP)",email_recv_title:"Receive — Email → Radio (IMAP)",
   smtp_enabled:"SMTP Send",smtp_server:"SMTP Server",smtp_user:"Username",smtp_pass:"Password",smtp_senders:"Allowed APRS senders",smtp_recip:"Allowed APRS recipients",
-  smtp_emails:"Allowed destination emails",smtp_emails_hint:"Comma-separated, empty = allow all",smtp_from:"From address",
+  smtp_emails:"Allowed destination emails",smtp_emails_hint:"Comma-separated, empty = allow all",smtp_from:"From address",smtp_links:"Person to person (licensed amateurs)",smtp_links_hint:"A station links its address from the radio: LINK addr, then LINK <code> from the mail. Anyone may then send \"CALL text\" to a linked callsign. Sent through the transport below, never the account above.",smtp_links_server:"Person-to-person SMTP",smtp_links_from:"Person-to-person From",smtp_links_from_hint:"An address of your own domain that passes SPF and DKIM from this server",
   imap_enabled:"IMAP Receive",imap_server:"IMAP Server",imap_user:"Username",imap_pass:"Password",imap_pass_hint:"Gmail: use App Password",
   imap_interval:"Poll interval (min)",imap_from:"From callsign",imap_allowed:"Allowed sender emails",imap_allowed_hint:"Comma-separated, empty = allow all",
   ext_enabled:"Extension Server",ext_sub:"Bidirectional TCP stream for external programs",ext_host:"Listen host",ext_port:"Listen port",
@@ -1257,7 +1260,7 @@ const S={en:{
   ai_daily_limit:"Günlük tavan",ai_daily_limit_hint:"TÜM gönderenler için günde yanıtlanan toplam soru. 0 = tavan yok. Kişi başı sınır, çok sayıda yabancının birer soru sormasına karşı korumaz",
   email_send_title:"Gönder — Telsiz → E-Posta (SMTP)",email_recv_title:"Al — E-Posta → Telsiz (IMAP)",
   smtp_enabled:"SMTP Gönder",smtp_server:"SMTP Sunucusu",smtp_user:"Kullanıcı adı",smtp_pass:"Şifre",smtp_senders:"İzin verilen APRS göndericileri",smtp_recip:"İzin verilen APRS alıcıları",
-  smtp_emails:"İzin verilen hedef e-postalar",smtp_emails_hint:"Virgülle ayır, boş = hepsi",smtp_from:"Gönderen adresi",
+  smtp_emails:"İzin verilen hedef e-postalar",smtp_emails_hint:"Virgülle ayır, boş = hepsi",smtp_from:"Gönderen adresi",smtp_links:"Kişiden kişiye (lisanslı amatörler)",smtp_links_hint:"İstasyon adresini telsizden bağlar: LINK adres, sonra e-postadaki LINK <kod>. Ardından herkes bağlı çağrı işaretine \"ÇAĞRI metin\" gönderebilir. Yukarıdaki hesaptan değil, aşağıdaki yoldan gider.",smtp_links_server:"Kişiden kişiye SMTP",smtp_links_from:"Kişiden kişiye gönderen",smtp_links_from_hint:"Bu sunucudan SPF ve DKIM'i geçen, kendi alan adınızdan bir adres",
   imap_enabled:"IMAP Al",imap_server:"IMAP Sunucusu",imap_user:"Kullanıcı adı",imap_pass:"Şifre",imap_pass_hint:"Gmail: Uygulama Şifresi kullanın",
   imap_interval:"Yoklama aralığı (dk)",imap_from:"Gönderen çağrı işareti",imap_allowed:"İzin verilen gönderen e-postalar",imap_allowed_hint:"Virgülle ayır, boş = hepsi",
   ext_enabled:"Extension Sunucusu",ext_sub:"Harici programlar için çift yönlü TCP akışı",ext_host:"Dinleme adresi",ext_port:"Dinleme portu",
@@ -1513,7 +1516,7 @@ function loadCfg(cfg){
   $('f-imap-pass').value=im.imap_password||'';$('f-imap-interval').value=im.poll_interval_mins||5;$('f-imap-from').value=im.from_callsign||'';$('f-imap-allowed').value=csv(im.allowed_senders);
   const sm=(cfg.extensions||{}).smtp||{};$('f-smtp-enabled').checked=sm.enabled||false;$('f-smtp-server').value=sm.smtp_server||'';$('f-smtp-user').value=sm.smtp_username||'';
   $('f-smtp-pass').value=sm.smtp_password||'';$('f-smtp-senders').value=csv(sm.allowed_senders);$('f-smtp-recip').value=csv(sm.allowed_recipients);
-  $('f-smtp-emails').value=csv(sm.allowed_receiver_emails);$('f-smtp-from').value=sm.from_email||'';
+  $('f-smtp-emails').value=csv(sm.allowed_receiver_emails);$('f-smtp-from').value=sm.from_email||'';$('f-smtp-links').checked=sm.allow_links===true;$('f-smtp-links-server').value=sm.links_smtp_server||'';$('f-smtp-links-from').value=sm.links_from_email||'';
   const es=cfg.extension_server||{};$('f-ext-enabled').checked=es.enabled||false;$('f-ext-host').value=es.host||'127.0.0.1';$('f-ext-port').value=es.port||65080;
 }
 // A limit is a safety setting, so unreadable input must not weaken it. An
@@ -1552,7 +1555,7 @@ function getCfg(){return{
         daily_limit:numOr($('f-ai-daily-limit').value,0)};
     })(),
     imap:{enabled:$('f-imap-enabled').checked,imap_server:$('f-imap-server').value.trim(),imap_username:$('f-imap-user').value.trim(),imap_password:$('f-imap-pass').value,poll_interval_mins:parseInt($('f-imap-interval').value)||5,from_callsign:$('f-imap-from').value.trim().toUpperCase(),allowed_senders:lst($('f-imap-allowed').value)},
-    smtp:{enabled:$('f-smtp-enabled').checked,smtp_server:$('f-smtp-server').value.trim(),smtp_username:$('f-smtp-user').value.trim(),smtp_password:$('f-smtp-pass').value,allowed_senders:lst($('f-smtp-senders').value),allowed_recipients:lst($('f-smtp-recip').value),allowed_receiver_emails:lst($('f-smtp-emails').value),from_email:$('f-smtp-from').value.trim()},
+    smtp:{enabled:$('f-smtp-enabled').checked,smtp_server:$('f-smtp-server').value.trim(),smtp_username:$('f-smtp-user').value.trim(),smtp_password:$('f-smtp-pass').value,allowed_senders:lst($('f-smtp-senders').value),allowed_recipients:lst($('f-smtp-recip').value),allowed_receiver_emails:lst($('f-smtp-emails').value),from_email:$('f-smtp-from').value.trim(),allow_links:$('f-smtp-links').checked,links_smtp_server:$('f-smtp-links-server').value.trim()||'localhost:25',links_from_email:$('f-smtp-links-from').value.trim()},
   }}}
 
 // ── Status ──

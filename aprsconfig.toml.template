@@ -295,6 +295,17 @@ allowed_receiver_emails = []
 # The "From:" address shown in outgoing emails
 from_email = "APRS-Agent <aprs@example.com>"
 
+# Person to person between licensed amateurs. A station links an address to
+# its callsign from the radio: "LINK addr@example.com" to the alias mails a
+# code there, "LINK <code>" from the same callsign confirms. Then anyone may
+# send "CALL text" to the alias and it is mailed to CALL's linked address.
+# This mail never goes through the account above: it uses its own transport,
+# normally this machine's own mail server, with a From address of a domain
+# whose SPF and DKIM allow this server. Off until you open it.
+allow_links = false
+links_smtp_server = "localhost:25"
+links_from_email = ""            # e.g. "APRS-Agent <noreply@your-domain>"
+
 # --- Bluesky ---
 # Posts incoming APRS messages to a Bluesky account (free API, no payment needed).
 # Create an App Password at: bsky.app → Settings → App Passwords
