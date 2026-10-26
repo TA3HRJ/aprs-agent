@@ -166,7 +166,8 @@ What is left, in the order it is worth doing:
     "gateway" (gateway_callsign as source, "CALL: " opening the text);
     both name the originator (Md.23/1-f, 1-g). Built in v3.2.193
     (extensions/bridge_source.py); e-mail has no callsign yet, so it is
-    always the gateway form. Step (1) done in v3.2.193 except the landing card. Open: e-mail
+    always the gateway form. Step (1) done: v3.2.193, and the landing's bridges card
+    (2026-10-26) says what runs here and for whom. Open: e-mail
     DNS for aprsagent.com, Bluesky DM or unchanged.
 
 Everything below this block is history — kept for the reasoning, not for the
