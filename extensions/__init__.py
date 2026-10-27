@@ -58,6 +58,20 @@ class Extension(ABC):
         """
         return None
 
+    def set_event_recorder(self, fn) -> None:
+        """Hand the extension a counter, fn(event_name), for the bridges'
+        person-to-person traffic - what was refused and why, counted per day
+        so abuse shows as numbers. Names only, never who."""
+        self._event_recorder = fn
+
+    def count(self, event: str) -> None:
+        fn = getattr(self, "_event_recorder", None)
+        if fn is not None:
+            try:
+                fn(event)
+            except Exception:
+                pass
+
     def set_own_writer(self, queue: asyncio.Queue) -> None:
         """
         Called once at startup to give the extension a queue for sending

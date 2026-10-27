@@ -61,6 +61,10 @@
 #   initial request/header timeout) and GHSA-494j-54xm-rwp3 (shared cookie
 #   Secure attribute). aiohttp 3.14.4 requires yarl >= 1.25.1, so yarl
 #   1.24.2 -> 1.25.1. Nothing else moves (pip dry-run on the VPS venv).
+# 2026-10-27, v3.2.200: pillow 12.3.0 -> 13.0.0, the first patched version
+#   for the 41 advisories on 12.3.0. It requires Python 3.11: the VPS runs
+#   3.12 (venv312), and CI's required locked job now runs 3.12 too. Only the
+#   desktop GUI and pystray use PIL; nothing on the server imports it.
 
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.4
@@ -88,7 +92,7 @@ jiter==0.16.0
 libipld==3.4.1
 multidict==6.9.1
 openai==2.45.0
-pillow==12.3.0
+pillow==13.0.0
 propcache==0.5.3
 pycparser==3.0
 pydantic==2.13.5

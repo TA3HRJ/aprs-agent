@@ -16,17 +16,18 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # 3.10 with the lock is the server as it runs, and must pass. 3.12 and
-    # 3.13 with the newest releases are the move ahead of 3.10's end
-    # (AUDIT-2026-10-08 O3): they report, they do not block.
+    # 3.12 with the lock is the server as it runs (venv312 since
+    # 2026-10-08), and must pass. 3.10 (the oldest still installed from
+    # source, upstream end of life 2026-10-01) and 3.13 with the newest
+    # releases report, they do not block.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - python: "3.10"
+          - python: "3.12"
             lock: "-c requirements-lock-linux.txt"
             required: true
-          - python: "3.12"
+          - python: "3.10"
             lock: ""
             required: false
           - python: "3.13"

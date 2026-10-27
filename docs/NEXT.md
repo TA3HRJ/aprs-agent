@@ -128,7 +128,10 @@ What is left, in the order it is worth doing:
     at high zoom, and clamping the viewport fetch to what Mercator draws -
     an hour or two, all in static/index.html.
 
-20. **When the AI does not answer - the operator's call.** v3.2.174 bounds a
+20. ✅ **Done, v3.2.200** (the operator's yes, 2026-10-27): a failed ask
+    sends "YZ cevap vermedi, sonra deneyin / AI did not answer, try later",
+    once in ten minutes per station (`check_ai_failure` item 5).
+    **When the AI does not answer - the operator's call.** v3.2.174 bounds a
     provider call to about a minute and lets a retry ask again
     (F-2026-10-15-01), but a failed ask still sends the station nothing.
     A short notice ("the AI did not answer - try again later") would cost
@@ -206,13 +209,12 @@ What is left, in the order it is worth doing:
     a Windows release and notes summarising the 3.2 line. Nothing assumes
     3.2: the VPS update script picks tags by version sort
     (`--sort=-v:refname`), v3.3.0 > v3.2.199.
-26. **Python 3.10 on the VPS is past upstream end of life** (2026-10-01,
-    devguide.python.org/versions, read 2026-10-27). Ubuntu 22.04.5;
-    python3.11 and 3.12 packages are installable there. Moving the venv to
-    3.12 would also let the Linux lock take Pillow 13 (41 open Dependabot
-    alerts, 13 needs >=3.11) or drop the GUI-only pystray/Pillow from it.
-    Cost: a new venv and lock, CI's locked job off 3.10, one deploy; the old
-    venv kept for rollback. Not done without a yes.
+26. ✅ **Python: already 3.12 since 2026-10-08** (HANDOFF "running",
+    venv312 by a systemd drop-in). Proposed on 2026-10-27 as if the VPS ran
+    3.10 - that was read off the old venv, not the running process; caught
+    before any change. What was left is done in v3.2.200: the Linux lock
+    takes Pillow 13.0.0, CI's required locked job runs 3.12 (the server),
+    3.10 (upstream end of life 2026-10-01) reports beside 3.13.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.

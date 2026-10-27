@@ -782,6 +782,18 @@ class AgentManager:
         except Exception as e:
             print(f"[gateway] delivery counts not restored: {e}",
                   file=sys.__stderr__)
+        # The bridges' person-to-person events per UTC day, {event: n} -
+        # refused mail, bad codes, unlinked chats: abuse shows as numbers
+        self._bridge_events: dict[str, dict] = {}
+        self._bridge_saved_at = 0.0
+        self._bridge_save_due = False
+        try:
+            d = json.loads(station_db_module.load_meta(
+                self._sta_db_path, "bridge_events", "") or "{}")
+            self._bridge_events = {k: {e: int(n) for e, n in v.items()}
+                                   for k, v in d.items() if isinstance(v, dict)}
+        except Exception as e:
+            print(f"[bridges] event counts not restored: {e}", file=sys.__stderr__)
         try:
             self._quake_watches = _quake_watches_load(
                 station_db_module.load_meta(self._sta_db_path,
@@ -1432,6 +1444,7 @@ class AgentManager:
                         # unless the operator opens it (allow_links).
                         if cfg.get("allow_links"):
                             ext.set_links(self._bridge_links)
+                        ext.set_event_recorder(self._record_bridge_event)
                         tg_ext = ext
                         ExtensionRegistry.register(ext)
                     elif cls is SmtpEmailer:
@@ -1445,6 +1458,7 @@ class AgentManager:
                         im = ext_cfg.get("imap", {})
                         if im.get("enabled") and im.get("allow_links") and im.get("maildir"):
                             ext.set_reply_domain(im.get("mail_domain", ""))
+                        ext.set_event_recorder(self._record_bridge_event)
                         ExtensionRegistry.register(ext)
                     elif cls is ImapReceiver:
                         ext = cls(cfg)
@@ -1452,6 +1466,7 @@ class AgentManager:
                         # off unless allow_links
                         if cfg.get("allow_links"):
                             ext.set_links(self._bridge_links)
+                        ext.set_event_recorder(self._record_bridge_event)
                         ExtensionRegistry.register(ext)
                     else:
                         ExtensionRegistry.register(cls(cfg))
@@ -1942,6 +1957,43 @@ class AgentManager:
                                         json.dumps(self._delivery))
         except Exception as e:
             print(f"[gateway] delivery counts not saved: {e}", file=sys.__stderr__)
+
+    def _record_bridge_event(self, event: str) -> None:
+        """One bridge event on today's line, 60 days kept. Saved at most
+        every 30 s, so a flood of refused mail is not a flood of writes."""
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        row = self._bridge_events.setdefault(day, {})
+        row[event] = row.get(event, 0) + 1
+        for k in sorted(self._bridge_events)[:-60]:
+            del self._bridge_events[k]
+        if time.time() - self._bridge_saved_at >= 30:
+            self._save_bridge_events()
+        elif not self._bridge_save_due:
+            self._bridge_save_due = True
+            try:
+                asyncio.get_running_loop().call_later(30, self._save_bridge_events)
+            except RuntimeError:
+                self._save_bridge_events()
+
+    def _save_bridge_events(self) -> None:
+        self._bridge_save_due = False
+        self._bridge_saved_at = time.time()
+        try:
+            station_db_module.save_meta(self._sta_db_path, "bridge_events",
+                                        json.dumps(self._bridge_events))
+        except Exception as e:
+            print(f"[bridges] event counts not saved: {e}", file=sys.__stderr__)
+
+    def _bridge_summary(self, days: int = 30) -> dict:
+        """Event totals over the last `days` UTC days."""
+        cutoff = time.strftime("%Y-%m-%d", time.gmtime(time.time() - days * 86400))
+        tot: dict = {}
+        for k, v in self._bridge_events.items():
+            if k > cutoff:
+                for e, n in v.items():
+                    tot[e] = tot.get(e, 0) + n
+        return {"days": days, "events": dict(sorted(tot.items())),
+                "since": min((k for k in self._bridge_events if k > cutoff), default="")}
 
     def _delivery_summary(self, days: int = 30) -> dict:
         """Totals over the last `days` UTC days."""
@@ -3520,6 +3572,9 @@ async def counters(request: web.Request) -> web.Response:
         # DMWGPT answers over 30 days, and how many the recipient's station
         # acknowledged in full (every part acked).
         "gateway_delivery": mgr._delivery_summary(30),
+        # The bridges' person-to-person events over 30 days: what was
+        # carried and what was refused, by reason. Counts only.
+        "bridge_events": mgr._bridge_summary(30),
     }, headers={"Cache-Control": "public, max-age=30"})
 
 

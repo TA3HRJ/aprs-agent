@@ -20,6 +20,8 @@ What must hold:
      than swallowed
   4. an SWR figure is answered without the model, with the right numbers,
      in the asker's language; "how do I lower it" still goes to the model
+  5. a failed ask is said to the station ("try later"), once in ten minutes
+     per station (NEXT 20)
 
 No network: the OpenAI client is replaced.
 
@@ -145,6 +147,22 @@ async def main() -> int:
     if SEEN.get("calls", 0) != 2 or not got:
         problems.append("a retry after a failed call was swallowed - asked "
                         f"{SEEN.get('calls', 0)} times, {len(got)} replies")
+
+    # 5. a failure is said, once in ten minutes per station (NEXT 20)
+    MODE["resp"] = "none"
+    SEEN.clear()
+    sent = []
+    gw, _ = gateway(sent)
+    told = []
+    for i, off in enumerate((0.0, 120.0, 700.0)):
+        _OFFSET["s"] = off
+        await gw.handle("W1ABC-8>APDR16,TCPIP*,qAC,T2X::DMWGPT   :"
+                        f"question number {i}{{{30 + i}")
+        told.append(len([s for s in replies(sent, "W1ABC-8") if "try later" in s]))
+    _OFFSET["s"] = 0.0
+    print(f"  no answer, told after each of 3 failures (0 s, 2 min, 11.7 min): {told}")
+    if told != [1, 1, 2]:
+        problems.append(f"a failure is not said once per ten minutes: {told}, want [1, 1, 2]")
 
     # 4. SWR, computed
     cases = (

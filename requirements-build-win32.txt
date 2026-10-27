@@ -64,8 +64,10 @@
 #   them; cp313-win32 wheel on PyPI). PIL is a hidden import of every target
 #   but is used only by the desktop GUI, which is not in the archive.
 #   setuptools 84.0.0 -> 84.2.1 (one low advisory, fixed in 84.1.0; pure
-#   Python). The Linux lock keeps pillow 12.3.0: 13.0.0 requires Python 3.11
-#   and the VPS runs 3.10, where nothing imports PIL.
+#   Python). The Linux lock moved to 13.0.0 in v3.2.200: the VPS runs
+#   Python 3.12 (venv312, since 2026-10-08), where nothing imports PIL. (A
+#   first version of this note said the VPS ran 3.10 - read off the old
+#   venv, not the running one.)
 
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.4

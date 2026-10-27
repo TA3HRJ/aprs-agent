@@ -160,6 +160,8 @@ class ImapReceiver(Extension):
         # web GUI when allow_links is on
         self._links = None
         self._sent_at: dict = {}        # address -> recent send times
+        # events from the reading thread, counted on the event loop
+        self._events: list = []
 
         if config.get("maildir"):
             self.log(f"initialized | maildir={config['maildir']} "
@@ -265,7 +267,12 @@ class ImapReceiver(Extension):
 
     async def _check_maildir(self) -> None:
         loop = asyncio.get_running_loop()
-        for src, to_call, text, who in await loop.run_in_executor(None, self._read_maildir):
+        got = await loop.run_in_executor(None, self._read_maildir)
+        events, self._events = self._events, []
+        for e in events:
+            self.count(e)
+        for src, to_call, text, who in got:
+            self.count("mail_in")
             parts = _split_message(text)
             for i, part in enumerate(parts):
                 await self._send_aprs(src, to_call, part)
@@ -304,10 +311,12 @@ class ImapReceiver(Extension):
         domain = sender.rsplit("@", 1)[-1] if "@" in sender else ""
         who = _mask_addr(sender)
         if not _authenticated(msg, cfg.get("auth_serv_id", ""), domain):
+            self._events.append("mail_in_unauthenticated")
             self.warn(f"dropped mail from {who}: no dmarc=pass from our MTA")
             return None
         linked = self._links.by_target("email", sender) if self._links else None
         if not linked:
+            self._events.append("mail_in_unlinked")
             self.warn(f"dropped mail from {who}: address not linked to a callsign")
             return None
         # The destination is the address it was delivered to: CALL@domain
@@ -316,6 +325,7 @@ class ImapReceiver(Extension):
         local, _, rdom = rcpt.partition("@")
         if rdom != str(cfg.get("mail_domain", "")).strip().lower() \
                 or not looks_like_callsign(local):
+            self._events.append("mail_in_bad_recipient")
             self.warn(f"dropped mail from {who}: not to a callsign at the mail domain")
             return None
         to_call = local.upper()
@@ -324,9 +334,11 @@ class ImapReceiver(Extension):
             subject = _SUBJECT_PREFIX.sub("", _decode_header(str(msg.get("Subject", ""))))
             text = _to_ascii(re.sub(r"^APRS:\s*\S+\s*", "", subject).strip())
         if not text:
+            self._events.append("mail_in_empty")
             self.warn(f"dropped mail from {who}: nothing to send")
             return None
         if not self._within_rate(sender):
+            self._events.append("mail_in_rate")
             self.warn(f"dropped mail from {who}: {_LINKED_PER_HOUR} an hour")
             return None
         src, text, _used = aprs_origin(cfg, linked["call"], text, limit=None)

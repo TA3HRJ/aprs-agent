@@ -663,6 +663,12 @@ TA1ABC-7 Hello, your beacon is working fine!
 ```
 First word = destination callsign, rest = message text.
 
+Every bridge event of person-to-person traffic is counted per UTC day
+(60 days kept): what was carried (`mail_in`, `mail_out`, `tg_on_air`) and
+what was refused and why (`mail_in_unauthenticated`, `mail_in_unlinked`,
+`mail_bad_code`, `tg_ignored`, the hourly limits ...). `/api/counters`
+reports the last 30 days as `bridge_events` - counts only, never who.
+
 **Person to person** (`allow_links`, off by default): instead of an IMAP
 account, this machine's own MTA takes mail for `CALL@your-domain` and
 delivers it to a Maildir, read every 20 s and emptied - no mail is kept.

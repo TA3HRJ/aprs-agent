@@ -240,9 +240,11 @@ class Telegram(Extension):
             # the radio half of linking: the code the bot gave in Telegram
             entry = links.confirm("telegram", sender_full, words[1])
             if entry:
+                self.count("tg_linked")
                 self.log(f"linked {entry['call']} to a Telegram chat")
                 await self._send_tg(f"Bağlandı / Linked: {entry['call']}", entry["target"])
             else:
+                self.count("tg_bad_code")
                 self.warn(f"LINK from {sender_full}: unknown or expired code")
         elif links is not None and head == "UNLINK":
             gone = links.unlink_call("telegram", sender_full)
@@ -357,6 +359,7 @@ class Telegram(Extension):
                 cmd = cmd.split("@")[0].lower()
                 if cmd in ("/link", "/bagla"):
                     code = self._links.request("telegram", arg.strip(), chat_id)
+                    self.count("tg_code" if code else "tg_code_refused")
                     if code:
                         await self._send_tg(
                             f"Telsizinizden {alias} adresine şu mesajı gönderin: LINK {code}\n"
@@ -386,9 +389,11 @@ class Telegram(Extension):
             elif linked:
                 originator = linked["call"]
                 if not self._within_rate(chat_id):
+                    self.count("tg_rate")
                     await self._send_tg(f"Saatlik sınır / Hourly limit: {_LINKED_PER_HOUR}", chat_id)
                     continue
             else:
+                self.count("tg_ignored")
                 self.warn(f"ignored a message from chat {chat_id or '?'} "
                           f"({sender_name}): not the configured chat, not linked")
                 if self._links is not None:
@@ -415,6 +420,8 @@ class Telegram(Extension):
             # the bridge alias with the callsign in the text (bridge_source)
             src, message, used = aprs_origin(cfg, originator, message)
             self.log(f"RX from Telegram ({sender_name}): {to_call} {message} [{used}: {src}]")
+            if linked and not own_chat:
+                self.count("tg_on_air")
             await self._send_aprs(src, to_call, message)
 
     def _next_msg_id(self) -> str:

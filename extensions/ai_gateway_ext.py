@@ -673,6 +673,8 @@ def _text_key(sender_base: str, text: str) -> str:
 # the model and free of the token bucket, and that is exactly what would make
 # it a way to key a distant transmitter on demand if it answered every time.
 _HELP_REPEAT_S = 600.0
+# Sent when the model was asked and gave nothing; both languages, one part
+_AI_FAILED_TEXT = "YZ cevap vermedi, sonra deneyin / AI did not answer, try later"
 
 # A question that mentions the weather while asking for something else. The
 # weather shortcut matches a word anywhere in the text, which is what sent a
@@ -957,6 +959,7 @@ class AIGateway(Extension):
         self._buckets: dict[str, list] = {}   # sender -> [tokens, last_refill, told]
         self._help_at: dict[str, float] = {}  # sender -> when the help text went out
         self._services_at: dict[str, float] = {}  # the same, for SERVICES
+        self._fail_told: dict[str, float] = {}    # the same, for "no answer"
         # The extensions section of the config, for SERVICES; None until the
         # web GUI hands it over, and then SERVICES goes to the model as before
         self._bridges: Optional[dict] = None
@@ -2242,6 +2245,14 @@ class AIGateway(Extension):
             # lives - ten minutes of silence after the failure, for a
             # question nobody is working on any more. Let a retry ask again.
             self._processed.pop(dedup_key, None)
+            # And say so, once in ten minutes per station: silence here is
+            # indistinguishable from a dead gateway (NEXT 20, the operator's
+            # yes 2026-10-27). One transmission per failure at most.
+            now = _clock()
+            if now - self._fail_told.get(sender_base, 0.0) >= _HELP_REPEAT_S:
+                self._fail_told[sender_base] = now
+                self.warn(f"no answer for {sender_full}: told them to try later")
+                await self._send_parts(my_call, sender_full, [_AI_FAILED_TEXT], rf)
             return None
 
         self.log(f"AI response: {answer}")
