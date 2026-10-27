@@ -199,6 +199,20 @@ What is left, in the order it is worth doing:
     person-to-person mails come back on air; MX at GoDaddy. Never through the
     operator's Gmail. Open: a first real link and round trip from a radio
     (the operator's own test); Bluesky DM or unchanged.
+25. **v3.3.0 after v3.2.199** (the operator's idea, 2026-10-27, for later).
+    Precedent: v3.1.0 (incident response) and v3.0.0 marked new capabilities;
+    person-to-person bridges both ways are one. Cut it when the operator's
+    first real round trip (radio -> Telegram/e-mail -> radio) has passed, with
+    a Windows release and notes summarising the 3.2 line. Nothing assumes
+    3.2: the VPS update script picks tags by version sort
+    (`--sort=-v:refname`), v3.3.0 > v3.2.199.
+26. **Python 3.10 on the VPS is past upstream end of life** (2026-10-01,
+    devguide.python.org/versions, read 2026-10-27). Ubuntu 22.04.5;
+    python3.11 and 3.12 packages are installable there. Moving the venv to
+    3.12 would also let the Linux lock take Pillow 13 (41 open Dependabot
+    alerts, 13 needs >=3.11) or drop the GUI-only pystray/Pillow from it.
+    Cost: a new venv and lock, CI's locked job off 3.10, one deploy; the old
+    venv kept for rollback. Not done without a yes.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.
