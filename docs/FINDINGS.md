@@ -8184,3 +8184,23 @@ and `~` from message text; APRS12c does not, and aprs.org (APRS101.PDF,
 aprs11.html) answered 403 on 2026-10-27, so it was not checked. Incoming
 reply-acks (`{12}AB`) are acked as `ack12`; APRS 1.2 shows `ack12}AB` -
 common clients match the number, left as is.
+
+---
+
+## F-2026-10-27-03 — Telegram linking was open, and nothing said which bot
+
+**Source:** the operator, 2026-10-27, trying to link from Telegram ·
+**Verdict:** our gap; fixed in v3.2.197 and on aprsagent.com
+
+With links open, SERVICES answered "TGSEND Telegram (/bagla)" and the
+landing page said "/link CALL in the bot" - neither named the bot. The
+operator, the one person who knew it, sent /start and /unlink to a
+third-party ID bot (the "@userinfobot" of the setup docs, which is only for
+finding the owner's chat_id). A stranger had no way to find
+`@APRSAgent_bot` at all.
+
+**Applied, v3.2.197.** The Telegram bridge asks getMe at start (and after a
+good poll while it has no name) and the gateway's SERVICES names
+`@<bot>` beside /bagla - /link. The live answer still fits three parts in
+both languages. The landing's bridges line and privacy section 04 name the
+bot. `check_services_answer` items 9-10 fail on v3.2.196.

@@ -1405,6 +1405,7 @@ class AgentManager:
             ("smtp",         SmtpEmailer,  ext_cfg.get("smtp", {})),
             ("fixed_beacon", FixedBeacon,  ext_cfg.get("fixed_beacon", {})),
         ]
+        tg_ext = None
         for name, cls, cfg in pairs:
             if cfg.get("enabled"):
                 try:
@@ -1420,8 +1421,9 @@ class AgentManager:
                         # the map shows, which live here.
                         ext.set_status_provider(self._grid_status)
                         ext.set_delivery_recorder(self._record_delivery)
-                        # SERVICES answers which bridges run here from this
-                        ext.set_bridges(ext_cfg)
+                        # SERVICES answers which bridges run here from this,
+                        # naming the Telegram bot once it has learnt its name
+                        ext.set_bridges(ext_cfg, lambda: getattr(tg_ext, "bot_username", ""))
                         ExtensionRegistry.register(ext)
                     elif cls is Telegram:
                         ext = cls(cfg)
@@ -1430,6 +1432,7 @@ class AgentManager:
                         # unless the operator opens it (allow_links).
                         if cfg.get("allow_links"):
                             ext.set_links(self._bridge_links)
+                        tg_ext = ext
                         ExtensionRegistry.register(ext)
                     elif cls is SmtpEmailer:
                         ext = cls(cfg)

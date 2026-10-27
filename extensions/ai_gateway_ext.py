@@ -534,10 +534,12 @@ def _has_bridge(ext_cfg: "Optional[dict]") -> bool:
     return any((ext_cfg or {}).get(k, {}).get("enabled") for k, *_ in _BRIDGES)
 
 
-def _services_text(ext_cfg: dict, sender_base: str, tr: bool) -> str:
+def _services_text(ext_cfg: dict, sender_base: str, tr: bool,
+                   tg_bot: str = "") -> str:
     """Which bridges this gateway carries and whether the asker may use them,
     from the running config: a bridge's own allowed_senders decide, and a
-    Telegram with allow_links is open to any licensed amateur who links."""
+    Telegram with allow_links is open to any licensed amateur who links -
+    at tg_bot, the bot's @name, without which a stranger cannot find it."""
     mine, listed, off = [], [], []
     for key, en, tr_name, alias_key in _BRIDGES:
         c = ext_cfg.get(key) or {}
@@ -553,7 +555,8 @@ def _services_text(ext_cfg: dict, sender_base: str, tr: bool) -> str:
         if alias_key and sender_base.upper() in senders:
             mine.append(label)
         elif key == "telegram" and c.get("allow_links"):
-            mine.append(label + (" (/bagla)" if tr else " (/link)"))
+            mine.append(label + (f" @{tg_bot}" if tg_bot else "")
+                        + (" (/bagla)" if tr else " (/link)"))
         elif key == "smtp" and c.get("allow_links"):
             # to linked amateurs: "CALL text"; your own address: LINK addr
             mine.append(label + (" (bagli: LINK adres)" if tr else " (linked: LINK address)"))
@@ -955,6 +958,7 @@ class AIGateway(Extension):
         # The extensions section of the config, for SERVICES; None until the
         # web GUI hands it over, and then SERVICES goes to the model as before
         self._bridges: Optional[dict] = None
+        self._tg_bot = None
         # sender -> [(ts, question, answer), ...], newest last. Memory only.
         self._history: dict[str, list] = {}
         # normalised question -> (expiry, the dedup key it was first filed
@@ -1108,8 +1112,10 @@ class AIGateway(Extension):
     def set_delivery_recorder(self, fn) -> None:
         self._delivery_recorder = fn
 
-    def set_bridges(self, ext_cfg: dict) -> None:
+    def set_bridges(self, ext_cfg: dict, tg_bot=None) -> None:
+        """tg_bot: a callable giving the Telegram bot's @name, or "" """
         self._bridges = ext_cfg
+        self._tg_bot = tg_bot
 
     def _part_done(self, key: tuple, acked: bool) -> None:
         """One numbered part settled: acked, or given up on. When the last
@@ -1663,7 +1669,8 @@ class AIGateway(Extension):
             return None
         if not self._fixed_answer_due(self._services_at, sender_base):
             return None
-        return _services_text(self._bridges, sender_base, tr)
+        return _services_text(self._bridges, sender_base, tr,
+                              (self._tg_bot() if self._tg_bot else "") or "")
 
     def _fixed_answer_due(self, told_at: dict, sender_base: str) -> bool:
         now = _clock()

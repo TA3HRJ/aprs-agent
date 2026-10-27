@@ -20,6 +20,11 @@ What must hold (no network, no provider):
   7. the model (Anthropic request shape) is told it cannot pass messages to other networks and to
      point to SERVICES, when a bridge is on
   8. asking again within ten minutes is not answered again for free
+  9. with links open the answer names the Telegram bot (@name) - a stranger
+     told "/bagla" could not tell which bot to write to - and still arrives
+     whole within the gateway's parts, in both languages
+ 10. the Telegram bridge learns that name from getMe, and the web GUI hands
+     it to the gateway
 
 Usage:  python tools/check_services_answer.py
 Exit code 1 on failure.
@@ -200,6 +205,46 @@ async def run() -> list:
     print(f"  8 second ask -> model: {bool(asked)}")
     if not asked:
         p.append("8: SERVICES answered twice in ten minutes without the limiter")
+
+    # 9: the live shape, links open, the bot named
+    b = copy.deepcopy(BRIDGES)
+    b["telegram"]["allow_links"] = True
+    b["smtp"]["allow_links"] = True
+    for q, last in (("servis", "e-posta alma."), ("services", "e-mail in.")):
+        gw, sent, asked = gateway(None)
+        try:
+            gw.set_bridges(b, lambda: "APRSAgent_bot")
+        except TypeError:
+            gw.set_bridges(b)
+        a = await ask(gw, sent, "TA1ABC-7", q)
+        print(f"  9 {q!r:10} -> {a!r}")
+        if "Telegram @APRSAgent_bot (/" not in a:
+            p.append(f"9: {q!r}: the bot is not named: {a!r}")
+        if not a.endswith(last):
+            p.append(f"9: {q!r}: the answer was cut: {a!r}")
+
+    # 10: getMe, and the wiring
+    import extensions.telegram_ext as tgm
+    from extensions.telegram_ext import Telegram
+    tg = Telegram({"enabled": True, "bot_token": "stub", "chat_id": "42"})
+    tg.log = tg.warn = tg.error = lambda m: None
+    orig = tgm._tg_api
+    tgm._tg_api = lambda token, method, params=None, timeout=15: (
+        {"ok": True, "result": {"username": "APRSAgent_bot"}} if method == "getMe" else {"ok": True})
+    try:
+        learn = getattr(tg, "_learn_username", None)
+        if learn:
+            await learn()
+    finally:
+        tgm._tg_api = orig
+    got = getattr(tg, "bot_username", "")
+    src = (Path(__file__).resolve().parent.parent / "web_gui.py").read_text(encoding="utf-8")
+    wired = "bot_username" in src.split("ext.set_bridges(", 1)[-1].split("\n", 1)[0]
+    print(f" 10 getMe -> {got!r}, web GUI hands it over: {wired}")
+    if got != "APRSAgent_bot":
+        p.append("10: the Telegram bridge does not learn its bot name")
+    if not wired:
+        p.append("10: web_gui does not give the gateway the bot name")
     return p
 
 

@@ -119,6 +119,9 @@ class Telegram(Extension):
         # web GUI; None = operator-only, as before links existed
         self._links = None
         self._sent_at: dict = {}        # chat id -> recent send times
+        # The bot's @name from getMe, so SERVICES can say which bot to
+        # write to; "" until Telegram has answered once
+        self.bot_username = ""
 
         self.log(
             f"initialized | token={_mask(config['bot_token'])} "
@@ -145,6 +148,18 @@ class Telegram(Extension):
 
     def set_links(self, links) -> None:
         self._links = links
+
+    async def _learn_username(self) -> None:
+        loop = asyncio.get_running_loop()
+        try:
+            me = await loop.run_in_executor(None, lambda: _tg_api(
+                self._config["bot_token"], "getMe"))
+        except Exception:
+            return      # asked again after the next good poll
+        name = ((me or {}).get("result") or {}).get("username") or ""
+        if name and name != self.bot_username:
+            self.bot_username = name
+            self.log(f"bot is @{name}")
 
     def _within_rate(self, chat_id: str) -> bool:
         """A linked user may put _LINKED_PER_HOUR messages an hour on air."""
@@ -273,6 +288,7 @@ class Telegram(Extension):
             self.log("webhook cleared")
         except Exception:
             pass
+        await self._learn_username()
         self.log(f"polling Telegram every {interval}s")
         await asyncio.sleep(5)
         failed = 0
@@ -300,6 +316,8 @@ class Telegram(Extension):
                 if failed >= _POLL_OUTAGE_AFTER:
                     self.log(f"poll recovered after {failed} missed polls")
                 failed = 0
+                if not self.bot_username:
+                    await self._learn_username()
             await asyncio.sleep(interval)
 
     async def _check_updates(self) -> None:
