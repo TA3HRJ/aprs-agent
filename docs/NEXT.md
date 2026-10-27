@@ -57,6 +57,9 @@ What is left, in the order it is worth doing:
 10. **DMWGPT in WB2OSZ's "APRS Information Services" list — stalled.** The
     address on the page bounced and the APRS Foundation form would not take
     the message (2026-09-29). Nothing to do until a working route turns up.
+    2026-10-27: the operator mailed WB2OSZ directly for the "New
+    Developments" list (APRS-Agent, DMWGPT and the bridges) - a working
+    route; the Information Services entry can be asked for in that thread.
 11. **Dependabot, 32-bit build:** nothing to do. The cryptography alerts on
     `requirements-build-win32.txt` are dismissed as unreachable; HANDOFF has
     the check to repeat when the next one comes.
