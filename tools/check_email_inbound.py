@@ -28,6 +28,13 @@ What must hold (no network, a temporary Maildir):
      and the e-mail bridge the reply domain only when the inbound side is on
  12. SERVICES names e-mail in as open to linked addresses
  13. a maildir without auth_serv_id or mail_domain does not start
+ 14. a mail to the sender's own callsign goes out from the bridge's
+     callsign, "mail: " opening the text - an igate does not gate a
+     message whose sender it heard on RF, and here sender and addressee are
+     the same radio (F-2026-10-27-05); to another call it stays the
+     linked call's own
+ 15. the operator's message to EMAIL that is not "address text" is answered
+     with the format and acked, not dropped in silence
 
 Usage:  python tools/check_email_inbound.py
 Exit code 1 on failure.
@@ -243,6 +250,27 @@ async def run() -> list:
         print(f" 13 maildir without {list(over)[0]} -> {'refused' if not got else 'started'}")
         if got:
             p.append(f"13: started without {list(over)[0]}")
+
+    # 14
+    sent, err = await run_case(tmp, links, mail(to="ta3hx-7@aprsagent.com", body="note to self\n"))
+    m = msgs(sent or [])
+    print(f" 14 to own call -> {m or err!r}")
+    if len(m) != 1 or not re.match(r"^EMAIL-5>APRAGT,TCPIP\*::TA3HX-7  :mail: note to self\{\d+$", m[0]):
+        p.append(f"14: a mail to the sender's own call did not go out from EMAIL-5: {m or err!r}")
+
+    # 15
+    sm = SmtpEmailer({"enabled": True, "smtp_server": "x:1", "smtp_username": "u",
+                      "allowed_senders": ["TA3HX"], "allowed_recipients": ["EMAIL"]})
+    sm.log = sm.warn = sm.error = lambda m: None
+    sm.set_links(links)
+    q15 = Q()
+    sm.set_own_writer(q15)
+    sm._send_email = lambda *a, **k: True
+    for text, n in (("TEST", 1), ("op@gmail.com", 2)):
+        r = await sm.handle(f"TA3HX-7>APAT89,WIDE1-1,qAR,TA3HX-10::EMAIL    :{text}{{{n}")
+        print(f" 15 operator {text!r} -> reply {q15.sent[-1:]} ack {r!r}")
+        if not r or not q15.sent or "Format" not in q15.sent[-1]:
+            p.append(f"15: the operator's {text!r} was not answered and acked")
     return p
 
 

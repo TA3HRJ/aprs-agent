@@ -269,7 +269,10 @@ class SmtpEmailer(Extension):
             self.error(
                 f"message from {sender_full} has no email+content format: '{message_text}'"
             )
-            return None
+            # Said back and acked: dropped in silence, the radio retried it
+            # and the operator never learnt why (F-2026-10-27-05)
+            await self._reply(recipient, sender_full, "Bicim/Format: adres@ornek.com metin")
+            return self._ack(packet, recipient, sender_full)
 
         receiver_email, email_content = parts[0], parts[1]
 

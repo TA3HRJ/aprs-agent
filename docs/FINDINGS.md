@@ -8233,3 +8233,35 @@ For the operator it was only a log line. For anyone else it was worse, by
 **Applied, v3.2.203.** Each bridge returns before anything else when the
 packet has a `response`. The gateway already handled acks on its own path
 and is unchanged. `check_bridge_acks.py` fails on v3.2.202 (7 items).
+
+---
+
+## F-2026-10-27-05 — mail to one's own call cannot reach the radio
+
+**Source:** the operator's round trip, 2026-10-27 18:50-20:05 ·
+**Verdict:** our design gap; fixed in v3.2.204
+
+A mail from the operator's linked address to `ta3hx-7@aprsagent.com` passed
+DMARC and the link and went to APRS-IS at 18:50:31 as
+`TA3HX-7>APRAGT::TA3HX-7` - and never reached the Anytone. aprs-is.net
+"IGate Details" (read 2026-10-27) gates a message to RF only if the
+receiving station was heard on RF recently **and the sending station was
+not**. Mail goes out under the linked call; to one's own call, sender and
+addressee are the same radio, so whenever the igate can reach it, it will
+not gate it. (At 18:50 TA3HX-7 had not been heard for over two hours either,
+outside YAAC's 80 min.)
+
+The same rule can stop a linked amateur's mail to a nearby friend whose igate
+also hears the linked call, and the Telegram bridge's linked messages, which
+go out the same way. Not changed: those senders should be their own calls.
+
+The same test showed the operator's own path dropping in silence: `TEST`,
+then an address alone, to EMAIL each logged "no email+content format" and
+answered nothing, with no ack.
+
+**Applied, v3.2.204.** Inbound mail whose linked call equals the addressed
+call goes out from the IMAP `from_callsign` (EMAIL-5 on the VPS) with "mail: "
+opening the text. The operator's malformed EMAIL message is answered
+"Bicim/Format: adres@ornek.com metin" and acked. `check_email_inbound`
+items 14-15 fail on v3.2.203. **Not yet seen on air:** needs a mail to the
+own call while an IS->RF igate hears the radio.

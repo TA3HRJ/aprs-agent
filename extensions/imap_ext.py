@@ -299,6 +299,12 @@ class ImapReceiver(Extension):
             self.count(e, w)
         for src, to_call, text, who in got:
             self.count("mail_in", who)
+            if src.upper() == to_call.upper():
+                # Mail to one's own call: an igate does not gate a message
+                # whose sender it heard on RF, and here the sender is the
+                # addressee's own radio (F-2026-10-27-05)
+                src = self._config.get("from_callsign", "EMAIL-5")
+                text = "mail: " + text
             parts = _split_message(text)
             for i, part in enumerate(parts):
                 await self._send_aprs(src, to_call, part)
