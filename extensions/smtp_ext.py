@@ -41,7 +41,7 @@ from typing import Optional
 import aprslib
 
 from . import Extension
-from config import TOCALL
+from config import TOCALL, aprs_message_text
 from config import strip_ssid
 from .bridge_links import CODE_TTL_S, base_call, looks_like_callsign
 
@@ -387,7 +387,7 @@ class SmtpEmailer(Extension):
         """A short APRS message from the alias back to the sender."""
         if not self._queue:
             return
-        pkt = (f"{alias}>{TOCALL},TCPIP*::{to_call:<9}:{text[:67]}"
+        pkt = (f"{alias}>{TOCALL},TCPIP*::{to_call:<9}:{aprs_message_text(text)[:67]}"
                f"{{{self._next_msg_id()}\r\n")
         await self._queue.put(pkt.encode("utf-8"))
 

@@ -31,7 +31,7 @@ from typing import Optional
 import aprslib
 
 from . import Extension
-from config import (TOCALL, strip_ssid, resolve_ai_api_key, AI_DEFAULT_PROVIDER,
+from config import (TOCALL, aprs_message_text, strip_ssid, resolve_ai_api_key, AI_DEFAULT_PROVIDER,
                     AI_PROVIDER_URLS as _PROVIDER_URLS,
                     AI_PROVIDER_MODELS as _PROVIDER_MODELS, ai_request_params)
 from packet_parser import looks_like_callsign
@@ -1894,7 +1894,7 @@ class AIGateway(Extension):
             self.error("no own_writer queue — cannot send reply")
             return
         mid = self._next_msg_id()
-        pkt = f"{from_call}>{TOCALL},TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
+        pkt = f"{from_call}>{TOCALL},TCPIP*::{to_call:<9}:{aprs_message_text(message)}{{{mid}\r\n"
         await self._own_writer.put(pkt.encode("utf-8"))
         key = (to_call.upper(), str(mid))
         if _RETRY_GAPS_S:

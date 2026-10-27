@@ -8158,3 +8158,29 @@ and which bridges are off. Same ten-minute repeat rule as HELP. HELP ends
 "Bridges: SERVICES" when a bridge is on (fits the three parts); the model is
 told it cannot pass messages to other networks and to point to SERVICES.
 `check_services_answer.py` fails on v3.2.193 (8 items).
+
+---
+
+## F-2026-10-27-02 — message text could carry "{", which starts the message number
+
+**Source:** a comparison of the message code with APRS 1.2 (wb2osz/aprsspec,
+APRS12c.pdf, "Messages"), done for the operator in a side session ·
+**Verdict:** our code; fixed in v3.2.196
+
+APRS 1.2: the message text "may contain any printable ASCII or UTF-8
+characters except { which indicates start of Message Identifier". Every
+builder of a message packet - the gateway's replies, the Telegram, WhatsApp
+and IMAP bridges, the e-mail bridge's replies - put the text on air as
+written, so a model answer or a bridged user's "hi {1} there" went out as
+`:hi {1} there{7` and a receiver takes "1} there{7" for the message number.
+Not seen live: the journal since 2026-09-01 has no sent message with a brace.
+
+**Applied, v3.2.196.** `config.aprs_message_text()` in all five builders:
+`{` becomes `(`, and `}` (allowed) becomes `)` so a pair still reads as one.
+`check_message_brace.py` fails on v3.2.195 (6 of 6 paths).
+
+**Not done, unverified:** the 1.0 spec is remembered as also excluding `|`
+and `~` from message text; APRS12c does not, and aprs.org (APRS101.PDF,
+aprs11.html) answered 403 on 2026-10-27, so it was not checked. Incoming
+reply-acks (`{12}AB`) are acked as `ack12`; APRS 1.2 shows `ack12}AB` -
+common clients match the number, left as is.

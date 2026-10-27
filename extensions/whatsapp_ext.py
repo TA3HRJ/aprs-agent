@@ -34,7 +34,7 @@ import aprslib
 
 from . import Extension
 from .bridge_source import aprs_origin
-from config import TOCALL
+from config import TOCALL, aprs_message_text
 from config import strip_ssid
 
 _GRAPH_API = "https://graph.facebook.com/v25.0"
@@ -217,6 +217,6 @@ class WhatsApp(Extension):
             self.error("no own_writer queue")
             return
         mid = self._next_msg_id()
-        pkt = f"{from_call}>{TOCALL},TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
+        pkt = f"{from_call}>{TOCALL},TCPIP*::{to_call:<9}:{aprs_message_text(message)}{{{mid}\r\n"
         await self._queue.put(pkt.encode("utf-8"))
         self.log(f"TX to APRS: {to_call} {message}")

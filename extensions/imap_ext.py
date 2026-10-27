@@ -29,7 +29,7 @@ from typing import Optional
 
 from . import Extension
 from .bridge_source import aprs_origin
-from config import TOCALL
+from config import TOCALL, aprs_message_text
 
 
 def _to_ascii(text: str) -> str:
@@ -232,5 +232,5 @@ class ImapReceiver(Extension):
             self.error("no own_writer queue")
             return
         mid = self._next_msg_id()
-        pkt = f"{from_call}>{TOCALL},TCPIP*::{to_call:<9}:{message}{{{mid}\r\n"
+        pkt = f"{from_call}>{TOCALL},TCPIP*::{to_call:<9}:{aprs_message_text(message)}{{{mid}\r\n"
         await self._queue.put(pkt.encode("utf-8"))

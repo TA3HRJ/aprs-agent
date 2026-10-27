@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.195"
+VERSION = "3.2.196"
 
 # The APRS destination ("tocall") on every packet this program sends -
 # message replies, acks, bridged messages, status and the beacon. APRAGT is
@@ -30,6 +30,20 @@ VERSION = "3.2.195"
 # out as the generic APRS ("unknown") and the beacon as AP4GNT, which was
 # registered to nobody.
 TOCALL = "APRAGT"
+
+
+def aprs_message_text(text: str) -> str:
+    """Message text fit for an APRS message packet.
+
+    APRS 1.2 (wb2osz/aprsspec, APRS12c): the text "may contain any printable
+    ASCII or UTF-8 characters except { which indicates start of Message
+    Identifier". A model's answer or a bridged user's text carrying one went
+    out as typed, and a receiver took what followed it for the message
+    number (F-2026-10-27-02). Replaced with ( rather than dropped, so the
+    text keeps its shape; } is allowed but goes with it to ), or "{x}"
+    would read "(x}".
+    """
+    return (text or "").replace("{", "(").replace("}", ")")
 
 # ── Secret handling for the HTTP API ────────────────────────────────────────
 # print_config()'s masking below is for human eyes: it keeps the first and last
