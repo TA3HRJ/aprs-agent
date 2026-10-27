@@ -8265,3 +8265,7 @@ opening the text. The operator's malformed EMAIL message is answered
 "Bicim/Format: adres@ornek.com metin" and acked. `check_email_inbound`
 items 14-15 fail on v3.2.203. **Not yet seen on air:** needs a mail to the
 own call while an IS->RF igate hears the radio.
+
+**Seen on air, 2026-10-27 20:43:** a mail from the linked address to the own
+call went out at 20:43:02 from EMAIL-5, and the Anytone acked it eight seconds
+later through YAAC (`TA3HX-7>...,qAR,TA3HX-10::EMAIL-5  :ack2`).
