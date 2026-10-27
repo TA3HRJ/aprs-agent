@@ -186,9 +186,11 @@ What is left, in the order it is worth doing:
     the operator's Gmail. Off until `allow_links`. Limits: one code
     request per callsign per 10 min, 3 code mails per address a day, 20 an
     hour in all; 20 person-to-person mails an hour per sender.
-    Open: turning Telegram and e-mail links on (operator), then the
-    landing card and the privacy-page line; inbound mail (MX/IMAP) not
-    started; Bluesky DM or unchanged.
+    2026-10-27: links turned on on the VPS for Telegram and e-mail (the
+    operator's yes); the landing's bridges line, privacy section 04 and the
+    site's help page say so. Open: a first real link from a radio (the
+    operator's own test); inbound mail (MX/IMAP) not started; Bluesky DM or
+    unchanged.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.
