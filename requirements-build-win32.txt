@@ -68,6 +68,11 @@
 #   Python 3.12 (venv312, since 2026-10-08), where nothing imports PIL. (A
 #   first version of this note said the VPS ran 3.10 - read off the old
 #   venv, not the running one.)
+#
+#   2026-10-27, v3.2.205: dnspython 2.8.0 -> 2.9.0 (GHSA-45c3-73f7-pv4m,
+#   pure Python, used only by atproto). oauthlib stays at 3.3.1 again:
+#   GHSA-3jp2-3mrg-2vxc is in the device-code token endpoint, server-side
+#   code an OAuth client never runs; alert dismissed as not used.
 
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.4
@@ -86,7 +91,7 @@ click==8.4.2
 colorama==0.4.6
 cryptography==48.0.1
 distro==1.9.0
-dnspython==2.8.0
+dnspython==2.9.0
 frozenlist==1.8.0
 h11==0.16.0
 httpcore==1.0.9

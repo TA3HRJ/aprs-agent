@@ -65,6 +65,10 @@
 #   for the 41 advisories on 12.3.0. It requires Python 3.11: the VPS runs
 #   3.12 (venv312), and CI's required locked job now runs 3.12 too. Only the
 #   desktop GUI and pystray use PIL; nothing on the server imports it.
+# 2026-10-27, v3.2.205: dnspython 2.8.0 -> 2.9.0 for GHSA-45c3-73f7-pv4m
+#   (excessive CPU in dns.name.from_wire_parser on a crafted DNS answer).
+#   Only atproto (Bluesky) uses it and allows <3; 2.9.0 is pure Python and
+#   requires 3.11. Nothing else moves (pip dry-run on the VPS venv).
 
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.4
@@ -81,7 +85,7 @@ cffi==2.1.1
 click==8.4.2
 cryptography==50.0.1
 distro==1.9.0
-dnspython==2.8.0
+dnspython==2.9.0
 exceptiongroup==1.3.1
 frozenlist==1.8.0
 h11==0.16.0
