@@ -130,7 +130,17 @@ Bu adres aprsagent.com APRS geçidinde {call} çağrı işaretine bağlandı.
 çağrı işaretiyle buraya iletilir. Bağlantıyı kaldırmak için telsizinizden
 {alias} adresine UNLINK gönderin.
 
-This address takes no mail. / Bu adrese yazılan okunmaz.
+{inbound}"""
+
+# The last lines of _LINKED_BODY: whether mail can come back
+_INBOUND_OFF = "This address takes no mail. / Bu adrese yazılan okunmaz.\n"
+_INBOUND_ON = """\
+To send an APRS message as {call}, write from this address to the station's
+callsign at {domain}, e.g. ta1abc-7@{domain}: the first line of the mail goes
+on air, about 180 characters.
+/ {call} olarak APRS mesajı göndermek için bu adresten istasyonun çağrı
+işaretine @{domain} yazın, örneğin ta1abc-7@{domain}: e-postanın ilk satırı
+yayına çıkar, en çok 180 karakter kadar.
 """
 
 _P2P_BODY = """\
@@ -138,12 +148,15 @@ _P2P_BODY = """\
 
 ---
 {sender} sent this to {call} over APRS, through the aprsagent.com gateway.
-Answer over APRS: to {sender} directly, or this mail address takes no mail.
+{answer_en}
 To stop these mails, send UNLINK to {alias} from your radio.
-/ {sender} bunu APRS üzerinden {call} için gönderdi. Telsizden {sender}
-istasyonuna cevap verin; bu adrese yazılan okunmaz. Durdurmak için
-telsizinizden {alias} adresine UNLINK gönderin.
+/ {sender} bunu APRS üzerinden {call} için gönderdi. {answer_tr}
+Durdurmak için telsizinizden {alias} adresine UNLINK gönderin.
 """
+_ANSWER_OFF = ("Answer over APRS: to {sender} directly, or this mail address takes no mail.",
+               "Telsizden {sender}\nistasyonuna cevap verin; bu adrese yazılan okunmaz.")
+_ANSWER_ON = ("Reply to this mail to answer {sender} over APRS: the first line goes on air.",
+              "Bu e-postayı\nyanıtlarsanız ilk satır APRS'ten {sender} istasyonuna gider.")
 
 _OWN_BODY = """\
 {text}
@@ -171,6 +184,9 @@ class SmtpEmailer(Extension):
         self._addr_codes: dict = {}     # address -> code mail times
         self._codes: list = []          # all code mail times
         self._sent_at: dict = {}        # base call -> person-to-person times
+        # The domain mail comes back on (CALL@domain), given by the web GUI
+        # when the inbound side is on; "" = this server takes no mail
+        self._reply_domain = ""
         self.log(
             f"SMTP initialized | server={config['smtp_server']} "
             f"| senders={config['allowed_senders']} "
@@ -195,6 +211,9 @@ class SmtpEmailer(Extension):
 
     def set_links(self, links) -> None:
         self._links = links
+
+    def set_reply_domain(self, domain: str) -> None:
+        self._reply_domain = (domain or "").strip().lower()
 
     def set_own_writer(self, q: asyncio.Queue) -> None:
         self._queue = q
@@ -302,8 +321,12 @@ class SmtpEmailer(Extension):
                     self.log(f"linked {entry['call']} to an e-mail address")
                     await self._reply(alias, sender_full,
                                       f"Baglandi/Linked: {mask_address(entry['target'])}")
+                    dom = self._reply_domain
+                    inbound = (_INBOUND_ON.format(call=entry["call"], domain=dom) if dom
+                               else _INBOUND_OFF)
                     await self._mail_linked(entry["target"], "aprsagent.com: linked",
-                                            _LINKED_BODY.format(call=entry["call"], alias=alias))
+                                            _LINKED_BODY.format(call=entry["call"], alias=alias,
+                                                                inbound=inbound))
                 else:
                     self.warn(f"LINK from {sender_full}: unknown or expired code")
                     await self._reply(alias, sender_full, "Kod gecersiz/Code unknown or expired")
@@ -320,10 +343,17 @@ class SmtpEmailer(Extension):
             if not self._within_rate(sender_full):
                 await self._reply(alias, sender_full, f"Saatlik sinir/Hourly limit {_LINKED_PER_HOUR}")
                 return True
+            # With the inbound side on, a reply to this mail comes back to
+            # the sender's callsign at the reply domain and goes on air
+            dom = self._reply_domain
+            en, tr = _ANSWER_ON if dom else _ANSWER_OFF
             ok = await self._mail_linked(
                 target["target"], f"APRS: {sender_full}",
                 _P2P_BODY.format(text=words[1].strip(), sender=sender_full,
-                                 alias=alias, call=target["call"]))
+                                 alias=alias, call=target["call"],
+                                 answer_en=en.format(sender=sender_full),
+                                 answer_tr=tr.format(sender=sender_full)),
+                reply_to=f"{sender_full.lower()}@{dom}" if dom else "")
             if ok:
                 self.log(f"{sender_full} -> {target['call']} by e-mail")
             return True
@@ -391,12 +421,14 @@ class SmtpEmailer(Extension):
                f"{{{self._next_msg_id()}\r\n")
         await self._queue.put(pkt.encode("utf-8"))
 
-    async def _mail_linked(self, to_addr: str, subject: str, body: str) -> bool:
+    async def _mail_linked(self, to_addr: str, subject: str, body: str,
+                           reply_to: str = "") -> bool:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._send_links_mail,
-                                          to_addr, subject, body)
+                                          to_addr, subject, body, reply_to)
 
-    def _send_links_mail(self, to_addr: str, subject: str, body: str) -> bool:
+    def _send_links_mail(self, to_addr: str, subject: str, body: str,
+                         reply_to: str = "") -> bool:
         """Blocking send through the links transport, never the operator's
         account: links_smtp_server (default localhost:25, no login) as
         links_from_email."""
@@ -416,6 +448,8 @@ class SmtpEmailer(Extension):
             msg["Date"] = formatdate(localtime=True)
             msg["Message-ID"] = make_msgid(domain=envelope.split("@", 1)[1])
             msg["Auto-Submitted"] = "auto-generated"
+            if reply_to:
+                msg["Reply-To"] = reply_to
             msg.set_content(body)
             with smtplib.SMTP(host, int(port_str), timeout=30) as s:
                 s.ehlo()

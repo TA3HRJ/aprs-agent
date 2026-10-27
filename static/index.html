@@ -758,6 +758,10 @@ body.public #about-gw-link{display:none!important}
   <div class="entry-row"><label data-i="imap_interval">Poll interval (min)</label><input id="f-imap-interval" type="text" value="5" style="max-width:80px"></div>
   <div class="entry-row"><label data-i="imap_from">From callsign</label><input id="f-imap-from" type="text" placeholder="EMAIL-5" style="max-width:140px"></div>
   <div class="entry-row"><label data-i="imap_allowed">Allowed sender emails</label><input id="f-imap-allowed" type="text"><div class="hint" data-i="imap_allowed_hint">Comma-separated, empty = allow all</div></div>
+  <div class="action-row"><div class="content"><div class="title" data-i="imap_links">Person to person (licensed amateurs)</div><div class="subtitle" data-i="imap_links_hint">This server's own mail server takes mail for CALL@domain into the Maildir below. Only a DMARC pass from an address linked to a callsign goes on air, under that callsign. The IMAP account above is not used.</div></div><label class="adw-switch"><input type="checkbox" id="f-imap-links"><span></span></label></div>
+  <div class="entry-row"><label data-i="imap_maildir">Maildir</label><input id="f-imap-maildir" type="text" placeholder="/var/lib/aprs-mail/inbox/"></div>
+  <div class="entry-row"><label data-i="imap_domain">Mail domain</label><input id="f-imap-domain" type="text" placeholder="example.org"></div>
+  <div class="entry-row"><label data-i="imap_authserv">Authserv-id</label><input id="f-imap-authserv" type="text"><div class="hint" data-i="imap_authserv_hint">The name your mail server writes in Authentication-Results</div></div>
 </div></div>
 
 <!-- STATION AI -->
@@ -1104,6 +1108,7 @@ const S={en:{
   smtp_emails:"Allowed destination emails",smtp_emails_hint:"Comma-separated, empty = allow all",smtp_from:"From address",smtp_links:"Person to person (licensed amateurs)",smtp_links_hint:"A station links its address from the radio: LINK addr, then LINK <code> from the mail. Anyone may then send \"CALL text\" to a linked callsign. Sent through the transport below, never the account above.",smtp_links_server:"Person-to-person SMTP",smtp_links_from:"Person-to-person From",smtp_links_from_hint:"An address of your own domain that passes SPF and DKIM from this server",
   imap_enabled:"IMAP Receive",imap_server:"IMAP Server",imap_user:"Username",imap_pass:"Password",imap_pass_hint:"Gmail: use App Password",
   imap_interval:"Poll interval (min)",imap_from:"From callsign",imap_allowed:"Allowed sender emails",imap_allowed_hint:"Comma-separated, empty = allow all",
+  imap_links:"Person to person (licensed amateurs)",imap_links_hint:"This server's own mail server takes mail for CALL@domain into the Maildir below. Only a DMARC pass from an address linked to a callsign goes on air, under that callsign. The IMAP account above is not used.",imap_maildir:"Maildir",imap_domain:"Mail domain",imap_authserv:"Authserv-id",imap_authserv_hint:"The name your mail server writes in Authentication-Results",
   ext_enabled:"Extension Server",ext_sub:"Bidirectional TCP stream for external programs",ext_host:"Listen host",ext_port:"Listen port",
   cfg_path:"Path",status_stopped:"● Stopped",status_running:"● Running",btn_reload:"🔄 Reload",btn_save:"💾 Save",btn_start:"▶ Start",btn_stop:"■ Stop",
   heard_label:"Last Heard",st_rx:"Received",st_tx:"Sent",st_err:"Errors",st_pk:"Packets",st_heard:"Heard",st_registry:"Registry",st_heard_reg:"Heard / Registry",st_stations:"Stations",st_calls:"Callsigns",st_uptime:"Uptime",st_lifetime:"Lifetime",btn_about:"About",btn_stats:"Stats",
@@ -1263,6 +1268,7 @@ const S={en:{
   smtp_emails:"İzin verilen hedef e-postalar",smtp_emails_hint:"Virgülle ayır, boş = hepsi",smtp_from:"Gönderen adresi",smtp_links:"Kişiden kişiye (lisanslı amatörler)",smtp_links_hint:"İstasyon adresini telsizden bağlar: LINK adres, sonra e-postadaki LINK <kod>. Ardından herkes bağlı çağrı işaretine \"ÇAĞRI metin\" gönderebilir. Yukarıdaki hesaptan değil, aşağıdaki yoldan gider.",smtp_links_server:"Kişiden kişiye SMTP",smtp_links_from:"Kişiden kişiye gönderen",smtp_links_from_hint:"Bu sunucudan SPF ve DKIM'i geçen, kendi alan adınızdan bir adres",
   imap_enabled:"IMAP Al",imap_server:"IMAP Sunucusu",imap_user:"Kullanıcı adı",imap_pass:"Şifre",imap_pass_hint:"Gmail: Uygulama Şifresi kullanın",
   imap_interval:"Yoklama aralığı (dk)",imap_from:"Gönderen çağrı işareti",imap_allowed:"İzin verilen gönderen e-postalar",imap_allowed_hint:"Virgülle ayır, boş = hepsi",
+  imap_links:"Kişiden kişiye (lisanslı amatörler)",imap_links_hint:"Bu sunucunun kendi posta sunucusu ÇAĞRI@alan adresine gelen postayı aşağıdaki Maildir'e koyar. Yalnızca bir çağrı işaretine bağlı adresten gelen ve DMARC'tan geçen posta, o çağrı işaretiyle yayına çıkar. Yukarıdaki IMAP hesabı kullanılmaz.",imap_maildir:"Maildir",imap_domain:"Posta alan adı",imap_authserv:"Authserv-id",imap_authserv_hint:"Posta sunucunuzun Authentication-Results'a yazdığı ad",
   ext_enabled:"Extension Sunucusu",ext_sub:"Harici programlar için çift yönlü TCP akışı",ext_host:"Dinleme adresi",ext_port:"Dinleme portu",
   cfg_path:"Dosya yolu",status_stopped:"● Durduruldu",status_running:"● Çalışıyor",btn_reload:"🔄 Yenile",btn_save:"💾 Kaydet",btn_start:"▶ Başlat",btn_stop:"■ Durdur",
   heard_label:"Son Duyulan",st_rx:"Alınan",st_tx:"Gönderilen",st_err:"Hata",st_pk:"Paket",st_heard:"Duyulan",st_registry:"Kayıtlı",st_heard_reg:"Duyulan / Kayıtlı",st_stations:"İstasyon",st_calls:"Çağrı İşareti",st_uptime:"Süre",st_lifetime:"Toplam Süre",btn_about:"Hakkında",btn_stats:"İstatistik",
@@ -1513,7 +1519,7 @@ function loadCfg(cfg){
   $('f-ai-rate-refill').value=(ai.rate_refill_s===undefined||ai.rate_refill_s===null)?180:ai.rate_refill_s;
   $('f-ai-daily-limit').value=ai.daily_limit||0;
   const im=(cfg.extensions||{}).imap||{};$('f-imap-enabled').checked=im.enabled||false;$('f-imap-server').value=im.imap_server||'';$('f-imap-user').value=im.imap_username||'';
-  $('f-imap-pass').value=im.imap_password||'';$('f-imap-interval').value=im.poll_interval_mins||5;$('f-imap-from').value=im.from_callsign||'';$('f-imap-allowed').value=csv(im.allowed_senders);
+  $('f-imap-pass').value=im.imap_password||'';$('f-imap-interval').value=im.poll_interval_mins||5;$('f-imap-from').value=im.from_callsign||'';$('f-imap-allowed').value=csv(im.allowed_senders);$('f-imap-links').checked=im.allow_links===true;$('f-imap-maildir').value=im.maildir||'';$('f-imap-domain').value=im.mail_domain||'';$('f-imap-authserv').value=im.auth_serv_id||'';
   const sm=(cfg.extensions||{}).smtp||{};$('f-smtp-enabled').checked=sm.enabled||false;$('f-smtp-server').value=sm.smtp_server||'';$('f-smtp-user').value=sm.smtp_username||'';
   $('f-smtp-pass').value=sm.smtp_password||'';$('f-smtp-senders').value=csv(sm.allowed_senders);$('f-smtp-recip').value=csv(sm.allowed_recipients);
   $('f-smtp-emails').value=csv(sm.allowed_receiver_emails);$('f-smtp-from').value=sm.from_email||'';$('f-smtp-links').checked=sm.allow_links===true;$('f-smtp-links-server').value=sm.links_smtp_server||'';$('f-smtp-links-from').value=sm.links_from_email||'';
@@ -1554,7 +1560,7 @@ function getCfg(){return{
         rate_refill_s:numOr($('f-ai-rate-refill').value,180),
         daily_limit:numOr($('f-ai-daily-limit').value,0)};
     })(),
-    imap:{enabled:$('f-imap-enabled').checked,imap_server:$('f-imap-server').value.trim(),imap_username:$('f-imap-user').value.trim(),imap_password:$('f-imap-pass').value,poll_interval_mins:parseInt($('f-imap-interval').value)||5,from_callsign:$('f-imap-from').value.trim().toUpperCase(),allowed_senders:lst($('f-imap-allowed').value)},
+    imap:{enabled:$('f-imap-enabled').checked,imap_server:$('f-imap-server').value.trim(),imap_username:$('f-imap-user').value.trim(),imap_password:$('f-imap-pass').value,poll_interval_mins:parseInt($('f-imap-interval').value)||5,from_callsign:$('f-imap-from').value.trim().toUpperCase(),allowed_senders:lst($('f-imap-allowed').value),allow_links:$('f-imap-links').checked,maildir:$('f-imap-maildir').value.trim(),mail_domain:$('f-imap-domain').value.trim().toLowerCase(),auth_serv_id:$('f-imap-authserv').value.trim()},
     smtp:{enabled:$('f-smtp-enabled').checked,smtp_server:$('f-smtp-server').value.trim(),smtp_username:$('f-smtp-user').value.trim(),smtp_password:$('f-smtp-pass').value,allowed_senders:lst($('f-smtp-senders').value),allowed_recipients:lst($('f-smtp-recip').value),allowed_receiver_emails:lst($('f-smtp-emails').value),from_email:$('f-smtp-from').value.trim(),allow_links:$('f-smtp-links').checked,links_smtp_server:$('f-smtp-links-server').value.trim()||'localhost:25',links_from_email:$('f-smtp-links-from').value.trim()},
   }}}
 

@@ -545,3 +545,19 @@ from_callsign = "EMAIL-5"
 
 # Only forward emails from these addresses (empty = allow all)
 allowed_senders = []
+
+# Person to person between licensed amateurs, off by default. Instead of an
+# IMAP account, this server's own mail server takes mail for
+# CALL@mail_domain (e.g. ta1abc-7@example.org) and delivers it to `maildir`,
+# which is read every 20 s and emptied - no mail is kept. A mail goes on air
+# only when the mail server's DMARC check passed for its From address
+# (Authentication-Results written by `auth_serv_id`) and that address was
+# linked to a callsign from the radio (the e-mail bridge's LINK). It is sent
+# under the linked callsign, to the callsign it was addressed to; the first
+# line of the mail is the text. Anything else is dropped without an answer.
+# With this on, replies to person-to-person mails come back the same way.
+# When maildir is set, imap_server and the login are not used.
+allow_links = false
+maildir = ""
+mail_domain = ""
+auth_serv_id = ""

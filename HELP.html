@@ -927,7 +927,18 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><td><span class="field-name">Gönderen çağrı işareti</span></td><td>İletilen e-postaların APRS'deki gönderen adı. Örnek: <code>EMAIL-5</code>. Gönderenin çağrı işareti bilinmediği için metin gönderenin adresiyle başlar: <code>ad@ornek.com: merhaba</code>.</td><td><span class="badge req">Zorunlu</span></td></tr>
       <tr><td><span class="field-name">Yoklama aralığı</span></td><td>Gelen kutusu kaç dakikada bir kontrol edilsin. Varsayılan: 5 dakika.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
       <tr><td><span class="field-name">İzin verilen gönderenler</span></td><td>Sadece bu e-posta adreslerinden gelenler iletilir. Boş = hepsi kabul.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">Kişiden kişiye (lisanslı amatörler)</span></td><td>IMAP hesabı yerine bu sunucunun kendi posta sunucusu <code>ÇAĞRI@alan-adı</code> adreslerine gelen postayı <b>Maildir</b>'e koyar; ajan 20 saniyede bir okur ve siler, posta saklanmaz. Varsayılan: kapalı (<code>allow_links</code>).</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
+      <tr><td><span class="field-name">Maildir / Posta alan adı / Authserv-id</span></td><td>Posta sunucusunun teslim ettiği klasör, adreslerin alan adı ve sunucunun <code>Authentication-Results</code> başlığına yazdığı ad. Üçü de kişiden kişiye için gerekli.</td><td><span class="badge opt">İsteğe bağlı</span></td></tr>
     </table>
+    <div class="callout tip">
+      <strong>E-postadan telsize (kişiden kişiye)</strong>
+      Önce adresinizi telsizden çağrı işaretinize bağlayın (SMTP sekmesi: <code>LINK adres</code>).
+      Sonra o adresten <code>ta1abc-7@alan-adı</code> adresine yazın: e-postanın ilk satırı
+      sizin çağrı işaretinizle TA1ABC-7'ye APRS mesajı olarak gider (en çok 180 karakter kadar).
+      Kişiden kişiye bir e-postayı yanıtlamak da aynı yoldan telsize döner. Yalnızca posta
+      sunucusunun DMARC denetiminden geçen ve bir çağrı işaretine bağlı adresten gelen posta
+      kabul edilir; gerisi cevapsız silinir. Bir adres saatte 20 mesaj gönderebilir.
+    </div>
   </div>
 
   <h2>SMTP E-posta Sekmesi</h2>
@@ -1908,7 +1919,18 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <tr><td><span class="field-name">From callsign</span></td><td>APRS sender callsign for forwarded emails. Example: <code>EMAIL-5</code>. The sender has no known callsign, so the text opens with their address: <code>name@example.com: hello</code>.</td><td><span class="badge req">Required</span></td></tr>
       <tr><td><span class="field-name">Poll interval</span></td><td>How often to check the inbox, in minutes. Default: 5.</td><td><span class="badge opt">Optional</span></td></tr>
       <tr><td><span class="field-name">Allowed senders</span></td><td>Only forward emails from these addresses. Empty = allow all.</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Person to person (licensed amateurs)</span></td><td>Instead of an IMAP account, this server's own mail server delivers mail for <code>CALL@your-domain</code> to a <b>Maildir</b>; the agent reads it every 20 seconds and deletes it, no mail is kept. Default: off (<code>allow_links</code>).</td><td><span class="badge opt">Optional</span></td></tr>
+      <tr><td><span class="field-name">Maildir / Mail domain / Authserv-id</span></td><td>The folder the mail server delivers to, the addresses' domain, and the name the server writes in <code>Authentication-Results</code>. All three are needed for person to person.</td><td><span class="badge opt">Optional</span></td></tr>
     </table>
+    <div class="callout tip">
+      <strong>From e-mail to the radio (person to person)</strong>
+      First link your address to your callsign from the radio (SMTP tab: <code>LINK address</code>).
+      Then write from that address to <code>ta1abc-7@your-domain</code>: the first line of the
+      mail goes to TA1ABC-7 as an APRS message from your callsign (about 180 characters at most).
+      Replying to a person-to-person mail comes back the same way. Only mail that passed the
+      mail server's DMARC check, from an address linked to a callsign, is taken; anything
+      else is deleted without an answer. An address may send 20 messages an hour.
+    </div>
   </div>
 
   <h2>SMTP Email Tab</h2>

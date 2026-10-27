@@ -560,6 +560,8 @@ def _services_text(ext_cfg: dict, sender_base: str, tr: bool,
         elif key == "smtp" and c.get("allow_links"):
             # to linked amateurs: "CALL text"; your own address: LINK addr
             mine.append(label + (" (bagli: LINK adres)" if tr else " (linked: LINK address)"))
+        elif key == "imap" and c.get("allow_links") and c.get("maildir"):
+            mine.append(label + (" (bagli)" if tr else " (linked)"))
         else:
             listed.append(label)
     if not mine and not listed:

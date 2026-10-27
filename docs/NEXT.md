@@ -191,9 +191,14 @@ What is left, in the order it is worth doing:
     hour in all; 20 person-to-person mails an hour per sender.
     2026-10-27: links turned on on the VPS for Telegram and e-mail (the
     operator's yes); the landing's bridges line, privacy section 04 and the
-    site's help page say so. Open: a first real link from a radio (the
-    operator's own test); inbound mail (MX/IMAP) not started; Bluesky DM or
-    unchanged.
+    site's help page say so.
+    2026-10-27: inbound mail done in v3.2.199 (the operator's yes): the
+    VPS's Postfix takes CALL@aprsagent.com into a Maildir, OpenDMARC judges
+    it, the IMAP extension sends a DMARC-passing mail from a linked address
+    under the linked call (`check_email_inbound`); replies to
+    person-to-person mails come back on air; MX at GoDaddy. Never through the
+    operator's Gmail. Open: a first real link and round trip from a radio
+    (the operator's own test); Bluesky DM or unchanged.
 
 Everything below this block is history — kept for the reasoning, not for the
 status.

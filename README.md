@@ -663,6 +663,27 @@ TA1ABC-7 Hello, your beacon is working fine!
 ```
 First word = destination callsign, rest = message text.
 
+**Person to person** (`allow_links`, off by default): instead of an IMAP
+account, this machine's own MTA takes mail for `CALL@your-domain` and
+delivers it to a Maildir, read every 20 s and emptied - no mail is kept.
+
+```toml
+allow_links  = true
+maildir      = "/var/lib/aprs-mail/inbox/"
+mail_domain  = "your-domain"
+auth_serv_id = "mx.your-domain"   # the authserv-id your MTA writes
+```
+
+A mail goes on air only when the MTA's `Authentication-Results` (from
+`auth_serv_id`, topmost) says `dmarc=pass` for its From domain and that
+address is linked to a callsign (the SMTP links below). It is sent under the
+linked callsign to the callsign it was addressed to (`ta1abc-7@your-domain`);
+the first line of the body is the text, a reply's quote is left out. 20 an
+hour per address; anything else is deleted without an answer. Replies to
+person-to-person mails come back the same way (`Reply-To`). The MTA needs a
+DMARC verifier (OpenDKIM + OpenDMARC) and should reject recipients that are
+not callsigns.
+
 ### SMTP Email
 
 ```toml

@@ -1440,6 +1440,18 @@ class AgentManager:
                         # Telegram's; off unless allow_links
                         if cfg.get("allow_links"):
                             ext.set_links(self._bridge_links)
+                        # a reply to a person-to-person mail comes back on
+                        # air when the inbound side (imap maildir) is on
+                        im = ext_cfg.get("imap", {})
+                        if im.get("enabled") and im.get("allow_links") and im.get("maildir"):
+                            ext.set_reply_domain(im.get("mail_domain", ""))
+                        ExtensionRegistry.register(ext)
+                    elif cls is ImapReceiver:
+                        ext = cls(cfg)
+                        # mail from linked addresses, under their callsign;
+                        # off unless allow_links
+                        if cfg.get("allow_links"):
+                            ext.set_links(self._bridge_links)
                         ExtensionRegistry.register(ext)
                     else:
                         ExtensionRegistry.register(cls(cfg))

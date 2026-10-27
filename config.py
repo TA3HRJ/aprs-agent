@@ -21,7 +21,7 @@ from typing import Any
 
 # Single source of truth for the application version.
 # Imported by aprs_connection.py (for the APRS-IS login banner) and gui.py.
-VERSION = "3.2.198"
+VERSION = "3.2.199"
 
 # The APRS destination ("tocall") on every packet this program sends -
 # message replies, acks, bridged messages, status and the beacon. APRAGT is
@@ -338,6 +338,13 @@ DEFAULTS: dict[str, Any] = {
             "poll_interval_mins": 5,
             "from_callsign": "EMAIL-5",
             "allowed_senders": [],
+            # Person to person: the server's own MTA delivers mail for
+            # CALL@mail_domain to maildir; only dmarc=pass (auth_serv_id's
+            # verdict) from an address linked to a callsign goes on air
+            "allow_links": False,
+            "maildir": "",
+            "mail_domain": "",
+            "auth_serv_id": "",
         },
         "smtp": {
             "enabled": False,
