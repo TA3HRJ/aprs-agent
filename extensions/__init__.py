@@ -59,16 +59,18 @@ class Extension(ABC):
         return None
 
     def set_event_recorder(self, fn) -> None:
-        """Hand the extension a counter, fn(event_name), for the bridges'
+        """Hand the extension a counter, fn(event_name, who), for the bridges'
         person-to-person traffic - what was refused and why, counted per day
-        so abuse shows as numbers. Names only, never who."""
+        so abuse shows as numbers. The counts are names only; `who` (a
+        callsign, or an address or chat masked by the caller) goes no further
+        than the admin panel's in-memory list of recent refusals."""
         self._event_recorder = fn
 
-    def count(self, event: str) -> None:
+    def count(self, event: str, who: str = "") -> None:
         fn = getattr(self, "_event_recorder", None)
         if fn is not None:
             try:
-                fn(event)
+                fn(event, who)
             except Exception:
                 pass
 

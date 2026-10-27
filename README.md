@@ -670,7 +670,10 @@ what was refused and why (`mail_in_unauthenticated`, `mail_in_unlinked`,
 file of the mail server's reject lines only) what the MTA refused at the door
 is counted too: `mta_reject_unknown_recipient`, `mta_reject_relay`,
 `mta_dropped_connection` ... `/api/counters` reports the last 30 days as
-`bridge_events` - counts only, never who.
+`bridge_events` - counts only, never who. The admin panel (Messages tab,
+"Bridge events") shows the same per day and the last 50 refusals with who -
+the callsign, or the address or chat masked (`s***@example.org`,
+`tg 777***`); that list lives in memory only (`/api/bridges`, admin port).
 
 **Person to person** (`allow_links`, off by default): instead of an IMAP
 account, this machine's own MTA takes mail for `CALL@your-domain` and

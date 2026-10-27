@@ -354,6 +354,8 @@ table.sta tr:hover td{background:rgba(255,255,255,.04);cursor:pointer}
 .s-dot.db{background:var(--dim)}
 .s-dot.unk{background:var(--warn)}
 .sta-empty{padding:40px;text-align:center;color:var(--dim);font-size:13px}
+.brg-note{padding:10px 12px 6px;color:var(--dim);font-size:12px}
+.brg-carried td:first-child{color:var(--dim)}
 
 /* STATION DETAIL MODAL */
 .sta-modal{position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55)}
@@ -913,6 +915,7 @@ body.public #about-gw-link{display:none!important}
       <select class="sta-select" id="msg-fsrc" onchange="fetchMsgs()">
         <option value="live" data-i="msg_live">Live feed</option>
         <option value="kept" data-i="msg_kept">Kept (14 days)</option>
+        <option value="bridges" data-i="msg_bridges">Bridge events</option>
       </select>
       <input class="sta-search" id="msg-fsearch" placeholder="Search…" data-i="msg_search" oninput="renderMsgs()">
       <span class="sta-count" id="msg-cnt">0</span>
@@ -932,6 +935,19 @@ body.public #about-gw-link{display:none!important}
         <tbody id="msg-body"></tbody>
       </table>
       <div class="sta-empty" id="msg-empty" hidden data-i="msg_empty">No APRS messages yet — they appear here as they are heard or sent.</div>
+    </div>
+    <div class="sta-table-wrap" id="brg-wrap" hidden>
+      <div class="brg-note" data-i="brg_note">Person-to-person bridges: what was carried and what was refused, per UTC day. Recent refusals are kept in memory only, until restart.</div>
+      <table class="sta" id="brg-tbl">
+        <thead><tr><th data-i="brg_h_event">Event</th><th style="width:70px" data-i="brg_h_today">Today</th><th style="width:80px" data-i="brg_h_30">30 days</th></tr></thead>
+        <tbody id="brg-body"></tbody>
+      </table>
+      <div class="brg-note" data-i="brg_recent">Recent refusals</div>
+      <table class="sta" id="brg-rtbl">
+        <thead><tr><th style="width:110px" data-i="msg_h_time">Time</th><th data-i="brg_h_event">Event</th><th data-i="brg_h_who">Who</th></tr></thead>
+        <tbody id="brg-rbody"></tbody>
+      </table>
+      <div class="sta-empty" id="brg-empty" hidden data-i="brg_empty">No bridge events yet.</div>
     </div>
   </div>
 
@@ -1203,7 +1219,7 @@ const S={en:{
   tab_msg:"Messages",
   msg_h_time:"Time",msg_h_from:"From",msg_h_to:"To",msg_h_chan:"Channel",msg_h_text:"Message",
   msg_empty:"No APRS messages yet — they appear here as they are heard or sent.",
-  stop_failed:"Stop did not take — see the log above",start_refused:"Start refused — an agent is still running",msg_all:"All",msg_rx:"Received",msg_tx:"Sent",msg_search:"Search…",msg_cs_unknown:"Not in the station registry - no position known",ms_ph:"Callsign or locator: TA3HX*, KM38",ms_short:"At least three letters or digits, * for any",ms_none:"No station found",ms_nopos:"no position",leg_window:"Badges: stations heard in the last 24 h · Close up: every station heard, fainter the longer it has been silent (1-10 days half, older faint)",ms_unreadable:"position unreadable",stack_title:"{n} stations on this one point",ms_more:"{n} found, newest {k} shown",ms_loc:"locator - go to square",al_go:"Show on the map",msg_live:"Live feed",msg_kept:"Kept (14 days)",
+  stop_failed:"Stop did not take — see the log above",start_refused:"Start refused — an agent is still running",msg_all:"All",msg_rx:"Received",msg_tx:"Sent",msg_search:"Search…",msg_cs_unknown:"Not in the station registry - no position known",ms_ph:"Callsign or locator: TA3HX*, KM38",ms_short:"At least three letters or digits, * for any",ms_none:"No station found",ms_nopos:"no position",leg_window:"Badges: stations heard in the last 24 h · Close up: every station heard, fainter the longer it has been silent (1-10 days half, older faint)",ms_unreadable:"position unreadable",stack_title:"{n} stations on this one point",ms_more:"{n} found, newest {k} shown",ms_loc:"locator - go to square",al_go:"Show on the map",msg_live:"Live feed",msg_kept:"Kept (14 days)",msg_bridges:"Bridge events",brg_note:"Person-to-person bridges: what was carried and what was refused, per UTC day. Recent refusals are kept in memory only, until restart.",brg_h_event:"Event",brg_h_today:"Today",brg_h_30:"30 days",brg_recent:"Recent refusals",brg_h_who:"Who",brg_empty:"No bridge events yet.",
   pub_home:"Home",pub_default_title:"APRS-Agent",pub_default_sub:"Live worldwide APRS-IS monitoring — station map, regional silence detection, RF propagation",pub_live:"live",
   cap_log:"Raw APRS packets exactly as they arrive from the APRS-IS network, in real time.",
   cap_sta:"Every station heard by this receiver — type, location, frequency and whether it is currently active.",
@@ -1364,7 +1380,7 @@ const S={en:{
   tab_msg:"Mesajlar",
   msg_h_time:"Saat",msg_h_from:"Gönderen",msg_h_to:"Alıcı",msg_h_chan:"Kanal",msg_h_text:"Mesaj",
   msg_empty:"Henüz APRS mesajı yok — duyulan ve gönderilen mesajlar burada görünür.",
-  stop_failed:"Durdurma gerçekleşmedi — yukarıdaki loga bakın",start_refused:"Başlatma reddedildi — bir ajan hâlâ çalışıyor",msg_all:"Tümü",msg_rx:"Alınan",msg_tx:"Gönderilen",msg_search:"Ara…",msg_cs_unknown:"İstasyon kaydında yok - konumu bilinmiyor",ms_ph:"Çağrı işareti veya locator: TA3HX*, KM38",ms_short:"En az üç harf veya rakam, * herhangi",ms_none:"İstasyon bulunamadı",ms_nopos:"konum yok",leg_window:"Rozetler: son 24 saatte duyulan istasyonlar · Yakında: duyulan her istasyon; ne kadar uzun sustuysa o kadar soluk (1-10 gün yarı, daha eskisi soluk)",ms_unreadable:"konum okunamadı",stack_title:"Bu tek noktada {n} istasyon",ms_more:"{n} bulundu, en yeni {k} gösteriliyor",ms_loc:"locator - kareye git",al_go:"Haritada göster",msg_live:"Canlı akış",msg_kept:"Saklanan (14 gün)",
+  stop_failed:"Durdurma gerçekleşmedi — yukarıdaki loga bakın",start_refused:"Başlatma reddedildi — bir ajan hâlâ çalışıyor",msg_all:"Tümü",msg_rx:"Alınan",msg_tx:"Gönderilen",msg_search:"Ara…",msg_cs_unknown:"İstasyon kaydında yok - konumu bilinmiyor",ms_ph:"Çağrı işareti veya locator: TA3HX*, KM38",ms_short:"En az üç harf veya rakam, * herhangi",ms_none:"İstasyon bulunamadı",ms_nopos:"konum yok",leg_window:"Rozetler: son 24 saatte duyulan istasyonlar · Yakında: duyulan her istasyon; ne kadar uzun sustuysa o kadar soluk (1-10 gün yarı, daha eskisi soluk)",ms_unreadable:"konum okunamadı",stack_title:"Bu tek noktada {n} istasyon",ms_more:"{n} bulundu, en yeni {k} gösteriliyor",ms_loc:"locator - kareye git",al_go:"Haritada göster",msg_live:"Canlı akış",msg_kept:"Saklanan (14 gün)",msg_bridges:"Köprü olayları",brg_note:"Kişiden kişiye köprüler: iletilen ve reddedilen, UTC günü başına. Son retler yalnızca bellekte tutulur, yeniden başlatınca silinir.",brg_h_event:"Olay",brg_h_today:"Bugün",brg_h_30:"30 gün",brg_recent:"Son retler",brg_h_who:"Kim",brg_empty:"Henüz köprü olayı yok.",
   pub_home:"Ana sayfa",pub_default_title:"APRS-Agent",pub_default_sub:"Dünya çapında canlı APRS-IS izleme — istasyon haritası, bölgesel sessizlik tespiti, RF yayılımı",pub_live:"canlı",
   cap_log:"APRS-IS ağından geldiği anda, ham APRS paketleri.",
   cap_sta:"Bu alıcının duyduğu tüm istasyonlar — tür, konum, frekans ve şu an aktif olup olmadıkları.",
@@ -1637,7 +1653,7 @@ function switchTab(tab){
   if(tab==='sta'||tab==='map'){fetchStations();if(!staRefreshTimer)staRefreshTimer=setInterval(fetchStations,5000)}
   else{clearInterval(staRefreshTimer);staRefreshTimer=null}
   if(tab==='map')initMap();
-  if(tab==='msg'){if(!msgLoaded)fetchMsgs();else renderMsgs()}
+  if(tab==='msg'){if(!msgLoaded||msgSrc()==='bridges')fetchMsgs();else renderMsgs()}
   updCaption();
 }
 // Public visitors get one line of context per tab; operators don't need it
@@ -2091,6 +2107,10 @@ async function fetchMsgs(){
   // on restart. "Kept" is the stored history - the gateway's own conversation
   // and anything matching the station filter, up to fourteen days.
   const kept=msgSrc()==='kept';
+  const brg=msgSrc()==='bridges';
+  $('msg-wrap').hidden=brg;$('brg-wrap').hidden=!brg;
+  $('msg-fdir').hidden=brg;$('msg-fsearch').hidden=brg;   // message filters only
+  if(brg){fetchBridges();return}
   try{
     if(!kept){const r=await api('GET','/api/messages');
       msgData=r.msgs||[];msgLoaded=true;renderMsgs();return}
@@ -2150,7 +2170,23 @@ document.addEventListener('click',e=>{
   const el=e.target.closest&&e.target.closest('#msg-body .msg-cs');
   if(el&&!el.classList.contains('msg-cs-miss'))msgGo(el);
 });
+// Bridge events (admin only): per-day counts and the recent refusals with
+// who - a callsign, or an address or chat masked by the bridge
+const BRG_CARRIED=new Set(['mail_in','mail_out','mail_code','mail_linked','tg_on_air','tg_code','tg_linked']);
+async function fetchBridges(){
+  let r;
+  try{r=await api('GET','/api/bridges')}catch(e){console.error(e);return}
+  const days=r.days||{},today=(days[r.today]||{}),tot={};
+  for(const d of Object.values(days))for(const[k,n]of Object.entries(d))tot[k]=(tot[k]||0)+n;
+  const names=Object.keys(tot).sort((a,b)=>(BRG_CARRIED.has(a)-BRG_CARRIED.has(b))||tot[b]-tot[a]);
+  $('brg-body').innerHTML=names.map(k=>`<tr class="${BRG_CARRIED.has(k)?'brg-carried':''}"><td>${esc(k)}</td><td>${today[k]||0}</td><td>${tot[k]}</td></tr>`).join('');
+  const rec=r.recent||[];
+  $('brg-rbody').innerHTML=rec.map(x=>`<tr><td>${esc(fmtClock(x.t))}</td><td>${esc(x.event)}</td><td>${esc(x.who||'-')}</td></tr>`).join('');
+  $('brg-empty').hidden=names.length>0;
+  $('msg-cnt').textContent=Object.values(today).reduce((a,b)=>a+b,0);
+}
 function renderMsgs(){
+  if(msgSrc()==='bridges')return     // its own view, refreshed on open, not per message
   const fdir=$('msg-fdir').value;
   const fs=$('msg-fsearch').value.toUpperCase();
   const rows=msgData.filter(m=>{

@@ -25,6 +25,11 @@ network):
      counted by reason: unknown recipient, relay, dropped connection ...;
      the first read does not count the past, a half-written line waits,
      and a rotated log is read from its start
+  8. the admin panel's view: refusals go on an in-memory list with who
+     (a callsign, or a masked address - never the address itself), carried
+     traffic does not; 50 at most, newest first; /api/bridges is served by
+     the admin app only, never the public one; the Messages tab reads it on
+     open, not on every message
 
 Usage:  python tools/check_bridge_events.py
 Exit code 1 on failure.
@@ -68,7 +73,7 @@ def quiet(ext):
 
 def recorder(ext):
     got = Counter()
-    getattr(ext, "set_event_recorder", lambda fn: None)(lambda e: got.update([e]))
+    getattr(ext, "set_event_recorder", lambda fn: None)(lambda e, w="": got.update([e]))
     return got
 
 
@@ -195,8 +200,10 @@ async def run() -> list:
     import station_db
     import web_gui
     db_path = str(tmp / "aprs_stations.db")
+    from collections import deque
     mgr = types.SimpleNamespace(_bridge_events={}, _sta_db_path=db_path,
-                                _bridge_saved_at=0.0, _bridge_save_due=False)
+                                _bridge_saved_at=0.0, _bridge_save_due=False,
+                                _bridge_recent=deque(maxlen=50))
     rec = getattr(web_gui.AgentManager, "_record_bridge_event", None)
     summ = getattr(web_gui.AgentManager, "_bridge_summary", None)
     if rec and summ:
@@ -236,7 +243,7 @@ async def run() -> list:
     # 6 - names only
     names = set()
     for part in (ROOT / "extensions").glob("*.py"):
-        names |= set(re.findall(r'(?:self\.count|_events\.append)\(\s*f?"([^"]*)"',
+        names |= set(re.findall(r'(?:self\.count|_events\.append)\(\(?\s*f?"([^"]*)"',
                                 part.read_text(encoding="utf-8")))
     bad = [x for x in names if "{" in x or "@" in x]
     print(f"  6 event names {sorted(names)}")
@@ -289,6 +296,62 @@ async def run() -> list:
             p.append(f"7: a line finished later was not counted: {third}")
         if fourth.get("mta_reject_unknown_recipient") != 2:
             p.append(f"7: a rotated log was not read from its start: {fourth}")
+
+    # 8 - the admin view
+    md3 = tmp / "Maildir3"
+    for d in ("new", "cur", "tmp"):
+        (md3 / d).mkdir(parents=True, exist_ok=True)
+    whos = []
+    try:
+        r3 = quiet(ImapReceiver({"enabled": True, "from_callsign": "EMAIL-5", "allow_links": True,
+                                 "maildir": str(md3), "mail_domain": "aprsagent.com",
+                                 "auth_serv_id": AUTHSERV}))
+        r3.set_links(links)
+        r3._queue = Q()
+        r3.set_event_recorder(lambda e, w="": whos.append((e, w)))
+        (md3 / "new" / "1.M1.host").write_bytes(mail(frm="stranger@example.org"))
+        await r3._check_maildir()
+    except Exception as e:
+        p.append(f"8: {type(e).__name__}: {e}")
+    print(f"  8 who passed for an unlinked sender: {whos}")
+    if not whos or whos[0][1] in ("", "stranger@example.org") or "***@example.org" not in whos[0][1]:
+        p.append(f"8: the refusal's who is not a masked address: {whos}")
+
+    rec = getattr(web_gui.AgentManager, "_record_bridge_event", None)
+    adm = getattr(web_gui.AgentManager, "_bridge_admin", None)
+    if rec and adm and hasattr(web_gui, "_BRIDGE_RECENT_N"):
+        from collections import deque
+        m2 = types.SimpleNamespace(_bridge_events={}, _sta_db_path=str(tmp / "b.db"),
+                                   _bridge_saved_at=time.time(), _bridge_save_due=True,
+                                   _bridge_recent=deque(maxlen=web_gui._BRIDGE_RECENT_N))
+        rec(m2, "mail_in", "TA3HX-7")
+        for i in range(60):
+            rec(m2, "tg_ignored", f"tg 77{i % 10}***")
+        rec(m2, "mail_in_unlinked", "s***@example.org")
+        view = adm(m2, 30)
+        recent = view.get("recent", [])
+        print(f"  8 admin view: {len(recent)} recent, newest {recent[:1]}")
+        if len(recent) != 50 or recent[0].get("event") != "mail_in_unlinked":
+            p.append(f"8: recent list {len(recent)} long, newest {recent[:1]}")
+        if any(x.get("event") == "mail_in" for x in recent):
+            p.append("8: carried traffic went on the refusal list")
+    else:
+        p.append("8: the manager has no admin view of the bridges")
+
+    src = (ROOT / "web_gui.py").read_text(encoding="utf-8")
+    admin_route = '@routes.get("/api/bridges")' in src
+    public_part = src.split("def _build_public_app", 1)[-1].split("\ndef ", 1)[0]
+    leaked = "/api/bridges" in public_part
+    page = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+    ui = 'value="bridges"' in page and "'/api/bridges'" in page
+    render = page.split("function renderMsgs(){", 1)[-1].split("\n}", 1)[0]
+    per_msg = "fetchBridges" in render
+    print(f"  8 admin route {admin_route}, in the public app {leaked}, panel view {ui}, "
+          f"fetched per message {per_msg}")
+    if not admin_route or leaked:
+        p.append(f"8: /api/bridges admin {admin_route}, public {leaked}")
+    if not ui or per_msg:
+        p.append(f"8: panel view {ui}, fetched on every message {per_msg}")
     return p
 
 

@@ -677,6 +677,13 @@ def _fmt_quake(q: dict) -> str:
     return f"M{q['mag']} {q['dist_km']} km away{depth}{where}"
 
 
+# Bridge events that are traffic carried or a link made, not a refusal; the
+# rest go on the admin panel's list of recent refusals as well
+_BRIDGE_CARRIED = frozenset({"mail_in", "mail_out", "mail_code", "mail_linked",
+                             "tg_on_air", "tg_code", "tg_linked"})
+_BRIDGE_RECENT_N = 50
+
+
 class AgentManager:
 
     def __init__(self, config_path: str):
@@ -785,6 +792,9 @@ class AgentManager:
         # The bridges' person-to-person events per UTC day, {event: n} -
         # refused mail, bad codes, unlinked chats: abuse shows as numbers
         self._bridge_events: dict[str, dict] = {}
+        # The last refusals with who (a callsign, or a masked address/chat),
+        # for the admin panel only; in memory, gone on restart, never stored
+        self._bridge_recent: deque = deque(maxlen=_BRIDGE_RECENT_N)
         self._bridge_saved_at = 0.0
         self._bridge_save_due = False
         try:
@@ -1958,9 +1968,12 @@ class AgentManager:
         except Exception as e:
             print(f"[gateway] delivery counts not saved: {e}", file=sys.__stderr__)
 
-    def _record_bridge_event(self, event: str) -> None:
+    def _record_bridge_event(self, event: str, who: str = "") -> None:
         """One bridge event on today's line, 60 days kept. Saved at most
-        every 30 s, so a flood of refused mail is not a flood of writes."""
+        every 30 s, so a flood of refused mail is not a flood of writes.
+        A refusal also goes on the admin's in-memory list, with who."""
+        if event not in _BRIDGE_CARRIED:
+            self._bridge_recent.append((int(time.time()), event, str(who or "")[:40]))
         day = time.strftime("%Y-%m-%d", time.gmtime())
         row = self._bridge_events.setdefault(day, {})
         row[event] = row.get(event, 0) + 1
@@ -1983,6 +1996,15 @@ class AgentManager:
                                         json.dumps(self._bridge_events))
         except Exception as e:
             print(f"[bridges] event counts not saved: {e}", file=sys.__stderr__)
+
+    def _bridge_admin(self, days: int = 30) -> dict:
+        """The admin panel's view: every day's counts, and the recent
+        refusals with who, newest first."""
+        cutoff = time.strftime("%Y-%m-%d", time.gmtime(time.time() - days * 86400))
+        return {"days": {k: v for k, v in sorted(self._bridge_events.items()) if k > cutoff},
+                "today": time.strftime("%Y-%m-%d", time.gmtime()),
+                "recent": [{"t": t, "event": e, "who": w}
+                           for t, e, w in reversed(self._bridge_recent)]}
 
     def _bridge_summary(self, days: int = 30) -> dict:
         """Event totals over the last `days` UTC days."""
@@ -3539,6 +3561,14 @@ def _evidence(request: web.Request, payload: dict) -> web.Response:
         payload["assessment_omitted"] = (
             "blind=1 — this station's own reading was removed before export")
     return web.json_response(payload)
+
+
+@routes.get("/api/bridges")
+async def bridge_events(request: web.Request) -> web.Response:
+    """Admin only (not in the public app): the bridges' daily counts and the
+    recent refusals with who - a callsign, or a masked address or chat."""
+    mgr: AgentManager = request.app["manager"]
+    return web.json_response(mgr._bridge_admin(30), headers=_NO_CACHE)
 
 
 @routes.get("/api/counters")

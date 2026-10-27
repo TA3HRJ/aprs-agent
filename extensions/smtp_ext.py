@@ -318,7 +318,7 @@ class SmtpEmailer(Extension):
             else:
                 entry = links.confirm("email", sender_full, arg)
                 if entry:
-                    self.count("mail_linked")
+                    self.count("mail_linked", sender_full)
                     self.log(f"linked {entry['call']} to an e-mail address")
                     await self._reply(alias, sender_full,
                                       f"Baglandi/Linked: {mask_address(entry['target'])}")
@@ -329,7 +329,7 @@ class SmtpEmailer(Extension):
                                             _LINKED_BODY.format(call=entry["call"], alias=alias,
                                                                 inbound=inbound))
                 else:
-                    self.count("mail_bad_code")
+                    self.count("mail_bad_code", sender_full)
                     self.warn(f"LINK from {sender_full}: unknown or expired code")
                     await self._reply(alias, sender_full, "Kod gecersiz/Code unknown or expired")
             return True
@@ -343,7 +343,7 @@ class SmtpEmailer(Extension):
         if len(words) == 2 and looks_like_callsign(head) and links.by_call("email", head):
             target = links.by_call("email", head)
             if not self._within_rate(sender_full):
-                self.count("mail_out_rate")
+                self.count("mail_out_rate", sender_full)
                 await self._reply(alias, sender_full, f"Saatlik sinir/Hourly limit {_LINKED_PER_HOUR}")
                 return True
             # With the inbound side on, a reply to this mail comes back to
@@ -358,7 +358,7 @@ class SmtpEmailer(Extension):
                                  answer_tr=tr.format(sender=sender_full)),
                 reply_to=f"{sender_full.lower()}@{dom}" if dom else "")
             if ok:
-                self.count("mail_out")
+                self.count("mail_out", sender_full)
                 self.log(f"{sender_full} -> {target['call']} by e-mail")
             return True
         if not operator and links.by_call("email", sender_full):
@@ -376,17 +376,17 @@ class SmtpEmailer(Extension):
         base = base_call(sender_full)
         now = time.time()
         if not _EMAIL_RE.match(addr) or not looks_like_callsign(base):
-            self.count("mail_code_refused")
+            self.count("mail_code_refused", sender_full)
             await self._reply(alias, sender_full, "Adres?/Address? LINK ad@ornek.com")
             return
         if now - self._code_at.get(base, 0.0) < CODE_TTL_S:
-            self.count("mail_code_refused")
+            self.count("mail_code_refused", sender_full)
             await self._reply(alias, sender_full, "Kod zaten gonderildi/Code already sent")
             return
         sent = [x for x in self._addr_codes.get(addr, []) if now - x < 86400]
         self._codes = [x for x in self._codes if now - x < 3600]
         if len(sent) >= _CODE_ADDR_PER_DAY or len(self._codes) >= _CODES_PER_HOUR:
-            self.count("mail_code_limit")
+            self.count("mail_code_limit", sender_full)
             self.warn(f"code mail for {sender_full} refused: limit")
             await self._reply(alias, sender_full, "Sinir, sonra deneyin/Limit, try later")
             return
@@ -401,7 +401,7 @@ class SmtpEmailer(Extension):
             self._code_at[base] = now
             self._addr_codes[addr] = sent + [now]
             self._codes.append(now)
-            self.count("mail_code")
+            self.count("mail_code", sender_full)
             self.log(f"link code mailed for {sender_full}")
             await self._reply(alias, sender_full, f"Kod gonderildi/Code sent: {mask_address(addr)}")
         else:
