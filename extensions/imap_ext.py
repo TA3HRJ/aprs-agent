@@ -56,6 +56,28 @@ _QUOTE_START = re.compile(
 _SUBJECT_PREFIX = re.compile(r"^\s*((re|ynt|fw|fwd|ilt|aw|sv|vs)\s*:\s*)+", re.I)
 
 
+# What the MTA refused at the door, by the reason in its log line (Postfix
+# wording). Order matters: the first match names the event.
+_MTA_REASONS = (
+    ("User unknown", "mta_reject_unknown_recipient"),
+    ("Relay access denied", "mta_reject_relay"),
+    ("Sender address rejected", "mta_reject_sender"),
+    ("Helo command rejected", "mta_reject_helo"),
+    ("Client host rejected", "mta_reject_client"),
+)
+
+
+def _mta_event(line: str) -> "Optional[str]":
+    if "reject:" in line:
+        for text, name in _MTA_REASONS:
+            if text in line:
+                return name
+        return "mta_reject_other"
+    if "lost connection after" in line or "too many errors after" in line:
+        return "mta_dropped_connection"
+    return None
+
+
 def _authenticated(msg, authserv_id: str, from_domain: str) -> bool:
     """dmarc=pass for from_domain in the topmost Authentication-Results
     header our own MTA wrote. The MTA prepends its headers, so ones a sender
@@ -162,6 +184,8 @@ class ImapReceiver(Extension):
         self._sent_at: dict = {}        # address -> recent send times
         # events from the reading thread, counted on the event loop
         self._events: list = []
+        self._mta_pos: Optional[int] = None     # read position in mta_log
+        self._mta_ino = None
 
         if config.get("maildir"):
             self.log(f"initialized | maildir={config['maildir']} "
@@ -268,6 +292,8 @@ class ImapReceiver(Extension):
     async def _check_maildir(self) -> None:
         loop = asyncio.get_running_loop()
         got = await loop.run_in_executor(None, self._read_maildir)
+        if self._config.get("mta_log"):
+            await loop.run_in_executor(None, self._read_mta_log)
         events, self._events = self._events, []
         for e in events:
             self.count(e)
@@ -279,6 +305,40 @@ class ImapReceiver(Extension):
                 if i < len(parts) - 1:
                     await asyncio.sleep(5)
             self.log(f"TX {who} -> {to_call} by e-mail ({len(parts)} part(s))")
+
+    def _read_mta_log(self) -> None:
+        """Count what the MTA refused before a mail ever reached the Maildir,
+        from the lines of its log added since the last read (`mta_log`: a
+        file of the MTA's reject and dropped-connection lines only). Counted
+        by reason, nothing else kept. The first read starts at the end: what
+        happened before this process is not counted twice."""
+        path = Path(self._config["mta_log"])
+        try:
+            st = path.stat()
+        except OSError:
+            return
+        pos = self._mta_pos
+        if pos is None or st.st_ino != self._mta_ino or st.st_size < pos:
+            # first look, or the file was rotated or truncated
+            pos = st.st_size if pos is None else 0
+            self._mta_ino = st.st_ino
+        if st.st_size == pos:
+            self._mta_pos = pos
+            return
+        try:
+            with open(path, "rb") as f:
+                f.seek(pos)
+                data = f.read(1 << 20)
+        except OSError as e:
+            self.error(f"cannot read {path}: {e}")
+            return
+        # whole lines only; a half-written last line waits for the next read
+        end = data.rfind(b"\n") + 1
+        self._mta_pos = pos + end
+        for line in data[:end].decode("utf-8", "replace").splitlines():
+            ev = _mta_event(line)
+            if ev:
+                self._events.append(ev)
 
     def _read_maildir(self) -> "list[tuple[str, str, str, str]]":
         """Every new mail is read once and deleted, kept or not: the server

@@ -561,3 +561,7 @@ allow_links = false
 maildir = ""
 mail_domain = ""
 auth_serv_id = ""
+# Optional: a log file holding only the mail server's reject and dropped-
+# connection lines (e.g. an rsyslog filter of Postfix). Read with the
+# Maildir and counted by reason in bridge_events; nothing else is kept.
+mta_log = ""

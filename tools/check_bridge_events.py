@@ -21,6 +21,10 @@ network):
   5. /api/counters carries bridge_events, and the web GUI hands the counter
      to all three bridges
   6. counting never carries who: no address, chat id or callsign in a name
+  7. what the MTA refused at the door (`mta_log`, its reject lines) is
+     counted by reason: unknown recipient, relay, dropped connection ...;
+     the first read does not count the past, a half-written line waits,
+     and a rotated log is read from its start
 
 Usage:  python tools/check_bridge_events.py
 Exit code 1 on failure.
@@ -238,6 +242,53 @@ async def run() -> list:
     print(f"  6 event names {sorted(names)}")
     if bad or not names:
         p.append(f"6: event names carry data: {bad or 'none found'}")
+
+    # 7 - the MTA's rejects
+    log = tmp / "mta.log"
+    old_line = ("Oct 27 07:00:00 h postfix/smtpd[1]: NOQUEUE: reject: RCPT from x[1.2.3.4]: "
+                "550 5.1.1 <a@aprsagent.com>: Recipient address rejected: User unknown\n")
+    log.write_text(old_line * 5, encoding="utf-8")
+    md2 = tmp / "Maildir2"
+    for d in ("new", "cur", "tmp"):
+        (md2 / d).mkdir(parents=True, exist_ok=True)
+    try:
+        r = quiet(ImapReceiver({"enabled": True, "from_callsign": "EMAIL-5", "allow_links": True,
+                                "maildir": str(md2), "mail_domain": "aprsagent.com",
+                                "auth_serv_id": AUTHSERV, "mta_log": str(log)}))
+    except Exception as e:
+        r = None
+        p.append(f"7: {e}")
+    if r is not None:
+        r._queue = Q()
+        got = recorder(r)
+        await r._check_maildir()                      # first look: the past is not counted
+        first = dict(got)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(old_line)
+            f.write("Oct 27 07:01:00 h postfix/smtpd[2]: NOQUEUE: reject: RCPT from y[5.6.7.8]: "
+                    "454 4.7.1 <t@x.com>: Relay access denied\n")
+            f.write("Oct 27 07:02:00 h postfix/smtpd[3]: lost connection after CONNECT from z[9.9.9.9]\n")
+            f.write("Oct 27 07:03:00 h postfix/smtpd[4]: NOQUEUE: reject: RCPT from w[1.1.1.1]: 554 5.7.1 half")
+        await r._check_maildir()
+        second = dict(got)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(" written: Client host rejected\n")
+        await r._check_maildir()
+        third = dict(got)
+        log.unlink()                                  # rotated: a new, shorter file
+        log.write_text(old_line, encoding="utf-8")
+        await r._check_maildir()
+        fourth = dict(got)
+        print(f"  7 MTA log: first {first} | then {second} | half line done {third} | rotated {fourth}")
+        if first:
+            p.append(f"7: the first read counted the past: {first}")
+        want = {"mta_reject_unknown_recipient": 1, "mta_reject_relay": 1, "mta_dropped_connection": 1}
+        if second != want:
+            p.append(f"7: {second}, wanted {want}")
+        if third.get("mta_reject_client") != 1:
+            p.append(f"7: a line finished later was not counted: {third}")
+        if fourth.get("mta_reject_unknown_recipient") != 2:
+            p.append(f"7: a rotated log was not read from its start: {fourth}")
     return p
 
 

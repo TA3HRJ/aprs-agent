@@ -666,8 +666,11 @@ First word = destination callsign, rest = message text.
 Every bridge event of person-to-person traffic is counted per UTC day
 (60 days kept): what was carried (`mail_in`, `mail_out`, `tg_on_air`) and
 what was refused and why (`mail_in_unauthenticated`, `mail_in_unlinked`,
-`mail_bad_code`, `tg_ignored`, the hourly limits ...). `/api/counters`
-reports the last 30 days as `bridge_events` - counts only, never who.
+`mail_bad_code`, `tg_ignored`, the hourly limits ...). With `mta_log` (a
+file of the mail server's reject lines only) what the MTA refused at the door
+is counted too: `mta_reject_unknown_recipient`, `mta_reject_relay`,
+`mta_dropped_connection` ... `/api/counters` reports the last 30 days as
+`bridge_events` - counts only, never who.
 
 **Person to person** (`allow_links`, off by default): instead of an IMAP
 account, this machine's own MTA takes mail for `CALL@your-domain` and
