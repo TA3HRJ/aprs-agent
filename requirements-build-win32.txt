@@ -58,6 +58,14 @@
 #   GHSA-5wr8-gcqf-gqf3 and GHSA-494j-54xm-rwp3; it requires yarl >= 1.25.1,
 #   so yarl 1.24.5 -> 1.25.1 - still the pure-Python wheel (py3-none-any),
 #   as 1.24.5 was: yarl publishes no win32 build.
+#
+#   2026-10-27, v3.2.198: pillow 12.3.0 -> 13.0.0, which closes the 41
+#   advisories on 12.3.0 (13.0.0 is the first patched version for all of
+#   them; cp313-win32 wheel on PyPI). PIL is a hidden import of every target
+#   but is used only by the desktop GUI, which is not in the archive.
+#   setuptools 84.0.0 -> 84.2.1 (one low advisory, fixed in 84.1.0; pure
+#   Python). The Linux lock keeps pillow 12.3.0: 13.0.0 requires Python 3.11
+#   and the VPS runs 3.10, where nothing imports PIL.
 
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.4
@@ -91,7 +99,7 @@ oauthlib==3.3.1
 openai==3.0.0
 packaging==26.3
 pefile==2024.8.26
-pillow==12.3.0
+pillow==13.0.0
 propcache==0.5.3
 pycparser==3.0
 pydantic==2.13.5
@@ -102,7 +110,7 @@ pystray==0.19.5
 pywin32-ctypes==0.2.3
 requests==2.34.2
 requests-oauthlib==2.0.0
-setuptools==84.0.0
+setuptools==84.2.1
 six==1.17.0
 sniffio==1.3.1
 tomli_w==1.2.0
