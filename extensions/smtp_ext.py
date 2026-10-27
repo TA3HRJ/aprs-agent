@@ -234,6 +234,11 @@ class SmtpEmailer(Extension):
         # Only handle message packets
         if packet.get("format") != "message":
             return None
+        # A radio's ack or rej of what we sent parses as a message with no
+        # text: carried on, it became an empty mail, post or chat message,
+        # and was acked back (F-2026-10-27-04)
+        if packet.get("response"):
+            return None
 
         # Check APRS message recipient (addressee)
         recipient = packet.get("addresse", "").strip().upper()

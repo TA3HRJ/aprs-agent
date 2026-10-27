@@ -8204,3 +8204,32 @@ good poll while it has no name) and the gateway's SERVICES names
 `@<bot>` beside /bagla - /link. The live answer still fits three parts in
 both languages. The landing's bridges line and privacy section 04 name the
 bot. `check_services_answer` items 9-10 fail on v3.2.196.
+
+---
+
+## F-2026-10-27-04 — the bridges carried a radio's ack on as a message
+
+**Source:** the operator's e-mail round trip, 2026-10-27 16:26 ·
+**Verdict:** our bug; fixed in v3.2.203
+
+The journal showed `[smtp] message from TA3HX-7 has no email+content
+format: ''` seven seconds after the EMAIL alias sent the link code. The
+packet was the Anytone's `:EMAIL    :ack2` - the ack of that reply.
+aprslib parses an ack as format "message" with `response` "ack", a
+`msgNo` and no `message_text`, and every bridge checked only the format.
+
+For the operator it was only a log line. For anyone else it was worse, by
+`check_bridge_acks` on v3.2.202:
+
+- e-mail: a linked amateur's ack fell to "own text to own address" - an
+  empty mail per ack, and every LINK/limit reply the alias sends draws one;
+  it also spent the hourly allowance
+- Telegram: the ack of each message the bot put on air (from_callsign is
+  an accepted recipient) went to the chat as an empty message - 12 of 12
+  in the check; not yet seen live (no ack to TA3HX-6 in the packet log)
+- Bluesky, Twitter, WhatsApp: an operator's ack posted an empty post
+- all five returned an ack for the ack
+
+**Applied, v3.2.203.** Each bridge returns before anything else when the
+packet has a `response`. The gateway already handled acks on its own path
+and is unchanged. `check_bridge_acks.py` fails on v3.2.202 (7 items).
