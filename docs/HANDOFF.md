@@ -65,10 +65,12 @@ predating v3.2.93's weather exclusion, which changed cell composition: *"23 of
 
 ## Releasing to Windows
 
-**Built 2026-10-31: v3.3.0** — `aprs-agent-v3.3.0.zip`, 60.3 MiB, 248 files, sha256
-`2B9ADF92C0E5426EF54E6BC2660B8859201288B36ABC98FFB2623A1B6C2BE8A2`, same file list as v3.2.198.
-Notes in `docs/RELEASE-v3.3.0-draft.md`. `gh release create` was refused by the
-auto-mode classifier; the operator publishes it. Until then the previous one stands:
+**Published 2026-10-31: [v3.3.0](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.3.0)**
+— `aprs-agent-v3.3.0.zip`, 60.3 MiB, 248 files, sha256
+`2B9ADF92C0E5426EF54E6BC2660B8859201288B36ABC98FFB2623A1B6C2BE8A2` (GitHub's asset
+digest matches), same file list as v3.2.198. Notes in `docs/RELEASE-v3.3.0-draft.md`.
+`gh release create` was refused by the auto-mode classifier; the operator ran it.
+`/releases/latest` resolves to v3.3.0.
 
 **Published 2026-10-27: [v3.2.198](https://github.com/TA3HRJ/aprs-agent/releases/tag/v3.2.198)**
 — `aprs-agent-v3.2.198.zip`, 60.2 MiB, 248 files, sha256
