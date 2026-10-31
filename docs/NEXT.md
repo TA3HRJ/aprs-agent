@@ -204,7 +204,8 @@ What is left, in the order it is worth doing:
     2026-10-31, v3.2.207: the operator's first real Telegram link and round
     trip from a radio passed - a second account's `/bagla TA3HX-7` gave a
     code, `LINK <code>` from the radio to TGSEND linked it a minute later,
-    the chat's `TA3HX-6 deneme` went on air as TA3HX-7 (`own`), `TA3HX-7
+    the chat's `TA3HX-6 deneme` went on air as TA3HX-7 (`own`; aprs.fi shows
+    `TA3HX-7>TA3HX-6: deneme`), `TA3HX-7
     merhaba` from the radio reached the chat, `UNLINK` from the radio removed
     it (`bridge_links.json` telegram empty again). Each step read off the
     journal. E-mail: radio -> mail passed 2026-10-27; mail to one's own call
