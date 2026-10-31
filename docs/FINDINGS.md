@@ -8269,3 +8269,110 @@ own call while an IS->RF igate hears the radio.
 **Seen on air, 2026-10-27 20:43:** a mail from the linked address to the own
 call went out at 20:43:02 from EMAIL-5, and the Anytone acked it eight seconds
 later through YAAC (`TA3HX-7>...,qAR,TA3HX-10::EMAIL-5  :ack2`).
+
+---
+
+## F-2026-10-31-01 — `Origin: null` passed the same-origin guard
+
+**Source:** an outside review of web_gui.py v3.2.205, pasted by the operator
+and checked against the code before anything changed ·
+**Verdict:** our bug; fixed in v3.2.206
+
+`_same_origin_only` refused a state-changing request whose Origin named
+another host, but tested `if src and src not in allowed`.
+`urlsplit("null").netloc` is `""`, so `Origin: null` - what a sandboxed frame
+sends - was read as no Origin at all and let through to `/api/stop`,
+`/api/config` and the rest. aiohttp reads the body as JSON whatever the
+Content-Type, so a `text/plain` form POST needs no preflight.
+
+Where it mattered most: a local install (Windows, Docker) serves the admin
+panel on 127.0.0.1:8080 with no login, and this check is the only thing
+between it and any page the operator opens. On the VPS the panel sits behind
+Apache form auth; its session cookie carries no SameSite attribute, so the
+browser's default decides. Not reproduced in a browser - read from the code
+and the headers.
+
+**Applied, v3.2.206.** An Origin header that names no host is refused like a
+foreign one. Requests with no Origin (the WhatsApp webhook) are unaffected.
+`check_web_guards` item 1 fails on v3.2.205.
+
+---
+
+## F-2026-10-31-02 — one exception could empty the still-off-the-air list
+
+**Source:** the same review · **Verdict:** our bug, never seen live; fixed in
+v3.2.206
+
+The silence loop pruned the missing list with `state = {}` when
+`silence_state()` raised. `_heard_again(None)` is True on purpose - a station
+gone from the registry leaves the list - so an empty answer removed every
+entry (1,718 on 2026-10-31) and logged a "back on the air" for each, and the
+next checkpoint made it permanent: F-35's false returns by another road.
+
+**Applied, v3.2.206.** The pruning is `AgentManager._prune_missing()`; when
+`silence_state()` raises it logs "missing list not checked" and removes
+nothing. `check_web_guards` item 2 fails on v3.2.205, and again with the guard
+reverted inside the new method.
+
+---
+
+## F-2026-10-31-03 — a young gate's "would still be flagged" used 3x the mean only
+
+**Source:** the same review · **Verdict:** our bug; fixed in v3.2.206
+
+`_prop_vs_baseline` answered "would this link be flagged if the gate were
+established" against `3 * ema`. The rule an established gate is held to is
+`max(3*mean, mean + 4*sigma)` (`station_db._ingest_prop_link`, F-2026-08-13-21).
+On a young gate with a wide spread the sigma term decides: mean 300 km,
+sigma 400 km, a 1000 km link - 3x says 900 km and "clears that bar and would
+still be flagged"; the real bar is 1900 km and it would not.
+
+**Applied, v3.2.206.** The counterfactual uses the flag-time sigma (the
+baseline's when the link predates it) and the reading names both terms.
+`check_web_guards` item 3 fails on v3.2.205.
+
+---
+
+## F-2026-10-31-04 — three small faults from the same review
+
+**Verdict:** ours; fixed in v3.2.206 (`check_web_guards` items 4-6, each
+failing on v3.2.205)
+
+- Monitor notifications by mail: an `smtp_server` without a port gave an
+  empty host, and smtplib failed with "please run connect() first" (the
+  review said it would reach localhost:587; it connects to nothing).
+  `smtp_ext` already refused the same value with a clear line; now this
+  path does too.
+- `/api/missing` iterated `mgr._missing` on the web loop while the agent
+  thread deletes from it, and `_grid_status` iterated `_quake_watches` while
+  `_quake_watch_scan` changes it in the executor: an occasional
+  "dictionary changed size during iteration". Both iterate a snapshot.
+- `_quake_watches_load`: one entry whose `ts` was not a number raised out of
+  the loop and no watch was restored. It is skipped.
+
+---
+
+## F-2026-10-31-05 — a station that falls silent while its cell alerts never reaches the missing list
+
+**Source:** the same review; measured on the VPS 2026-10-31 ·
+**Verdict:** design gap, not changed - waiting for the operator
+
+The comment on `_missing` says it holds stations that crossed their threshold
+"while their cell was alerting"; the code adds a cell's `silent_calls` only
+in the scan where the episode opens. One falling silent later in the same
+episode is never added, and if the cell drops below the rule it leaves the
+map with nothing anywhere.
+
+Measured:
+
+- **Live, `/api/silence` against `/api/missing`:** 4 alerting cells, 18 silent stations, 4 of them not on the
+  list (FF96 1, JN27 2, KP23 1).
+- **`silence_history`, 7 days** (read-only): 951 alerting episodes, keyed by
+  cell and `since`. 5,848 stations were silent in an episode's first alerting
+  snapshot; 461 more fell silent later in the same episode (+7.9 %, in 254
+  episodes). Most of the big ones repeat - JN72 three nights running.
+
+An upper bound: the first alerting snapshot can precede the scan where the
+episode opens (the confirm delay), so some of the 461 were added. Adding them
+grows the list by up to about 460 entries a week, against 1,718 now; entries
+still leave only when heard. No code written.

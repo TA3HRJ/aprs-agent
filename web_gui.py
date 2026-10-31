@@ -536,8 +536,12 @@ def _quake_watches_load(text: str, now: float) -> dict:
         return {}
     out = {}
     for k, d in (raw.items() if isinstance(raw, dict) else ()):
-        if (not isinstance(d, dict) or not d.get("ts")
-                or now - float(d["ts"]) > _QUAKE_WINDOW_S):
+        # One unreadable entry skipped, not every watch lost (F-2026-10-31-04)
+        try:
+            if (not isinstance(d, dict) or not d.get("ts")
+                    or now - float(d["ts"]) > _QUAKE_WINDOW_S):
+                continue
+        except (TypeError, ValueError):
             continue
         d["quiet"] = set(d.get("quiet") or ())
         d["far_quiet"] = set(d.get("far_quiet") or ())
@@ -1655,17 +1659,8 @@ class AgentManager:
                 for cell in cleared:
                     self._log_both(f"[silence] cleared: {cell}")
 
-                # A station leaves the missing list only by being heard again —
-                # independent of whether its cell is still alerting.
                 if self._missing:
-                    try:
-                        state = self._station_db.silence_state(list(self._missing))
-                    except Exception:
-                        state = {}
-                    for call in list(self._missing):
-                        if _heard_again(state.get(call)):
-                            del self._missing[call]
-                            self._log_both(f"[silence] back on the air: {call}")
+                    self._prune_missing()
 
                 # Prune cooled-down cache entries regardless of alert state, so
                 # the dict doesn't grow forever with cells that never re-alert.
@@ -2049,7 +2044,9 @@ class AgentManager:
                     out["cell"]["since"] = int(self._silence_active[grid])
         now = time.time()
         quakes = []
-        for w in self._quake_watches.values():
+        # A snapshot: _quake_watch_scan adds and drops watches in the
+        # executor (F-2026-10-31-04)
+        for w in list(self._quake_watches.values()):
             if w.get("alert") not in _PAGER_SHOWN or not w.get("ts"):
                 continue
             km = _quake_reaches(w, grid)
@@ -2631,6 +2628,22 @@ class AgentManager:
         except Exception:
             return None
 
+    def _prune_missing(self) -> None:
+        """A station leaves the missing list only by being heard again -
+        independent of whether its cell is still alerting."""
+        try:
+            state = self._station_db.silence_state(list(self._missing))
+        except Exception as e:
+            # Not knowing is not hearing: an empty answer here read as every
+            # station gone from the registry, emptied the list and logged a
+            # "back on the air" for each (F-2026-10-31-02)
+            self._log_both(f"[silence] missing list not checked: {e}")
+            return
+        for call in list(self._missing):
+            if _heard_again(state.get(call)):
+                del self._missing[call]
+                self._log_both(f"[silence] back on the air: {call}")
+
     @staticmethod
     async def _send_notification(msg: str, channel: str, config: dict) -> None:
         loop = asyncio.get_event_loop()
@@ -2663,7 +2676,13 @@ class AgentManager:
                 print("[monitor] SMTP not configured — cannot send notification", file=sys.stderr)
                 return
             host, _, port_str = server_port.rpartition(":")
-            port = int(port_str) if port_str.isdigit() else 587
+            if not host or not port_str.isdigit():
+                # Without a port the host came out empty and smtplib failed
+                # with "please run connect() first" (F-2026-10-31-04)
+                print(f"[monitor] Invalid smtp_server '{server_port}'. "
+                      f"Use 'host:port'", file=sys.stderr)
+                return
+            port = int(port_str)
             import smtplib, email.mime.text as _mt
             mime = _mt.MIMEText(msg, "plain", "utf-8")
             mime["Subject"] = f"APRS Monitor: {msg.splitlines()[0]}"
@@ -4217,7 +4236,8 @@ async def get_missing(request: web.Request) -> web.Response:
     except Exception:
         state = {}
     out = []
-    for call, meta in mgr._missing.items():
+    # A snapshot: the agent thread removes entries (F-2026-10-31-04)
+    for call, meta in list(mgr._missing.items()):
         st = state.get(call)
         if not st or _heard_again(st):
             continue
@@ -4408,9 +4428,13 @@ def _prop_vs_baseline(link: dict, base: dict, params: dict) -> dict:
                         "before — see gate_baseline for why"}
     ratio = km / ema
     # The counterfactual, and it belongs to YOUNG gates only: what this gate's
-    # own average would have said had it been trusted. 3x the mean is the rule
-    # an established gate is held to (station_db._ingest_prop_link).
-    est_threshold = 3.0 * ema
+    # own figures would have said had they been trusted. An established gate
+    # is held to max(3*mean, mean + 4*sigma) (station_db._ingest_prop_link);
+    # 3x the mean alone said "would still be flagged" of links a spread-out
+    # young gate would not have flagged (F-2026-10-31-03).
+    sigma = (at.get("sigma_km") if at.get("ema_km")
+             else base.get("sigma_km")) or 0.0
+    est_threshold = max(3.0 * ema, ema + 4.0 * sigma)
     would_survive = km >= est_threshold
     # The bar the decision actually used, off the link. Unlike the figures
     # above it cannot approach zero — the floor is folded into it — so
@@ -4457,7 +4481,8 @@ def _prop_vs_baseline(link: dict, base: dict, params: dict) -> dict:
         reading = (
             "{bar}this link is {r:.2f}x the figure this gate has produced so "
             "far ({e:.0f} km). An established gate is only flagged at or "
-            "beyond 3x that figure, which here would be {t:.0f} km, so this "
+            "beyond 3x that figure or that figure plus 4 sigma, whichever is "
+            "higher, which here would be {t:.0f} km, so this "
             "link {verdict}. The gate is NOT established ({n} of {need} "
             "samples), so the figure is itself weak — but it is the only "
             "thing measured about this gate, and reading it as no information "
@@ -4881,7 +4906,10 @@ async def _same_origin_only(request: web.Request, handler):
                 request.headers.get("Host", ""),
                 request.headers.get("X-Forwarded-Host", ""),
             ) if h}
-            if src and src not in allowed:
+            # A sandboxed frame sends "Origin: null", whose netloc is empty:
+            # a header that is there but names no host is foreign too
+            # (F-2026-10-31-01)
+            if not src or src not in allowed:
                 print(f"[web] cross-origin {request.method} {request.path} "
                       f"from {origin} refused", file=sys.stderr)
                 raise web.HTTPForbidden(text="cross-origin request refused")
