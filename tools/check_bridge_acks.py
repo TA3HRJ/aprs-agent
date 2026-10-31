@@ -37,10 +37,10 @@ from extensions.bluesky_ext import Bluesky  # noqa: E402
 from extensions.smtp_ext import SmtpEmailer  # noqa: E402
 from extensions.whatsapp_ext import WhatsApp  # noqa: E402
 
-try:
-    from extensions.twitter_ext import Twitter  # noqa: E402
-except Exception:  # tweepy missing
-    Twitter = None
+# The module imports without tweepy and the class refuses to start (v3.2.143),
+# so the import alone cannot tell; CI has no tweepy
+import extensions.twitter_ext as twm  # noqa: E402
+Twitter = twm.Twitter if twm.tweepy is not None else None
 
 
 class Q:
