@@ -8376,3 +8376,27 @@ An upper bound: the first alerting snapshot can precede the scan where the
 episode opens (the confirm delay), so some of the 461 were added. Adding them
 grows the list by up to about 460 entries a week, against 1,718 now; entries
 still leave only when heard. No code written.
+
+---
+
+## F-2026-10-31-06 — a start can hang connecting to APRS-IS, and the updater reads it as a bad release
+
+**Source:** the v3.2.204 and v3.2.206 deploys, 2026-10-27 20:18 and
+2026-10-31 07:02 (journal times) · **Verdict:** our gap; not changed
+
+Twice the updater rolled a release back with "packets 0 -> 0 in 60 s". In
+both journals the new process logged `[aprs-is] login callsign: TA3HX-5` and
+then nothing from the connection: no beacon, no status, no Telegram poll
+start. The beacon's queue is set only after `asyncio.open_connection()`
+returns (aprs_connection.py:140-150), and the healthy starts log the beacon in
+the same second as the login line. So both times the process was still inside
+`open_connection(server, port)` - `rotate.aprs2.net` had handed it a server
+that did not answer - and that call has no timeout; the 120 s
+`READ_TIMEOUT_S` guards only reads after it. The rollback, connecting afresh,
+was on the air at once both times.
+
+The releases were not at fault: v3.2.204 went live unchanged on the second
+try. The cost is a release held back until someone clears the tag from
+`/var/lib/aprs-update.bad-tags`, and on any start, up to the kernel's TCP
+connect timeout (about two minutes) off the air. The fix would be a deadline
+on the connect so the next rotate answer is tried; not written yet.
