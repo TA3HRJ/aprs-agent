@@ -208,13 +208,17 @@ What is left, in the order it is worth doing:
     `TA3HX-7>TA3HX-6: deneme`), `TA3HX-7
     merhaba` from the radio reached the chat, `UNLINK` from the radio removed
     it (`bridge_links.json` telegram empty again). Each step read off the
-    journal. E-mail: radio -> mail passed 2026-10-27; mail to one's own call
-    still waits for an IS->RF igate that hears the radio.
+    journal. E-mail the same evening, radio to radio: `TA3HX-7 eposta
+    deneme` to EMAIL (gated by TA3HX-10) was mailed to the linked address
+    with Reply-To ta3hx-7@aprsagent.com (19:40:41 CET); the Gmail reply
+    passed DMARC (19:41:29) and went on air as `EMAIL-5>TA3HX-7: mail:
+    cevap 1` (19:41:34); the Anytone showed it and acked EMAIL-5 six seconds
+    later through TA3HX-10 - the IS->RF leg works.
 25. **v3.3.0 after v3.2.199** (the operator's idea, 2026-10-27, for later).
     Precedent: v3.1.0 (incident response) and v3.0.0 marked new capabilities;
     person-to-person bridges both ways are one. Cut it when the operator's
     first real round trip (radio -> Telegram/e-mail -> radio) has passed
-    (Telegram passed 2026-10-31, see 24), with
+    (Telegram and e-mail passed 2026-10-31, see 24), with
     a Windows release and notes summarising the 3.2 line. Nothing assumes
     3.2: the VPS update script picks tags by version sort
     (`--sort=-v:refname`), v3.3.0 > v3.2.199.
