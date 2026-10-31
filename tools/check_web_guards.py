@@ -20,6 +20,10 @@ network, no server):
   5. /api/missing and the grid status iterate snapshots of dicts another
      thread changes
   6. one unreadable quake watch does not stop the others being restored
+  7. a station that falls silent while its cell's episode is already open
+     reaches the still-off-the-air list, not only those silent when it
+     opened (F-2026-10-31-05: 461 in a week were not); a cell still waiting
+     out its confirm delay adds nobody, and an entry keeps its first date
 
 Usage:  python tools/check_web_guards.py
 Exit code 1 on failure.
@@ -186,6 +190,25 @@ def main() -> int:
     print(f"  6 one bad watch, one good -> {sorted(got)}")
     if sorted(got) != ["us2"]:
         p.append(f"6: restored {sorted(got)}, expected us2")
+
+    # 7
+    note = getattr(wg.AgentManager, "_note_missing", None)
+    if note is None:
+        p.append("7: no AgentManager._note_missing - stations silent after "
+                 "an episode opened are never added")
+    else:
+        m = manager(None, {"OLD-1": {"cell": "JN27", "flagged": 5.0}})
+        m._silence_active = {"JN27": 1.0}
+        alerts = {"JN27": {"silent_calls": ["OLD-1", "LATE-2"]},
+                  "KP23": {"silent_calls": ["PENDING-3"]}}
+        m._note_missing(alerts, 100.0)
+        print(f"  7 open JN27 + pending KP23 -> {sorted(m._missing)}")
+        if "LATE-2" not in m._missing:
+            p.append("7: a station silent after its cell's episode opened was not added")
+        if "PENDING-3" in m._missing:
+            p.append("7: a cell still waiting out its confirm delay added a station")
+        if m._missing.get("OLD-1", {}).get("flagged") != 5.0:
+            p.append("7: an entry already on the list lost its first date")
 
     for f in p:
         print("  FAIL  " + f)

@@ -1619,11 +1619,9 @@ class AgentManager:
                         c.get("silent_calls") or [])
 
                 opened, cleared = self._silence_episodes(set(alerts), time.time())
+                self._note_missing(alerts, time.time())
                 for cell in opened:
                     c = alerts[cell]
-                    for _call in c.get("silent_calls", []):
-                        self._missing.setdefault(
-                            _call, {"cell": cell, "flagged": time.time()})
                     note = ""
                     now_ts = time.time()
                     cached = self._silence_note_cache.get(cell)
@@ -2627,6 +2625,23 @@ class AgentManager:
             return _json.loads(text)
         except Exception:
             return None
+
+    def _note_missing(self, alerts: dict, now: float) -> None:
+        """Every station silent in a cell whose episode is open goes on the
+        missing list, kept with the date it was first put there.
+
+        Only the cell's silent stations at the scan where the episode opened
+        used to be added; one falling silent later in the same episode was
+        never listed, and left the map with nothing anywhere when the cell
+        dropped below the rule - 461 stations in the week to 2026-10-31
+        (F-2026-10-31-05). A cell still waiting out _SILENCE_CONFIRM_S adds
+        nobody, as before.
+        """
+        for cell, c in alerts.items():
+            if cell not in self._silence_active:
+                continue
+            for call in c.get("silent_calls") or ():
+                self._missing.setdefault(call, {"cell": cell, "flagged": now})
 
     def _prune_missing(self) -> None:
         """A station leaves the missing list only by being heard again -

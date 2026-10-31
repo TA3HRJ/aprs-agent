@@ -8377,6 +8377,12 @@ episode opens (the confirm delay), so some of the 461 were added. Adding them
 grows the list by up to about 460 entries a week, against 1,718 now; entries
 still leave only when heard. No code written.
 
+**Applied, v3.2.207, the operator's decision the same day.** Every scan adds
+the silent stations of each alerting cell whose episode is open
+(`AgentManager._note_missing`), keeping an entry's first date; a cell still
+in its confirm delay adds nobody. `check_web_guards` item 7 fails on
+v3.2.206 and with the method emptied.
+
 ---
 
 ## F-2026-10-31-06 — a start can hang connecting to APRS-IS, and the updater reads it as a bad release
@@ -8400,3 +8406,11 @@ try. The cost is a release held back until someone clears the tag from
 `/var/lib/aprs-update.bad-tags`, and on any start, up to the kernel's TCP
 connect timeout (about two minutes) off the air. The fix would be a deadline
 on the connect so the next rotate answer is tried; not written yet.
+
+**Applied, v3.2.207.** The next address is started 5 s after the last
+(`happy_eyeballs_delay`), the whole connect ends at 30 s and is retried with a
+fresh lookup, and "no answer from SERVER:PORT" goes to the journal as well.
+v3.2.206 went live on its second start (07:33:43, beacon the same second).
+`check_connect_timeout` fails on v3.2.206 (4 items). Measured from this
+machine: rotate.aprs2.net answered in 0.45 s; 10.255.255.1 was given up at a
+3 s deadline.

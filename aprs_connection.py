@@ -46,6 +46,16 @@ SOFTWARE_VERSION = f"APRS-AGENT {VERSION}"
 # check on it.
 READ_TIMEOUT_S = 120.0
 
+# The connect had no deadline either. rotate.aprs2.net answers with eleven
+# addresses and asyncio tries them one after another, so a dead first one
+# cost the kernel's whole TCP connect timeout, about two minutes, before the
+# next was tried. Twice a deploy's health check gave up first and rolled a
+# good release back (F-2026-10-31-06). Now the next address starts after
+# CONNECT_STAGGER_S whether or not the last has failed, and the whole attempt
+# ends at CONNECT_TIMEOUT_S, when the name is looked up again.
+CONNECT_TIMEOUT_S = 30.0
+CONNECT_STAGGER_S = 5.0
+
 
 def _warn_login_collision(callsign: str) -> None:
     """Say which callsign we log in as, and warn when it carries no SSID.
@@ -137,7 +147,10 @@ async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
         print(f"Connecting to {server}:{port} ...", file=sys.stderr)
 
         try:
-            reader, writer = await asyncio.open_connection(server, port)
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(server, port,
+                                        happy_eyeballs_delay=CONNECT_STAGGER_S),
+                timeout=CONNECT_TIMEOUT_S)
             print(f"Connected. Logging in as {callsign} ...", file=sys.stderr)
 
             # Send login
@@ -152,6 +165,15 @@ async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
             # Run the receive loop and the send loop concurrently
             await _run_session(reader, writer, own_queue, ext_con_store, rate_limit_pps)
 
+        except asyncio.TimeoutError:
+            # Before OSError: from 3.11 this is TimeoutError, an OSError, and
+            # would print as "Network error: ." Both streams, so the journal
+            # can tell this from a hang somewhere else.
+            line = (f"[aprs-is] no answer from {server}:{port} in "
+                    f"{CONNECT_TIMEOUT_S:.0f}s. Retrying in 5s ...")
+            print(line, file=sys.stderr)
+            if sys.stderr is not sys.__stderr__:
+                print(line, file=sys.__stderr__)
         except ConnectionRefusedError:
             print(
                 f"Connection refused by {server}:{port}. Retrying in 5s ...",
