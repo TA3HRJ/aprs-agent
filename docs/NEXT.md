@@ -200,12 +200,20 @@ What is left, in the order it is worth doing:
     it, the IMAP extension sends a DMARC-passing mail from a linked address
     under the linked call (`check_email_inbound`); replies to
     person-to-person mails come back on air; MX at GoDaddy. Never through the
-    operator's Gmail. Open: a first real link and round trip from a radio
-    (the operator's own test); Bluesky DM or unchanged.
+    operator's Gmail. Open: Bluesky DM or unchanged.
+    2026-10-31, v3.2.207: the operator's first real Telegram link and round
+    trip from a radio passed - a second account's `/bagla TA3HX-7` gave a
+    code, `LINK <code>` from the radio to TGSEND linked it a minute later,
+    the chat's `TA3HX-6 deneme` went on air as TA3HX-7 (`own`), `TA3HX-7
+    merhaba` from the radio reached the chat, `UNLINK` from the radio removed
+    it (`bridge_links.json` telegram empty again). Each step read off the
+    journal. E-mail: radio -> mail passed 2026-10-27; mail to one's own call
+    still waits for an IS->RF igate that hears the radio.
 25. **v3.3.0 after v3.2.199** (the operator's idea, 2026-10-27, for later).
     Precedent: v3.1.0 (incident response) and v3.0.0 marked new capabilities;
     person-to-person bridges both ways are one. Cut it when the operator's
-    first real round trip (radio -> Telegram/e-mail -> radio) has passed, with
+    first real round trip (radio -> Telegram/e-mail -> radio) has passed
+    (Telegram passed 2026-10-31, see 24), with
     a Windows release and notes summarising the 3.2 line. Nothing assumes
     3.2: the VPS update script picks tags by version sort
     (`--sort=-v:refname`), v3.3.0 > v3.2.199.
