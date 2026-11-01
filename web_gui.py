@@ -3208,6 +3208,8 @@ async def public_llms(request: web.Request) -> web.Response:
         " https://github.com/TA3HRJ/aprs-agent",
         f"- Atom feed of silence alerts and quake rings: {_public_base(request, cfg)}"
         "feed/silence.atom (?grid=KM,KN41, ?lang=tr)",
+        f"- Atom feed of propagation openings: {_public_base(request, cfg)}"
+        "feed/prop.atom (?grid=KM,KN41, ?lang=tr)",
     ]
     for label, key in (("Home", "public_home_url"),
                        ("Privacy", "public_privacy_url")):
@@ -3242,23 +3244,15 @@ async def silence_feed(request: web.Request) -> web.Response:
     mgr: AgentManager = request.app["manager"]
     base = _public_base(request, mgr.get_config())
     tr = request.query.get("lang", "").lower() == "tr"
-    grids = [g.strip().upper() for g in request.query.get("grid", "").split(",")
-             if g.strip()]
-    if any(not _FEED_GRID.match(g) for g in grids):
+    grids = _feed_grids(request)
+    if grids is None:
         return web.Response(status=400, text="grid: Maidenhead fields or "
                             "squares, comma-separated, e.g. KM,KN41\n")
     db = mgr._station_db
     entries = []
     deaf = db.deaf_since()
     if deaf:
-        entries.append({
-            "id": "tag:aprsagent.com,2026:deaf/%d" % int(deaf),
-            "updated": deaf,
-            "title": ("Ajan APRS-IS'i duymuyor" if tr else
-                      "This agent is not hearing APRS-IS"),
-            "summary": ("Bu süre boyunca sessizlik değerlendirilmiyor." if tr
-                        else "No silence is judged while it cannot hear."),
-            "link": base})
+        entries.append(_deaf_entry(deaf, base, tr))
     else:
         for c in await silence_cells_cached(db, mgr._sta_db_path):
             since = mgr._silence_active.get(c["cell"]) if c.get("alert") else None
@@ -3300,19 +3294,42 @@ async def silence_feed(request: web.Request) -> web.Response:
             "title": ("M%.1f %s (PAGER %s)" % (mag, place, level)),
             "summary": text,
             "link": base + "?q=" + _latlon_to_grid4(w["lat"], w["lon"])})
-    entries.sort(key=lambda e: -e["updated"])
-    entries = entries[:_FEED_MAX]
+    title = ("APRS-Agent — sessizlik uyarıları ve deprem halkaları" if tr else
+             "APRS-Agent — silence alerts and quake rings")
+    return _atom_response(request, base, "feed/silence.atom", title, grids,
+                          entries)
+
+
+def _feed_grids(request: web.Request):
+    """?grid= as a list, or None when one of them is not a field or square."""
+    grids = [g.strip().upper() for g in request.query.get("grid", "").split(",")
+             if g.strip()]
+    return None if any(not _FEED_GRID.match(g) for g in grids) else grids
+
+
+def _deaf_entry(deaf: float, base: str, tr: bool) -> dict:
+    return {"id": "tag:aprsagent.com,2026:deaf/%d" % int(deaf),
+            "updated": deaf,
+            "title": ("Ajan APRS-IS'i duymuyor" if tr else
+                      "This agent is not hearing APRS-IS"),
+            "summary": ("Bu süre boyunca sessizlik değerlendirilmiyor." if tr
+                        else "No silence is judged while it cannot hear."),
+            "link": base}
+
+
+def _atom_response(request: web.Request, base: str, path: str, title: str,
+                   grids: list, entries: list) -> web.Response:
+    """Both feeds, written the same way: newest first, at most _FEED_MAX."""
+    entries = sorted(entries, key=lambda e: -e["updated"])[:_FEED_MAX]
     esc = html.escape
     self_url = str(request.url.with_scheme(
         request.headers.get("X-Forwarded-Proto", request.scheme)))
-    title = ("APRS-Agent — sessizlik uyarıları ve deprem halkaları" if tr else
-             "APRS-Agent — silence alerts and quake rings")
     if grids:
         title += " (" + ", ".join(grids) + ")"
     out = ['<?xml version="1.0" encoding="utf-8"?>',
            '<feed xmlns="http://www.w3.org/2005/Atom">',
            "<title>%s</title>" % esc(title),
-           "<id>%s</id>" % esc(base + "feed/silence.atom"
+           "<id>%s</id>" % esc(base + path
                                + ("?grid=" + ",".join(grids) if grids else "")),
            "<updated>%s</updated>" % _atom_time(
                entries[0]["updated"] if entries else time.time()),
@@ -3331,6 +3348,97 @@ async def silence_feed(request: web.Request) -> web.Response:
     return web.Response(text="\n".join(out) + "\n",
                         content_type="application/atom+xml", charset="utf-8",
                         headers={"Cache-Control": "public, max-age=60"})
+
+
+# ── Atom feed: propagation openings (2026-11-01) ────────────────────────────
+# Asked for as a subscription. A reader polls this; nothing goes out on the
+# air, which is why it came first (NEXT 6). One entry per announced opening -
+# two or more senders in a field, never a single long link - from the stored
+# history. ?grid=KM keeps openings with an end in that field, ?grid=KM38 those
+# with an end within _PROP_FEED_KM of the square's centre: an opening rarely
+# touches one 1x2 degree square, and 400 km is what STATUS and the embed card
+# call near. Measured over 14 days that is 1-45 entries a week depending on
+# where (Izmir 11.5, Vienna 45).
+_PROP_FEED_S = 7 * 86400
+_PROP_FEED_KM = 400.0
+
+
+def _prop_event_near(ev: dict, grids: list) -> bool:
+    for g in grids:
+        if len(g) == 2:
+            for l in ev["links"]:
+                if g in (str(l.get("s_grid", "")), str(l.get("g_grid", ""))):
+                    return True
+            continue
+        lat0, lon0, _ = _grid_center(g)
+        for l in ev["links"]:
+            for la, lo in ((l.get("s_lat"), l.get("s_lon")),
+                           (l.get("g_lat"), l.get("g_lon"))):
+                if la is not None and lo is not None and StationDB._haversine_km(
+                        lat0, lon0, la, lo) <= _PROP_FEED_KM:
+                    return True
+    return False
+
+
+@routes.get("/feed/prop.atom")
+async def prop_feed(request: web.Request) -> web.Response:
+    from packet_parser import _latlon_to_locator
+    mgr: AgentManager = request.app["manager"]
+    base = _public_base(request, mgr.get_config())
+    tr = request.query.get("lang", "").lower() == "tr"
+    grids = _feed_grids(request)
+    if grids is None:
+        return web.Response(status=400, text="grid: Maidenhead fields or "
+                            "squares, comma-separated, e.g. KM,KN41\n")
+    entries = []
+    deaf = mgr._station_db.deaf_since()
+    if deaf:
+        # Openings are measured from what is heard; while deaf, none can be.
+        e = _deaf_entry(deaf, base, tr)
+        e["summary"] = ("Bu süre boyunca açılım ölçülmüyor." if tr else
+                        "No opening is measured while it cannot hear.")
+        entries.append(e)
+    events = await asyncio.get_event_loop().run_in_executor(
+        None, station_db_module.read_prop_events, mgr._sta_db_path,
+        time.time() - _PROP_FEED_S)
+    for ev in events:
+        links = [l for l in ev["links"]
+                 if l.get("s_lat") is not None and l.get("g_lat") is not None]
+        if not links:
+            continue
+        for l in links:
+            l["s_grid"] = _latlon_to_locator(l["s_lat"], l["s_lon"])[:2]
+            l["g_grid"] = _latlon_to_locator(l["g_lat"], l["g_lon"])[:2]
+        ev = dict(ev, links=links)
+        if grids and not _prop_event_near(ev, grids):
+            continue
+        links.sort(key=lambda l: -float(l.get("km") or 0))
+        senders = len({str(l.get("call", "")).split("-")[0] for l in links})
+        top = int(round(float(links[0].get("km") or 0)))
+        pairs = "; ".join("%s → %s %d km" % (l.get("call", "?"), l.get("gate", "?"),
+                                             round(float(l.get("km") or 0)))
+                          for l in links[:5])
+        if len(links) > 5:
+            pairs += (" (+%d daha)" if tr else " (+%d more)") % (len(links) - 5)
+        summary = pairs + "."
+        if ev["note"]:
+            summary += (" Yapay zekâ yorumu (otomatik): " if tr else
+                        " AI reading (automated): ") + ev["note"]
+        mid = links[0]
+        square = _latlon_to_locator((mid["s_lat"] + mid["g_lat"]) / 2,
+                                    (mid["s_lon"] + mid["g_lon"]) / 2)[:4]
+        entries.append({
+            "id": "tag:aprsagent.com,2026:prop/%s/%d" % (ev["region"], ev["ts"]),
+            "updated": ev["ts"],
+            "title": (("%s üzerinde yayılım açılımı: %d gönderen, en uzun %d km"
+                       if tr else
+                       "Propagation opening over %s: %d senders, longest %d km")
+                      % (ev["region"], senders, top)),
+            "summary": summary,
+            "link": base + "?q=" + square})
+    title = ("APRS-Agent — yayılım açılımları" if tr else
+             "APRS-Agent — propagation openings")
+    return _atom_response(request, base, "feed/prop.atom", title, grids, entries)
 
 
 # ── Embeddable status card (2026-10-20) ─────────────────────────────────────
@@ -5033,6 +5141,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/sitemap.xml", public_sitemap),
         web.get("/llms.txt", public_llms),
         web.get("/feed/silence.atom", silence_feed),
+        web.get("/feed/prop.atom", prop_feed),
         web.get("/embed/status", embed_status),
         web.get("/aprs-symbols-24-{table}.png", symbols),
         web.get("/api/info", info),

@@ -1063,6 +1063,11 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       <code>/embed/status</code> yolunda durur. Uyarıları bir RSS/Atom
       okuyucuda izlemek için <code>/feed/silence.atom</code> akışı da var
       (<code>?grid=KM</code> bölgeye göre süzer, <code>?lang=tr</code> Türkçe).
+      Yayılım açılımları için ayrı bir akış var: <code>/feed/prop.atom</code>.
+      Her açılım bir kayıt; <code>?grid=KM</code> ucu o alanda olanları,
+      <code>?grid=KM38</code> karenin 400 km çevresine ucu düşenleri tutar.
+      Yerine göre haftada birkaç ile kırkı aşkın arası kayıt gelir. Akışı
+      okuyucunuz çeker; telsize hiçbir şey gönderilmez.
     </p>
   </div>
 
@@ -2065,6 +2070,11 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       at <code>/embed/status</code>. To follow the alerts in an RSS/Atom
       reader there is also the <code>/feed/silence.atom</code> feed
       (<code>?grid=KM</code> filters by region, <code>?lang=tr</code> for Turkish).
+      Propagation openings have a feed of their own, <code>/feed/prop.atom</code>:
+      one entry per opening; <code>?grid=KM</code> keeps those with an end in
+      that field, <code>?grid=KM38</code> those with an end within 400 km of
+      the square. Depending on where, that is from a few to over forty entries
+      a week. Your reader polls it; nothing is sent on the air.
     </p>
   </div>
 

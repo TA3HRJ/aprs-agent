@@ -957,6 +957,32 @@ def record_prop_event(path: str, event: dict[str, Any]) -> None:
         con.close()
 
 
+def read_prop_events(path: str, since_ts: float,
+                     limit: int = 500) -> list[dict[str, Any]]:
+    """Stored opening events from since_ts on, newest first, for the Atom
+    feed. Each is one opening as announced: two or more senders in a field."""
+    if not Path(path).exists():
+        return []
+    con = _connect(path)
+    try:
+        out = []
+        for ts, region, note, raw in con.execute(
+                "SELECT ts, region, note, links FROM prop_history "
+                "WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
+                (int(since_ts), int(limit))):
+            try:
+                links = json.loads(raw or "[]")
+            except Exception:
+                continue
+            out.append({"ts": int(ts), "region": region or "",
+                        "note": note or "", "links": links})
+        return out
+    except sqlite3.Error:
+        return []                           # no table yet
+    finally:
+        con.close()
+
+
 def find_prop_event(path: str, call: str, gate: str, ts: int,
                     window_s: int = 3600) -> Optional[dict[str, Any]]:
     """The stored opening event that contains this link, if any.

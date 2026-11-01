@@ -39,6 +39,15 @@ What is left, in the order it is worth doing:
 6. **Propagation alerts as a subscription**, asked for publicly. It would be
    the first time the gateway starts traffic rather than answering it, which
    is an etiquette question before it is a code one.
+   **Off-air half done in v3.3.4** (the operator's choice, 2026-11-01):
+   `/feed/prop.atom`, one entry per stored opening of the last 7 days,
+   `?grid=` by field or 400 km of a square (`check_prop_feed`). Measured over
+   14 days before choosing: 45 openings a day worldwide; within 400 km,
+   1 (Sydney) to 45 (Vienna, Atlanta) a week, Izmir 11.5, up to 19 in one
+   day - one APRS message per opening would be far too many. Still open:
+   Telegram for linked amateurs (no RF), and APRS only if asked again -
+   then opt-in from the station's own call, 7-day expiry, at most one
+   digest a day, 400 km, no resends, and KEGM is the operator's call.
 7. ~~**A registered tocall.**~~ Done in v3.2.176: `APRAGT` allocated
    2026-10-18 and used on every packet (`config.TOCALL`); the bridges' acks
    rebuilt on the way (F-2026-10-19-01). What was planned: DMWGPT and the bridges
