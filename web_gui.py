@@ -3210,6 +3210,8 @@ async def public_llms(request: web.Request) -> web.Response:
         "feed/silence.atom (?grid=KM,KN41, ?lang=tr)",
         f"- Atom feed of propagation openings: {_public_base(request, cfg)}"
         "feed/prop.atom (?grid=KM,KN41, ?lang=tr)",
+        f"- Embeddable cards (iframe): {_public_base(request, cfg)}"
+        "embed/status?grid=KM38 (silence), embed/prop?grid=KM38 (openings)",
     ]
     for label, key in (("Home", "public_home_url"),
                        ("Privacy", "public_privacy_url")):
@@ -3380,9 +3382,35 @@ def _prop_event_near(ev: dict, grids: list) -> bool:
     return False
 
 
+def _prop_openings(events: list, grids: list) -> list:
+    """Stored openings as the feed and the card show them, newest first: links
+    with both ends placed, longest first, the distinct senders, the longest
+    link and the square of its midpoint. ?grid= filters as _prop_event_near."""
+    from packet_parser import _latlon_to_locator
+    out = []
+    for ev in events:
+        links = [l for l in ev["links"]
+                 if l.get("s_lat") is not None and l.get("g_lat") is not None]
+        if not links:
+            continue
+        for l in links:
+            l["s_grid"] = _latlon_to_locator(l["s_lat"], l["s_lon"])[:2]
+            l["g_grid"] = _latlon_to_locator(l["g_lat"], l["g_lon"])[:2]
+        ev = dict(ev, links=links)
+        if grids and not _prop_event_near(ev, grids):
+            continue
+        links.sort(key=lambda l: -float(l.get("km") or 0))
+        mid = links[0]
+        out.append(dict(
+            ev, senders=len({str(l.get("call", "")).split("-")[0] for l in links}),
+            top=int(round(float(mid.get("km") or 0))),
+            square=_latlon_to_locator((mid["s_lat"] + mid["g_lat"]) / 2,
+                                      (mid["s_lon"] + mid["g_lon"]) / 2)[:4]))
+    return out
+
+
 @routes.get("/feed/prop.atom")
 async def prop_feed(request: web.Request) -> web.Response:
-    from packet_parser import _latlon_to_locator
     mgr: AgentManager = request.app["manager"]
     base = _public_base(request, mgr.get_config())
     tr = request.query.get("lang", "").lower() == "tr"
@@ -3401,20 +3429,8 @@ async def prop_feed(request: web.Request) -> web.Response:
     events = await asyncio.get_event_loop().run_in_executor(
         None, station_db_module.read_prop_events, mgr._sta_db_path,
         time.time() - _PROP_FEED_S)
-    for ev in events:
-        links = [l for l in ev["links"]
-                 if l.get("s_lat") is not None and l.get("g_lat") is not None]
-        if not links:
-            continue
-        for l in links:
-            l["s_grid"] = _latlon_to_locator(l["s_lat"], l["s_lon"])[:2]
-            l["g_grid"] = _latlon_to_locator(l["g_lat"], l["g_lon"])[:2]
-        ev = dict(ev, links=links)
-        if grids and not _prop_event_near(ev, grids):
-            continue
-        links.sort(key=lambda l: -float(l.get("km") or 0))
-        senders = len({str(l.get("call", "")).split("-")[0] for l in links})
-        top = int(round(float(links[0].get("km") or 0)))
+    for ev in _prop_openings(events, grids):
+        links = ev["links"]
         pairs = "; ".join("%s → %s %d km" % (l.get("call", "?"), l.get("gate", "?"),
                                              round(float(l.get("km") or 0)))
                           for l in links[:5])
@@ -3424,18 +3440,15 @@ async def prop_feed(request: web.Request) -> web.Response:
         if ev["note"]:
             summary += (" Yapay zekâ yorumu (otomatik): " if tr else
                         " AI reading (automated): ") + ev["note"]
-        mid = links[0]
-        square = _latlon_to_locator((mid["s_lat"] + mid["g_lat"]) / 2,
-                                    (mid["s_lon"] + mid["g_lon"]) / 2)[:4]
         entries.append({
             "id": "tag:aprsagent.com,2026:prop/%s/%d" % (ev["region"], ev["ts"]),
             "updated": ev["ts"],
             "title": (("%s üzerinde yayılım açılımı: %d gönderen, en uzun %d km"
                        if tr else
                        "Propagation opening over %s: %d senders, longest %d km")
-                      % (ev["region"], senders, top)),
+                      % (ev["region"], ev["senders"], ev["top"])),
             "summary": summary,
-            "link": base + "?q=" + square})
+            "link": base + "?q=" + ev["square"]})
     title = ("APRS-Agent — yayılım açılımları" if tr else
              "APRS-Agent — propagation openings")
     return _atom_response(request, base, "feed/prop.atom", title, grids, entries)
@@ -3599,6 +3612,112 @@ async def embed_status(request: web.Request) -> web.Response:
                 'rel="noopener">%s →</a></div></body></html>'
                 % (esc(T["updated"].format(t=time.strftime("%H:%M", time.gmtime(now)))),
                    esc(base), esc(grid), esc(T["open"])))
+    return web.Response(text="\n".join(body), content_type="text/html",
+                        charset="utf-8", headers={"Cache-Control": "public, max-age=60"})
+
+
+# ── Embeddable propagation card (2026-11-02) ────────────────────────────────
+# The feed above as a card, for a page that cannot read Atom: a QRZ.com
+# biography runs no script, so a feed link there shows nothing. The openings
+# of the last 7 days with an end within 400 km of the square (or in the
+# field), newest first, each linking to the map; the feed at the foot. The
+# status card counts the last 3 h; this one keeps the week, where Izmir sees
+# 11.5 a week.
+#   <iframe src="https://map.example.org/embed/prop?grid=KM38&lang=tr"
+#           width="320" height="230" style="border:0"></iframe>
+# One pair of links is sometimes stored as several openings in a day and the
+# feed lists each (left as is; the rules stay frozen, F-2026-10-05-06). In
+# four rows that would crowd out the rest, so the card shows a repeat once:
+# same day, same field, same links.
+_EMBED_PROP_ROWS = 4
+_EMBED_PROP_T = {
+    "en": {"head": "Propagation openings",
+           "n": "{n} within 400 km in 7 days",
+           "n_field": "{n} in this field in 7 days",
+           "none": "No openings within 400 km in 7 days",
+           "none_field": "No openings in this field in 7 days",
+           "row": "{d} · {km} km, {n} senders",
+           "feed": "Atom feed",
+           "months": "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec"},
+    "tr": {"head": "Propagasyon açılımları",
+           "n": "7 günde ucu 400 km içinde {n} açılım",
+           "n_field": "7 günde bu alanda {n} açılım",
+           "none": "7 günde 400 km içinde açılım yok",
+           "none_field": "7 günde bu alanda açılım yok",
+           "row": "{d} · {km} km, {n} gönderen",
+           "feed": "Atom akışı",
+           "months": "Oca Şub Mar Nis May Haz Tem Ağu Eyl Eki Kas Ara"},
+}
+_EMBED_PROP_CSS = """
+.rs{display:flex;flex-direction:column;gap:2px}
+.r{font:12px var(--mono);color:var(--link);text-decoration:none;white-space:nowrap;
+overflow:hidden;text-overflow:ellipsis}
+"""
+
+
+@routes.get("/embed/prop")
+async def embed_prop(request: web.Request) -> web.Response:
+    mgr: AgentManager = request.app["manager"]
+    base = _public_base(request, mgr.get_config())
+    lang = "tr" if request.query.get("lang", "").lower() == "tr" else "en"
+    T, P = _EMBED_T[lang], _EMBED_PROP_T[lang]
+    grid = request.query.get("grid", "").strip()
+    if not _EMBED_GRID.match(grid):
+        return web.Response(status=400, text="grid: a Maidenhead field or square, "
+                            "e.g. ?grid=KM38\n")
+    grid = grid[:4].upper()
+    theme = request.query.get("theme", "").lower()
+    now = time.time()
+    events = await asyncio.get_event_loop().run_in_executor(
+        None, station_db_module.read_prop_events, mgr._sta_db_path,
+        now - _PROP_FEED_S)
+    rows, seen = [], set()
+    months = P["months"].split()
+    for ev in _prop_openings(events, [grid]):
+        tm = time.gmtime(ev["ts"])
+        key = (tm.tm_yday, ev["region"],
+               frozenset((l.get("call"), l.get("gate")) for l in ev["links"]))
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append((ev, "%d %s %02d:%02d" % (tm.tm_mday, months[tm.tm_mon - 1],
+                                             tm.tm_hour, tm.tm_min)))
+    field = len(grid) == 2
+    esc = html.escape
+    lines = []
+    if mgr._station_db.deaf_since():
+        # Openings are measured from what is heard; the stored ones stay.
+        cls = "unk"
+        lines.append(T["deaf"])
+    else:
+        cls = "ok" if rows else "unk"
+    lines.append(P["n_field" if field else "n"].format(n=len(rows)) if rows else
+                 P["none_field" if field else "none"])
+    feed = base + "feed/prop.atom?grid=" + grid + ("&lang=tr" if lang == "tr" else "")
+    theme_attr = ' data-theme="%s"' % theme if theme in ("light", "dark") else ""
+    body = ['<!doctype html>', '<html lang="%s"%s><head><meta charset="utf-8">'
+            % (lang, theme_attr),
+            '<meta name="viewport" content="width=device-width,initial-scale=1">',
+            '<meta http-equiv="refresh" content="300">',
+            '<meta name="robots" content="noindex">',
+            '<title>%s · %s</title>' % (esc(grid), esc(P["head"])),
+            '<style>%s%s</style></head><body>' % (_EMBED_CSS, _EMBED_PROP_CSS),
+            '<div class="hd"><span class="sq">%s</span>'
+            '<a class="brand" href="%s" target="_blank" rel="noopener">APRS-Agent</a></div>'
+            % (esc(grid), esc(base)),
+            '<div class="st %s"><span class="dot"></span>%s</div>' % (cls, esc(P["head"]))]
+    body += ['<div class="l">%s</div>' % esc(x) for x in lines]
+    if rows:
+        body.append('<div class="rs">')
+        for ev, d in rows[:_EMBED_PROP_ROWS]:
+            body.append('<a class="r" href="%s?q=%s" target="_blank" rel="noopener">%s</a>'
+                        % (esc(base), esc(ev["square"]),
+                           esc(P["row"].format(d=d, km=ev["top"], n=ev["senders"]))))
+        body.append('</div>')
+    body.append('<div class="ft"><span>%s</span><a href="%s" target="_blank" '
+                'rel="noopener">%s →</a></div></body></html>'
+                % (esc(T["updated"].format(t=time.strftime("%H:%M", time.gmtime(now)))),
+                   esc(feed), esc(P["feed"])))
     return web.Response(text="\n".join(body), content_type="text/html",
                         charset="utf-8", headers={"Cache-Control": "public, max-age=60"})
 
@@ -5143,6 +5262,7 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/feed/silence.atom", silence_feed),
         web.get("/feed/prop.atom", prop_feed),
         web.get("/embed/status", embed_status),
+        web.get("/embed/prop", embed_prop),
         web.get("/aprs-symbols-24-{table}.png", symbols),
         web.get("/api/info", info),
         web.get("/api/counters", counters),

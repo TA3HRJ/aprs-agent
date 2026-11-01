@@ -48,6 +48,10 @@ What is left, in the order it is worth doing:
    Telegram for linked amateurs (no RF), and APRS only if asked again -
    then opt-in from the station's own call, 7-day expiry, at most one
    digest a day, 400 km, no resends, and KEGM is the operator's call.
+   v3.3.5: `/embed/prop?grid=KM38`, the feed as an iframe card for pages
+   that run no script (a QRZ.com biography showed only the feed's link):
+   the week's openings within 400 km, newest four, repeats of one day shown
+   once (`check_embed_prop`).
    Seen live 2026-11-01: one pair of links stored as four openings in a
    day shows as four identical feed entries; left as is (the operator's
    call), the opening rules stay frozen (F-2026-10-05-06).
