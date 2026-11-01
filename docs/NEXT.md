@@ -141,8 +141,9 @@ What is left, in the order it is worth doing:
     over BrandMeister and the replies reached APRS-IS, but nothing was acked
     or shown on the radio, while BM2841-10 acked other stations. Not a code
     fault; record and next test outside the repo (`DMR-BRIDGE-2026-09-10.md`).
-    The landing page still says DMR is "not tested"; it now is, and the
-    answer does not come back.
+    The landing page has said so since 2026-10-20 (aprsagent-site 05a9c6e,
+    live 2026-11-01): the question gets through, the answer does not yet
+    reach the radio reliably. Open item is the RF test, not the page.
 22. ✅ **Done, v3.2.189.** **Repeater monitor matches the wrong stations** (F-2026-10-20-03). Match
     on the full callsign with SSID where the DB gives one, else only a
     station with a repeater symbol; never overwrite a matched station's
