@@ -3211,7 +3211,8 @@ async def public_llms(request: web.Request) -> web.Response:
         f"- Atom feed of propagation openings: {_public_base(request, cfg)}"
         "feed/prop.atom (?grid=KM,KN41, ?lang=tr)",
         f"- Embeddable cards (iframe): {_public_base(request, cfg)}"
-        "embed/status?grid=KM38 (silence), embed/prop?grid=KM38 (openings)",
+        "embed/status?grid=KM38 (silence), embed/prop?grid=KM38 (openings); "
+        "a builder for the code at embed/",
     ]
     for label, key in (("Home", "public_home_url"),
                        ("Privacy", "public_privacy_url")):
@@ -3719,6 +3720,162 @@ async def embed_prop(request: web.Request) -> web.Response:
                 % (esc(T["updated"].format(t=time.strftime("%H:%M", time.gmtime(now)))),
                    esc(feed), esc(P["feed"])))
     return web.Response(text="\n".join(body), content_type="text/html",
+                        charset="utf-8", headers={"Cache-Control": "public, max-age=60"})
+
+
+# ── Card builder (2026-11-02) ───────────────────────────────────────────────
+# For someone who saw a card on another page and wants one of their own: their
+# square, which cards, language and theme; a live preview and the iframe code
+# to paste. A plain GET form, so it works without script; only the copy
+# button uses one. The code points at this installation's public address.
+_EMBED_SIZES = {"status": (320, 210), "prop": (320, 230)}
+_EMBED_B = {
+    "en": {"title": "Put a card on your page",
+           "lede": "Cards for your website, blog or QRZ.com biography: the "
+                   "silence state of your square and the propagation openings "
+                   "near it. They refresh themselves every 5 minutes, run no "
+                   "script and load nothing from another server.",
+           "grid": "Your Maidenhead square", "card": "Cards",
+           "both": "Both", "status": "Status", "prop": "Propagation openings",
+           "lang": "Card language", "theme": "Theme", "light": "Light",
+           "dark": "Dark", "auto": "The reader's device setting",
+           "show": "Show", "bad": "Not a Maidenhead square or field: %s",
+           "preview": "Preview", "code": "Code to paste", "copy": "Copy the code",
+           "copied": "Copied",
+           "qrz": "QRZ.com: switch the biography editor to its HTML (source) "
+                  "view and paste the code there.",
+           "other": "Türkçe", "map": "Live map"},
+    "tr": {"title": "Sayfanıza kart koyun",
+           "lede": "Web sitenize, blogunuza ya da QRZ.com biyografinize kart: "
+                   "karenizin sessizlik durumu ve çevresindeki propagasyon "
+                   "açılımları. Kartlar 5 dakikada bir kendini yeniler, script "
+                   "çalıştırmaz, başka bir sunucudan bir şey yüklemez.",
+           "grid": "Maidenhead kareniz", "card": "Kartlar",
+           "both": "İkisi de", "status": "Durum", "prop": "Propagasyon açılımları",
+           "lang": "Kart dili", "theme": "Tema", "light": "Açık",
+           "dark": "Koyu", "auto": "Okuyanın cihaz ayarı",
+           "show": "Göster", "bad": "Maidenhead karesi ya da alanı değil: %s",
+           "preview": "Önizleme", "code": "Yapıştırılacak kod", "copy": "Kodu kopyala",
+           "copied": "Kopyalandı",
+           "qrz": "QRZ.com: biyografi düzenleyicisinde HTML (kaynak) görünümüne "
+                  "geçin ve kodu oraya yapıştırın.",
+           "other": "English", "map": "Canlı harita"},
+}
+_EMBED_B_CSS = """
+:root{--bg:#f6f3ea;--card:#fdfbf5;--fg:#22201a;--fg2:#635c50;--line:#d9d2c2;
+--accent:#b0413e;--link:#24506e;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1a16;--card:#211f1a;--fg:#ece6d8;
+--fg2:#b3aa98;--line:#3a362e;--accent:#d0605c;--link:#8fb6d4}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 var(--sans);padding:24px 16px}
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:5px;
+background:repeating-linear-gradient(45deg,#b0413e 0 9px,var(--bg) 9px 18px,#24506e 18px 27px,var(--bg) 27px 36px)}
+main{max-width:46em;margin:0 auto}
+.top{display:flex;justify-content:space-between;gap:12px;font:13px var(--mono)}
+.top a{color:var(--link)}
+h1{font-size:26px;margin:.6em 0 .2em}
+p{color:var(--fg2);margin:.4em 0}
+form{display:grid;grid-template-columns:repeat(auto-fit,minmax(10em,1fr));gap:12px;
+background:var(--card);border:1px solid var(--line);padding:14px;margin:1em 0}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--fg2)}
+input,select,button{font:15px var(--sans);padding:6px 8px;border:1px solid var(--line);
+background:var(--bg);color:var(--fg);border-radius:4px}
+input{font-family:var(--mono);text-transform:uppercase}
+button{background:var(--link);border-color:var(--link);color:#fff;cursor:pointer;align-self:end}
+.err{color:var(--accent);font-weight:600}
+h2{font:600 13px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--fg2);margin:1.4em 0 .5em}
+.pv{display:flex;flex-wrap:wrap;gap:16px}
+.pv iframe{border:0;max-width:100%}
+textarea{width:100%;font:13px/1.5 var(--mono);padding:10px;border:1px solid var(--line);
+background:var(--card);color:var(--fg);border-radius:4px;resize:vertical}
+#cp{margin-top:8px}
+"""
+
+
+def _embed_snippets(base: str, grid: str, card: str, lang: str, theme: str) -> list:
+    """(path, width, height, query) per chosen card, the code's own order."""
+    q = "grid=" + grid + ("&lang=tr" if lang == "tr" else "") + \
+        ("&theme=" + theme if theme in ("light", "dark") else "")
+    return [("embed/" + c,) + _EMBED_SIZES[c] + (q,)
+            for c in ("status", "prop") if card in (c, "both")]
+
+
+@routes.get("/embed/")
+async def embed_builder(request: web.Request) -> web.Response:
+    mgr: AgentManager = request.app["manager"]
+    base = _public_base(request, mgr.get_config())
+    qy = request.query
+    lang = "tr" if qy.get("lang", "").lower() == "tr" else "en"
+    B = _EMBED_B[lang]
+    card = qy.get("card", "both")
+    card = card if card in ("both", "status", "prop") else "both"
+    theme = qy.get("theme", "light")
+    theme = theme if theme in ("light", "dark", "auto") else "light"
+    raw = qy.get("grid", "").strip()
+    grid = raw[:4].upper() if _EMBED_GRID.match(raw) else ""
+    esc = html.escape
+
+    def opt(name, value, cur):
+        return '<option value="%s"%s>%s</option>' % (
+            value, " selected" if value == cur else "", esc(B[name]))
+
+    other = esc("?" + "&".join(
+        "%s=%s" % (k, v) for k, v in (
+            ("grid", grid), ("card", card), ("theme", theme),
+            ("lang", "en" if lang == "tr" else "tr")) if v))
+    out = ['<!doctype html>', '<html lang="%s"><head><meta charset="utf-8">' % lang,
+           '<meta name="viewport" content="width=device-width,initial-scale=1">',
+           '<title>%s · APRS-Agent</title>' % esc(B["title"]),
+           '<style>%s</style></head><body><main>' % _EMBED_B_CSS,
+           '<div class="top"><a href="%s">APRS-Agent · %s</a>'
+           '<a href="%s" lang="%s">%s</a></div>'
+           % (esc(base), esc(B["map"]), other, "en" if lang == "tr" else "tr",
+              esc(B["other"])),
+           '<h1>%s</h1><p>%s</p>' % (esc(B["title"]), esc(B["lede"])),
+           '<form method="get" action="">',
+           '<label>%s<input name="grid" value="%s" placeholder="KM38" maxlength="6" '
+           'required autocomplete="off" spellcheck="false"></label>'
+           % (esc(B["grid"]), esc(grid or raw)),
+           '<label>%s<select name="card">%s%s%s</select></label>'
+           % (esc(B["card"]), opt("both", "both", card), opt("status", "status", card),
+              opt("prop", "prop", card)),
+           '<label>%s<select name="lang">'
+           '<option value="en"%s>English</option><option value="tr"%s>Türkçe</option>'
+           '</select></label>' % (esc(B["lang"]), "" if lang == "tr" else " selected",
+                                   " selected" if lang == "tr" else ""),
+           '<label>%s<select name="theme">%s%s%s</select></label>'
+           % (esc(B["theme"]), opt("light", "light", theme), opt("dark", "dark", theme),
+              opt("auto", "auto", theme)),
+           '<button type="submit">%s</button></form>' % esc(B["show"])]
+    status = 200
+    if raw and not grid:
+        status = 400
+        out.append('<p class="err">%s</p>' % esc(B["bad"] % raw))
+    elif grid:
+        parts = _embed_snippets(base, grid, card, lang, theme)
+        code = "\n".join(
+            '<iframe src="%s%s?%s"\n        width="%d" height="%d" style="border:0"'
+            ' title="APRS-Agent %s"></iframe>' % (base, p, q, w, h, grid)
+            for p, w, h, q in parts)
+        out.append('<h2>%s</h2><div class="pv">' % esc(B["preview"]))
+        out += ['<iframe src="/%s?%s" width="%d" height="%d" title="%s"></iframe>'
+                % (esc(p), esc(q), w, h, esc(B["preview"])) for p, w, h, q in parts]
+        out.append('</div><h2>%s</h2>' % esc(B["code"]))
+        out.append('<textarea id="code" rows="%d" readonly>%s</textarea>'
+                   % (3 * len(parts) + 1, esc(code)))
+        out.append('<button id="cp" type="button" hidden>%s</button>' % esc(B["copy"]))
+        out.append('<p>%s</p>' % esc(B["qrz"]))
+        # The only script on the page: without it the code is selected by hand.
+        out.append('<script>(function(){var b=document.getElementById("cp"),'
+                   't=document.getElementById("code");if(!navigator.clipboard)return;'
+                   'b.hidden=false;b.onclick=function(){navigator.clipboard.writeText('
+                   't.value).then(function(){b.textContent=%s;});};'
+                   't.onfocus=function(){t.select();};})();</script>'
+                   % json.dumps(B["copied"]))
+    out.append('</main></body></html>')
+    return web.Response(status=status, text="\n".join(out), content_type="text/html",
                         charset="utf-8", headers={"Cache-Control": "public, max-age=60"})
 
 
@@ -5263,6 +5420,8 @@ def _build_public_app(mgr: "AgentManager") -> web.Application:
         web.get("/feed/prop.atom", prop_feed),
         web.get("/embed/status", embed_status),
         web.get("/embed/prop", embed_prop),
+        web.get("/embed/", embed_builder),
+        web.get("/embed", embed_builder),
         web.get("/aprs-symbols-24-{table}.png", symbols),
         web.get("/api/info", info),
         web.get("/api/counters", counters),
