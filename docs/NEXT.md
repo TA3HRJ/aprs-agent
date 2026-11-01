@@ -28,7 +28,9 @@ What is left, in the order it is worth doing:
    16 of 32 empty handlers wrapped the page's own code with a request; a
    fault there now reaches the console and the admin journal, a failed
    request still does not (F-2026-09-24-05, `check_silent_catch`).
-4. **The compound-question limit**, F-2026-09-10-03.
+4. ~~**The compound-question limit**, F-2026-09-10-03.~~ Measured and
+   closed 2026-11-01: 0 compound questions in 84 from outside users, so the
+   limit stays recorded and nothing is built (F-2026-11-01-01).
 5. **Hazard correlation** (audit §4a, item 19): longer retention for two
    tables or an external episode tally, then re-measure by episode.
 6. **Propagation alerts as a subscription**, asked for publicly. It would be

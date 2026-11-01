@@ -5494,6 +5494,9 @@ questions actually are on APRS, and whether two topics are readable inside the
 
 Left for a session that wants to do it properly.
 
+**Measured, 2026-11-01 (F-2026-11-01-01):** no outside user asked a compound
+question in 84 questions; not built, the limit stands.
+
 ---
 
 ## Not findings
@@ -8414,3 +8417,38 @@ v3.2.206 went live on its second start (07:33:43, beacon the same second).
 `check_connect_timeout` fails on v3.2.206 (4 items). Measured from this
 machine: rotate.aprs2.net answered in 0.45 s; 10.255.255.1 was given up at a
 3 s deadline.
+
+---
+
+## F-2026-11-01-01 — compound questions measured: none from outside users, so F-2026-09-10-03 stays a limit
+
+**Source:** the agent's journal on the VPS, every `[ai-gateway] RX from` line
+with its `AI response:` (2026-08-21, the journal's start, to 2026-11-01; the
+last question arrived 2026-10-25) · **Verdict:** not worth building; NEXT 4
+closed
+
+F-2026-09-10-03 left the fix waiting on a measurement: how often a message to
+DMWGPT asks two things that different stages of the chain would answer. The
+journal holds 116 questions from 25 base callsigns, each read by hand:
+
+| from | questions | compound |
+|---|---|---|
+| the operator's own stations | 24 | 2 - the same test, "Time, date and my location?", 2026-09-10 |
+| a second test radio and the QRX bot | 8 | 0 |
+| everyone else | 84 | **0** |
+
+People ask one thing per message and send the next as a second message (a
+train question then a car question; nearest igate then nearest digipeater).
+The chain answers that use correctly as it stands. "Time and date" in one
+message is one stage, not two. With no demand, whether two topics fit in 186
+characters was not measured either.
+
+So the design F-2026-09-10-03 describes - collect every deterministic fact,
+ask the model only about the rest, join them without the model rewording a
+fact - would be built for a test question. The limit stays as recorded: a
+compound question gets the first matching stage's answer only.
+
+Two other faults visible in the same 116 were already fixed: "Tell me a joke
+about the weather" got a temperature reading (the joke guard before
+`_wx_lookup`), and "digipeater near me" got "no live data" (its own stage,
+`_DIGI_TYPES`).
