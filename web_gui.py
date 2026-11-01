@@ -681,6 +681,35 @@ def _fmt_quake(q: dict) -> str:
     return f"M{q['mag']} {q['dist_km']} km away{depth}{where}"
 
 
+def _hazard_when(h: dict, since) -> str:
+    """'40 min before' / '3 h after' the silence began; '' without a start."""
+    if not since:
+        return ""
+    d = int(since - h["ts"])
+    m = abs(d) // 60
+    span = f"{m} min" if m < 120 else f"{m // 60} h"
+    return f"{span} {'before' if d >= 0 else 'after'}"
+
+
+def _fmt_hazard(h: dict, since) -> str:
+    """One line, e.g. 'NWS SVR_STORM from TWCSVR, 40 min before'."""
+    when = _hazard_when(h, since)
+    return (f"NWS {h['product'] or '?'} from {h['callsign']}"
+            + (f", {when}" if when else ""))
+
+
+def _hazard_evidence(hazards, since) -> list:
+    """The warnings with the offset a reader needs to weigh them."""
+    out = []
+    for h in hazards:
+        e = dict(h)
+        if since:
+            # Positive = the warning came before the silence began.
+            e["offset_s"] = int(since - h["ts"])
+        out.append(e)
+    return out
+
+
 # Bridge events that are traffic carried or a link made, not a refusal; the
 # rest go on the admin panel's list of recent refusals as well
 _BRIDGE_CARRIED = frozenset({"mail_in", "mail_out", "mail_code", "mail_linked",
@@ -1621,7 +1650,10 @@ class AgentManager:
                 opened, cleared = self._silence_episodes(set(alerts), time.time())
                 self._note_missing(alerts, time.time())
                 for cell in opened:
-                    c = alerts[cell]
+                    # A copy: the cached cell is shared with the map's requests.
+                    c = dict(alerts[cell])
+                    c["hazards"] = self._station_db.hazards_in(
+                        cell, c.get("since"))
                     note = ""
                     now_ts = time.time()
                     cached = self._silence_note_cache.get(cell)
@@ -2143,6 +2175,25 @@ class AgentManager:
                     f"whether the timing fits it.\n")
         return out
 
+    @staticmethod
+    def _hazard_context(c: dict) -> str:
+        """Weather-service warnings as a prompt fragment, phrased as evidence
+        (F-2026-11-01-02). Measured, a warning beside a silence is above
+        chance and still coincidence about half the time, and the square is
+        the office's, not necessarily where the warning applies."""
+        hz = c.get("hazards") or []
+        if not hz:
+            return ""
+        lines = "\n".join(f"  - {_fmt_hazard(h, c.get('since'))}"
+                          for h in hz[-5:])
+        return ("US National Weather Service warnings issued from an office in "
+                "this square around the silence:\n" + lines + "\n"
+                "Severe storms and floods can cut mains power, so a warning is a "
+                "candidate cause (power_outage) - not proof: measured, about half "
+                "of such matches are coincidence, and the warned counties may lie "
+                "outside this square. Name the warning in the summary if you "
+                "give it weight.\n")
+
     def _silence_episodes(self, alerting: set, now: float
                           ) -> "tuple[list, list]":
         """Open and close alert episodes; returns (opened, cleared) cells.
@@ -2346,6 +2397,7 @@ class AgentManager:
             f"{history}"
             f"{self._cell_context(c)}\n"
             f"{self._quake_context(c)}"
+            f"{self._hazard_context(c)}"
             "Consider that some APRS 'stations' are event advisory objects "
             "(incidents, fire warnings, markers) published by services — "
             "those expire by design when the event closes, which is not an "
@@ -2394,6 +2446,8 @@ class AgentManager:
                f"Stations: {', '.join(c['silent_calls'][:8])}")
         for q in _alert_quakes(c):
             msg += f"\n🌍 {_fmt_quake(q)}"
+        for h in (c.get("hazards") or [])[-3:]:
+            msg += f"\n⛈ {_fmt_hazard(h, c.get('since'))}"
         if note:
             msg += f"\nAI: {note}"
         return msg
@@ -2425,6 +2479,11 @@ class AgentManager:
                 line += f"\n   🌍 {_fmt_quake(qs[0])}"
                 if len(qs) > 1:
                     line += f" (+{len(qs) - 1} more)"
+            hz = c.get("hazards") or []
+            if hz:
+                line += f"\n   ⛈ {_fmt_hazard(hz[-1], c.get('since'))}"
+                if len(hz) > 1:
+                    line += f" (+{len(hz) - 1} more)"
             if note:
                 line += f"\n   AI: {note}"
             lines.append(line)
@@ -3950,6 +4009,9 @@ async def get_silence(request: web.Request) -> web.Response:
         # Only alerting cells: _cell_quakes is cheap (one shared cached feed)
         # but the payload is not, on a worldwide feed.
         c["quakes"] = _alert_quakes(c) if c["alert"] else []
+        # Same square and window as the measurement (F-2026-11-01-02).
+        c["hazards"] = (mgr._station_db.hazards_in(c["cell"], c.get("since"))
+                        if c["alert"] else [])
         # When they stopped, as facts: spread and opening from the last
         # packets, and who has come back while the alert ran. Alerting cells
         # only - a handful, each a dict lookup per silent station.
@@ -4148,6 +4210,12 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
         # line decides the cell — and until now it was not in the file.
         "gates": _gate_evidence(mgr, c),
         "quakes": _quake_evidence(c),
+        # None, not [], when the moment is older than the warnings kept in
+        # memory: "none on record" and "none kept" are different answers.
+        "hazards": (None if snapshot_ts and time.time() - snapshot_ts
+                    > station_db_module.StationDB.HAZARD_RECENT_S
+                    else _hazard_evidence(mgr._station_db.hazards_in(
+                        cell, c.get("since"), snapshot_ts), c.get("since"))),
         "assessment": {
             "note": note,
             "automated": True,
@@ -4163,6 +4231,9 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
                                    "beacon interval, minimum 15 minutes",
             "quake_radius_km": _QUAKE_RADIUS_KM,
             "quake_window_s": _QUAKE_WINDOW_S,
+            "hazard_window_s": station_db_module.StationDB.HAZARD_WINDOW_S,
+            "hazard_match": "an NWS warning first seen in the same 4-character "
+                            "square, from hazard_window_s before `since` on",
             # min_silent is applied to `sites` as well as to `silent`, which is
             # what demotes a cell whose callsigns all belong to one operator.
             "site_rule": "distinct operators (base callsign); a cell with "
@@ -4199,6 +4270,14 @@ async def get_silence_evidence(request: web.Request) -> web.Response:
             "A quake within the search radius is a candidate, not a cause. "
             "Weigh offset_s: a long gap between quake and silence is "
             "coincidence, not causation.",
+            "hazards are US National Weather Service warnings filed under this "
+            "square by the issuing office's own position; the warned counties "
+            "(FIPS) may lie elsewhere. Measured over 33 days (2026-11-01): 13 of "
+            "130 silence episodes in squares that carry warnings had one within "
+            "2 h, against 4-7 with the window shifted by one to seven days - "
+            "above chance, and about half of such matches are still "
+            "coincidence. A candidate, not a cause. null means the moment is "
+            "older than the week of warnings kept in memory.",
             "cell.suspect_position counts how many of the silent stations "
             "beacon a US callsign from an eastern longitude while running "
             "MMDVM/D-Star/Pi-Star firmware — the well-known case of a hotspot "

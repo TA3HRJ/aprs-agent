@@ -1156,6 +1156,7 @@ const S={en:{
   sil_no_local:"Not announced: not one of these stations was heard by an igate — every one either gated itself or dialled the APRS-IS backbone directly. Their silence is an internet or app dropout, and says nothing about this region.",
   sil_stats:"{s} of {b} stations silent",sil_since:"Since:",sil_onset:"Stopped over {span}; {o} of {n} within {w} min of the first",sil_back:"{r} back during this alert",sil_backup:"A spread fits both readings: stations dropping out one by one, or one outage where stations on backup power stop later.",
   sil_q_before:"{t} before",sil_q_after:"{t} after",
+  sil_hz_tip:"US weather-service warning from an office in this square. A candidate, not a cause: measured, about half of such matches are coincidence, and the warned area may lie elsewhere.",
   sil_dl:"Raw data",sil_cp:"Copy as AI prompt",sil_cp_blind:"Kör kopyala",sil_cp_blind:"Copy blind",
   sil_copied:"Evidence copied — paste it into any AI to get a second reading.",
   sil_cp_fallback:"Clipboard blocked — nothing was copied, it still holds whatever was there before. Saved as a file instead.",
@@ -1316,6 +1317,7 @@ const S={en:{
   sil_no_local:"Duyurulmadı: bu istasyonların hiçbirini bir igate duymadı — her biri ya kendini gateledi ya da doğrudan APRS-IS omurgasına bağlandı. Sessizlikleri bir internet ya da uygulama kopmasıdır, bu bölge hakkında bir şey söylemez.",
   sil_stats:"{b} istasyondan {s} tanesi sustu",sil_since:"Başlangıç:",sil_onset:"{span} içinde sustular; ilk {w} dk içinde {o}/{n}",sil_back:"bu uyarı sürerken {r} geri geldi",sil_backup:"Yayılma iki okumaya da uyar: istasyonların tek tek susması da, yedek güçle çalışanların daha geç sustuğu tek bir kesinti de.",
   sil_q_before:"{t} önce",sil_q_after:"{t} sonra",
+  sil_hz_tip:"Bu karedeki bir ofisten ABD hava durumu servisi uyarısı. Neden değil, aday: ölçüldüğünde bu tür eşleşmelerin yaklaşık yarısı tesadüf ve uyarılan bölge başka yerde olabilir.",
   sil_dl:"Ham veri",sil_cp:"AI istemi olarak kopyala",
   sil_copied:"Veri kopyalandı — ikinci bir yorum için istediğiniz AI'a yapıştırın.",
   sil_cp_fallback:"Pano engellendi — kopyalama YAPILMADI, panoda eski içerik duruyor. Veri dosya olarak kaydedildi.",
@@ -2426,6 +2428,17 @@ function silPopup(c){
     }
     h+='<br><span class="sil-quake">🌍 M'+q.mag+' · '+q.dist_km+' km'+when
       +(q.place?' · '+esc(q.place):'')+'</span>';
+  }
+  // NWS warnings filed under this square around the silence (F-2026-11-01-02):
+  // the offset again decides, and the tooltip says what the match is worth.
+  if(c.hazards)for(const z of c.hazards){
+    let when='';
+    if(c.since&&z.ts){
+      const d=Math.round(c.since-z.ts);
+      when=' · '+t(d>=0?'sil_q_before':'sil_q_after').replace('{t}',fmtAgoLong(Math.abs(d)));
+    }
+    h+='<br><span class="sil-quake" title="'+escA(t('sil_hz_tip'))+'">⛈ NWS '
+      +esc(z.product||'?')+' · '+esc(z.callsign)+when+'</span>';
   }
   if(c.ai_note)h+='<br><span style="color:#8ff0a4;font-size:11px">AI: '+esc(c.ai_note)+'</span>';
   h+='<div class="sil-ev"><a onclick="silEvidence(\''+c.cell+'\',0,this)">⬇ '+t('sil_dl')

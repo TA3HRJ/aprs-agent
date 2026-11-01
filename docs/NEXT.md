@@ -31,8 +31,11 @@ What is left, in the order it is worth doing:
 4. ~~**The compound-question limit**, F-2026-09-10-03.~~ Measured and
    closed 2026-11-01: 0 compound questions in 84 from outside users, so the
    limit stays recorded and nothing is built (F-2026-11-01-01).
-5. **Hazard correlation** (audit §4a, item 19): longer retention for two
-   tables or an external episode tally, then re-measure by episode.
+5. ~~**Hazard correlation** (audit §4a, item 19).~~ Done in v3.3.3:
+   re-measured by episode from the nightly backups, 13 of 130 against 4-7
+   in shifted controls; a silence cell now names a warning in its square as
+   a candidate (F-2026-11-01-02). Neither retention change was needed. To
+   re-measure again, keep a backup every 14 days - the operator's call.
 6. **Propagation alerts as a subscription**, asked for publicly. It would be
    the first time the gateway starts traffic rather than answering it, which
    is an etiquette question before it is a code one.

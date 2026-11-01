@@ -473,6 +473,19 @@ def parse_hazard(parsed: dict[str, Any]) -> Optional[dict[str, Any]]:
     }
 
 
+def _hazard_cell(lat, lon) -> str:
+    """The Maidenhead square a warning is filed under: its office's own
+    beacon position, not the warned counties. The table and the in-memory
+    copy the silence readers use key on this one function, so the live
+    annotation joins exactly as the measurement did (F-2026-11-01-02)."""
+    if lat is None or lon is None:
+        return ""
+    try:
+        return _latlon_to_locator(float(lat), float(lon))[:4].upper()
+    except Exception:
+        return ""
+
+
 def record_hazards(path: str, rows: list[dict[str, Any]]) -> int:
     """Append hazard warnings, one row per (callsign, issued).
 
@@ -501,13 +514,7 @@ def record_hazards(path: str, rows: list[dict[str, Any]]) -> int:
                     "ON hazard_history (cell, ts)")
         n = 0
         for r in rows:
-            cell = ""
-            if r.get("lat") is not None and r.get("lon") is not None:
-                try:
-                    cell = _latlon_to_locator(float(r["lat"]),
-                                              float(r["lon"]))[:4].upper()
-                except Exception:
-                    cell = ""
+            cell = _hazard_cell(r.get("lat"), r.get("lon"))
             cur = con.execute(
                 "INSERT OR IGNORE INTO hazard_history VALUES (?,?,?,?,?,?,?,?)",
                 (int(r.get("ts") or time.time()), r.get("callsign", ""),
@@ -1453,6 +1460,10 @@ class StationDB:
         # record_hazards. Bounded by the number of offices with an active
         # product, which measured 557 across the whole feed.
         self._hazards_pending: dict[tuple, dict[str, Any]] = {}
+        # The same warnings by square, kept HAZARD_RECENT_S for the silence
+        # readers: square -> {(callsign, issued): (first seen, product)}.
+        # Not the table - a request may not do I/O on the event loop.
+        self._hazards_recent: dict[str, dict[tuple, tuple]] = {}
         # Recent anomalous links for /api/prop and (later) the map layer
         self._prop_links: deque = deque(maxlen=500)
         # Calibration: global distance histogram + counters, so thresholds
@@ -1579,12 +1590,66 @@ class StationDB:
             h["lat"], h["lon"] = rec.lat, rec.lon
         h["ts"] = int(parsed.get("ts") or time.time())
         self._hazards_pending[key] = h
+        cell = _hazard_cell(h["lat"], h["lon"])
+        if cell:
+            self._hazards_recent.setdefault(cell, {}).setdefault(
+                key, (h["ts"], h["product"]))
 
     def take_hazards(self) -> list[dict[str, Any]]:
-        """Hand the pending warnings to the writer and clear the buffer."""
+        """Hand the pending warnings to the writer and clear the buffer.
+        Also ages out the in-memory copy, here because this runs on a timer
+        and ingest must stay O(1)."""
         rows = list(self._hazards_pending.values())
         self._hazards_pending.clear()
+        cutoff = time.time() - self.HAZARD_RECENT_S
+        for cell in list(self._hazards_recent):
+            kept = {k: v for k, v in self._hazards_recent[cell].items()
+                    if v[0] >= cutoff}
+            if kept:
+                self._hazards_recent[cell] = kept
+            else:
+                del self._hazards_recent[cell]
         return rows
+
+    # Weather-service warnings near a silence (F-2026-11-01-02). Measured over
+    # 33 days: 13 of 130 silence episodes in squares that also carry NWS
+    # warnings had one within 2 h, against 4-7 with the window shifted by one
+    # to seven days. Above chance, and about half of such matches are still
+    # coincidence - so this informs a reader and decides nothing, like quakes.
+    HAZARD_WINDOW_S = 2 * 3600
+    # A week covers any episode worth annotating; the table keeps fourteen days.
+    HAZARD_RECENT_S = 7 * 24 * 3600
+
+    def hazards_in(self, cell: str, since_ts,
+                   until_ts=None) -> list[dict[str, Any]]:
+        """Warnings filed under this square from HAZARD_WINDOW_S before the
+        silence began until now (or until_ts, for a past snapshot), oldest
+        first. Same square, same window as the measurement; nothing wider is
+        supported by it."""
+        if not cell or not since_ts:
+            return []
+        lo = float(since_ts) - self.HAZARD_WINDOW_S
+        hi = float(until_ts) if until_ts else float("inf")
+        out = [{"ts": ts, "product": prod, "callsign": key[0]}
+               for key, (ts, prod)
+               in list(self._hazards_recent.get(cell.upper(), {}).items())
+               if lo <= ts <= hi]
+        out.sort(key=lambda h: h["ts"])
+        return out
+
+    def _load_recent_hazards(self, con: sqlite3.Connection) -> None:
+        """Refill the in-memory warnings from the table after a restart,
+        or a cell alerting in the first minutes would show none."""
+        try:
+            rows = con.execute(
+                "SELECT callsign, issued, ts, product, cell FROM hazard_history "
+                "WHERE cell != '' AND ts >= ?",
+                (int(time.time() - self.HAZARD_RECENT_S),)).fetchall()
+        except sqlite3.Error:
+            return                          # no table yet
+        for cs, issued, ts, prod, cell in rows:
+            self._hazards_recent.setdefault(cell, {}).setdefault(
+                (cs, issued), (int(ts), prod or ""))
 
     def _matches_feed(self, callsign: str) -> bool:
         """Can the current feed hear this station at all?"""
@@ -2704,6 +2769,7 @@ class StationDB:
             # Read by the caller, which does the logging. This module has no
             # print statements and this count is not a reason to start.
             self.load_dropped_positions = dropped
+            self._load_recent_hazards(con)
             if voided:
                 # Merged, not replaced: rows are rewritten only when their
                 # station is saved again, so a later start can drop the same

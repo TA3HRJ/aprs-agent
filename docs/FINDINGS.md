@@ -8452,3 +8452,51 @@ Two other faults visible in the same 116 were already fixed: "Tell me a joke
 about the weather" got a temperature reading (the joke guard before
 `_wx_lookup`), and "digipeater near me" got "no live data" (its own stage,
 `_DIGI_TYPES`).
+
+---
+
+## F-2026-11-01-02 — hazard correlation re-measured by episode: above chance, about 2x
+
+**Source:** `silence_history` and `hazard_history` from three databases on the
+VPS, opened read-only and merged on their keys: the live file (2026-10-18 to
+11-01), the nightly backup of 2026-10-27 (10-13 to 10-27) and the pre-restore
+copy of 2026-09-27 (09-13 to 09-27) - **33 days**, overlapping the
+AUDIT-2026-09-15 §4a window by two · **Verdict:** shown as a candidate,
+decides nothing
+
+AUDIT-2026-09-15 §4a found warnings beside silences above chance and too few
+episodes to decide, and noted the 14-day retention would never let the table
+ripen. The backups already held two more fortnights, so the re-measurement
+needed no code.
+
+Same join as the audit: a silence snapshot and a warning share a 4-character
+square (the warning's square is its office's own beacon position) and lie
+within 2 h. Episodes are one square's snapshots less than 6 h apart; an
+episode matches when a warning falls between its first snapshot - 2 h and its
+last + 2 h.
+
+| window | episodes matched (130, in 22 squares) |
+|---|---|
+| **as recorded** | **13 (10.0 %)** |
+| shifted +/-24 h | 6 and 6 (4.6 %) |
+| shifted +/-72 h | 6 and 7 (4.6-5.4 %) |
+| shifted +/-7 days | 4 and 4 (3.1 %) |
+
+The real window beats every control by about two times, the same direction as
+the audit's six episodes on a mostly independent sample. The matches are
+storm and flood products (severe thunderstorm/weather 7, flood 5), which can
+cut mains power. Counted by snapshot instead, the gap shrinks to 4.5 % against
+1.3-4.1 %: one 22-snapshot Arizona episode carried the audit's 8.2 %, so the
+episode is the unit to read. Thirteen is still small, the controls are not
+independent of one another, and about half of the 13 is what chance gives.
+
+**Applied, v3.3.3.** A silence cell names such warnings the way it names a
+quake, as a candidate: the map popup (⛈ line, tooltip with the caveat), the
+evidence file (`hazards` with `offset_s`, the window under `detection`, a
+caveat), the AI-note prompt and both Telegram formats. Same square, and from
+2 h before the cell's `since` on - the measured window, nothing wider. The
+warnings are kept in memory by square for a week, refilled from the table at
+start; an evidence snapshot older than that says `null`, not `[]`. Silence
+detection is unchanged. `check_hazard_near` fails on v3.3.2 (no helper) and
+on four mutations of the new code: no refill, unbounded window, no ageing,
+Telegram without the line.
