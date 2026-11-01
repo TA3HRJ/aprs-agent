@@ -48,6 +48,9 @@ What is left, in the order it is worth doing:
    Telegram for linked amateurs (no RF), and APRS only if asked again -
    then opt-in from the station's own call, 7-day expiry, at most one
    digest a day, 400 km, no resends, and KEGM is the operator's call.
+   Seen live 2026-11-01: one pair of links stored as four openings in a
+   day shows as four identical feed entries; left as is (the operator's
+   call), the opening rules stay frozen (F-2026-10-05-06).
 7. ~~**A registered tocall.**~~ Done in v3.2.176: `APRAGT` allocated
    2026-10-18 and used on every packet (`config.TOCALL`); the bridges' acks
    rebuilt on the way (F-2026-10-19-01). What was planned: DMWGPT and the bridges
