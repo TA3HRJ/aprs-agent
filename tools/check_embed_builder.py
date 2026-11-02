@@ -12,7 +12,8 @@ them on their own page. What must hold (the public app, driven in process):
   3. card=prop / card=status give that card alone
   4. the code carries lang=tr and theme only when chosen; light is the
      default theme, "the reader's device" leaves it out
-  5. lang=tr turns the page Turkish; the language link keeps the choices
+  5. lang=tr turns the page Turkish; the language link keeps the choices;
+     the openings card is named with its band, VHF/UHF
   6. a malformed square is a 400 with the reason and no code, and what was
      typed is escaped
   7. the preview loads the cards from this server; nothing else is loaded
@@ -85,6 +86,8 @@ async def main() -> int:
             p.append(f"card=prop, Turkish, dark: {got!r}")
         if "Sayfanıza kart koyun" not in h or "Yapıştırılacak kod" not in h:
             p.append("lang=tr does not turn the page Turkish")
+        if ">VHF/UHF propagasyon açılımları</option>" not in h:
+            p.append("the openings card is not named with its band")
         if 'href="?grid=KM38&amp;card=prop&amp;theme=dark&amp;lang=en"' not in h:
             p.append("the language link drops the choices")
 

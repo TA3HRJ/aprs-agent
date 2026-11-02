@@ -16,6 +16,9 @@ hold (the public app, driven in process, over a temporary history table):
   4. ?grid=KM counts the field's openings; a far square says there are none
   5. ?lang=tr answers in Turkish; while deaf the card says so and the stored
      openings stay
+  8. the head and the title name the band, VHF/UHF: "propagation" alone
+     reads as HF to an amateur
+  9. the top line links to the card builder filled in for this card
   6. the foot links to the feed for the same grid; the page refreshes
      itself, loads nothing from another host, no header forbids framing
   7. a malformed grid is a 400; no history table yet is an empty card
@@ -108,6 +111,12 @@ async def main() -> int:
         if st != 200:
             print(h[:300])
             return 1
+        if '<span class="dot"></span>VHF/UHF openings</div>' not in h or \
+                "<title>KM38 · VHF/UHF propagation openings</title>" not in h:
+            p.append("the head or the title does not name the band, VHF/UHF")
+        if 'href="https://map.example.org/embed/?grid=KM38&amp;card=prop&amp;theme=auto"' \
+                not in h:
+            p.append("no link to the builder for this card")
         if "5 within 400 km in 7 days" not in t:
             p.append("count of the week's openings near KM38 (far, old and the "
                      "repeat must be left out)")
@@ -149,7 +158,9 @@ async def main() -> int:
         st, _, h = await page(path, "?grid=km38nk&lang=tr")
         t = text(h)
         print(f"  tr  : {t[60:200]!r}")
-        if "Propagasyon açılımları" not in t or "7 günde ucu 400 km içinde 5 açılım" not in t \
+        if 'embed/?grid=KM38&amp;card=prop&amp;lang=tr&amp;theme=auto"' not in h:
+            p.append("the builder link drops the language")
+        if "VHF/UHF açılımları" not in t or "7 günde ucu 400 km içinde 5 açılım" not in t \
                 or "gönderen" not in t or "lang=tr" not in h:
             p.append("lang=tr not Turkish")
 

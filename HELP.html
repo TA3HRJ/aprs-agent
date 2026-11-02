@@ -1048,7 +1048,9 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
     <p>Kodu hazırlamanın en kolay yolu
       <a href="https://map.aprsagent.com/embed/">map.aprsagent.com/embed/</a>:
       karenizi yazın, kartları, dili ve temayı seçin; sayfa kartları önizler ve
-      yapıştırılacak kodu verir. Elle yazmak isterseniz şu kodu yapıştırın
+      yapıştırılacak kodu verir. Her kartın üst satırındaki "Sayfana ekle"
+      bağlantısı da oraya, o kartın ayarlarıyla gider; kartınızı gören biri
+      kendi kartını oradan alır. Elle yazmak isterseniz şu kodu yapıştırın
       (<code>KM38</code> yerine kendi karenizi yazın):</p>
 <pre><code>&lt;iframe src="https://map.aprsagent.com/embed/status?grid=KM38&amp;lang=tr"
         width="320" height="210" style="border:0"&gt;&lt;/iframe&gt;</code></pre>
@@ -1078,8 +1080,10 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       açılımlar için ikinci bir kart var: son 7 günde ucu karenin 400 km
       çevresine düşen açılımların en yenileri, her biri haritaya bağlantıyla;
       altta akışın bağlantısı. Aynı gün aynı bağlantılarla birkaç kez
-      kaydedilen bir açılım kartta bir kez görünür. Parametreler yukarıdakiyle
-      aynı:
+      kaydedilen bir açılım kartta bir kez görünür. Açılımlar bir igate'in
+      havadan doğrudan duyduğu paketlerden ölçülür: çoğu 2 m, bir kısmı 70 cm
+      LoRa APRS. Kartın başlığı bu yüzden "VHF/UHF açılımları" der.
+      Parametreler yukarıdakiyle aynı:
     </p>
 <pre><code>&lt;iframe src="https://map.aprsagent.com/embed/prop?grid=KM38&amp;lang=tr"
         width="320" height="230" style="border:0"&gt;&lt;/iframe&gt;</code></pre>
@@ -2069,7 +2073,9 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
     <p>The easiest way to get the code is
       <a href="https://map.aprsagent.com/embed/">map.aprsagent.com/embed/</a>:
       type your square, pick the cards, language and theme; the page previews
-      the cards and gives the code to paste. To write it by hand, paste this
+      the cards and gives the code to paste. The "Add to page" link in each
+      card's top line goes there too, with that card's settings, so someone
+      who sees your card can take their own. To write it by hand, paste this
       (put your own square in place of <code>KM38</code>):</p>
 <pre><code>&lt;iframe src="https://map.aprsagent.com/embed/status?grid=KM38"
         width="320" height="210" style="border:0"&gt;&lt;/iframe&gt;</code></pre>
@@ -2099,8 +2105,10 @@ if(t==="dark"){var m=document.querySelector('meta[name="theme-color"]');if(m)m.c
       feed. For openings there is a second card: the newest openings of the
       last 7 days with an end within 400 km of the square, each linking to
       the map, and the feed's link at its foot. An opening stored several
-      times in one day with the same links shows once. The parameters are the
-      same as above:
+      times in one day with the same links shows once. Openings are measured
+      on packets an igate heard straight over the air: mostly 2 m, some 70 cm
+      LoRa APRS, so the card's head reads "VHF/UHF openings". The parameters
+      are the same as above:
     </p>
 <pre><code>&lt;iframe src="https://map.aprsagent.com/embed/prop?grid=KM38"
         width="320" height="230" style="border:0"&gt;&lt;/iframe&gt;</code></pre>

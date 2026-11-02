@@ -302,11 +302,12 @@ minutes (`&lang=tr` for Turkish, `&theme=dark`, or the reader's own setting):
 ```
 
 It works in a QRZ.com biography: paste the iframe in the editor's HTML view.
-`/embed/prop?grid=KM38` is its companion for propagation: the newest openings
+`/embed/prop?grid=KM38` is its companion for propagation: the newest VHF/UHF openings
 of the last 7 days with an end within 400 km, each linking to the map, and the
 `/feed/prop.atom` link at its foot (`width="320" height="230"`).
 `/embed/` builds the code for a visitor: their square, which cards, language
-and theme, with a live preview and the iframe code to paste.
+and theme, with a live preview and the iframe code to paste. Each card's top
+line links to it ("Add to page"), filled in for that card.
 
 The public page also serves `robots.txt` (keeping crawlers off `/api/` and
 `/ws`), `sitemap.xml`, `llms.txt` and an HTML 404 page, and loads Leaflet from

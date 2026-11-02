@@ -53,6 +53,11 @@ What is left, in the order it is worth doing:
    the week's openings within 400 km, newest four, repeats of one day shown
    once (`check_embed_prop`). v3.3.6: `/embed/`, a builder that gives a
    visitor the iframe code for their own square (`check_embed_builder`).
+   v3.3.7: the openings card names its band, "VHF/UHF openings" (short to
+   stay one line in a 244 px QRZ column; the title says it in full), and
+   both cards carry "Add to page" in their top line, a link to the builder
+   filled in for that card - a line beside the cards on one page reached
+   only that page's readers.
    Seen live 2026-11-01: one pair of links stored as four openings in a
    day shows as four identical feed entries; left as is (the operator's
    call), the opening rules stay frozen (F-2026-10-05-06).

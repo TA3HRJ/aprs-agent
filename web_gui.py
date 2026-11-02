@@ -3479,7 +3479,8 @@ _EMBED_T = {
            "quake_n": ": {k} of {n} stations quiet", "unusual": " (unusual)",
            "prop": "{n} propagation opening(s) nearby in 3 h, longest {km:.0f} km",
            "prop0": "No propagation openings nearby in 3 h",
-           "open": "Open on the map", "updated": "Updated {t} UTC"},
+           "open": "Open on the map", "updated": "Updated {t} UTC",
+           "add": "Add to page"},
     "tr": {"ok": "Herkes yayında", "quiet_ok": "Bölgesel sessizlik yok",
            "silence": "Bölgesel sessizlik",
            "igate": "Igate arızası", "gate": "Tek igate, durumu bilinmiyor",
@@ -3492,7 +3493,8 @@ _EMBED_T = {
            "quake_n": ": {k}/{n} istasyon sustu", "unusual": " (olağandışı)",
            "prop": "Son 3 saatte yakında {n} propagasyon açılımı, en uzun {km:.0f} km",
            "prop0": "Son 3 saatte yakında propagasyon açılımı yok",
-           "open": "Haritada aç", "updated": "Güncellendi {t} UTC"},
+           "open": "Haritada aç", "updated": "Güncellendi {t} UTC",
+           "add": "Sayfana ekle"},
 }
 _EMBED_CSS = """
 :root{--bg:#fdfbf5;--fg:#22201a;--fg2:#635c50;--line:#d9d2c2;--ok:#2e7d4f;
@@ -3520,7 +3522,27 @@ background:repeating-linear-gradient(45deg,#b0413e 0 7px,var(--bg) 7px 14px,#245
 .ft{margin-top:auto;display:flex;justify-content:space-between;gap:8px;
 font:11px var(--mono);color:var(--fg2)}
 .ft a{color:var(--link);text-decoration:none;font-weight:600}
+.hd{flex-wrap:wrap;row-gap:0}.bl{white-space:nowrap}.bl .brand{letter-spacing:.04em}
+.bl .sep{margin:0 .35em;letter-spacing:0}.brand.add{color:var(--link)}
 """
+# The top line beside the square has 169 px in a 244 px QRZ column; "APRS-Agent ·
+# Sayfana ekle" takes 157 (Courier New 169), so the spacing is tighter there and
+# the line wraps rather than overflow in a wider font.
+
+
+def _embed_head(base: str, grid: str, card: str, lang: str, theme: str) -> str:
+    """A card's top line: the square, the brand (the map) and a link to the
+    builder filled in for this card. In the card, so it goes wherever the card
+    is pasted - a line beside it on one page reaches only that page's readers."""
+    esc = html.escape
+    q = "grid=%s&card=%s%s&theme=%s" % (
+        grid, card, "&lang=tr" if lang == "tr" else "",
+        theme if theme in ("light", "dark") else "auto")
+    return ('<div class="hd"><span class="sq">%s</span><span class="bl">'
+            '<a class="brand" href="%s" target="_blank" rel="noopener">APRS-Agent</a>'
+            '<span class="brand sep">·</span><a class="brand add" href="%sembed/?%s" '
+            'target="_blank" rel="noopener">%s</a></span></div>'
+            % (esc(grid), esc(base), esc(base), esc(q), esc(_EMBED_T[lang]["add"])))
 
 
 @routes.get("/embed/status")
@@ -3604,9 +3626,7 @@ async def embed_status(request: web.Request) -> web.Response:
             '<meta name="robots" content="noindex">',
             '<title>%s · %s</title>' % (esc(grid), esc(head)),
             '<style>%s</style></head><body>' % _EMBED_CSS,
-            '<div class="hd"><span class="sq">%s</span>'
-            '<a class="brand" href="%s" target="_blank" rel="noopener">APRS-Agent</a></div>'
-            % (esc(grid), esc(base)),
+            _embed_head(base, grid, "status", lang, theme),
             '<div class="st %s"><span class="dot"></span>%s</div>' % (cls, esc(head))]
     body += ['<div class="l">%s</div>' % esc(x) for x in lines]
     body.append('<div class="ft"><span>%s</span><a href="%s?q=%s" target="_blank" '
@@ -3630,9 +3650,14 @@ async def embed_status(request: web.Request) -> web.Response:
 # feed lists each (left as is; the rules stay frozen, F-2026-10-05-06). In
 # four rows that would crowd out the rest, so the card shows a repeat once:
 # same day, same field, same links.
+# The head names the band: an opening is measured on packets an igate heard
+# straight over the air, mostly 2 m, some 70 cm LoRa; "propagation" alone
+# reads as HF to an amateur. Short on the card - in a 244 px QRZ column
+# "VHF/UHF propagation openings" takes two lines; the title says it in full.
 _EMBED_PROP_ROWS = 4
 _EMBED_PROP_T = {
-    "en": {"head": "Propagation openings",
+    "en": {"head": "VHF/UHF openings",
+           "title": "VHF/UHF propagation openings",
            "n": "{n} within 400 km in 7 days",
            "n_field": "{n} in this field in 7 days",
            "none": "No openings within 400 km in 7 days",
@@ -3640,7 +3665,8 @@ _EMBED_PROP_T = {
            "row": "{d} · {km} km, {n} senders",
            "feed": "Atom feed",
            "months": "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec"},
-    "tr": {"head": "Propagasyon açılımları",
+    "tr": {"head": "VHF/UHF açılımları",
+           "title": "VHF/UHF propagasyon açılımları",
            "n": "7 günde ucu 400 km içinde {n} açılım",
            "n_field": "7 günde bu alanda {n} açılım",
            "none": "7 günde 400 km içinde açılım yok",
@@ -3701,11 +3727,9 @@ async def embed_prop(request: web.Request) -> web.Response:
             '<meta name="viewport" content="width=device-width,initial-scale=1">',
             '<meta http-equiv="refresh" content="300">',
             '<meta name="robots" content="noindex">',
-            '<title>%s · %s</title>' % (esc(grid), esc(P["head"])),
+            '<title>%s · %s</title>' % (esc(grid), esc(P["title"])),
             '<style>%s%s</style></head><body>' % (_EMBED_CSS, _EMBED_PROP_CSS),
-            '<div class="hd"><span class="sq">%s</span>'
-            '<a class="brand" href="%s" target="_blank" rel="noopener">APRS-Agent</a></div>'
-            % (esc(grid), esc(base)),
+            _embed_head(base, grid, "prop", lang, theme),
             '<div class="st %s"><span class="dot"></span>%s</div>' % (cls, esc(P["head"]))]
     body += ['<div class="l">%s</div>' % esc(x) for x in lines]
     if rows:
@@ -3732,11 +3756,12 @@ _EMBED_SIZES = {"status": (320, 210), "prop": (320, 230)}
 _EMBED_B = {
     "en": {"title": "Put a card on your page",
            "lede": "Cards for your website, blog or QRZ.com biography: the "
-                   "silence state of your square and the propagation openings "
-                   "near it. They refresh themselves every 5 minutes, run no "
+                   "silence state of your square and the VHF/UHF propagation "
+                   "openings near it. They refresh themselves every 5 minutes, "
+                   "run no "
                    "script and load nothing from another server.",
            "grid": "Your Maidenhead square", "card": "Cards",
-           "both": "Both", "status": "Status", "prop": "Propagation openings",
+           "both": "Both", "status": "Status", "prop": "VHF/UHF propagation openings",
            "lang": "Card language", "theme": "Theme", "light": "Light",
            "dark": "Dark", "auto": "The reader's device setting",
            "show": "Show", "bad": "Not a Maidenhead square or field: %s",
@@ -3747,11 +3772,12 @@ _EMBED_B = {
            "other": "Türkçe", "map": "Live map"},
     "tr": {"title": "Sayfanıza kart koyun",
            "lede": "Web sitenize, blogunuza ya da QRZ.com biyografinize kart: "
-                   "karenizin sessizlik durumu ve çevresindeki propagasyon "
+                   "karenizin sessizlik durumu ve çevresindeki VHF/UHF propagasyon "
                    "açılımları. Kartlar 5 dakikada bir kendini yeniler, script "
                    "çalıştırmaz, başka bir sunucudan bir şey yüklemez.",
            "grid": "Maidenhead kareniz", "card": "Kartlar",
-           "both": "İkisi de", "status": "Durum", "prop": "Propagasyon açılımları",
+           "both": "İkisi de", "status": "Durum",
+           "prop": "VHF/UHF propagasyon açılımları",
            "lang": "Kart dili", "theme": "Tema", "light": "Açık",
            "dark": "Koyu", "auto": "Okuyanın cihaz ayarı",
            "show": "Göster", "bad": "Maidenhead karesi ya da alanı değil: %s",

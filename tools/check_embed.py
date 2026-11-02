@@ -14,6 +14,8 @@ What must hold (the public app, driven in process):
   6. the page links to /?q=<square>, refreshes itself, loads nothing from
      another host, and the app sends no header that forbids framing
   7. a malformed grid is a 400
+  8. the top line links to the card builder filled in for this card (square,
+     card, language, theme), so a card pasted anywhere carries the way to one
 
 Usage:  python tools/check_embed.py
 Exit code 1 on failure.
@@ -80,6 +82,9 @@ async def main() -> int:
         p.append("propagation count (suspect/old/far must be left out)")
     if 'href="https://map.example.org/?q=KM38"' not in h:
         p.append("map link")
+    if 'href="https://map.example.org/embed/?grid=KM38&amp;card=status&amp;theme=auto"' \
+            not in h or ">Add to page</a>" not in h:
+        p.append("no link to the builder for this card")
     if 'http-equiv="refresh"' not in h:
         p.append("no self-refresh")
     if re.search(r'(src|href)="https?://(?!map\.example\.org)', h.replace(
@@ -99,6 +104,9 @@ async def main() -> int:
     if "Bölgesel sessizlik" not in t or "31 sabit istasyon · 9 sessiz" not in t \
             or time.strftime("%H:%M UTC", time.gmtime(1792000000)) not in t:
         p.append("alerting square, Turkish")
+    if 'embed/?grid=KM38&amp;card=status&amp;lang=tr&amp;theme=auto"' not in h or \
+            ">Sayfana ekle</a>" not in h:
+        p.append("the builder link drops the language")
 
     igate = {"cell": {"baseline": 20, "silent": 6, "alert": True, "cause": "igate"}}
     st, _, h = await page(igate, "?grid=KM38")
@@ -118,6 +126,8 @@ async def main() -> int:
     st, _, h = await page(quiet, "?grid=KM38&theme=dark")
     if 'data-theme="dark"' not in h:
         p.append("theme=dark")
+    if 'embed/?grid=KM38&amp;card=status&amp;theme=dark"' not in h:
+        p.append("the builder link drops the theme")
 
     some = {"cell": {"baseline": 29, "silent": 3, "alert": False, "cause": ""}}
     st, _, h = await page(some, "?grid=KM38")
