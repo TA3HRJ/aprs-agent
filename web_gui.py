@@ -3787,19 +3787,51 @@ _EMBED_B = {
                   "geçin ve kodu oraya yapıştırın.",
            "other": "English", "map": "Canlı harita"},
 }
+# The aprsagent.com family's theme rule (site standard 1.3), as the map page
+# keeps it: light unless the visitor chose dark with the button, the choice in
+# localStorage "theme" - the map's own key, so a page here follows the map. The
+# device's dark setting is not read: from a light aprsagent.com the builder had
+# opened dark. Set before first paint.
+_FAMILY_THEME_HEAD = (
+    '<meta name="theme-color" content="#f6f3ea">'
+    '<script>(function(){var t=null;try{t=localStorage.getItem("theme")}catch(e){}'
+    'document.documentElement.dataset.theme=t==="dark"?"dark":"light";'
+    'if(t==="dark"){var m=document.querySelector(\'meta[name="theme-color"]\');'
+    'if(m)m.content="#1b1a16"}})();</script>')
+_FAMILY_THM_BTN = (
+    '<button class="thm" type="button" data-thm title="Açık / koyu tema · Light / dark '
+    'theme" aria-label="Açık / koyu tema · Light / dark theme"><svg class="i-moon" '
+    'viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" '
+    'aria-hidden="true"><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z"/>'
+    '</svg><svg class="i-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+    'stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 '
+    '.8v2M8 13.2v2M.8 8h2M13.2 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M2.9 13.1l1.4-1.4M11.7 '
+    '4.3l1.4-1.4"/></svg></button>'
+    '<script>document.querySelector("[data-thm]").addEventListener("click",function(){'
+    'var r=document.documentElement,n=r.dataset.theme==="dark"?"light":"dark";'
+    'r.dataset.theme=n;try{localStorage.setItem("theme",n)}catch(e){}'
+    'var m=document.querySelector(\'meta[name="theme-color"]\');'
+    'if(m)m.content=n==="dark"?"#1b1a16":"#f6f3ea"});</script>')
+_FAMILY_THM_CSS = """
+.thm{display:inline-flex;align-items:center;justify-content:center;width:32px;height:28px;
+padding:0;border:1px solid var(--fg);background:transparent;color:var(--fg2);cursor:pointer;flex:none}
+.thm:hover{color:var(--fg)}.thm svg{width:15px;height:15px;display:block}
+:root[data-theme="dark"] .thm .i-moon,:root:not([data-theme="dark"]) .thm .i-sun{display:none}
+"""
 _EMBED_B_CSS = """
 :root{--bg:#f6f3ea;--card:#fdfbf5;--fg:#22201a;--fg2:#635c50;--line:#d9d2c2;
 --accent:#b0413e;--link:#24506e;
 --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
-@media (prefers-color-scheme:dark){:root{--bg:#1b1a16;--card:#211f1a;--fg:#ece6d8;
---fg2:#b3aa98;--line:#3a362e;--accent:#d0605c;--link:#8fb6d4}}
+:root[data-theme="dark"]{--bg:#1b1a16;--card:#211f1a;--fg:#ece6d8;
+--fg2:#b3aa98;--line:#3a362e;--accent:#d0605c;--link:#8fb6d4}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 var(--sans);padding:24px 16px}
 body::before{content:"";position:fixed;left:0;right:0;top:0;height:5px;
 background:repeating-linear-gradient(45deg,#b0413e 0 9px,var(--bg) 9px 18px,#24506e 18px 27px,var(--bg) 27px 36px)}
 main{max-width:46em;margin:0 auto}
-.top{display:flex;justify-content:space-between;gap:12px;font:13px var(--mono)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;font:13px var(--mono)}
+.top span{display:flex;align-items:center;gap:12px}
 .top a{color:var(--link)}
 h1{font-size:26px;margin:.6em 0 .2em}
 p{color:var(--fg2);margin:.4em 0}
@@ -3853,12 +3885,13 @@ async def embed_builder(request: web.Request) -> web.Response:
             ("lang", "en" if lang == "tr" else "tr")) if v))
     out = ['<!doctype html>', '<html lang="%s"><head><meta charset="utf-8">' % lang,
            '<meta name="viewport" content="width=device-width,initial-scale=1">',
+           _FAMILY_THEME_HEAD,
            '<title>%s · APRS-Agent</title>' % esc(B["title"]),
-           '<style>%s</style></head><body><main>' % _EMBED_B_CSS,
+           '<style>%s%s</style></head><body><main>' % (_EMBED_B_CSS, _FAMILY_THM_CSS),
            '<div class="top"><a href="%s">APRS-Agent · %s</a>'
-           '<a href="%s" lang="%s">%s</a></div>'
+           '<span><a href="%s" lang="%s">%s</a>%s</span></div>'
            % (esc(base), esc(B["map"]), other, "en" if lang == "tr" else "tr",
-              esc(B["other"])),
+              esc(B["other"]), _FAMILY_THM_BTN),
            '<h1>%s</h1><p>%s</p>' % (esc(B["title"]), esc(B["lede"])),
            '<form method="get" action="">',
            '<label>%s<input name="grid" value="%s" placeholder="KM38" maxlength="6" '
@@ -3893,7 +3926,7 @@ async def embed_builder(request: web.Request) -> web.Response:
                    % (3 * len(parts) + 1, esc(code)))
         out.append('<button id="cp" type="button" hidden>%s</button>' % esc(B["copy"]))
         out.append('<p>%s</p>' % esc(B["qrz"]))
-        # The only script on the page: without it the code is selected by hand.
+        # Without this script the code is selected by hand.
         out.append('<script>(function(){var b=document.getElementById("cp"),'
                    't=document.getElementById("code");if(!navigator.clipboard)return;'
                    'b.hidden=false;b.onclick=function(){navigator.clipboard.writeText('
@@ -3911,12 +3944,13 @@ _NOT_FOUND_HTML = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>404 - APRS-Agent</title>
+""" + _FAMILY_THEME_HEAD + """
 <style>
 :root{--bg:#f6f3ea;--fg:#22201a;--fg2:#635c50;--accent:#b0413e;--link:#24506e;
 --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
-@media (prefers-color-scheme:dark){:root{--bg:#1b1a16;--fg:#ece6d8;--fg2:#b3aa98;
---accent:#d0605c;--link:#8fb6d4}}
+:root[data-theme="dark"]{--bg:#1b1a16;--fg:#ece6d8;--fg2:#b3aa98;
+--accent:#d0605c;--link:#8fb6d4}
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);
 color:var(--fg);font:16px/1.6 var(--sans);padding:24px;box-sizing:border-box}
 body::before{content:"";position:fixed;left:0;right:0;top:0;height:5px;

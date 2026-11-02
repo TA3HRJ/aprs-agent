@@ -8500,3 +8500,26 @@ start; an evidence snapshot older than that says `null`, not `[]`. Silence
 detection is unchanged. `check_hazard_near` fails on v3.3.2 (no helper) and
 on four mutations of the new code: no refill, unbounded window, no ageing,
 Telegram without the line.
+
+## F-2026-11-02-01 — the card builder and the 404 page took the device's dark setting
+
+**Seen, 2026-11-02 (the operator):** aprsagent.com in its light theme; the
+"status card" link opened map.aprsagent.com/embed/ dark. Measured in the
+browser with the device in dark mode and no stored choice, every page linked
+from aprsagent.com: the landing page, help, privacy and 404 on aprsagent.com,
+the map, and the four tool sites (repeaters, coax, sinav, contacts) open
+light, and the aprsagent.com pages follow a stored "dark". Two did not: the
+builder (`/embed/`, v3.3.6) and the public app's HTML 404 page (v3.2.174) -
+both had `@media (prefers-color-scheme:dark)`, which the family standard
+(1.3) does not read: light unless the visitor chose dark, kept in
+localStorage "theme".
+
+**Applied, v3.3.8.** Both set `data-theme` before first paint from
+localStorage "theme" - the map's own key on that host, so they follow the
+map - with the dark colours under `:root[data-theme="dark"]`; the builder
+has the family's theme button. The embed cards are unchanged: without
+`?theme=` they follow the reader's device on purpose, an option the builder
+offers. A choice made on aprsagent.com does not reach map.aprsagent.com
+(another origin), as with the tool sites. `check_family_theme` fails on
+v3.3.7 (11 items) and on four mutations: no button, no default light, the
+media query back, a button that does not store the choice.
