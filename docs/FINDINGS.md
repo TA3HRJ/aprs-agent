@@ -8523,3 +8523,38 @@ offers. A choice made on aprsagent.com does not reach map.aprsagent.com
 (another origin), as with the tool sites. `check_family_theme` fails on
 v3.3.7 (11 items) and on four mutations: no button, no default light, the
 media query back, a button that does not store the choice.
+
+## F-2026-11-11-01 — the model denied the rate limit, and a refusal was transmitted four times
+
+**Seen, 2026-11-10 22:35-23:28 UTC+1 (journal and the operator's log):**
+YO7CHY asked from two radios, -1 and -5. The limit on the VPS is 5
+questions, then one every 6 minutes (`rate_burst = 5`, `rate_refill_s = 360`).
+
+- Asked "how many questions may i ask you ?", the model answered "Ask as many
+  as you like; no fixed limit." Asked "why you ask me to wait ?", it answered
+  "I didn't ask you to wait ... Possibly a delayed or duplicated packet from
+  the gateway", and the same again at 23:26. The notice "Too many questions -
+  please wait N min" is sent by the code: it was never in the model's
+  history, and its rules said nothing of a limit.
+- YO7CHY-5 acked nothing that night. Its answer and its notice were each
+  resent three times (40/60/120 s): the notice went out four times, which is
+  the hammering transmitter `_allow_rate` is written to avoid.
+- After YO7CHY-1 was told, YO7CHY-5 ("H" at 22:53) met silence: the bucket is
+  the base callsign's, and so was "told".
+
+The wait figures in the notices (3, 1, 3, 4, 4, 1 min) were right for a
+6-minute refill. The limit itself is not changed.
+
+**Applied, v3.3.9.** A refusal (rate notice, daily notice, "AI did not
+answer") goes out once, not resent; answers still are. "Told" is per full
+callsign. A question about the limit - "how many questions", "why ... wait",
+the notice quoted back, Turkish "kac soru", "neden ... bekle" - is answered by
+the code before the limiter, with the configured numbers and this station's
+wait, once per 10 min, spending no token. A sent notice joins the station's
+history, and the model's rules state the limit and the notice and forbid
+denying a message or inventing a cause. `check_rate_talk` fails on v3.3.8
+(15 items) and on five mutations: the notice resent, "told" per base, no
+history entry, no notice in the rules, a token spent by the limit answer.
+
+Not addressed: the model's two T2LT answers disagreed ("choke at base", then
+"no extra choke needed"); that is the model's quality, not this code.

@@ -489,6 +489,24 @@ _HELP_MSG_TR = re.compile(
     r"|nas[iı]l\s+kullan",
     re.I)
 
+# A question about the limiter itself. On 2026-11-10 YO7CHY asked "how many
+# questions may i ask you", "why you ask me to wait" and quoted the notice
+# back; the model, which never sees the notice, said "no fixed limit" and "I
+# never said that - likely duplicated packets from the gateway"
+# (F-2026-11-11-01). The code knows the limit, so the code answers.
+_LIMIT_MSG = re.compile(
+    r"too\s+many\s+quest"
+    r"|how\s+many\s+(?:questions|messages)"
+    r"|why\s+(?:do\s+|did\s+|must\s+|should\s+)?(?:\w+\s+){0,4}wait\b"
+    r"|(?:question|rate)\s+limit",
+    re.I)
+_LIMIT_MSG_TR = re.compile(
+    r"[cç]ok\s+fazla\s+soru"
+    r"|ka[cç]\s+soru"
+    r"|(?:neden|niye|ni[cç]in)\s+(?:\w+\s+){0,4}bekle"
+    r"|soru\s+(?:s[iı]n[iı]r|limit)",
+    re.I)
+
 # Two facts and a boundary, in the order someone meeting it needs them.
 # Deliberately not a command list: promising commands would be the next thing
 # to go stale. The one pointer added to it, to SERVICES, is only appended when
@@ -956,10 +974,11 @@ class AIGateway(Extension):
         # refill only bites on sustained hammering. A flat cooldown would have
         # punished exactly the people worth having — someone meeting the thing
         # for the first time asks three or four questions back to back.
-        self._buckets: dict[str, list] = {}   # sender -> [tokens, last_refill, told]
+        self._buckets: dict[str, list] = {}   # sender -> [tokens, last_refill, told calls]
         self._help_at: dict[str, float] = {}  # sender -> when the help text went out
         self._services_at: dict[str, float] = {}  # the same, for SERVICES
         self._fail_told: dict[str, float] = {}    # the same, for "no answer"
+        self._limit_at: dict[str, float] = {}     # the same, for the limit answer
         # The extensions section of the config, for SERVICES; None until the
         # web GUI hands it over, and then SERVICES goes to the model as before
         self._bridges: Optional[dict] = None
@@ -1030,7 +1049,8 @@ class AIGateway(Extension):
             self.warn(f"config reload failed, keeping previous: {e}")
         return self._config
 
-    def _allow_rate(self, sender: str, cfg: dict) -> "tuple[bool, Optional[str]]":
+    def _allow_rate(self, sender: str, cfg: dict,
+                    who: str = "") -> "tuple[bool, Optional[str]]":
         """Token bucket. Returns (allowed, notice to send back or None).
 
         A refusal that says nothing looks like a broken service, and the person
@@ -1041,6 +1061,10 @@ class AIGateway(Extension):
         hammering sender into a hammering transmitter, at our own expense and
         on a shared RF resource. The notice unlocks again only after they have
         earned a token back.
+
+        The bucket is the base callsign's, but "told" is per full callsign
+        (`who`): YO7CHY-1 was told and YO7CHY-5, another radio, then met
+        silence (F-2026-11-11-01).
         """
         burst = float(cfg.get("rate_burst", 4) or 0)
         refill_s = float(cfg.get("rate_refill_s", 180) or 0)
@@ -1049,18 +1073,19 @@ class AIGateway(Extension):
         now = time.time()
         b = self._buckets.get(sender)
         if b is None:
-            self._buckets[sender] = [burst - 1.0, now, False]
+            self._buckets[sender] = [burst - 1.0, now, set()]
             return True, None
         tokens = min(burst, b[0] + (now - b[1]) / refill_s)
         if tokens < 1.0:
             b[0], b[1] = tokens, now
-            if b[2]:
+            told = who or sender
+            if told in b[2]:
                 return False, None            # already told them this episode
-            b[2] = True
+            b[2].add(told)
             wait_min = max(1, int(round((1.0 - tokens) * refill_s / 60.0)))
             tmpl = cfg.get("rate_notice") or _DEFAULT_RATE_NOTICE
             return False, tmpl.replace("{m}", str(wait_min))[:64]
-        b[0], b[1], b[2] = tokens - 1.0, now, False
+        b[0], b[1], b[2] = tokens - 1.0, now, set()
         # Senders idle longer than a full refill are forgotten, so the dict
         # cannot grow without bound on a worldwide feed.
         if len(self._buckets) > 2000:
@@ -1677,6 +1702,35 @@ class AIGateway(Extension):
         return _services_text(self._bridges, sender_base, tr,
                               (self._tg_bot() if self._tg_bot else "") or "")
 
+    def _limit_answer(self, question: str, sender_base: str,
+                      cfg: dict) -> "Optional[str]":
+        """The limiter explained by the code, with this station's own wait.
+        None when the question is not about it, the limiter is off, or the
+        sender was told within _HELP_REPEAT_S (then the ordinary path, the
+        limiter included). Reading the bucket spends no token."""
+        tr = bool(_LIMIT_MSG_TR.search(question))
+        if not tr and not _LIMIT_MSG.search(question):
+            return None
+        burst = float(cfg.get("rate_burst", 4) or 0)
+        refill_s = float(cfg.get("rate_refill_s", 180) or 0)
+        if burst <= 0 or refill_s <= 0:
+            return None
+        if not self._fixed_answer_due(self._limit_at, sender_base):
+            return None
+        b = self._buckets.get(sender_base)
+        tokens = burst if b is None else min(burst, b[0] + (time.time() - b[1]) / refill_s)
+        per = "%g" % round(refill_s / 60.0, 1)
+        wait = max(1, int(round((1.0 - tokens) * refill_s / 60.0)))
+        if tr:
+            text = ("Istasyon basina sinir: %d soru, sonra %s dakikada 1 - "
+                    "telsiz kanali ortak. " % (int(burst), per))
+            return text + ("Siradaki soru %d dk sonra." % wait if tokens < 1.0
+                           else "Simdi sorabilirsiniz.")
+        text = ("Limit per station: %d questions, then 1 every %s min - the "
+                "radio channel is shared. " % (int(burst), per))
+        return text + ("Next one in %d min." % wait if tokens < 1.0
+                       else "You can ask now.")
+
     def _fixed_answer_due(self, told_at: dict, sender_base: str) -> bool:
         now = _clock()
         if now - told_at.get(sender_base, 0.0) < _HELP_REPEAT_S:
@@ -1794,6 +1848,18 @@ class AIGateway(Extension):
                 "network yourself. If asked about this gateway's bridges, "
                 "tell them to send SERVICES (in Turkish: SERVIS)."
             )
+        burst = int(float(cfg.get("rate_burst", 4) or 0))
+        refill_s = float(cfg.get("rate_refill_s", 180) or 0)
+        if burst > 0 and refill_s > 0:
+            # It said "no fixed limit" and denied the notice (F-2026-11-11-01)
+            rules += (
+                f" Each station may ask {burst} questions, then one every "
+                f"{refill_s / 60:g} minutes; past that this gateway's code "
+                "itself replies 'Too many questions - please wait N min'. "
+                "If asked about a limit or a wait, say so. Never deny a "
+                "message in this conversation, and do not invent causes "
+                "such as duplicated packets."
+            )
         operator = cfg.get("system_prompt", "").strip()
         system_prompt = (rules + " " + operator) if operator else rules
 
@@ -1900,8 +1966,8 @@ class AIGateway(Extension):
                               f"back to the clock: {e}")
         return str(self._msg_counter)
 
-    async def _send_reply(self, from_call: str, to_call: str,
-                          message: str) -> "Optional[tuple]":
+    async def _send_reply(self, from_call: str, to_call: str, message: str,
+                          resend: bool = True) -> "Optional[tuple]":
         if not self._own_writer:
             self.error("no own_writer queue — cannot send reply")
             return
@@ -1909,7 +1975,7 @@ class AIGateway(Extension):
         pkt = f"{from_call}>{TOCALL},TCPIP*::{to_call:<9}:{aprs_message_text(message)}{{{mid}\r\n"
         await self._own_writer.put(pkt.encode("utf-8"))
         key = (to_call.upper(), str(mid))
-        if _RETRY_GAPS_S:
+        if _RETRY_GAPS_S and resend:
             self._unacked[key] = asyncio.create_task(
                 self._resend(key, to_call, str(mid), pkt))
         return key
@@ -1944,21 +2010,24 @@ class AIGateway(Extension):
 
     async def _send_parts(self, from_call: str, to_call: str,
                           parts: "list[str]", rf: bool,
-                          log: bool = True) -> None:
+                          log: bool = True, resend: bool = True) -> None:
         """Every answer leaves through here: a pause before the first part to
         a sender heard on RF, and a gap between parts. The two replay loops
         used to sleep after a part rather than before the next, which sent
         the first two parts back to back."""
         # A fresh answer (not a replay) is tallied: how many of its parts the
         # recipient's station acknowledges. Replays are the same answer again.
+        # A refusal (resend=False) goes out once: resending "please wait" to a
+        # radio that does not ack sent it four times to YO7CHY-5 on
+        # 2026-11-10, the hammering transmitter _allow_rate keeps us from being.
         group = ({"n": len(parts), "left": len(parts), "acked": 0}
-                 if log and _RETRY_GAPS_S and parts else None)
+                 if log and resend and _RETRY_GAPS_S and parts else None)
         for i, part in enumerate(parts):
             if i:
                 await asyncio.sleep(_PART_GAP_S)
             elif rf and _RF_TURNAROUND_S > 0:
                 await asyncio.sleep(_RF_TURNAROUND_S)
-            key = await self._send_reply(from_call, to_call, part)
+            key = await self._send_reply(from_call, to_call, part, resend)
             if group is not None:
                 if key is None:
                     group["n"] -= 1
@@ -2098,12 +2167,13 @@ class AIGateway(Extension):
             # again - still no model call, one question is still one call -
             # but from here on each copy costs a token, so how often someone
             # may ask is the bucket's decision rather than a flat cap.
-            allowed, notice = self._allow_rate(sender_base, cfg)
+            allowed, notice = self._allow_rate(sender_base, cfg, sender_full)
             if not allowed:
                 self.mark_working()
                 self.warn(f"rate-limited {sender_full} (past replays)")
                 if notice:
-                    await self._send_parts(my_call, sender_full, [notice], rf)
+                    await self._send_parts(my_call, sender_full, [notice], rf,
+                                           resend=False)
                 return None
             self.log(f"resending answer to {sender_full} (replays spent)")
             await self._send_parts(
@@ -2172,6 +2242,8 @@ class AIGateway(Extension):
         help_text = self._help_answer(question, sender_base)
         if help_text is None:
             help_text = self._services_answer(question, sender_base)
+        if help_text is None:
+            help_text = self._limit_answer(question, sender_base, cfg)
         if help_text is not None:
             self.log(f"RX from {sender_full}: {question}")
             prev = self._processed.get(dedup_key)
@@ -2185,13 +2257,16 @@ class AIGateway(Extension):
             self.mark_working()
             return None
 
-        allowed, notice = self._allow_rate(sender_base, cfg)
+        allowed, notice = self._allow_rate(sender_base, cfg, sender_full)
         if not allowed:
             self.mark_working()
             self.warn(f"rate-limited {sender_full}"
                       + (" (told)" if notice else " (already told)"))
             if notice:
-                await self._send_parts(my_call, sender_full, [notice], rf)
+                await self._send_parts(my_call, sender_full, [notice], rf,
+                                       resend=False)
+                # So that the model, asked next about the wait, sees it said.
+                self._remember(sender_base, question, notice)
             return None
 
         self.log(f"RX from {sender_full}: {question}")
@@ -2231,7 +2306,9 @@ class AIGateway(Extension):
                 self.warn(f"daily limit reached, refused {sender_full}"
                           + (" (told)" if notice else ""))
                 if notice:
-                    await self._send_parts(my_call, sender_full, [notice], rf)
+                    await self._send_parts(my_call, sender_full, [notice], rf,
+                                           resend=False)
+                    self._remember(sender_base, question, notice)
                 return None
             answer = await self._ask_ai(question, sender_full,
                                         self._recent_turns(sender_base))
@@ -2252,7 +2329,8 @@ class AIGateway(Extension):
             if now - self._fail_told.get(sender_base, 0.0) >= _HELP_REPEAT_S:
                 self._fail_told[sender_base] = now
                 self.warn(f"no answer for {sender_full}: told them to try later")
-                await self._send_parts(my_call, sender_full, [_AI_FAILED_TEXT], rf)
+                await self._send_parts(my_call, sender_full, [_AI_FAILED_TEXT], rf,
+                                       resend=False)
             return None
 
         self.log(f"AI response: {answer}")

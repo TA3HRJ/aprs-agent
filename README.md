@@ -501,7 +501,9 @@ whitelist      = []                   # callsigns allowed to use AI (wildcards O
 # then one more per `rate_refill_s` seconds, refilling to the full burst once
 # idle. Deliberately not a flat cooldown: the first people to try a new gateway
 # ask several questions in a row, and freezing them out teaches the wrong thing.
-# Someone who runs out is told once per episode, with the wait in minutes.
+# Someone who runs out is told once per episode (once per SSID), with the
+# wait in minutes, and the notice is not resent. "How many questions" or "why
+# wait" is answered by the code from these numbers, and the model is told them.
 # Either setting at 0 switches the limiter off.
 rate_burst     = 4
 rate_refill_s  = 180
