@@ -38,6 +38,12 @@ from extensions.ai_gateway_ext import AIGateway  # noqa: E402
 _REAL_CLOCK = aig._clock
 _OFFSET = {"s": 0.0}
 aig._clock = lambda: _REAL_CLOCK() + _OFFSET["s"]
+# Resends off. The clock above jumps minutes, but a resend task sleeps in
+# real time, so here an answer's resends would still be running at every
+# repeat. A repeat that arrives while they run is acked and starts no replay
+# (F-2026-11-14-01, tools/check_resend_storm.py); this check is about what
+# a repeat gets once they have finished.
+aig._RETRY_GAPS_S = ()
 
 CFG = {
     "enabled": True,

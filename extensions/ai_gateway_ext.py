@@ -614,6 +614,13 @@ _HISTORY_TTL_S = 600.0
 # answers on a shared channel. Two minutes is the shape of someone re-sending
 # because nothing came back; past that, asking again is asking again.
 _TEXT_DEDUP_S = 120.0
+# Signing off. SP2ST-3 sent QRT on 2026-11-13 and resends of an earlier
+# answer went on for four minutes after it (F-2026-11-14-01). Only a sign-off
+# stops them: a new question may be typed before the answer is read.
+_SIGN_OFF = re.compile(
+    r"^\s*(?:qrt|73|sk|bye|cu|cul|gn|good\s*night|tnx|thanks?|thank\s+you)"
+    r"(?:[\s,!.]+(?:73|tnx|thanks?|bye|qrt|sk))*(?:\s+de\s+\S+)?\s*[!.]*\s*$",
+    re.I)
 _PUNCT = re.compile(r"[^A-Z0-9]+")
 
 # Infrastructure questions. An igate, a digipeater or a weather station
@@ -888,6 +895,19 @@ _PART_GAP_S = 5.0               # between parts
 # identical to one it passed in the last 30 s as a duplicate, so the first
 # resend cannot come sooner than that or it never reaches the air.
 _RETRY_GAPS_S = (40.0, 60.0, 120.0)
+# A station whose last answer drew no ack for any part, resends included,
+# gets the next ones without resends for this long, or until it acks
+# anything. YO7CHY-5 acked nothing on 2026-11-10 or 2026-11-13, and each
+# answer to it went out four times (F-2026-11-14-01). A re-ask still gets a
+# replay, so a lost answer is not lost for good.
+_NO_ACK_HOLD_S = 6 * 3600.0
+# A ceiling under all of the above: once one station has been sent this many
+# packets in this window, nothing more is resent to it. A fresh answer's
+# first transmission still goes. Two three-part answers resent in full are
+# 24; the storm of F-2026-11-14-01 was about 40 in seven minutes. It is a
+# net for the next bug of this kind, not the fix for this one.
+_TX_CAP_N = 24
+_TX_CAP_S = 300.0
 # How long one provider call may take. The OpenAI client's own default is ten
 # minutes and it retries twice; a question once hung for 900 s before failing
 # (F-2026-10-15-01) - answers normally take 1-6 s, and nobody at a radio
@@ -1006,6 +1026,10 @@ class AIGateway(Extension):
         self._delivery_recorder = None
         # numbered part (addressee, msg id) -> its answer's tally
         self._part_group: dict = {}
+        # addressee -> until when its answers go without resends
+        self._no_ack_until: dict[str, float] = {}
+        # addressee -> when each packet to it went out, within _TX_CAP_S
+        self._tx_times: dict[str, list] = {}
         self._provider = config.get("provider", AI_DEFAULT_PROVIDER)
         self._base_url = config.get("base_url", "") or _PROVIDER_URLS.get(
             self._provider, "")
@@ -1155,6 +1179,11 @@ class AIGateway(Extension):
             return
         g["acked"] += int(acked)
         g["left"] -= 1
+        if (g["left"] == 0 and g["acked"] == 0 and g.get("to")
+                and not g.get("cut")):
+            self._no_ack_until[g["to"]] = _clock() + _NO_ACK_HOLD_S
+            self.log(f"{g['to']} acked no part of the answer; no resends "
+                     f"to it for {_NO_ACK_HOLD_S / 3600:g} h or until it acks")
         if g["left"] == 0 and self._delivery_recorder is not None:
             try:
                 self._delivery_recorder(g["n"], g["acked"])
@@ -1974,6 +2003,7 @@ class AIGateway(Extension):
         mid = self._next_msg_id()
         pkt = f"{from_call}>{TOCALL},TCPIP*::{to_call:<9}:{aprs_message_text(message)}{{{mid}\r\n"
         await self._own_writer.put(pkt.encode("utf-8"))
+        self._tx_room(to_call, spend=True)
         key = (to_call.upper(), str(mid))
         if _RETRY_GAPS_S and resend:
             self._unacked[key] = asyncio.create_task(
@@ -1989,7 +2019,12 @@ class AIGateway(Extension):
                     return
                 if not self._own_writer:
                     return
+                if not self._tx_room(to_call):
+                    self.warn(f"resend cap: {to_call} had {_TX_CAP_N} packets "
+                              f"in {_TX_CAP_S:.0f} s, {mid} not resent")
+                    return
                 await self._own_writer.put(pkt.encode("utf-8"))
+                self._tx_room(to_call, spend=True)
                 self.log(f"TX to {to_call} (resend {n} of {mid}, no ack)")
             self.log(f"no ack from {to_call} for {mid} after "
                      f"{len(_RETRY_GAPS_S)} resends")
@@ -2002,11 +2037,51 @@ class AIGateway(Extension):
     def _acked(self, sender_full: str, mid: str, kind: str) -> None:
         """An ack or rej for one of our parts: stop resending it."""
         key = (sender_full.upper(), str(mid))
+        self._no_ack_until.pop(sender_full.upper(), None)
         task = self._unacked.pop(key, None)
         if task is not None:
             self._part_done(key, True)
             task.cancel()
             self.log(f"{kind.lower()} from {sender_full} for {mid}")
+
+    def _tx_room(self, call: str, spend: bool = False) -> bool:
+        """Whether this station is under the resend ceiling; with spend,
+        count one packet to it."""
+        now = _clock()
+        times = [x for x in self._tx_times.get(call.upper(), ())
+                 if now - x < _TX_CAP_S]
+        if spend:
+            times.append(now)
+        if times:
+            self._tx_times[call.upper()] = times
+        else:
+            self._tx_times.pop(call.upper(), None)
+        return len(times) < _TX_CAP_N
+
+    def _pending_to(self, call: str) -> bool:
+        """Parts to this station still waiting on an ack, resends to come."""
+        call = call.upper()
+        return any(k[0] == call for k in self._unacked)
+
+    def _drop_pending(self, call: str) -> int:
+        """Stop the resends to this station: it has signed off."""
+        call = call.upper()
+        keys = [k for k in self._unacked if k[0] == call]
+        for k in keys:
+            g = self._part_group.get(k)
+            if g is not None:
+                g["cut"] = True     # cut short: no evidence it does not ack
+            self._unacked.pop(k).cancel()   # its finally settles the tally
+        return len(keys)
+
+    async def _ack_copy(self, my_call: str, sender_full: str,
+                        msg_id: str) -> None:
+        """Ack a copy of a message already in hand. Its sender's radio sends
+        it again because our first ack did not reach it; left unacked, it
+        goes on asking, and every copy used to start a replay."""
+        if msg_id and self._own_writer:
+            ack = f"{my_call}>{TOCALL},TCPIP*::{sender_full:<9}:ack{msg_id}\r\n"
+            await self._own_writer.put(ack.encode("utf-8"))
 
     async def _send_parts(self, from_call: str, to_call: str,
                           parts: "list[str]", rf: bool,
@@ -2020,7 +2095,10 @@ class AIGateway(Extension):
         # A refusal (resend=False) goes out once: resending "please wait" to a
         # radio that does not ack sent it four times to YO7CHY-5 on
         # 2026-11-10, the hammering transmitter _allow_rate keeps us from being.
-        group = ({"n": len(parts), "left": len(parts), "acked": 0}
+        if resend and self._no_ack_until.get(to_call.upper(), 0.0) > _clock():
+            resend = False
+        group = ({"n": len(parts), "left": len(parts), "acked": 0,
+                  "to": to_call.upper()}
                  if log and resend and _RETRY_GAPS_S and parts else None)
         for i, part in enumerate(parts):
             if i:
@@ -2138,6 +2216,16 @@ class AIGateway(Extension):
             # cached answer goes out again. No AI call; the cost is one more
             # transmission on a path that already failed once.
             exp, cached, left = seen
+            await self._ack_copy(my_call, sender_full, msg_id)
+            # The resends of that answer are still running: they are the
+            # replay already. SP2ST-3's radio sent one question four times
+            # on 2026-11-13; each copy started the whole answer again, with
+            # its own resends, on top of the first one's - about 40
+            # transmissions for one question (F-2026-11-14-01).
+            if cached and self._pending_to(sender_full):
+                self.log(f"repeat from {sender_full}, acked; the answer's "
+                         f"resends are still running")
+                return None
             # How long ago the question first arrived. A copy that lands in
             # the same breath is the sender's own client sending twice -
             # N1QQA's did on 2026-09-20, and every answer went out twice for
@@ -2183,6 +2271,11 @@ class AIGateway(Extension):
             self.mark_working()
             return None
         self._processed[dedup_key] = (now_ts + self._DEDUP_TTL_S, "", self._MAX_REPLAYS)
+        if _SIGN_OFF.match(raw_msg):
+            dropped = self._drop_pending(sender_full)
+            if dropped:
+                self.log(f"{sender_full} signed off; {dropped} resend(s) of "
+                         f"the earlier answer stopped")
 
         # Ack immediately -- it means "your message was received", not
         # "answered", so it shouldn't wait on the AI call or the whitelist

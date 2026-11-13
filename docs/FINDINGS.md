@@ -8558,3 +8558,52 @@ history entry, no notice in the rules, a token spent by the limit answer.
 
 Not addressed: the model's two T2LT answers disagreed ("choke at base", then
 "no extra choke needed"); that is the model's quality, not this code.
+
+## F-2026-11-14-01 — one question, about 40 transmissions: replays and resends multiplied
+
+**Seen, 2026-11-13 20:46-20:53 UTC+1 (journal and the operator's log):**
+SP2ST-3 asked "Co to jest APRS?" once. The answer was 3 parts. Its radio sent
+the question three more times (20:46:57, 20:47:33, 20:48:24).
+
+- Only the first copy was acked. A copy that dedup recognised returned before
+  the ack, so the radio never heard an ack and kept asking.
+- Every copy replayed the whole answer with fresh message numbers. Each replay
+  got its own resends (40/60/120 s, since v3.2.138) on top of the first
+  answer's, which were still running. The journal shows message numbers
+  60000-60012 for one question, and about 40 packets to SP2ST-3 in seven
+  minutes. SP2ST-3 acked parts as they arrived, so most of these were
+  copies of parts it already had.
+- SP2ST-3 sent QRT at 20:49:40. Eleven resends followed it, the last at
+  20:53:25.
+- YO7CHY-5 acked nothing on 2026-11-10 or 2026-11-13. Each answer to it went
+  out four times ("Hello. How can I help?" at 21:12, 21:13, 21:14, 21:16).
+
+**Why the checks did not see it.** `check_resend` sends one answer and no
+repeat. `check_replay` moves a fake clock by minutes between repeats, but the
+resend tasks sleep in real time. In that check they never fired, so the
+replay and resend paths were never seen together. v3.3.9 changed this send
+path (refusals not resent) without looking at what a repeat does to it.
+
+**Applied, v3.3.10.**
+
+- Every copy of a numbered message is acked.
+- A repeat that arrives while the answer's resends are still running starts
+  no replay; the resends are the replay.
+- A sign-off (QRT, 73, tnx, bye) stops the resends of the earlier answer. A
+  new question does not, because it may be typed before the answer is read.
+- A station whose last answer drew no ack for any part gets the next ones
+  without resends for 6 h, or until it acks anything. A re-ask still gets a
+  replay.
+- A ceiling under all of this: past 24 packets to one station in 5 min,
+  nothing more is resent to it. A fresh answer's first transmission still
+  goes.
+
+`check_resend_storm` fails on v3.3.9 (60 transmissions for one question
+against a budget of 12, one ack for four copies, 9 resends after QRT, a silent
+station resent to) and on three mutations: no pending test, no no-ack hold,
+no ceiling. `check_replay` now runs with resends off, and says why.
+
+Cost: a station that does ack, but whose whole answer was lost once, loses
+resends for the next 6 h until its next ack. It still gets a replay when it
+asks again.
+
