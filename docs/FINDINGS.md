@@ -8603,6 +8603,8 @@ against a budget of 12, one ack for four copies, 9 resends after QRT, a silent
 station resent to) and on three mutations: no pending test, no no-ack hold,
 no ceiling. `check_replay` now runs with resends off, and says why.
 
+**Addendum, same day:** CI was red on v3.3.10. `check_context` case 4 (DL5XL-9, the same question four times) has the same fake-clock shape as `check_replay`. It was not run locally because the related checks were picked by name. It now runs that case with resends off. Before a change to the gateway's send path, grep `tools/` for `replay` and `_clock`, not only for the names.
+
 Cost: a station that does ack, but whose whole answer was lost once, loses
 resends for the next 6 h until its next ack. It still gets a replay when it
 asks again.

@@ -138,6 +138,11 @@ async def run() -> int:
     sent, seen = [], []
     gw = new_gateway(sent, seen, [A1, A1, A1, A1])
     real = aig._clock
+    # Resends off: the clock jumps 90 s, but a resend task sleeps in real
+    # time, so the first answer's resends would still be running at every
+    # repeat, and a repeat during them is acked without a replay
+    # (F-2026-11-14-01, tools/check_resend_storm.py).
+    gaps, aig._RETRY_GAPS_S = aig._RETRY_GAPS_S, ()
     for i in range(4):
         n = len(sent)
         # Minutes apart, as he sent them. A copy in the same second is a
@@ -150,6 +155,7 @@ async def run() -> int:
                             "the %dth unanswered" % (i + 1, i + 1))
             break
     aig._clock = real
+    aig._RETRY_GAPS_S = gaps
 
     for p in problems:
         print("FAIL: " + p)
