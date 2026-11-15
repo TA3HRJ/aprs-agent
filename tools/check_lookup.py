@@ -267,8 +267,12 @@ async def run() -> int:
     if n != 1:
         problems.append("a two-igate answer that fits one packet went out as "
                         "%d: %r" % (n, a))
-    if "own feed" not in a.lower():
+    if not a.lower().startswith("per my feed"):
         problems.append("the short answer lost its provenance: %r" % a)
+    if "(own feed)" in a.lower():
+        # beside the last igate it reads as a fact about that igate
+        # (F-2026-11-15-01)
+        problems.append("the provenance tag trails a callsign: %r" % a)
 
     sent, calls = [], {"n": 0}
     gw = new_gateway(sent, calls, tmp)

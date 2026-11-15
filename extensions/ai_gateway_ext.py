@@ -1565,7 +1565,10 @@ class AIGateway(Extension):
         # listing it cost a packet of its own: a 72-character answer sent
         # a second packet carrying only "feed only." (F-2026-09-27-01). When the short form keeps the
         # answer in one packet, use it; otherwise the sentence stays.
-        short = listing + " (own feed)"
+        # The short tag leads: as a suffix, "(own feed)" sat next to the last
+        # igate and read as a fact about it - "KI4SBB-B 5km (own feed)",
+        # sent to KR4OII on 2026-11-14 (F-2026-11-15-01).
+        short = "Per my feed, " + listing[:1].lower() + listing[1:]
         if len(full) > 64 and len(short) <= 64:
             return short
         return full

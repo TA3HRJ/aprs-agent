@@ -8609,3 +8609,20 @@ Cost: a station that does ack, but whose whole answer was lost once, loses
 resends for the next 6 h until its next ack. It still gets a replay when it
 asks again.
 
+## F-2026-11-15-01 — "(own feed)" read as a fact about the last igate
+
+**Seen, 2026-11-14/15 (operator's log):** KR4OII asked "igate near me" three
+times and was sent "Nearest igates to you: KI4SBB-A 5km; KI4SBB-B 5km (own
+feed)". The answers were right. Each went out as one packet and was acked
+within 7 s, and no model was called. But the tag
+sat beside KI4SBB-B and reads as "KI4SBB-B gates only its own feed". It meant
+that the list comes from this gateway's own feed (F-2026-09-27-01).
+
+**Applied, v3.3.11.** The short form leads with the tag: "Per my feed,
+nearest igates to you: ...". Here that is 62 characters, still one packet.
+The full form ("... My own feed only.") is unchanged. `check_lookup` fails on
+v3.3.10 (2 items: no leading tag, tag trailing a callsign).
+
+Cost: the prefix is 2 characters longer than the old suffix. A listing of
+52-53 characters now takes the full form, which is two packets.
+
