@@ -5536,8 +5536,12 @@ async def _persist_loop(mgr: "AgentManager") -> None:
                 print(f"[health] rss {rss:.0f} MB, up {tick // 60} h",
                       file=sys.__stderr__)
         try:
+            # Only what was heard this minute; everything once an hour, so
+            # a change made outside a packet is never more than an hour
+            # from disk (F-2026-11-18-02).
             await asyncio.get_event_loop().run_in_executor(
-                None, mgr._station_db.save_sqlite, mgr._sta_db_path)
+                None, mgr._station_db.save_sqlite, mgr._sta_db_path,
+                tick % 60 == 0)
         except Exception as e:
             print(f"[station-db] SQLite save failed: {e}", file=sys.__stderr__)
         if mgr.running:

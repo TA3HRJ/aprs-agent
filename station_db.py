@@ -1100,6 +1100,14 @@ def clean_ai_description(value: Any) -> str:
     return "" if s.lower() in _AI_EMPTY else s
 
 
+def _take_unsaved(r: "StationRecord") -> bool:
+    """True once per change: reports and clears the record's unsaved mark."""
+    if r.unsaved:
+        r.unsaved = False
+        return True
+    return False
+
+
 class StationRecord:
     """All known data about a single station (callsign + SSID)."""
 
@@ -1129,6 +1137,7 @@ class StationRecord:
         "self_beacon",     # True = this agent's own Fixed Beacon (see below)
         "is_object",       # True = APRS Object packet (event advisory, not infra)
         "position_unreadable",  # sends a position we cannot read (F-2026-10-10-03)
+        "unsaved",         # heard since the last flush to SQLite (not persisted)
     )
 
     def __init__(self, callsign: str) -> None:
@@ -1190,6 +1199,7 @@ class StationRecord:
         # Persisted to SQLite — the flag must survive the hourly-update
         # restarts, or every deploy would re-arm this false-positive class.
         self.is_object: bool = False
+        self.unsaved: bool = True
 
     def update_from_parsed(self, parsed: dict[str, Any]) -> None:
         """Merge fields extracted from a new APRS packet into this record."""
@@ -1219,6 +1229,7 @@ class StationRecord:
                 gate = "TCPIP/" + gate
             self.last_gate = gate
         self.last_seen    = ts
+        self.unsaved      = True
         self.packet_count += 1
         self.last_packet  = parsed.get("raw", "")[:200]
 
@@ -1517,7 +1528,7 @@ class StationDB:
             self._repeater_index.setdefault(call, []).append(rec)
         # Enrich stations already in memory (e.g. loaded from SQLite before
         # the repeater DB was available).
-        for st in self._stations.values():
+        for st in list(self._stations.values()):
             if st.db_record is None:
                 entry = self._db_entry(st)
                 if entry:
@@ -2350,7 +2361,7 @@ class StationDB:
     # ------------------------------------------------------------------
     def get_all(self) -> list[dict[str, Any]]:
         """Return all stations as a list of dicts, sorted by last_seen desc."""
-        rows = [r.to_dict() for r in self._stations.values()]
+        rows = [r.to_dict() for r in list(self._stations.values())]
         rows.sort(key=lambda r: r["last_seen"] or 0, reverse=True)
         return rows
 
@@ -2564,7 +2575,7 @@ class StationDB:
         records in ten before any trigonometry runs.
         """
         hits: "list[tuple[float, Any]]" = []
-        for rec in self._stations.values():
+        for rec in list(self._stations.values()):
             if (rec.station_type not in kinds
                     or rec.lat is None or rec.lon is None):
                 continue
@@ -2583,7 +2594,7 @@ class StationDB:
         a few thousand records before any trigonometry runs.
         """
         best, best_km = None, None
-        for rec in self._stations.values():
+        for rec in list(self._stations.values()):
             if rec.wx_temp_c is None or rec.lat is None or rec.lon is None:
                 continue
             d = self._haversine_km(lat, lon, rec.lat, rec.lon)
@@ -2608,8 +2619,12 @@ class StationDB:
         Only stations with a DB record are checked.
         watch_filter: if non-empty, only check those base callsigns.
         """
+        # A snapshot: this runs on the web loop while the agent thread adds
+        # stations. Iterating the live dict ended the monitor loop eight
+        # times in November with "dictionary changed size during
+        # iteration" (F-2026-11-18-01).
         results = []
-        for rec in self._stations.values():
+        for rec in list(self._stations.values()):
             if rec.db_record is None:
                 continue
             if watch_filter and rec.base_call not in watch_filter:
@@ -2633,7 +2648,7 @@ class StationDB:
         Prioritises DB-matched stations, then others.
         """
         candidates = [
-            r for r in self._stations.values()
+            r for r in list(self._stations.values())
             if not r.ai_analyzed and r.comment.strip()
         ]
         # DB-matched first
@@ -2655,8 +2670,17 @@ class StationDB:
         "ema_interval_s", "last_gate", "hour_counts", "is_object",
     )
 
-    def save_sqlite(self, path: str) -> int:
-        """Persist all station records. Returns number of rows written."""
+    def save_sqlite(self, path: str, full: bool = True) -> int:
+        """Persist station records. Returns number of rows written.
+
+        full=False writes only the records heard since the last flush. The
+        minute flush used to rewrite every row: 252,427 took 10-18 s in
+        September (F-2026-09-15-01) and the registry held 419,192 on
+        2026-11-18, while only a few thousand are heard in a minute
+        (F-2026-11-18-02). A change made outside a packet - an AI note, a
+        geocoded city - waits for the next full flush, which the persist
+        loop runs hourly and at shutdown.
+        """
         con = _connect(path)
         try:
             con.execute(
@@ -2689,6 +2713,9 @@ class StationDB:
                 # on the 90 pkt/s worldwide feed. list(dict.values()) is a
                 # single C-level call, atomic under the GIL.
                 for r in list(self._stations.values())
+                # Cleared before the fields are read: a packet landing in
+                # between sets it again and the record goes next minute.
+                if _take_unsaved(r) or full
             ]
             con.executemany(
                 "INSERT OR REPLACE INTO stations VALUES ("
@@ -2788,6 +2815,7 @@ class StationDB:
                         r.hour_counts = hc
                 except Exception:
                     pass
+                r.unsaved = False         # on disk as it stands
                 self._stations[cs] = r
                 if r.last_seen > self.stored_newest_seen:
                     self.stored_newest_seen = r.last_seen

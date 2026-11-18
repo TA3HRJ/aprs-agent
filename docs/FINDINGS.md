@@ -8626,3 +8626,59 @@ v3.3.10 (2 items: no leading tag, tag trailing a callsign).
 Cost: the prefix is 2 characters longer than the old suffix. A listing of
 52-53 characters now takes the full form, which is two packets.
 
+---
+
+## F-2026-11-18-01 — the monitor loop died on a registry walk, eight times in two weeks
+
+**Seen, audit 2026-11-18:** `[monitor] LOOP DIED: RuntimeError: dictionary
+changed size during iteration` on 2026-11-05, 11-07 (twice), 11-08, 11-13,
+11-14, 11-16 and 11-18. The supervisor restarted it each time after 5-10 s,
+so no transition was lost for long, but each was a traceback in the journal
+and a gap in the monitor.
+
+**Why:** `check_transitions` walked `StationDB._stations` on the web loop
+while the agent thread, which runs its own event loop, added stations to it.
+The same class was fixed for `/api/missing` in F-2026-10-31-04 and for
+`save_sqlite` long before. Five more walks had the same shape:
+`get_unanalyzed`, `get_all`, `nearest_wx`, `nearest_of_type` and the
+enrichment pass in `load_repeater_db`.
+
+**Applied, v3.3.13.** All six iterate `list(self._stations.values())`, one
+C-level copy, atomic under the GIL. None is left in `station_db.py`.
+`check_registry_snapshot` makes the race deterministic: every record read
+adds a new one, as the agent thread would. It fails on v3.3.12 for all six.
+
+Cost: one list of references per walk, about 3 MB at 419,000 stations.
+
+---
+
+## F-2026-11-18-02 — the minute flush rewrote all 419,192 stations
+
+**Measured, audit 2026-11-18:** the `stations` table held 419,192 rows,
+against 302,658 on 2026-10-08. `save_sqlite` ran every minute and wrote every
+row with `INSERT OR REPLACE`. At 252,427 rows it held the write lock for
+10-18 s (F-2026-09-15-01); the work grows with the registry, not with the
+traffic. The agent averaged about 20 % CPU over 3.5 days, against 6.7 % at a
+single sample on 2026-10-08. A live profile was not taken, so how much of that
+is the flush is an inference.
+
+**Applied, v3.3.13.** A record carries an `unsaved` mark, not persisted. A
+packet sets it, and the flush clears it before reading the fields, so a
+packet landing in between makes the record go again next minute. The minute
+flush writes only marked records. Every 60th flush, and the one at
+shutdown, writes everything, so a change made outside a packet (an AI note,
+a geocoded city, a value cleaned at load) is never more than an hour from
+disk. Records loaded from disk start unmarked.
+
+Locally, at 419,000 rows: full flush 5.8-6.2 s, incremental (5,238 rows)
+1.35 s, most of it the walk itself. The server's disk was slower than this
+machine's in September, so the gain there is probably larger. It has not been
+measured there yet.
+
+`check_registry_flush` fails on v3.3.12 four ways: 300 rows written for two
+stations heard, 300 with nothing heard, 300 after a load, and no hourly full
+flush in the persist loop. It also fails on a mutation that drops the mark
+from `update_from_parsed`.
+
+Cost: after a crash (not a stop), up to an hour of changes made outside a
+packet is lost. In practice that means AI notes, which get redone.
