@@ -8671,9 +8671,10 @@ a geocoded city, a value cleaned at load) is never more than an hour from
 disk. Records loaded from disk start unmarked.
 
 Locally, at 419,000 rows: full flush 5.8-6.2 s, incremental (5,238 rows)
-1.35 s, most of it the walk itself. The server's disk was slower than this
-machine's in September, so the gain there is probably larger. It has not been
-measured there yet.
+1.35 s, most of it the walk itself. **On the server**, on an online-backup
+copy of the live database (419,218 stations), with the venv312 interpreter:
+full flush **15.4 s**, incremental (5,241 rows) **0.67 s**. The minute's
+write work is about 23 times smaller, and so is the write lock it holds.
 
 `check_registry_flush` fails on v3.3.12 four ways: 300 rows written for two
 stations heard, 300 with nothing heard, 300 after a load, and no hourly full
