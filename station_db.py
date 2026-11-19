@@ -1243,10 +1243,18 @@ class StationRecord:
             self.symbol_table = parsed.get("symbol_table", "/")
             self.symbol_overlay = parsed.get("symbol_overlay", "")
 
-        # Prefer DB coordinates; only overwrite if we don't have them yet.
-        # locator is initialised to "" (not None) — treat both as unset.
+        # A station matched to the repeater database keeps the position it
+        # has (the database's, or its first). Any other station is where its
+        # latest packet says it is. Until v3.3.14 every station kept the
+        # first position it was ever heard at: a tracker stayed at home, a
+        # first position misread at the parser stayed on the wrong continent,
+        # and 493 silence sensors sat in the wrong square (F-2026-11-19-01).
+        # The parser sets lat, lon and locator together, so they move
+        # together. locator is initialised to "" (not None) - both are unset.
+        moves = self.db_record is None and "lat" in parsed
         for field in ("lat", "lon", "locator"):
-            if field in parsed and getattr(self, field) in (None, ""):
+            if field in parsed and (moves
+                                    or getattr(self, field) in (None, "")):
                 setattr(self, field, parsed[field])
         if "lat" in parsed:
             self.position_unreadable = False

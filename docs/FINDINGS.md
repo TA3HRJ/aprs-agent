@@ -8683,3 +8683,65 @@ from `update_from_parsed`.
 
 Cost: after a crash (not a stop), up to an hour of changes made outside a
 packet is lost. In practice that means AI notes, which get redone.
+
+---
+
+## F-2026-11-19-01 — every station stayed where it was first heard
+
+**Seen, 2026-11-19 (operator):** the map put the LoRa tracker TA3HX-8 at
+home in Karsiyaka. Its last 92 position packets over 18 h all put it at
+38.396 N 26.749 E, within 300 m of one another and 31 km west, beside the
+TA3HX-11 igate. Home is where it was first heard, on 2026-09-24.
+
+**Why:** since v2.7.0 `update_from_parsed` wrote lat, lon and locator only
+when they were still empty. The comment called this "prefer DB coordinates",
+but it applied to every station, and the registry survives restarts. So every
+station kept the first position it was ever heard at:
+
+- a tracker stayed at home;
+- a first position misread at the parser, before the checks of
+  F-2026-10-10-03, stayed on the wrong continent;
+- the propagation check compared each new position with that first one, so a
+  station that had moved once was a "jump" on every packet after it.
+
+**Measured on the live feed, 2026-11-19.** The current packet log (716,977
+lines, 43,003 stations with a position) was set against the registry:
+
+- 3,016 stations were more than 1 km from where they transmit from.
+- 1,021 were in a different 4-character square.
+- Of 28,804 silence sensors (fixed symbols), 493 were in the wrong square
+  and 147 were more than 1,000 km off. For example, ZP7DD-10 (Paraguay) was
+  in LL85, KU4WW (USA) in OL63, and N3ARY-N (Missouri) in NM58 in China,
+  stored with the wrong sign of longitude.
+
+**Silence, tested before the change.** `silence_cells()` was run on an online
+copy of the live database, first as stored and then with the latest
+positions applied. Cells meeting the threshold went from 53 to 51; 4 appeared
+and 6 went:
+
+- **Went:** NM58 in China was three US stations misplaced there.
+- **Appeared:** HI24 and NJ97 gained stations that really are there.
+- **JJ01** (1 N 1 E, open sea) appeared because heard stations left it. The
+  silent ones remain at a stored 1.0/1.0, a placeholder `_plausible` does not
+  catch. They are long silent and not this change's doing.
+
+Mobile symbols were already excluded from silence, so a tracker moving
+changes nothing there.
+
+**Applied, v3.3.14.** A station without a repeater-database match takes each
+packet's position; lat, lon and locator move together, because the parser
+sets them together. A matched station keeps its position. A packet without a
+position moves nothing. `check_position_update` fails on v3.3.13 four ways
+(the tracker stays, the locator stays, the propagation check compares against
+the first position, a load restores it). It also fails on a mutation that
+lets matched stations move.
+
+Cost: 84 of 34,597 fixed-symbol stations alternate between two squares in the
+same log. Most are object names sent by more than one station ("Hospital",
+"146.850"). They used to sit in their first square and now follow each
+packet. Each is heard as it moves, so it is never counted silent in the
+square it left; that square's baseline drops by one.
+
+Not changed: the comment is still kept from the first packet that had one.
+TA3HX-8's stored comment is a telemetry definition (`:TA3HX-8  :EQNS...`),
+which the parser read as a comment.
