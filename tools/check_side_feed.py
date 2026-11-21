@@ -4,21 +4,25 @@
 On 2026-11-21 one station's messages to DMWGPT reached aprs.fi and never
 reached the server the full feed was connected to. Four questions went
 unanswered; every packet of that station was missing for 86 minutes while
-the rest arrived normally (F-2026-11-21-01). A second connection on port 14580 now fetches the
-gateway's messages only (filter g/) from another server.
+the rest arrived normally (F-2026-11-21-01). A second connection on port
+14580 now fetches the gateway's messages only (filter g/) from another
+server.
 
-What must hold (no network; a local server stands in for the second one):
+What must hold (no network; local servers stand in for APRS-IS):
 
   1. with the full feed on and the gateway enabled, the second connection
      is started; with either off it is not
-  2. it logs in receive-only (passcode -1) with a g/ filter for the gateway,
-     SSIDs included, and sends nothing after the login line
-  3. a message only the second connection delivers reaches the extensions,
+  2. it logs in receive-only (passcode -1) with a g/ filter for the gateway
+     and its SSIDs only (g/X/X-*, not X*), and sends nothing after the login
+  3. it does not settle for the main feed's server while another answers:
+     rotate.aprs2.net's cached answer led the first deploy back to it four
+     times in a row
+  4. a message only the second connection delivers reaches the extensions,
      and what they answer goes out on the main connection
-  4. a message both deliver is dispatched once, whichever came first - the
+  5. a message both deliver is dispatched once, whichever came first - the
      gateway acks every copy it is handed
-  5. other traffic on the main feed is dispatched as before, duplicates too
-  6. a message the main feed never delivered is counted when it is forgotten
+  6. other traffic on the main feed is dispatched as before, duplicates too
+  7. a message the main feed never delivered is counted when it is forgotten
 
 Usage:  python tools/check_side_feed.py
 Exit code 1 on failure.
@@ -39,6 +43,7 @@ import aprs_connection as ac  # noqa: E402
 from extensions import Extension, ExtensionRegistry  # noqa: E402
 
 GW = "DMWGPT"
+CRLF = b"\r\n"
 CONFIG = {"server": "127.0.0.1", "callsign": "N0CALL-5", "full_feed": True,
           "extensions": {"ai_gateway": {"enabled": True, "callsign": GW,
                                         "trigger_aliases": []}}}
@@ -59,7 +64,8 @@ class Recorder(Extension):
     async def handle(self, line: str):
         self.seen.append(line)
         if f":{GW.ljust(9)}:" in line or f":{(GW + '-1').ljust(9)}:" in line:
-            return b"DMWGPT>APRS,TCPIP*::" + line.split(">")[0].encode() + b":ack"
+            return (b"DMWGPT>APRS,TCPIP*::"
+                    + line.split(">")[0].encode() + b":ack")
         return None
 
 
@@ -100,11 +106,14 @@ async def scenario(p: list) -> None:
                     return
                 got.append(b)
         t = asyncio.create_task(take())
+        writer.write(b"# aprsc 3.0.1" + CRLF
+                     + b"# logresp DMWGPT unverified, server T2SIDE" + CRLF)
+        await writer.drain()
         while True:
             line = await side_lines.get()
             if line is None:
                 break
-            writer.write((line + "\r\n").encode())
+            writer.write(line.encode() + CRLF)
             await writer.drain()
         t.cancel()
         writer.close()
@@ -117,6 +126,8 @@ async def scenario(p: list) -> None:
     own_queue: asyncio.Queue = asyncio.Queue()
     ac._own_queue_now[0] = own_queue
     ac._main_peer[0] = None
+    if hasattr(ac, "_main_server"):
+        ac._main_server[0] = "T2MAIN"
 
     main_reader = asyncio.StreamReader()
     main_writer = FakeWriter()
@@ -125,7 +136,7 @@ async def scenario(p: list) -> None:
                                                 store, 0))
 
     async def on_main(line: str) -> None:
-        main_reader.feed_data((line + "\r\n").encode())
+        main_reader.feed_data(line.encode() + CRLF)
         await asyncio.sleep(0.05)
 
     async def on_side(line: str) -> None:
@@ -156,8 +167,8 @@ async def scenario(p: list) -> None:
     print(f"  side login: {login.strip()!r}")
     if " pass -1 " not in login:
         p.append("the second connection is not receive-only (pass -1)")
-    if f"filter g/{GW}*" not in login:
-        p.append(f"the second connection does not filter g/{GW}*")
+    if not login.rstrip().endswith(f"filter g/{GW}/{GW}-*"):
+        p.append(f"the second connection does not filter g/{GW}/{GW}-*")
     if b"".join(got)[len(login.encode()):].strip():
         p.append("the second connection sent something after its login")
 
@@ -207,6 +218,77 @@ async def scenario(p: list) -> None:
     ExtensionRegistry.clear()
 
 
+async def avoid_main(p: list) -> None:
+    """Two servers on one port, the first named like the main feed's."""
+    if not hasattr(ac, "_side_order"):
+        p.append("the second connection takes whichever address comes first")
+        return
+    names = {"127.0.0.1": b"T2MAIN", "127.0.0.2": b"T2OTHER"}
+    conns: list[str] = []
+
+    def handler(ip):
+        async def serve(reader, writer):
+            conns.append(ip)
+            writer.write(b"# logresp DMWGPT unverified, server "
+                         + names[ip] + CRLF)
+            await writer.drain()
+            await reader.read(4096)
+            await asyncio.sleep(5)
+            writer.close()
+        return serve
+
+    a = await asyncio.start_server(handler("127.0.0.1"), "127.0.0.1", 0)
+    port = a.sockets[0].getsockname()[1]
+    try:
+        b = await asyncio.start_server(handler("127.0.0.2"), "127.0.0.2", port)
+    except OSError as e:
+        print(f"  (no 127.0.0.2 here: {e}; avoidance by name not exercised)")
+        a.close()
+        b = None
+    if b is not None:
+        ac.SIDE_PORT = port
+        ac.SIDE_SAME_RETRY_S = 0.05
+        ac._main_peer[0] = None            # only the name gives it away
+        ac._main_server[0] = "T2MAIN"
+
+        async def resolve(server, port_):
+            return ["127.0.0.1", "127.0.0.2"]
+
+        real_resolve, real_order = ac._resolve, ac._side_order
+        ac._resolve = resolve
+        # unshuffled, so the main feed's server is met first
+        ac._side_order = lambda addrs, avoid: sorted(
+            addrs, key=lambda x: x in avoid)
+        err = io.StringIO()
+        with redirect_stderr(err):
+            t = asyncio.create_task(ac._side_feed(CONFIG, Store(),
+                                                  frozenset({GW})))
+            await asyncio.sleep(0.6)
+            t.cancel()
+            await asyncio.gather(t, return_exceptions=True)
+        ac._resolve, ac._side_order = real_resolve, real_order
+        a.close()
+        b.close()
+        settled = [ln for ln in err.getvalue().splitlines()
+                   if "receive only" in ln]
+        print(f"  connections: {conns}; settled: {settled[-1:]}")
+        if not settled or "T2OTHER" not in settled[-1]:
+            p.append("the second connection settled for the main feed's "
+                     "server while another answered")
+
+    # the ordering itself: shuffled, the main feed's address last
+    ac._main_peer[0] = "10.0.0.1"
+    three = ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+    firsts = {ac._side_order(three, set())[0] for _ in range(60)}
+    lasts = {ac._side_order(three, set())[-1] for _ in range(20)}
+    print(f"  first address over 60 orderings: {sorted(firsts)}; "
+          f"last: {sorted(lasts)}")
+    if "10.0.0.1" in firsts or lasts != {"10.0.0.1"}:
+        p.append("the main feed's address is not tried last")
+    if len(firsts) < 2:
+        p.append("the other addresses are not shuffled")
+
+
 def main() -> int:
     p: list[str] = []
     if not hasattr(ac, "_side_feed"):
@@ -227,6 +309,7 @@ def main() -> int:
 
     with redirect_stderr(io.StringIO()):
         asyncio.run(scenario(p))
+    asyncio.run(avoid_main(p))
 
     if p:
         print("\nFAIL")

@@ -8787,3 +8787,17 @@ says whether the second connection is worth keeping. A live aprsc accepted
 the login the same day (`logresp DMWGPT unverified, server T2IRELAND`).
 Check: `check_side_feed`, seen failing on v3.3.14 and on two mutations (no
 cross-feed dedup; a passcode on the side login).
+
+**Addendum, 2026-11-21 — v3.3.15 settled for the main feed's server; fixed
+in v3.3.16.** The first deploy's journal: the side feed met the main feed's
+server four times in a row and, as written, took it on the fourth -
+rotate.aprs2.net's answer comes back in the same order while the resolver
+caches it, and asyncio tries the first address first. It also filtered
+`g/DMW*/DMWGPT*`: the trigger alias DMW with a trailing wildcard takes every
+addressee that begins with those letters. Now the side feed resolves the
+name itself, shuffles the addresses and tries the main feed's address last;
+it reads the server's name from `# logresp` and moves on when it is the
+main feed's (the same server by another address, IPv4 beside IPv6), and
+settles for it only when nothing else answers. The filter is `g/X/X-*` per
+watched call. `check_side_feed` gained both, seen failing on v3.3.15 and on a
+mutation (the name test removed).

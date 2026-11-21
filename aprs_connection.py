@@ -22,6 +22,8 @@ from __future__ import annotations
 
 
 import asyncio
+import random
+import socket
 import sys
 from typing import Any
 
@@ -71,12 +73,14 @@ CONNECT_STAGGER_S = 5.0
 # every copy it is handed, so a message from both feeds would be acked twice.
 SIDE_PORT = 14580
 SIDE_SEEN_S = 120.0      # how long a message is remembered across the feeds
+SIDE_SAME_RETRY_S = 5.0  # after landing on the main feed's server
 
 _side_watch: frozenset = frozenset()   # SSID-free addressees watched
 _seen: dict = {}         # key -> [first seen, "main"|"side", main confirmed]
 _seen_pruned = [0.0]
 _own_queue_now: list = [None]          # the main session's outbound queue
 _main_peer: list = [None]              # the main feed's server address
+_main_server: list = [None]            # and its name, from "# logresp"
 _side_missed = [0]       # messages only the side feed delivered
 
 
@@ -136,6 +140,37 @@ def _first_copy(key: str, origin: str, now: float) -> bool:
     return False
 
 
+def _logresp_server(line: str):
+    """'T2IRELAND' from '# logresp X unverified, server T2IRELAND'."""
+    if line.startswith("# logresp") and " server " in line:
+        return line.rsplit(" server ", 1)[1].split()[0] or None
+    return None
+
+
+def _side_filter(watch: frozenset) -> str:
+    """g/X/X-* for each watched call: the call and its SSIDs, nothing else.
+    X* would also take every addressee that merely begins with X."""
+    return "/".join(f"{c}/{c}-*" for c in sorted(watch))
+
+
+def _side_order(addrs: list, avoid: set) -> list:
+    """Shuffled, the main feed's server and those found to be it last.
+
+    rotate.aprs2.net's answer comes back in the same order for as long as
+    the resolver caches it, so the first address is usually the one the
+    main feed took: on 2026-11-21 the first deploy met it four times in a
+    row and settled for it."""
+    addrs = list(dict.fromkeys(addrs))
+    random.shuffle(addrs)
+    return sorted(addrs, key=lambda a: a == _main_peer[0] or a in avoid)
+
+
+async def _resolve(server: str, port: int) -> list:
+    infos = await asyncio.get_event_loop().getaddrinfo(
+        server, port, type=socket.SOCK_STREAM)
+    return [i[4][0] for i in infos]
+
+
 class _ToMainFeed:
     """Writer for the side feed's dispatch: anything an extension answers
     goes out on the main connection. The side connection never sends."""
@@ -155,37 +190,49 @@ async def _side_feed(config: dict[str, Any], ext_con_store: ConStore,
     server = config["server"]
     gw = (config.get("extensions") or {}).get("ai_gateway") or {}
     login = (gw.get("callsign") or sorted(watch)[0]).upper()
-    flt = "/".join(f"{c}*" for c in sorted(watch))
+    flt = _side_filter(watch)
     login_line = (f"user {login} pass -1 vers {SOFTWARE_VERSION} "
                   f"filter g/{flt}\r\n")
     loop = asyncio.get_event_loop()
-    same_server = 0
+    avoid: set = set()        # addresses that turned out to be the main's
     await asyncio.sleep(CONNECT_STAGGER_S)    # let the main feed pick first
     while True:
         writer = None
+        pause = 30
         try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(server, SIDE_PORT,
-                                        happy_eyeballs_delay=CONNECT_STAGGER_S),
-                timeout=CONNECT_TIMEOUT_S)
-            peer = (writer.get_extra_info("peername") or ("?",))[0]
-            # On the main feed's own server it adds nothing. rotate.aprs2.net
-            # answers with another one more often than not.
-            if peer == _main_peer[0] and same_server < 3:
-                same_server += 1
-                raise ConnectionAbortedError(
-                    f"same server as the main feed ({peer})")
-            same_server = 0
+            addrs = _side_order(await _resolve(server, SIDE_PORT), avoid)
+            for addr in addrs:
+                try:
+                    reader, writer = await asyncio.wait_for(
+                        asyncio.open_connection(addr, SIDE_PORT),
+                        timeout=CONNECT_TIMEOUT_S / 3)
+                    break
+                except (OSError, asyncio.TimeoutError):
+                    continue
+            if writer is None:
+                raise ConnectionError(f"no address of {server} answered")
             writer.write(login_line.encode("utf-8"))
             await writer.drain()
-            _both_streams(f"[side-feed] {peer}:{SIDE_PORT} g/{flt}, "
-                          f"receive only")
             while True:
                 raw = await asyncio.wait_for(reader.readline(),
                                              timeout=READ_TIMEOUT_S)
                 if not raw:
                     raise ConnectionResetError("server closed the connection")
                 line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                if line.startswith("#"):
+                    name = _logresp_server(line)
+                    if name is None:
+                        continue
+                    # The same server by another address (IPv4 beside IPv6)
+                    # shows only here. Settle for it when nothing else is left.
+                    if name == _main_server[0] and len(avoid) < len(addrs) - 1:
+                        avoid.add(addr)
+                        pause = SIDE_SAME_RETRY_S
+                        raise ConnectionAbortedError(
+                            f"{name} is the main feed's server")
+                    _both_streams(f"[side-feed] {name} {addr}:{SIDE_PORT} "
+                                  f"g/{flt}, receive only")
+                    continue
                 key = _watched_msg_key(line, watch)
                 if key is None or not _first_copy(key, "side", loop.time()):
                     continue
@@ -193,11 +240,11 @@ async def _side_feed(config: dict[str, Any], ext_con_store: ConStore,
                 ext_con_store.broadcast(line)
         except Exception as e:                # CancelledError is not one
             _both_streams(f"[side-feed] {type(e).__name__}: {e}. "
-                          f"Retrying in 30s ...")
+                          f"Retrying in {pause}s ...")
         finally:
             if writer is not None:
                 writer.close()
-        await asyncio.sleep(30)
+        await asyncio.sleep(pause)
 
 
 def _warn_login_collision(callsign: str) -> None:
@@ -454,6 +501,11 @@ async def _receive_loop(
                     )
         else:
             dispatch = True
+
+        if line[0] == "#" and _side_watch:
+            name = _logresp_server(line)
+            if name:
+                _main_server[0] = name
 
         # A message to the gateway the side feed has already dispatched.
         if dispatch and _side_watch:
