@@ -57,6 +57,149 @@ CONNECT_TIMEOUT_S = 30.0
 CONNECT_STAGGER_S = 5.0
 
 
+# -- The message side feed -------------------------------------------------
+# The full feed is one TCP connection to one server. On 2026-11-21 a
+# station's four questions to the AI gateway reached aprs.fi and never
+# reached the server this agent was connected to. Every packet of that one
+# station was missing for 86 minutes while the rest arrived normally
+# (F-2026-11-21-01).
+#
+# So beside the full feed a second, small connection asks another server on
+# port 14580 for messages addressed to the gateway only (filter g/), receive
+# only (passcode -1). Whichever copy of a message arrives first is
+# dispatched; the other is dropped here. That matters: the gateway acks
+# every copy it is handed, so a message from both feeds would be acked twice.
+SIDE_PORT = 14580
+SIDE_SEEN_S = 120.0      # how long a message is remembered across the feeds
+
+_side_watch: frozenset = frozenset()   # SSID-free addressees watched
+_seen: dict = {}         # key -> [first seen, "main"|"side", main confirmed]
+_seen_pruned = [0.0]
+_own_queue_now: list = [None]          # the main session's outbound queue
+_main_peer: list = [None]              # the main feed's server address
+_side_missed = [0]       # messages only the side feed delivered
+
+
+def _both_streams(line: str) -> None:
+    """Live Log and journal both (see _warn_login_collision)."""
+    print(line, file=sys.stderr)
+    if sys.stderr is not sys.__stderr__:
+        print(line, file=sys.__stderr__)
+
+
+def _side_watch_from(config: dict) -> frozenset:
+    """SSID-free callsigns whose messages the side feed fetches."""
+    gw = (config.get("extensions") or {}).get("ai_gateway") or {}
+    if not gw.get("enabled", True):
+        return frozenset()
+    calls = [gw.get("callsign", "")] + list(gw.get("trigger_aliases") or [])
+    return frozenset(strip_ssid(c.strip().upper()) for c in calls
+                     if c and c.strip())
+
+
+def _watched_msg_key(line: str, watch: frozenset):
+    """'SRC>:ADDRESSEE:text{id' for a message to a watched call, else None.
+
+    The path is left out on purpose: the same packet comes through two
+    servers, and it is the same message whichever way it came."""
+    if not watch or line.startswith("#"):
+        return None
+    head, sep, payload = line.partition(":")
+    if not sep or len(payload) < 11 or payload[0] != ":" or payload[10] != ":":
+        return None
+    if strip_ssid(payload[1:10].strip().upper()) not in watch:
+        return None
+    return head.split(">", 1)[0].upper() + ">" + payload
+
+
+def _first_copy(key: str, origin: str, now: float) -> bool:
+    """True for the first copy of a message within SIDE_SEEN_S, recording it.
+
+    A message the side feed delivered and the main feed never did is
+    reported when it is forgotten: that count is what the side feed is for."""
+    if now - _seen_pruned[0] > 10.0:
+        _seen_pruned[0] = now
+        for k, v in list(_seen.items()):
+            if now - v[0] > SIDE_SEEN_S:
+                del _seen[k]
+                if v[1] == "side" and not v[2]:
+                    _side_missed[0] += 1
+                    _both_streams(
+                        f"[side-feed] the main feed never delivered "
+                        f"{k[:80]!r} ({_side_missed[0]} so far)")
+    hit = _seen.get(key)
+    if hit is None or now - hit[0] > SIDE_SEEN_S:
+        _seen[key] = [now, origin, origin == "main"]
+        return True
+    if origin == "main":
+        hit[2] = True
+    return False
+
+
+class _ToMainFeed:
+    """Writer for the side feed's dispatch: anything an extension answers
+    goes out on the main connection. The side connection never sends."""
+
+    def write(self, data: bytes) -> None:
+        q = _own_queue_now[0]
+        if q is not None:
+            q.put_nowait(data)
+
+    async def drain(self) -> None:
+        return None
+
+
+async def _side_feed(config: dict[str, Any], ext_con_store: ConStore,
+                     watch: frozenset) -> None:
+    """Receive-only connection for messages to the gateway. Never returns."""
+    server = config["server"]
+    gw = (config.get("extensions") or {}).get("ai_gateway") or {}
+    login = (gw.get("callsign") or sorted(watch)[0]).upper()
+    flt = "/".join(f"{c}*" for c in sorted(watch))
+    login_line = (f"user {login} pass -1 vers {SOFTWARE_VERSION} "
+                  f"filter g/{flt}\r\n")
+    loop = asyncio.get_event_loop()
+    same_server = 0
+    await asyncio.sleep(CONNECT_STAGGER_S)    # let the main feed pick first
+    while True:
+        writer = None
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(server, SIDE_PORT,
+                                        happy_eyeballs_delay=CONNECT_STAGGER_S),
+                timeout=CONNECT_TIMEOUT_S)
+            peer = (writer.get_extra_info("peername") or ("?",))[0]
+            # On the main feed's own server it adds nothing. rotate.aprs2.net
+            # answers with another one more often than not.
+            if peer == _main_peer[0] and same_server < 3:
+                same_server += 1
+                raise ConnectionAbortedError(
+                    f"same server as the main feed ({peer})")
+            same_server = 0
+            writer.write(login_line.encode("utf-8"))
+            await writer.drain()
+            _both_streams(f"[side-feed] {peer}:{SIDE_PORT} g/{flt}, "
+                          f"receive only")
+            while True:
+                raw = await asyncio.wait_for(reader.readline(),
+                                             timeout=READ_TIMEOUT_S)
+                if not raw:
+                    raise ConnectionResetError("server closed the connection")
+                line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                key = _watched_msg_key(line, watch)
+                if key is None or not _first_copy(key, "side", loop.time()):
+                    continue
+                await ExtensionRegistry.broadcast(line, _ToMainFeed())
+                ext_con_store.broadcast(line)
+        except Exception as e:                # CancelledError is not one
+            _both_streams(f"[side-feed] {type(e).__name__}: {e}. "
+                          f"Retrying in 30s ...")
+        finally:
+            if writer is not None:
+                writer.close()
+        await asyncio.sleep(30)
+
+
 def _warn_login_collision(callsign: str) -> None:
     """Say which callsign we log in as, and warn when it carries no SSID.
 
@@ -143,6 +286,24 @@ async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
             f"filter {filter_cmd}\r\n"
         )
 
+    global _side_watch
+    _side_watch = _side_watch_from(config) if full_feed else frozenset()
+    # Lives as long as this call: cancelled with it (an agent restart).
+    side_task = (asyncio.create_task(
+        _side_feed(config, ext_con_store, _side_watch))
+        if _side_watch else None)
+    try:
+        await _main_feed(server, port, callsign, login_line, ext_con_store,
+                         rate_limit_pps)
+    finally:
+        if side_task is not None:
+            side_task.cancel()
+
+
+async def _main_feed(server: str, port: int, callsign: str, login_line: str,
+                     ext_con_store: ConStore, rate_limit_pps: int) -> None:
+    """The full (or filtered) feed: connect, run, reconnect, forever."""
+
     while True:
         print(f"Connecting to {server}:{port} ...", file=sys.stderr)
 
@@ -152,6 +313,7 @@ async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
                                         happy_eyeballs_delay=CONNECT_STAGGER_S),
                 timeout=CONNECT_TIMEOUT_S)
             print(f"Connected. Logging in as {callsign} ...", file=sys.stderr)
+            _main_peer[0] = (writer.get_extra_info("peername") or (None,))[0]
 
             # Send login
             writer.write(login_line.encode("utf-8"))
@@ -159,6 +321,7 @@ async def start_server(config: dict[str, Any], ext_con_store: ConStore) -> None:
 
             # Queue for extensions (e.g. Fixed Beacon) to send packets
             own_queue: asyncio.Queue = asyncio.Queue()
+            _own_queue_now[0] = own_queue
             ExtensionRegistry.set_own_writers(own_queue)
             ext_con_store.set_upstream(own_queue)
 
@@ -291,6 +454,12 @@ async def _receive_loop(
                     )
         else:
             dispatch = True
+
+        # A message to the gateway the side feed has already dispatched.
+        if dispatch and _side_watch:
+            key = _watched_msg_key(line, _side_watch)
+            if key is not None and not _first_copy(key, "main", loop.time()):
+                continue
 
         if dispatch:
             # Broadcast to all extensions (may write ACK packets back to APRS-IS)

@@ -8771,3 +8771,19 @@ reaches DMWGPT only if the one upstream server's full feed carries it.
 
 Nothing applied. A second, filtered connection (port 14580,
 `filter g/DMWGPT`) is offered to the operator as redundancy (NEXT).
+
+**Addendum, 2026-11-21 — applied in v3.3.15** (the operator chose it). Beside
+the full feed a second connection asks a server on port 14580 for messages
+to the gateway only: `filter g/DMWGPT*` (SSIDs and trigger aliases
+included), passcode -1, so it is receive-only and never sends. It avoids the
+main feed's server; rotate.aprs2.net answers with another one more often
+than not. Whichever copy of a message arrives first is dispatched and the
+other is dropped, keyed on source and message text without the path - the
+gateway acks every copy it is handed, so a message from both feeds would
+otherwise be acked twice. Its answers go out on the main connection. A
+message only the side feed delivered is logged as
+`[side-feed] the main feed never delivered ...` two minutes later; that count
+says whether the second connection is worth keeping. A live aprsc accepted
+the login the same day (`logresp DMWGPT unverified, server T2IRELAND`).
+Check: `check_side_feed`, seen failing on v3.3.14 and on two mutations (no
+cross-feed dedup; a passcode on the side login).

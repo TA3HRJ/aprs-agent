@@ -257,6 +257,12 @@ What is left, in the order it is worth doing:
     takes Pillow 13.0.0, CI's required locked job runs 3.12 (the server),
     3.10 (upstream end of life 2026-10-01) reports beside 3.13.
 
+27. **Second feed for the gateway's messages - shipped in v3.3.15**
+    (F-2026-11-21-01, the operator's choice). To judge it: count
+    `[side-feed] the main feed never delivered` in the journal after a few
+    weeks. Zero means one connection was enough and it costs a TCP socket;
+    any means it answered a question that would have gone unanswered.
+
 Everything below this block is history — kept for the reasoning, not for the
 status.
 
