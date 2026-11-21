@@ -8745,3 +8745,29 @@ square it left; that square's baseline drops by one.
 Not changed: the comment is still kept from the first packet that had one.
 TA3HX-8's stored comment is a telemetry definition (`:TA3HX-8  :EQNS...`),
 which the parser read as a comment.
+
+---
+
+## F-2026-11-21-01 — a question that never reached the feed
+
+**Seen, 2026-11-21 (operator, from aprs.fi):** AE5HO sent "Are you working"
+to DMWGPT four times, 03:43:55-03:51:59 CET, from an internet client
+(`TCPIP*,qAC`, entering at T2GREECE and T2PRT). DMWGPT did not answer.
+
+**Measured.** None of the four is in `packets.log`, the message history or
+the journal. aprs.fi's raw list for the same callsign gives the reason. Every
+packet from the bare callsign AE5HO between 03:34 and 05:00 is missing from
+our feed. That is the five-minute weather reports through AMBCWOP-2 as well
+as the messages. The feed was not deaf: about 4,600 packets a minute arrived,
+including AE5HO-10's through the same T2PRT. The agent had connected at
+03:31 after the host's reboot. The feed broke for 41 s at 05:01:42, and
+AE5HO's packets were back from 05:05. Since 2026-11-15 aprs.fi lists no other
+message to DMWGPT, so nothing else was lost.
+
+**Verdict:** not ours to fix in code. The full-feed connection (port 10152)
+carried everything except one source for 90 minutes; the server's side is
+not visible from here. It does show the single point of failure: a question
+reaches DMWGPT only if the one upstream server's full feed carries it.
+
+Nothing applied. A second, filtered connection (port 14580,
+`filter g/DMWGPT`) is offered to the operator as redundancy (NEXT).
