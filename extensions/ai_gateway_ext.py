@@ -623,6 +623,59 @@ _SIGN_OFF = re.compile(
     re.I)
 _PUNCT = re.compile(r"[^A-Z0-9]+")
 
+# Not for the model at all: an automatic reply ("message received", "I am
+# away") or a sign-off on its own. An auto-responder answers every message
+# it is sent, this gateway's answers included, and an answer from here draws
+# the next receipt: F-2026-09-27-01 was two such machines exchanging 6,102
+# messages in 96 minutes. A receipt comes from a real callsign, so the
+# service-name test (F-2026-09-20-05) does not see it, and one station's
+# receipts each end in a different time of day, so the text dedup does not
+# either. Measured 2026-11-25 with a stub model: the PT2VHF client's default
+# auto-reply, that station's receipt, "73" and "tnx 73" each cost one model
+# call and two transmissions. They are acked, which is all a receipt or a
+# goodbye asks for, and not answered (F-2026-11-25-01).
+_AUTO_REPLY = re.compile(
+    r"\bauto(?:matic)?[\s-]*(?:repl\w*|respon\w*|answer\w*|message)"
+    r"|\b(?:message|msg)\s+(?:has\s+been\s+|was\s+)?(?:received|rcvd)\b"
+    r"|\b(?:i\s*am|i'?m|currently|presently)\s+"
+    r"(?:away|not\s+available|unavailable|afk|qrt)\b"
+    r"|\baway\s+from\s+(?:the\s+|my\s+)?(?:radio|rig|station|keyboard|shack)\b"
+    r"|\bout\s+of\s+(?:the\s+)?office\b"
+    r"|\b(?:i\s*will|i'?ll|will)\s+(?:reply|respond|answer|get\s+back|be\s+back)\b"
+    # Portuguese and Spanish (folded to ASCII before matching)
+    r"|\bmensage[mn]s?\s+recebid|\bretornarei\b|\bresposta\s+automatica"
+    r"|\bmensaje\s+recibido|\brespuesta\s+automatica|\bno\s+estoy\s+disponible"
+    r"|\b(?:estoy|estou)\s+ausente"
+    # Turkish: mesajiniz alindi, mesajin alinmistir, otomatik yanit
+    r"|\bmesaj\w*\s+(?:alindi|alinmistir|ulasti)\b"
+    r"|\botomatik\s+(?:yanit|cevap|mesaj)"
+    # German, French, Italian
+    r"|\bnachricht\s+erhalten|\bautomatische\s+antwort"
+    r"|\bbin\s+(?:nicht\s+erreichbar|abwesend)"
+    r"|\bmessage\s+recu\b|\breponse\s+automatique"
+    r"|\bmessaggio\s+ricevuto|\brisposta\s+automatica",
+    re.I)
+
+# A question, for the test above only. _QUESTIONISH takes IS, CAN or WHEN
+# anywhere, and "I am away, will reply when back" has one; here a question
+# is a question mark, a sentence that opens like one, or a Turkish particle.
+_ASKS = re.compile(
+    r"\?|^\s*(?:what|where|who|when|why|how|which|can|could|does|do|did|is"
+    r"|are|was|will\s+you|would|tell|give|explain)\b"
+    r"|\b(?:nedir|nerede|nasil|ne\s+kadar|kim|m[iu]s[iu]n|m[iu])\b",
+    re.I)
+
+
+def _not_for_answer(question: str) -> str:
+    """Why a message is acked and left unanswered; "" to answer it."""
+    text = _to_ascii(question)
+    if _SIGN_OFF.match(text):
+        return "a sign-off"
+    if _AUTO_REPLY.search(text) and not _ASKS.search(text):
+        return "an automatic reply"
+    return ""
+
+
 # Infrastructure questions. An igate, a digipeater or a weather station
 # beacons precisely so that others can find it; answering about one is not
 # the same act as answering about a person who happens to carry a tracker.
@@ -2329,6 +2382,14 @@ class AIGateway(Extension):
             ):
                 self.warn(f"blocked {sender_full} — not in whitelist")
                 return None
+
+        # Acked above; nothing else goes back (F-2026-11-25-01).
+        why = _not_for_answer(question)
+        if why:
+            self.log(f"RX from {sender_full}: {question} - {why}, acked, "
+                     f"not answered")
+            self.mark_working()
+            return None
 
         # Before the limiter, because it costs neither a model call nor a
         # token. On 2026-09-20 a newcomer spent his burst on four questions

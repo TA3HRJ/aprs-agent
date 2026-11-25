@@ -8801,3 +8801,49 @@ main feed's (the same server by another address, IPv4 beside IPv6), and
 settles for it only when nothing else answers. The filter is `g/X/X-*` per
 watched call. `check_side_feed` gained both, seen failing on v3.3.15 and on a
 mutation (the name test removed).
+
+## F-2026-11-25-01 — an automatic reply from a real callsign went to the model
+
+**Fixed in v3.3.17.**
+
+**Asked:** the operator, after a look at another APRS client's auto-reply:
+was there not already a guard against reply loops? There were three, and
+none covered this case. F-2026-09-20-05 drops senders whose name is not
+callsign-shaped (QRX, WXBOT). The 120 s text dedup and the token bucket
+limit repeats. A receipt sent by a station's auto-responder comes from a
+real callsign, and STN126's receipts (F-2026-09-27-01) each end in a
+different time of day ("Mesajiniz alindi. Tesekkur ediyoruz - DARD81
+(19:05:25)"), so no two of them are the same text.
+
+**Measured with a stub model on v3.3.16.** Each of these drew one model
+call and two transmissions (the answer and one resend): that client's
+default auto-reply ("Mensagem recebida. Retornarei assim que possivel."),
+STN126's receipt, "Auto-reply: I am away from the radio", "73" and
+"tnx 73". An auto-responder receipts the answer too, so a question sent
+from a station with one switched on costs one extra model call per receipt
+that gets past the bucket.
+
+**How often, live.** No automatic reply reached DMWGPT in the 14 days of
+`message_history`; 147 messages to it are in the journal since 2026-08-22.
+In the 20,436 stored messages of other traffic the new test calls 82 of
+them automatic replies, in 3 distinct texts. All three are receipts: STN126's
+(79) and two of one form from two other stations. No question was among
+them.
+
+**What changed.** A message that reads as an automatic reply (a short
+multilingual list: auto-reply, message received, I am away, will reply;
+mensagem recebida, retornarei; mesajiniz alindi, otomatik yanit;
+Nachricht erhalten, abwesend; and French and Italian equivalents) and does
+not ask anything, and a sign-off on its own (QRT, 73, tnx, bye), is acked
+and not answered. No model call, no transmission beyond the ack. "Does not
+ask anything" means no question mark, no question word at the start and no
+Turkish question particle. `_QUESTIONISH` is too loose for this: "will reply
+when back" contains WHEN. Of the 147 journal messages, 2 are now left
+unanswered: "bye" and "QRT".
+
+**Cost.** A person who sends just "tnx" or "73" now gets an ack and no
+"you're welcome". On APRS the ack is the usual answer to that. An
+auto-reply in a language or wording not on the list still gets one answer.
+
+Check: `check_auto_reply`, seen failing on v3.3.16 and on two mutations
+(no sign-off test; no question test).
