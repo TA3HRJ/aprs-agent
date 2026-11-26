@@ -176,7 +176,7 @@ First run creates a default `aprsconfig.toml` — enter your callsign and you're
 
 | Port | Direction | Purpose |
 |------|-----------|---------|
-| 14580 | OUT | APRS-IS server (filtered) |
+| 14580 | OUT | APRS-IS server (filtered). With `full_feed` and the AI Gateway both on, also a second, receive-only connection to another server that fetches only the gateway's messages, so a message the full-feed server never received is still answered |
 | 10152 | OUT | APRS-IS full-feed (optional) |
 | 8080 | IN | Web GUI — admin (aiohttp) |
 | 8082 | IN | Public View — read-only page (if `public_port` is set) |
@@ -416,7 +416,11 @@ retry of the same message asks again.
 Automatic stations are not answered at all. APRS service names are not
 callsign-shaped — `QRX`, `WXBOT`, `SMSGTE` carry no digit where a callsign
 must — and answering one is how two machines end up talking to each other on
-a shared channel.
+a shared channel. An automatic reply from a real callsign ("message received",
+"I am away", in several languages) and a sign-off on its own (`73`, `QRT`,
+`bye`) are acked and not answered either: an auto-responder receipts every
+answer it is sent, so each answer would draw the next receipt. A question
+that uses the same words ("are you away?") is still answered.
 
 > **⚠️ Everything that passes through this is public.**
 > Amateur radio is conducted in the clear; encoding a transmission to obscure
